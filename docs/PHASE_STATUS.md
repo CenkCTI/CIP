@@ -7,5 +7,16 @@
 - [x] Dashboard reads real project data for the authenticated user.
 - [x] Project create, read, update, delete, search, filtering, and sorting implemented with server actions and Zod validation.
 - [x] Unit tests added for validation and authorization-related helpers.
-- [ ] Migration applied to live Supabase database (blocked unless `SUPABASE_DB_URL` is configured).
-- [ ] Browser acceptance against live Supabase (blocked unless Supabase project credentials and email settings are configured).
+- [x] Phase 1 SQL migration applied in Supabase, manually verified by the repository owner on the live deployment at https://cip-omega.vercel.app.
+- [x] Real account registration, sign-in, and sign-out manually verified by the repository owner on the live deployment.
+- [x] Project create, read, edit, delete, persistence after refresh/re-sign-in, and real dashboard counts manually verified by the repository owner on the live deployment.
+- [x] Cross-user project isolation manually verified by the repository owner: a second user cannot see or directly access the first user's project.
+- [x] Production Vercel deployment manually verified by the repository owner.
+
+## Phase 2
+- [x] Versioned migration authored for research notes, evidence metadata, timeline events, project tasks, private `evidence` Storage bucket restrictions, indexes, triggers, and RLS policies.
+- [x] Project detail workspace implemented with Overview, Research Notes, Evidence, Timeline, and Tasks tabs backed by authenticated server mutations.
+- [x] Direct signed evidence upload flow implemented without service-role keys, with metadata finalization, orphan cleanup on finalization failure, file replacement safety, and private signed download URLs.
+- [x] Edit UI implemented for Research Notes, Evidence, Timeline Events, and Tasks.
+- [ ] Phase 2 migration applied to live Supabase database (blocked unless `SUPABASE_DB_URL` is configured in the execution environment).
+- [ ] Browser acceptance against live Supabase for Phase 2 workspace modules.

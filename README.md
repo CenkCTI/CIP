@@ -22,3 +22,13 @@ Set `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, and `NEXT_PUBLIC_SUPABAS
 
 ## Mutation pattern
 Project create, update, and delete use Next.js Server Actions with Zod validation in `src/app/actions.ts`; reads are server-rendered with Supabase RLS enforcing ownership.
+
+## Phase 2 Storage setup
+Apply migrations in order, then verify that Supabase Storage contains a private bucket named `evidence`:
+
+```bash
+psql "$SUPABASE_DB_URL" -f supabase/migrations/202607210001_phase1_foundation.sql
+psql "$SUPABASE_DB_URL" -f supabase/migrations/202607210002_phase2_workspace.sql
+```
+
+The Phase 2 migration configures the bucket as private with a 20 MB limit and MIME restrictions for PNG, JPEG, PDF, PCAP, LOG, and TXT evidence. Object paths are scoped as `{userId}/{projectId}/{uuid}-{sanitizedFileName}` and Storage RLS only allows authenticated project owners to read, upload, or delete their own project evidence objects.
