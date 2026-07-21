@@ -103,6 +103,39 @@ describe("workspace server workflow security", () => {
     expect(requireUserMock).not.toHaveBeenCalled();
   });
 
+  it("signed upload authorization returns a server-generated path containing the validated project UUID", async () => {
+    const { createSignedUploadUrl } = makeSupabase();
+    const { authorizeEvidenceUpload } = await import("@/app/actions");
+    await expect(authorizeEvidenceUpload(PROJECT_ID, uploadInput)).resolves.toMatchObject({ path: expect.stringMatching(new RegExp(`^${USER_ID}/${PROJECT_ID}/[0-9a-f-]+-proof\\.pdf$`)) });
+    expect((createSignedUploadUrl.mock.calls as unknown as string[][])[0][0]).toContain(`/${PROJECT_ID}/`);
+    expect((createSignedUploadUrl.mock.calls as unknown as string[][])[0][0]).not.toContain("//");
+  });
+
+  it("URL evidence creation remains unaffected by file upload project validation", async () => {
+    const { inserts } = makeSupabase();
+    const { createUrlEvidence } = await import("@/app/actions");
+    await expect(createUrlEvidence(PROJECT_ID, {}, validEvidence())).resolves.toEqual({ success: "Evidence saved." });
+    expect(inserts[0]).toMatchObject({ project_id: PROJECT_ID, collected_by: USER_ID, source_url: "https://example.test" });
+  });
+
+  it("production code contains no missing-projectId fallback to an empty string", async () => {
+    const { readFileSync } = await import("node:fs");
+    const files = ["src/components/workspace-forms.tsx", "src/app/projects/[id]/page.tsx", "src/app/actions.ts"];
+    const source = files.map((file) => readFileSync(file, "utf8")).join("\n");
+    expect(source).not.toMatch(/projectId\s*=\s*["']{2}/);
+    expect(source).not.toMatch(/projectId\s*\|\|\s*["']{2}/);
+    expect(source).not.toMatch(/String\(projectId\s*\?\?\s*["']{2}\)/);
+  });
+
+  it("hardened storage RLS migration never casts object path segments to UUID", async () => {
+    const { readFileSync } = await import("node:fs");
+    const migration = readFileSync("supabase/migrations/202607210003_harden_evidence_storage_paths.sql", "utf8");
+    expect(migration).not.toMatch(/split_part\s*\(\s*name[\s\S]*?::uuid/i);
+    expect(migration).not.toMatch(/storage\.foldername\s*\(\s*name\s*\)[\s\S]*?::uuid/i);
+    expect(migration).toMatch(/p\.id::text\s*=\s*split_part\(name, '\/', 2\)/);
+    expect(migration).toMatch(/p\.owner_id::text\s*=\s*split_part\(name, '\/', 1\)/);
+  });
+
   it("metadata finalization failure deletes the newly uploaded orphan object", async () => {
     const { remove } = makeSupabase({ metadataInsertError: "insert failed" });
     const { finalizeEvidenceUpload } = await import("@/app/actions");
