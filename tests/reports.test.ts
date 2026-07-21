@@ -137,7 +137,27 @@ describe("report TipTap validation and exports", () => {
     ).toBe(false);
   });
 
-  it("rejects unsafe canonical link marks", () => {
+  it("accepts normal safe URLs and rejects unsafe canonical link marks", () => {
+    for (const href of ["https://example.com", "https://example.com/path"]) {
+      expect(
+        parseJsonDoc({
+          type: "doc",
+          attrs: { version: 1 },
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  type: "text",
+                  text: "x",
+                  marks: [{ type: "link", attrs: { href } }],
+                },
+              ],
+            },
+          ],
+        }).success,
+      ).toBe(true);
+    }
     for (const href of [
       "javascript:alert(1)",
       "data:text/html,x",

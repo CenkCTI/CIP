@@ -9,7 +9,8 @@ let actionResult: { success?: string; error?: string } = {
 vi.mock("@/app/actions", () => ({
   updateReport: vi.fn(async () => actionResult),
 }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+const push = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 const report = {
   id: "00000000-0000-4000-8000-000000000001",
   title: "R1",
@@ -25,7 +26,19 @@ const report = {
 describe("ReportEditor dirty and insertion behavior", () => {
   beforeEach(() => {
     actionResult = { success: "Report saved." };
-    const rects = [{ width: 0, height: 0, top: 0, left: 0, bottom: 0, right: 0, x: 0, y: 0, toJSON: () => ({}) }] as unknown as DOMRectList;
+    const rects = [
+      {
+        width: 0,
+        height: 0,
+        top: 0,
+        left: 0,
+        bottom: 0,
+        right: 0,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      },
+    ] as unknown as DOMRectList;
     Element.prototype.getClientRects = vi.fn(() => rects);
     Range.prototype.getClientRects = vi.fn(() => rects);
     Range.prototype.getBoundingClientRect = vi.fn(() => rects[0] as DOMRect);
@@ -65,6 +78,23 @@ describe("ReportEditor dirty and insertion behavior", () => {
       "aria-disabled",
       "true",
     );
+  });
+  it("normal back control asks for confirmation when dirty", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(
+      <ReportEditor
+        projectId="p1"
+        report={report}
+        insertables={{ evidence: [] }}
+      />,
+    );
+    await userEvent.type(screen.getByLabelText(/title/i), " changed");
+    await userEvent.click(
+      screen.getByRole("button", { name: /back to reports/i }),
+    );
+    expect(confirm).toHaveBeenCalledWith("Discard unsaved report changes?");
+    expect(push).not.toHaveBeenCalled();
+    confirm.mockRestore();
   });
   it("inserts only displayed safe current-project metadata", async () => {
     render(

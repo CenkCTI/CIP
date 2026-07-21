@@ -46,6 +46,8 @@ type SP = CtiSearchParams & {
   status?: string;
   priority?: string;
   deadline?: string;
+  deleted?: string;
+  relationships?: string;
 };
 type Row = Record<string, unknown>;
 const ss = (v: unknown) => String(v ?? "");
@@ -357,7 +359,11 @@ export default async function Page({
         />
       )}{" "}
       {tab === "reports" && (
-        <Reports id={id} rows={filterReports((reports ?? []) as Row[], sp)} />
+        <Reports
+          id={id}
+          rows={filterReports((reports ?? []) as Row[], sp)}
+          sp={sp}
+        />
       )}
     </section>
   );
@@ -1006,7 +1012,7 @@ function filterReports(rows: Row[], sp: SP) {
     return primary || ss(a.id).localeCompare(ss(b.id));
   });
 }
-function Reports({ id, rows }: { id: string; rows: Row[] }) {
+function Reports({ id, rows, sp }: { id: string; rows: Row[]; sp: SP }) {
   return (
     <div className="mt-6 grid gap-6 lg:grid-cols-[360px_1fr]">
       <div className="card">
@@ -1014,6 +1020,15 @@ function Reports({ id, rows }: { id: string; rows: Row[] }) {
         <ReportCreate projectId={id} />
       </div>
       <div className="space-y-3">
+        {sp.deleted === "report" && (
+          <p
+            className="rounded border border-emerald-900 bg-emerald-950/50 p-3 text-sm text-emerald-200"
+            role="status"
+          >
+            Report deleted. Cleaned up {Number(sp.relationships || 0)} manual
+            Report graph relationships.
+          </p>
+        )}
         {rows.map((r) => (
           <Link
             key={ss(r.id)}

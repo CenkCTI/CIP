@@ -1,4 +1,6 @@
+import { Editor } from "@tiptap/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { reportEditorExtensions } from "@/lib/reports/editor-extensions";
 
 let projectOwner = "u1";
 let existingReport: { id: string; project_id: string; title: string } | null = {
@@ -8,6 +10,7 @@ let existingReport: { id: string; project_id: string; title: string } | null = {
 };
 let updateResult: "ok" | "zero" | "error" = "ok";
 let deleteResult: "ok" | "zero" | "error" = "ok";
+let createResult: "ok" | "error" = "ok";
 function chain(table: string) {
   const c: Record<string, unknown> & {
     _op: string;
@@ -53,7 +56,9 @@ function chain(table: string) {
           ? { data: { id: existingReport?.id }, error: null }
           : { data: null, error: { code: "PGRST116" } };
       if (table === "reports" && c._op === "insert")
-        return { data: { id: "new" }, error: null };
+        return createResult === "ok"
+          ? { data: { id: "new" }, error: null }
+          : { data: null, error: { code: "500" } };
       if (table === "reports")
         return existingReport
           ? { data: existingReport, error: null }
@@ -99,6 +104,27 @@ describe("report CRUD server actions", () => {
     };
     updateResult = "ok";
     deleteResult = "ok";
+    createResult = "ok";
+  });
+  it("creates a report or returns a controlled creation failure", async () => {
+    const { createReport } = await import("@/app/actions");
+    await expect(
+      createReport(
+        "00000000-0000-4000-8000-0000000000aa",
+        {},
+        fd({ title: "R2", type: "CTI", status: "DRAFT" }),
+      ),
+    ).rejects.toThrow(
+      "REDIRECT:/projects/00000000-0000-4000-8000-0000000000aa/reports/new",
+    );
+    createResult = "error";
+    await expect(
+      createReport(
+        "00000000-0000-4000-8000-0000000000aa",
+        {},
+        fd({ title: "R2", type: "CTI", status: "DRAFT" }),
+      ),
+    ).resolves.toEqual({ error: "Unable to create report." });
   });
   it("returns not found for unowned project update", async () => {
     projectOwner = "other";
@@ -133,6 +159,34 @@ describe("report CRUD server actions", () => {
         }),
       ),
     ).resolves.toEqual({ error: "Report not found." });
+  });
+  it("updates with actual production TipTap JSON", async () => {
+    const e = new Editor({
+      extensions: reportEditorExtensions(),
+      content: {
+        type: "doc",
+        attrs: { version: 1 },
+        content: [{ type: "paragraph" }],
+      },
+      element: document.createElement("div"),
+    });
+    e.commands.insertContent("production json");
+    const { updateReport } = await import("@/app/actions");
+    const form = fd({
+      title: "R1",
+      type: "CTI",
+      status: "DRAFT",
+      content: JSON.stringify(e.getJSON()),
+    });
+    await expect(
+      updateReport(
+        "00000000-0000-4000-8000-0000000000aa",
+        existingReport!.id,
+        {},
+        form,
+      ),
+    ).resolves.toEqual({ success: "Report saved." });
+    e.destroy();
   });
   it("handles zero-row update without raw database errors", async () => {
     updateResult = "zero";

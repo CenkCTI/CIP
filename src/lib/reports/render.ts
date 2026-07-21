@@ -67,8 +67,11 @@ function renderNodeHtml(n: TNode): string {
     }
     case "bulletList":
       return `<ul>${children(n).map(renderNodeHtml).join("")}</ul>`;
-    case "orderedList":
-      return `<ol>${children(n).map(renderNodeHtml).join("")}</ol>`;
+    case "orderedList": {
+      const start =
+        Number(n.attrs?.start) > 1 ? ` start="${Number(n.attrs?.start)}"` : "";
+      return `<ol${start}>${children(n).map(renderNodeHtml).join("")}</ol>`;
+    }
     case "listItem":
       return `<li>${children(n).map(renderNodeHtml).join("")}</li>`;
     case "blockquote":
@@ -134,12 +137,14 @@ function blockMd(n: TNode, depth = 0, ordered = false, index = 1): string {
           .map((c) => blockMd(c, depth, false))
           .join("") + "\n"
       );
-    case "orderedList":
+    case "orderedList": {
+      const start = Number(n.attrs?.start) || 1;
       return (
         children(n)
-          .map((c, i) => blockMd(c, depth, true, i + 1))
+          .map((c, i) => blockMd(c, depth, true, start + i))
           .join("") + "\n"
       );
+    }
     case "listItem": {
       const [first, ...rest] = children(n);
       const prefix = ordered ? `${index}. ` : "- ";
@@ -316,14 +321,16 @@ function pdfBlock(
           pdfBlock(c, `${key}-${i}`, depth, false, i + 1),
         ),
       );
-    case "orderedList":
+    case "orderedList": {
+      const start = Number(n.attrs?.start) || 1;
       return React.createElement(
         PdfView,
         { key },
         children(n).map((c, i) =>
-          pdfBlock(c, `${key}-${i}`, depth, true, i + 1),
+          pdfBlock(c, `${key}-${i}`, depth, true, start + i),
         ),
       );
+    }
     case "listItem": {
       const [first, ...rest] = children(n);
       return React.createElement(

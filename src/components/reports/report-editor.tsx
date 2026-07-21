@@ -3,18 +3,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import LinkExt from "@tiptap/extension-link";
-import { Table } from "@tiptap/extension-table";
-import TableRow from "@tiptap/extension-table-row";
-import TableCell from "@tiptap/extension-table-cell";
-import TableHeader from "@tiptap/extension-table-header";
 import { updateReport } from "@/app/actions";
 import {
   canonicalReportRevision,
   reportStatuses,
   reportTypes,
 } from "@/lib/reports/schema";
+import { reportEditorExtensions } from "@/lib/reports/editor-extensions";
 
 type Row = Record<string, unknown>;
 const s = (v: unknown) => String(v ?? "");
@@ -56,18 +51,7 @@ export function ReportEditor({
   const [savedRevision, setSavedRevision] = useState(initialRevision);
   const editor = useEditor({
     immediatelyRender: false,
-    extensions: [
-      StarterKit,
-      LinkExt.configure({
-        openOnClick: false,
-        autolink: true,
-        protocols: ["http", "https"],
-      }),
-      Table.configure({ resizable: true }),
-      TableRow,
-      TableHeader,
-      TableCell,
-    ],
+    extensions: reportEditorExtensions(),
     content,
     editorProps: {
       attributes: {
@@ -241,6 +225,7 @@ function Toolbar({ editor }: { editor: Editor | null }) {
     <div className="flex flex-wrap gap-2">
       {b("H1", () => editor.chain().focus().toggleHeading({ level: 1 }).run())}
       {b("H2", () => editor.chain().focus().toggleHeading({ level: 2 }).run())}
+      {b("H3", () => editor.chain().focus().toggleHeading({ level: 3 }).run())}
       {b("Bold", () => editor.chain().focus().toggleBold().run())}
       {b("Italic", () => editor.chain().focus().toggleItalic().run())}
       {b("Bullets", () => editor.chain().focus().toggleBulletList().run())}
