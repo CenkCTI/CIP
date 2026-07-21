@@ -28,3 +28,10 @@
 - [x] CTI relationship model documented in README.md and docs/RELATIONSHIPS.md.
 - [ ] Phase 3 migration applied to live Supabase database (blocked unless `SUPABASE_DB_URL` is configured in the execution environment).
 - [ ] Browser acceptance against live Supabase for Phase 3 CTI modules.
+
+## Phase 4
+- [x] Additive migration authored for `public.entity_relationships`, database endpoint validation, RLS, duplicate/self-link constraints, indexes, updated_at trigger, and polymorphic cleanup triggers.
+- [x] Protected graph endpoint returns typed nodes, semantic edges from all ten Phase 3 join tables, manual edges, deterministic global limits, dangling-edge prevention, and truncation metadata.
+- [x] Project Knowledge Graph tab implemented with accessible legend, filters, search, deterministic/resettable layout, controlled node dragging, detail drawer, manual link creation, and manual edge edit/delete.
+- [ ] Phase 4 migration applied to live Supabase database (blocked unless `SUPABASE_DB_URL` is configured in the execution environment).
+- [ ] Browser acceptance against live Supabase for Knowledge Graph flows.

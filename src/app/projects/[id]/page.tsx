@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { KnowledgeGraph } from "@/components/graph/knowledge-graph";
 import { notFound } from "next/navigation";
 import { deleteProject, updateProject } from "@/app/actions";
 import { ProjectForm } from "@/components/project-form";
@@ -60,6 +61,7 @@ const tabs = [
   "malware",
   "cves",
   "mitre",
+  "graph",
 ];
 function tagText(a: unknown) {
   return aa(a).join(", ");
@@ -93,6 +95,28 @@ export default async function Page({
     .eq("id", id)
     .single<Project>();
   if (error || !project) notFound();
+  const mk = (t: string) => `/projects/${id}?tab=${t}`;
+  if (tab === "graph") {
+    return (
+      <section className="mx-auto max-w-6xl">
+        <h1 className="text-3xl font-bold text-white">{project.name}</h1>
+        <nav className="mt-6 flex flex-wrap gap-2 border-b border-slate-800 pb-2">
+          {tabs.map((t) => (
+            <Link
+              key={t}
+              className={`rounded-t px-4 py-2 capitalize ${tab === t ? "bg-slate-800 text-cyan-200" : "text-slate-400 hover:text-white"}`}
+              href={mk(t)}
+            >
+              {t}
+            </Link>
+          ))}
+        </nav>
+        <div className="mt-4">
+          <KnowledgeGraph projectId={id} />
+        </div>
+      </section>
+    );
+  }
   const [
     { data: notes, error: notesError },
     { data: evidence, error: evidenceError },
@@ -190,7 +214,6 @@ export default async function Page({
     campaignMitre,
     malwareMitre,
   } as Record<string, Row[] | null>;
-  const mk = (t: string) => `/projects/${id}?tab=${t}`;
   return (
     <section className="mx-auto max-w-6xl">
       <h1 className="text-3xl font-bold text-white">{project.name}</h1>
@@ -205,7 +228,7 @@ export default async function Page({
           </Link>
         ))}
       </nav>
-      {tab !== "overview" && (
+      {tab !== "overview" && tab !== "graph" && (
         <SearchBar
           id={id}
           tab={tab}
@@ -215,6 +238,7 @@ export default async function Page({
         />
       )}{" "}
       {tab === "overview" && <Overview project={project} />}{" "}
+      {tab === "graph" && <KnowledgeGraph projectId={id} />}{" "}
       {tab === "notes" && (
         <Notes
           id={id}
@@ -637,7 +661,11 @@ function Evidence({ id, rows }: { id: string; rows: Row[] }) {
       <div className="lg:col-span-2 grid gap-4">
         {rows.length ? (
           rows.map((e) => (
-            <article className="card" key={ss(e.id)}>
+            <article
+              id={`evidence-${ss(e.id)}`}
+              className="card"
+              key={ss(e.id)}
+            >
               <h3 className="font-semibold text-white">
                 {ss(e.title)}{" "}
                 <span className="text-xs text-cyan-200">{ss(e.type)}</span>
