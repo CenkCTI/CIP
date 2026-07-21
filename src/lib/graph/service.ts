@@ -376,3 +376,31 @@ export async function assertGraphEntity(
     .single();
   if (error || !data) notFound();
 }
+
+export async function assertGraphEntities(
+  supabase: Awaited<ReturnType<typeof requireUser>>["supabase"],
+  projectId: string,
+  positions: { entityType: GraphEntityType; entityId: string }[],
+) {
+  const byType = new Map<GraphEntityType, Set<string>>();
+  for (const position of positions) {
+    const ids = byType.get(position.entityType) ?? new Set<string>();
+    ids.add(position.entityId);
+    byType.set(position.entityType, ids);
+  }
+  await Promise.all(
+    Array.from(byType.entries()).map(async ([type, ids]) => {
+      const wanted = Array.from(ids);
+      const { data, error } = await supabase
+        .from(entityTableMap[type])
+        .select("id")
+        .eq("project_id", projectId)
+        .in("id", wanted);
+      if (error) notFound();
+      const found = new Set(
+        ((data ?? []) as { id: string }[]).map((row) => row.id),
+      );
+      if (wanted.some((id) => !found.has(id))) notFound();
+    }),
+  );
+}

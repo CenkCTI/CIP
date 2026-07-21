@@ -85,6 +85,24 @@ export const graphPrefix: Record<GraphEntityType, string> = {
 export function nodeId(type: GraphEntityType, id: string) {
   return `${graphPrefix[type]}:${id}`;
 }
+
+export type GraphNodePosition = {
+  entityType: GraphEntityType;
+  entityId: string;
+  x: number;
+  y: number;
+};
+const coordinate = z.number().finite().min(-1000000).max(1000000);
+export const graphLayoutPositionSchema = z.object({
+  entityType: z.enum(graphEntityTypes),
+  entityId: z.string().uuid(),
+  x: coordinate,
+  y: coordinate,
+});
+export const graphLayoutPatchSchema = z.object({
+  positions: z.array(graphLayoutPositionSchema).min(1).max(500),
+});
+
 export const entityTableMap: Record<GraphEntityType, string> = {
   ACTOR: "threat_actors",
   CAMPAIGN: "campaigns",

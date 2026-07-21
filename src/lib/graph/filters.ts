@@ -59,3 +59,12 @@ export function preservedPosition<
 >(existing: Map<string, T>, id: string, fallback: { x: number; y: number }) {
   return existing.get(id)?.position ?? fallback;
 }
+
+export function applySavedOrDeterministicPosition(
+  saved: Map<string, { x: number; y: number }>,
+  id: string,
+  index: number,
+  total: number,
+) {
+  return saved.get(id) ?? deterministicPosition(index, total);
+}
