@@ -38,6 +38,7 @@ const colors: Record<GraphEntityType, string> = {
   CVE: "#eab308",
   MITRE: "#38bdf8",
   EVIDENCE: "#94a3b8",
+  REPORT: "#ec4899",
 };
 const icons: Record<GraphEntityType, string> = {
   ACTOR: "👤",
@@ -47,6 +48,7 @@ const icons: Record<GraphEntityType, string> = {
   CVE: "🛡️",
   MITRE: "📐",
   EVIDENCE: "📎",
+  REPORT: "📄",
 };
 
 function graphError(payload: unknown, fallback: string) {

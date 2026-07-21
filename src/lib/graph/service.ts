@@ -103,6 +103,16 @@ const defs: {
       `/projects/${projectId}?tab=evidence#evidence-${id}`,
     meta: ["type", "collection_date", "created_at"],
   },
+  {
+    type: "REPORT",
+    table: "reports",
+    select: "id,title,type,status,updated_at",
+    order: "title",
+    title: (r) => s(r.title),
+    sub: (r) => `${s(r.type)} · ${s(r.status)}`,
+    url: (projectId, id) => `/projects/${projectId}/reports/${id}`,
+    meta: ["type", "status", "updated_at"],
+  },
 ];
 export const semanticJoinDefs = [
   [

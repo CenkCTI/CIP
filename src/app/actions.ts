@@ -5,6 +5,12 @@ import { createClient } from "@/lib/supabase/server";
 import { parseProjectForm } from "@/lib/projects/schema";
 import { requireUser } from "@/lib/auth";
 import {
+  reportMetaSchema,
+  reportSchema,
+  formObject as reportFormObject,
+  emptyTiptapDoc,
+} from "@/lib/reports/schema";
+import {
   buildEvidencePath,
   evidenceFinalizeSchema,
   evidenceMetadataSchema,
@@ -754,4 +760,110 @@ export async function deleteCti(
   if (error) return { error: "Record could not be deleted." };
   revalidatePath(`/projects/${pid}`);
   return { success: "CTI record deleted." };
+}
+
+async function assertReport(projectId: string, reportId: string) {
+  const { supabase, projectId: pid } = await assertProject(projectId);
+  const report = parseRequiredUuid(reportId, "Report");
+  if (!report.ok) return { ok: false as const, error: "Report not found." };
+  const { data, error } = await supabase
+    .from("reports")
+    .select("id,project_id,title")
+    .eq("project_id", pid)
+    .eq("id", report.id)
+    .single();
+  if (error || !data) return { ok: false as const, error: "Report not found." };
+  return {
+    ok: true as const,
+    supabase,
+    projectId: pid,
+    reportId: report.id,
+    title: String(data.title),
+  };
+}
+
+export async function createReport(
+  projectId: string,
+  _: State,
+  fd: FormData,
+): Promise<State> {
+  const { supabase, user, projectId: pid } = await assertProject(projectId);
+  const p = reportMetaSchema.safeParse(reportFormObject(fd));
+  if (!p.success)
+    return { error: p.error.issues[0]?.message ?? "Invalid report" };
+  const { data, error } = await supabase
+    .from("reports")
+    .insert({
+      ...p.data,
+      content: emptyTiptapDoc,
+      project_id: pid,
+      author_id: user.id,
+    })
+    .select("id")
+    .single();
+  if (error || !data) return { error: "Unable to create report." };
+  revalidatePath(`/projects/${pid}`);
+  redirect(`/projects/${pid}/reports/${data.id}`);
+}
+export async function updateReport(
+  projectId: string,
+  reportId: string,
+  _: State,
+  fd: FormData,
+): Promise<State> {
+  const report = await assertReport(projectId, reportId);
+  if (!report.ok) return { error: report.error };
+  let parsedContent: unknown;
+  try {
+    parsedContent = JSON.parse(String(fd.get("content") || "null"));
+  } catch {
+    return { error: "Report content must be valid JSON." };
+  }
+  const p = reportSchema.safeParse({
+    ...reportFormObject(fd),
+    content: parsedContent,
+  });
+  if (!p.success)
+    return { error: p.error.issues[0]?.message ?? "Invalid report" };
+  const { data, error } = await report.supabase
+    .from("reports")
+    .update(p.data)
+    .eq("project_id", report.projectId)
+    .eq("id", report.reportId)
+    .select("id")
+    .single();
+  if (error || !data) return { error: "Unable to save report." };
+  revalidatePath(`/projects/${report.projectId}`);
+  revalidatePath(`/projects/${report.projectId}/reports/${report.reportId}`);
+  return { success: "Report saved." };
+}
+export async function deleteReport(
+  projectId: string,
+  reportId: string,
+  _title: string,
+  fd: FormData,
+): Promise<State> {
+  const report = await assertReport(projectId, reportId);
+  if (!report.ok) return { error: report.error };
+  if (String(fd.get("confirm") || "") !== report.title)
+    return { error: "Confirmation does not match the current report title." };
+  const { data: rels } = await report.supabase
+    .from("entity_relationships")
+    .select("id", { count: "exact" })
+    .eq("project_id", report.projectId)
+    .or(
+      `and(source_type.eq.REPORT,source_id.eq.${report.reportId}),and(target_type.eq.REPORT,target_id.eq.${report.reportId})`,
+    );
+  const { data, error } = await report.supabase
+    .from("reports")
+    .delete()
+    .eq("project_id", report.projectId)
+    .eq("id", report.reportId)
+    .select("id")
+    .single();
+  if (error || !data) return { error: "Unable to delete report." };
+  revalidatePath(`/projects/${report.projectId}`);
+  redirect(
+    `/projects/${report.projectId}?tab=reports&deleted=report&relationships=${rels?.length ?? 0}`,
+  );
 }

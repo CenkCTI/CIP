@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { deleteProject, updateProject } from "@/app/actions";
 import { ProjectForm } from "@/components/project-form";
 import { CtiDelete, CtiForm } from "@/components/cti-forms";
+import { reportStatuses, reportTypes } from "@/lib/reports/schema";
+import { ReportCreate } from "@/components/reports/report-create";
 import {
   DeleteEvidence,
   DeleteNote,
@@ -44,6 +46,8 @@ type SP = CtiSearchParams & {
   status?: string;
   priority?: string;
   deadline?: string;
+  deleted?: string;
+  relationships?: string;
 };
 type Row = Record<string, unknown>;
 const ss = (v: unknown) => String(v ?? "");
@@ -61,6 +65,7 @@ const tabs = [
   "malware",
   "cves",
   "mitre",
+  "reports",
   "graph",
 ];
 function tagText(a: unknown) {
@@ -128,6 +133,7 @@ export default async function Page({
     { data: malware, error: malwareError },
     { data: cves, error: cvesError },
     { data: mitre, error: mitreError },
+    { data: reports, error: reportsError },
     { data: campaignThreatActors, error: campaignThreatActorsError },
     { data: threatActorMalware, error: threatActorMalwareError },
     { data: threatActorIndicators, error: threatActorIndicatorsError },
@@ -149,6 +155,12 @@ export default async function Page({
     supabase.from("malware").select("*").eq("project_id", id),
     supabase.from("cves").select("*").eq("project_id", id),
     supabase.from("mitre_techniques").select("*").eq("project_id", id),
+    supabase
+      .from("reports")
+      .select("id,title,type,status,content,updated_at")
+      .eq("project_id", id)
+      .order("updated_at", { ascending: false })
+      .order("id", { ascending: true }),
     supabase.from("campaign_threat_actors").select("*").eq("project_id", id),
     supabase.from("threat_actor_malware").select("*").eq("project_id", id),
     supabase.from("threat_actor_indicators").select("*").eq("project_id", id),
@@ -175,6 +187,7 @@ export default async function Page({
     malwareError,
     cvesError,
     mitreError,
+    reportsError,
     campaignThreatActorsError,
     threatActorMalwareError,
     threatActorIndicatorsError,
@@ -345,6 +358,13 @@ export default async function Page({
           rels={rels}
         />
       )}{" "}
+      {tab === "reports" && (
+        <Reports
+          id={id}
+          rows={filterReports((reports ?? []) as Row[], sp)}
+          sp={sp}
+        />
+      )}
     </section>
   );
 }
@@ -560,6 +580,30 @@ function SearchBar({
             defaultValue={sp.type ?? ""}
             placeholder="Technique ID"
           />
+        </>
+      )}
+      {tab === "reports" && (
+        <>
+          <select
+            className="field max-w-40"
+            name="type"
+            defaultValue={sp.type ?? ""}
+          >
+            <option value="">All report types</option>
+            {reportTypes.map((t) => (
+              <option key={t}>{t}</option>
+            ))}
+          </select>
+          <select
+            className="field max-w-40"
+            name="status"
+            defaultValue={sp.status ?? ""}
+          >
+            <option value="">All statuses</option>
+            {reportStatuses.map((t) => (
+              <option key={t}>{t}</option>
+            ))}
+          </select>
         </>
       )}
       {tab === "tasks" && (
@@ -943,4 +987,65 @@ function selectedFor(
     campaign_ids: pick(rels.campaignMitre, "mitre_technique_id", "campaign_id"),
     malware_ids: pick(rels.malwareMitre, "mitre_technique_id", "malware_id"),
   };
+}
+
+function filterReports(rows: Row[], sp: SP) {
+  const q = sp.q?.toLowerCase();
+  let out = rows.filter(
+    (r) =>
+      (!sp.type || ss(r.type) === sp.type) &&
+      (!sp.status || ss(r.status) === sp.status),
+  );
+  if (q)
+    out = out.filter(
+      (r) =>
+        ss(r.title).toLowerCase().includes(q) ||
+        JSON.stringify(r.content ?? {})
+          .toLowerCase()
+          .includes(q),
+    );
+  return out.sort((a, b) => {
+    const primary =
+      sp.sort === "title"
+        ? ss(a.title).localeCompare(ss(b.title))
+        : ss(b.updated_at).localeCompare(ss(a.updated_at));
+    return primary || ss(a.id).localeCompare(ss(b.id));
+  });
+}
+function Reports({ id, rows, sp }: { id: string; rows: Row[]; sp: SP }) {
+  return (
+    <div className="mt-6 grid gap-6 lg:grid-cols-[360px_1fr]">
+      <div className="card">
+        <h2 className="font-semibold text-white">New report</h2>
+        <ReportCreate projectId={id} />
+      </div>
+      <div className="space-y-3">
+        {sp.deleted === "report" && (
+          <p
+            className="rounded border border-emerald-900 bg-emerald-950/50 p-3 text-sm text-emerald-200"
+            role="status"
+          >
+            Report deleted. Cleaned up {Number(sp.relationships || 0)} manual
+            Report graph relationships.
+          </p>
+        )}
+        {rows.map((r) => (
+          <Link
+            key={ss(r.id)}
+            href={`/projects/${id}/reports/${ss(r.id)}`}
+            className="block rounded border border-slate-800 p-4 hover:border-cyan-400"
+          >
+            <h3 className="font-semibold text-white">{ss(r.title)}</h3>
+            <p className="text-sm text-slate-400">
+              {ss(r.type)} · {ss(r.status)} · Updated{" "}
+              {new Date(ss(r.updated_at)).toLocaleString()}
+            </p>
+          </Link>
+        ))}
+        {rows.length === 0 && (
+          <p className="text-slate-400">No reports match this view.</p>
+        )}
+      </div>
+    </div>
+  );
 }
