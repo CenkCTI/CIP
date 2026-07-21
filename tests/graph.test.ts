@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import {
-  applySavedOrDeterministicPosition,
   deterministicPosition,
+  positionWithSavedFallback,
   filterGraph,
   preservedPosition,
   syncRelationshipFilters,
+  upsertSavedPosition,
 } from "@/lib/graph/filters";
 import {
   addUniqueGraphEdge,
@@ -173,15 +174,35 @@ describe("knowledge graph helpers", () => {
     expect(out.meta.truncated).toBe(true);
   });
 
-  it("restores saved positions after remount/refetch and lays out new nodes deterministically", () => {
-    const saved = new Map([["actor:a", { x: 42, y: 84 }]]);
-    expect(applySavedOrDeterministicPosition(saved, "actor:a", 0, 2)).toEqual({
-      x: 42,
-      y: 84,
-    });
-    expect(applySavedOrDeterministicPosition(saved, "malware:m", 1, 2)).toEqual(
-      deterministicPosition(1, 2),
-    );
+  it("keeps live dragged positions ahead of stale saved positions during rerenders", () => {
+    let saved = new Map([["actor:a", { x: 10, y: 20 }]]);
+    expect(
+      positionWithSavedFallback(undefined, saved, "actor:a", 0, 2),
+    ).toEqual({ x: 10, y: 20 });
+
+    saved = upsertSavedPosition(saved, "actor:a", { x: 30, y: 40 });
+    expect(
+      positionWithSavedFallback({ x: 30, y: 40 }, saved, "actor:a", 0, 2),
+    ).toEqual({ x: 30, y: 40 });
+    expect(
+      positionWithSavedFallback(
+        { x: 30, y: 40 },
+        new Map([["actor:a", { x: 10, y: 20 }]]),
+        "actor:a",
+        0,
+        2,
+      ),
+    ).toEqual({ x: 30, y: 40 });
+  });
+
+  it("restores the new server position on refetch/remount and lays out new nodes deterministically", () => {
+    const refetched = new Map([["actor:a", { x: 30, y: 40 }]]);
+    expect(
+      positionWithSavedFallback(undefined, refetched, "actor:a", 0, 2),
+    ).toEqual({ x: 30, y: 40 });
+    expect(
+      positionWithSavedFallback(undefined, refetched, "malware:m", 1, 2),
+    ).toEqual(deterministicPosition(1, 2));
   });
 
   it("validates layout batches and rejects non-finite coordinates", () => {

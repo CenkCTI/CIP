@@ -1,7 +1,21 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { assertGraphEntities } from "@/lib/graph/service";
-import { graphLayoutPatchSchema } from "@/lib/graph/types";
+import {
+  graphLayoutPatchSchema,
+  type GraphNodePosition,
+} from "@/lib/graph/types";
+
+function dedupePositions(positions: GraphNodePosition[]) {
+  return Array.from(
+    positions
+      .reduce((byNode, position) => {
+        byNode.set(`${position.entityType}:${position.entityId}`, position);
+        return byNode;
+      }, new Map<string, GraphNodePosition>())
+      .values(),
+  );
+}
 
 async function requireOwnedProject(projectId: string) {
   const ctx = await requireUser();
@@ -58,15 +72,16 @@ export async function PATCH(
       { error: parsed.error.issues[0]?.message ?? "Invalid layout." },
       { status: 400 },
     );
+  const uniquePositions = dedupePositions(parsed.data.positions);
   try {
-    await assertGraphEntities(ctx.supabase, id, parsed.data.positions);
+    await assertGraphEntities(ctx.supabase, id, uniquePositions);
   } catch (error) {
     if ((error as Error).message === "NEXT_HTTP_ERROR_FALLBACK;404") {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     throw error;
   }
-  const rows = parsed.data.positions.map((position) => ({
+  const rows = uniquePositions.map((position) => ({
     project_id: id,
     user_id: ctx.user.id,
     entity_type: position.entityType,

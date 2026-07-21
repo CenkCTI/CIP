@@ -13,11 +13,12 @@ import {
   type Node,
 } from "@xyflow/react";
 import {
-  applySavedOrDeterministicPosition,
   deterministicPosition,
   filterGraph,
+  positionWithSavedFallback,
   preservedPosition,
   syncRelationshipFilters,
+  upsertSavedPosition,
 } from "@/lib/graph/filters";
 import {
   graphEntityTypes,
@@ -60,12 +61,16 @@ function GraphCanvas({
   savedPositions,
   onReload,
   onLayoutReset,
+  onPositionSaved,
+  layoutWarning,
 }: {
   data: GraphResponse;
   projectId: string;
   savedPositions: Map<string, { x: number; y: number }>;
   onReload: () => Promise<void>;
   onLayoutReset: () => Promise<void>;
+  onPositionSaved: (id: string, position: { x: number; y: number }) => void;
+  layoutWarning: string;
 }) {
   const { fitView } = useReactFlow();
   const [query, setQuery] = useState("");
@@ -105,6 +110,7 @@ function GraphCanvas({
   }, [relationshipOptions]);
 
   const nodesRef = useRef(new Map<string, Node>());
+  const draggedNodeIds = useRef(new Set<string>());
   const filtered = useMemo(
     () =>
       filterGraph(data.nodes, data.edges, {
@@ -117,24 +123,23 @@ function GraphCanvas({
   const makeNodes = useCallback(
     (preservePositions = true) =>
       filtered.nodes.map<Node>((node, index) => {
-        const existing = preservePositions
-          ? preservedPosition(
-              nodesRef.current,
-              node.id,
-              deterministicPosition(index, filtered.nodes.length),
-            )
-          : undefined;
+        const existing =
+          preservePositions && draggedNodeIds.current.has(node.id)
+            ? preservedPosition(
+                nodesRef.current,
+                node.id,
+                deterministicPosition(index, filtered.nodes.length),
+              )
+            : undefined;
         return {
           id: node.id,
-          position:
-            savedPositions.get(node.id) ??
-            existing ??
-            applySavedOrDeterministicPosition(
-              savedPositions,
-              node.id,
-              index,
-              filtered.nodes.length,
-            ),
+          position: positionWithSavedFallback(
+            existing,
+            savedPositions,
+            node.id,
+            index,
+            filtered.nodes.length,
+          ),
           data: {
             label: (
               <button className="text-left" onClick={() => setDrawer(node)}>
@@ -198,6 +203,15 @@ function GraphCanvas({
   }, [makeEdges, makeNodes, setEdges, setNodes]);
 
   async function resetLayout() {
+    try {
+      await onLayoutReset();
+    } catch {
+      setMessage(
+        "Unable to reset saved graph layout; current layout preserved.",
+      );
+      return;
+    }
+    draggedNodeIds.current.clear();
     setQuery("");
     setTypes([...graphEntityTypes]);
     setRelationships(relationshipOptions);
@@ -214,12 +228,7 @@ function GraphCanvas({
       },
     }));
     setNodes(resetNodes);
-    try {
-      await onLayoutReset();
-      setMessage("Saved graph layout reset.");
-    } catch {
-      setMessage("Unable to reset saved graph layout.");
-    }
+    setMessage("Saved graph layout reset.");
     requestAnimationFrame(() => void fitView({ duration: 250 }));
   }
 
@@ -227,6 +236,15 @@ function GraphCanvas({
     async (_: MouseEvent | TouchEvent, dragged: Node) => {
       const graphNode = data.nodes.find((node) => node.id === dragged.id);
       if (!graphNode) return;
+      draggedNodeIds.current.add(dragged.id);
+      setNodes((current) =>
+        current.map((node) =>
+          node.id === dragged.id
+            ? { ...node, position: dragged.position }
+            : node,
+        ),
+      );
+      onPositionSaved(dragged.id, dragged.position);
       const response = await fetch(`/api/projects/${projectId}/graph/layout`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -243,12 +261,14 @@ function GraphCanvas({
       });
       if (!response.ok) {
         const payload: unknown = await response.json().catch(() => ({}));
-        setMessage(graphError(payload, "Unable to save graph layout."));
+        setMessage(
+          `${graphError(payload, "Unable to save graph layout.")} Current position is unsaved.`,
+        );
       } else {
         setMessage("Graph layout saved.");
       }
     },
-    [data.nodes, projectId],
+    [data.nodes, onPositionSaved, projectId, setNodes],
   );
 
   async function createLink() {
@@ -378,6 +398,9 @@ function GraphCanvas({
             onChange={(event) => setDescription(event.target.value)}
           />
         </div>
+        {layoutWarning && (
+          <p className="text-sm text-amber-300">{layoutWarning}</p>
+        )}
         {message && <p className="text-sm text-cyan-200">{message}</p>}
         {data.meta.truncated && (
           <p className="text-sm text-amber-300">
@@ -481,10 +504,12 @@ export function KnowledgeGraph({ projectId }: { projectId: string }) {
     new Map<string, { x: number; y: number }>(),
   );
   const [error, setError] = useState("");
+  const [layoutWarning, setLayoutWarning] = useState("");
   const [loading, setLoading] = useState(true);
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
+    setLayoutWarning("");
     const [response, layoutResponse] = await Promise.all([
       fetch(`/api/projects/${projectId}/graph`),
       fetch(`/api/projects/${projectId}/graph/layout`),
@@ -506,6 +531,10 @@ export function KnowledgeGraph({ projectId }: { projectId: string }) {
               { x: position.x, y: position.y },
             ]),
           ),
+        );
+      } else {
+        setLayoutWarning(
+          "Saved graph layout could not be loaded; using automatic layout until positions can be fetched.",
         );
       }
     }
@@ -529,6 +558,11 @@ export function KnowledgeGraph({ projectId }: { projectId: string }) {
     if (!response.ok) throw new Error("Unable to reset graph layout.");
     setSavedPositions(new Map());
   };
+  const updateSavedPosition = (
+    id: string,
+    position: { x: number; y: number },
+  ) =>
+    setSavedPositions((current) => upsertSavedPosition(current, id, position));
   return (
     <ReactFlowProvider>
       <GraphCanvas
@@ -537,6 +571,8 @@ export function KnowledgeGraph({ projectId }: { projectId: string }) {
         savedPositions={savedPositions}
         onReload={load}
         onLayoutReset={resetServerLayout}
+        onPositionSaved={updateSavedPosition}
+        layoutWarning={layoutWarning}
       />
     </ReactFlowProvider>
   );

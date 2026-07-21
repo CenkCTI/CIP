@@ -134,7 +134,7 @@ describe("graph layout route", () => {
     expect(res.status).toBe(404);
   });
 
-  it("duplicate upserts update composite rows and different users stay independent", async () => {
+  it("duplicate PATCH entries become one final upsert row", async () => {
     const upsert = vi.fn(async () => ({ error: null }));
     const supabase = {
       from: (table: string) =>
@@ -157,9 +157,23 @@ describe("graph layout route", () => {
       { params: Promise.resolve({ id: "project-1" }) },
     );
     expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ saved: 1 });
     expect(upsert).toHaveBeenCalledWith(
-      expect.arrayContaining([expect.objectContaining({ user_id: "user-1" })]),
+      [
+        expect.objectContaining({
+          user_id: "user-1",
+          entity_type: "ACTOR",
+          entity_id: uuid1,
+          position_x: 3,
+          position_y: 4,
+        }),
+      ],
       { onConflict: "project_id,user_id,entity_type,entity_id" },
+    );
+    expect(assertGraphEntities).toHaveBeenCalledWith(
+      expect.anything(),
+      "project-1",
+      [{ entityType: "ACTOR", entityId: uuid1, x: 3, y: 4 }],
     );
   });
 

@@ -60,11 +60,22 @@ export function preservedPosition<
   return existing.get(id)?.position ?? fallback;
 }
 
-export function applySavedOrDeterministicPosition(
+export function positionWithSavedFallback(
+  existing: { x: number; y: number } | undefined,
   saved: Map<string, { x: number; y: number }>,
   id: string,
   index: number,
   total: number,
 ) {
-  return saved.get(id) ?? deterministicPosition(index, total);
+  return existing ?? saved.get(id) ?? deterministicPosition(index, total);
+}
+
+export function upsertSavedPosition(
+  current: Map<string, { x: number; y: number }>,
+  id: string,
+  position: { x: number; y: number },
+) {
+  const next = new Map(current);
+  next.set(id, position);
+  return next;
 }
