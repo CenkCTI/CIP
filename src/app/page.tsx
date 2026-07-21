@@ -1,18 +1,2 @@
-export default function Home() {
-  return (
-    <main className="flex min-h-screen items-center justify-center p-8">
-      <section className="max-w-2xl rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-        <p className="mb-3 text-sm font-semibold uppercase tracking-[0.3em] text-slate-500">
-          CIP
-        </p>
-        <h1 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">
-          Clean foundation ready for preflight.
-        </h1>
-        <p className="mt-6 text-base leading-7 text-slate-600">
-          This repository contains the minimal Next.js App Router foundation for
-          future Cyber Research OS work.
-        </p>
-      </section>
-    </main>
-  );
-}
+import Link from "next/link";
+export default function Home(){return <main className="min-h-screen p-8"><section className="mx-auto mt-24 max-w-3xl text-center"><p className="text-sm uppercase tracking-[.35em] text-cyan-300">Cyber Research OS</p><h1 className="mt-4 text-5xl font-bold tracking-tight text-white">Operations workspace for serious cyber research.</h1><p className="mt-6 text-slate-300">Real Supabase authentication, protected dashboards, and project CRUD foundation.</p><div className="mt-8 flex justify-center gap-3"><Link className="rounded-lg bg-cyan-400 px-5 py-3 font-semibold text-slate-950" href="/auth/sign-in">Sign in</Link><Link className="rounded-lg border border-slate-700 px-5 py-3" href="/auth/sign-up">Create account</Link></div></section></main>}
