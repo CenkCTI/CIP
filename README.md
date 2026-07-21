@@ -49,3 +49,11 @@ Relationship edits are applied through the authenticated `replace_cti_relationsh
 ## Phase 5 Reports and exports
 
 Project Reports provide authenticated CRUD, a TipTap rich-text editor, insertion of real current-project records, Knowledge Graph Report nodes, and server-side PDF, Markdown, and standalone HTML downloads. Report content is stored as structured TipTap JSON; generated HTML escapes text and permits only supported nodes/marks and HTTP/HTTPS links. PDF generation uses `@react-pdf/renderer` in a Node.js route for Vercel-compatible real PDF bytes rather than browser screenshots or renamed HTML.
+
+## Phase 6 local Ollama AI Workspace
+
+Migrations now run from `202607210001` through `202607210012_phase6_ai_usage.sql`. The AI Workspace is an owned-project tab that uses local Ollama only and never persists AI output without explicit approval.
+
+Quick start: copy `.env.example` to `.env.local`, set `AI_ENABLED=true`, `AI_PROVIDER=ollama`, `AI_BASE_URL=http://127.0.0.1:11434/v1`, set `AI_MODEL` to a model you installed with Ollama, leave `AI_API_KEY` blank for local no-key Ollama, then run `npm run dev`. Use `npm run ai:smoke` only when Ollama is running.
+
+Production note: Vercel cannot reach a laptop-local Ollama endpoint. Keep AI disabled in Vercel unless you later provide a separately secured reachable HTTPS OpenAI-compatible endpoint.

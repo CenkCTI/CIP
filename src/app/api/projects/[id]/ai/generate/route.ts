@@ -1,0 +1,31 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { requireUser } from "@/lib/auth";
+import { aiWorkflowSchema, getAiConfig } from "@/lib/ai/config";
+import { runStructuredWorkflow, validateExtractedIndicator, missingProtectedTokens } from "@/lib/ai/workflows";
+import { AiError } from "@/lib/ai/client";
+export const runtime = "nodejs"; export const dynamic = "force-dynamic";
+const uuid = z.string().uuid();
+const bodySchema = z.object({ workflow: aiWorkflowSchema, noteIds: z.array(uuid).max(10).optional(), evidenceIds: z.array(uuid).max(10).optional(), pastedText: z.string().max(20000).optional(), entityType: z.enum(["campaigns","malware"]).optional(), entityId: uuid.optional(), targetLanguage: z.enum(["Spanish","French","German","Arabic","Turkish","Ukrainian","Russian","Chinese","Japanese","Korean","Portuguese","Italian","English"]).optional(), selections: z.record(z.string(), z.array(uuid).max(20)).optional() }).strict();
+async function projectCtx(id: string) { const { supabase, user } = await requireUser(); const { data, error } = await supabase.from("projects").select("id,owner_id").eq("id", id).single(); if (error || !data || data.owner_id !== user.id) throw new Error("not_found"); return { supabase, user, projectId: id }; }
+function safeError(e: unknown) { const code = e instanceof AiError ? e.code : "internal_failure"; return NextResponse.json({ error: code === "disabled" ? "AI is disabled." : code === "configuration_required" ? "AI configuration is required." : code === "timeout" ? "AI provider timed out." : code === "missing_model" ? "Configured Ollama model is missing." : code === "malformed_output" ? "AI output did not match the required schema." : code === "rate_limited" ? "AI usage limit exceeded." : "AI request could not be completed." }, { status: code === "rate_limited" ? 429 : 400 }); }
+async function reserve(supabase: any, projectId: string, workflow: string, inputChars: number) { const cfg = getAiConfig(); const { data, error } = await supabase.rpc("reserve_ai_usage_event", { p_project_id: projectId, p_workflow: workflow, p_input_chars: inputChars, p_window_minutes: cfg.rateLimitWindowMinutes, p_max_requests: cfg.rateLimitRequests, p_max_input_chars: cfg.rateLimitInputChars }); if (error || !data) throw new AiError("rate_limited"); return data as string; }
+async function finish(supabase: any, eventId: string, status: string, output: unknown) { await supabase.rpc("complete_ai_usage_event", { p_event_id: eventId, p_status: status, p_output_chars: JSON.stringify(output ?? "").length }); }
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params; const parsed = bodySchema.parse(await req.json()); const ctx = await projectCtx(id);
+    const source: Record<string, unknown> = { pastedText: parsed.pastedText?.slice(0, 20000) ?? "" };
+    if (parsed.noteIds?.length) { const { data } = await ctx.supabase.from("research_notes").select("id,title,content,tags").eq("project_id", id).in("id", parsed.noteIds); source.notes = data ?? []; }
+    if (parsed.evidenceIds?.length) { const { data } = await ctx.supabase.from("evidence").select("id,title,type,description,source_url,collection_date,tags").eq("project_id", id).in("id", parsed.evidenceIds); source.evidence = data ?? []; }
+    if (parsed.workflow === "suggest_mitre_mapping") { const table = parsed.entityType === "campaigns" ? "campaigns" : "malware"; const { data } = await ctx.supabase.from(table).select("id,name,description").eq("project_id", id).eq("id", parsed.entityId).single(); source.target = data; const { data: mitre } = await ctx.supabase.from("mitre_techniques").select("id,technique_id,name,description").eq("project_id", id).limit(200); source.available_mitre = mitre ?? []; }
+    if (parsed.workflow === "generate_report_draft" && parsed.selections) { for (const [table, ids] of Object.entries(parsed.selections)) { if (!["research_notes","evidence","timeline_events","project_tasks","threat_actors","campaigns","indicators","malware","cves","mitre_techniques"].includes(table)) continue; const { data } = await ctx.supabase.from(table).select("*").eq("project_id", id).in("id", ids); source[table] = (data ?? []).map((r: any) => ({ ...r, storage_path: undefined, owner_id: undefined, author_id: undefined })); } }
+    const inputChars = JSON.stringify(source).length; if (inputChars > getAiConfig().maxInputChars) return NextResponse.json({ error: "Selected source data is too large." }, { status: 400 });
+    const eventId = await reserve(ctx.supabase, id, parsed.workflow, inputChars);
+    try { const result: any = await runStructuredWorkflow(parsed.workflow, source); if (parsed.workflow === "summarize_research") { const allowed = new Set(((source.notes as any[]) ?? []).map((n) => n.id)); result.cited_source_note_ids = result.cited_source_note_ids.filter((x: string) => allowed.has(x)); }
+      if (parsed.workflow === "extract_indicators") { const values = result.indicators.map((x: any) => ({ ...x, validation: validateExtractedIndicator(x) })); const { data: existing } = await ctx.supabase.from("indicators").select("id,value,type").eq("project_id", id); result.indicators = values.map((x: any) => ({ ...x, duplicate_id: (existing ?? []).find((e: any) => e.type === x.type && e.value === x.validation.normalized)?.id ?? null })); }
+      if (parsed.workflow === "translate_document") { const sourceText = String((source.notes as any[])?.[0]?.content ?? (source.evidence as any[])?.[0]?.description ?? ""); const missing = missingProtectedTokens(sourceText, result.translated_text); result.preservation_warnings = [...result.preservation_warnings, ...missing.map((m) => `Protected token missing or changed: ${m}`)]; }
+      await finish(ctx.supabase, eventId, "SUCCEEDED", result); return NextResponse.json({ result, sourceRecordIds: { notes: ((source.notes as any[]) ?? []).map((n) => n.id), evidence: ((source.evidence as any[]) ?? []).map((e) => e.id) }, disclaimer: "AI-generated suggestions require human review and explicit approval before saving." });
+    } catch (e) { await finish(ctx.supabase, eventId, "FAILED", null); throw e; }
+  } catch (e) { return safeError(e); }
+}

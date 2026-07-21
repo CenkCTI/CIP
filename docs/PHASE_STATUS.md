@@ -49,3 +49,8 @@
 - [x] Knowledge Graph extended with Report nodes, styles, detail links, manual relationships, and saved position validation.
 - [ ] Phase 5 migrations applied to live Supabase database (blocked unless `SUPABASE_DB_URL` is configured in the execution environment).
 - [ ] Browser acceptance against live Supabase for report editor/export flows.
+
+## Phase 6 — Local Ollama AI Workspace
+- Code added for server-only Ollama configuration/status, JSON validation, metadata usage limiting migration 012, project AI Workspace UI, generation routes, and explicit approval routes.
+- Operator-reported prior live acceptance for Phases 1-5 is recorded separately from checks run in this environment.
+- Migration 012 was authored but not applied in this container because no live Supabase connection was configured.

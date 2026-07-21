@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "ai:smoke": "node scripts/ai-smoke.mjs"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",
@@ -29,6 +30,7 @@
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
+    "server-only": "^0.0.1",
     "tailwindcss": "latest",
     "zod": "^4.2.1"
   },
