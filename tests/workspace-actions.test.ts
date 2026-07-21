@@ -111,6 +111,13 @@ describe("workspace server workflow security", () => {
     expect((createSignedUploadUrl.mock.calls as unknown as string[][])[0][0]).not.toContain("//");
   });
 
+
+  it("labels signed upload authorization errors before any byte upload", async () => {
+    makeSupabase({ signedUploadError: "new row violates row-level security policy" });
+    const { authorizeEvidenceUpload } = await import("@/app/actions");
+    await expect(authorizeEvidenceUpload(PROJECT_ID, uploadInput)).resolves.toEqual({ error: "Signed upload authorization failed: new row violates row-level security policy" });
+  });
+
   it("URL evidence creation remains unaffected by file upload project validation", async () => {
     const { inserts } = makeSupabase();
     const { createUrlEvidence } = await import("@/app/actions");
@@ -127,13 +134,40 @@ describe("workspace server workflow security", () => {
     expect(source).not.toMatch(/String\(projectId\s*\?\?\s*["']{2}\)/);
   });
 
-  it("hardened storage RLS migration never casts object path segments to UUID", async () => {
+  it("fixed storage RLS migration recreates all evidence policies for authenticated users", async () => {
     const { readFileSync } = await import("node:fs");
-    const migration = readFileSync("supabase/migrations/202607210003_harden_evidence_storage_paths.sql", "utf8");
+    const migration = readFileSync("supabase/migrations/202607210004_fix_evidence_storage_signed_upload_rls.sql", "utf8");
+    for (const action of ["select", "insert", "update", "delete"]) {
+      expect(migration).toMatch(new RegExp(`for ${action} to authenticated`, "i"));
+    }
+    for (const policy of ["read", "insert", "update", "delete"]) {
+      expect(migration).toContain(`drop policy if exists "evidence storage ${policy} own" on storage.objects;`);
+    }
+  });
+
+  it("fixed storage RLS migration uses equivalent SELECT and INSERT ownership/path checks", async () => {
+    const { readFileSync } = await import("node:fs");
+    const migration = readFileSync("supabase/migrations/202607210004_fix_evidence_storage_signed_upload_rls.sql", "utf8");
+    const read = migration.match(/create policy "evidence storage read own"[\s\S]*?using \(([\s\S]*?)\n\);/)?.[1];
+    const insert = migration.match(/create policy "evidence storage insert own"[\s\S]*?with check \(([\s\S]*?)\n\);/)?.[1];
+    expect(read).toBeTruthy();
+    expect(insert).toBeTruthy();
+    const normalize = (sql = "") => sql.replace(/\s+/g, " ").trim();
+    expect(normalize(read)).toBe(normalize(insert));
+    expect(read).toContain("bucket_id = 'evidence'");
+    expect(read).toContain("(storage.foldername(name))[1] = (select auth.jwt()->>'sub')");
+    expect(read).toContain("array_length(storage.foldername(name), 1) = 2");
+    expect(read).toContain("storage.filename(name) <> ''");
+    expect(read).toContain("p.id::text = (storage.foldername(name))[2]");
+    expect(read).toContain("p.owner_id = (select auth.uid())");
+  });
+
+  it("fixed storage RLS migration never casts object path segments to UUID", async () => {
+    const { readFileSync } = await import("node:fs");
+    const migration = readFileSync("supabase/migrations/202607210004_fix_evidence_storage_signed_upload_rls.sql", "utf8");
     expect(migration).not.toMatch(/split_part\s*\(\s*name[\s\S]*?::uuid/i);
     expect(migration).not.toMatch(/storage\.foldername\s*\(\s*name\s*\)[\s\S]*?::uuid/i);
-    expect(migration).toMatch(/p\.id::text\s*=\s*split_part\(name, '\/', 2\)/);
-    expect(migration).toMatch(/p\.owner_id::text\s*=\s*split_part\(name, '\/', 1\)/);
+    expect(migration).not.toMatch(/\(storage\.foldername\(name\)\)\[[^\]]+\]::uuid/i);
   });
 
   it("metadata finalization failure deletes the newly uploaded orphan object", async () => {
