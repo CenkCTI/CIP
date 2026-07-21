@@ -15,6 +15,9 @@ export const noteSchema = z.object({
   tags,
 });
 
+export const requiredUuidSchema = z.string().trim().uuid();
+export const optionalUuidSchema = z.preprocess((v) => v === "" ? null : v, z.string().uuid().nullable().optional());
+
 const httpUrl = z.string().trim().optional().transform((v) => v || null).refine((v) => {
   if (!v) return true;
   try { return ["http:", "https:"].includes(new URL(v).protocol); } catch { return false; }
@@ -36,6 +39,13 @@ export const evidenceFinalizeSchema = evidenceMetadataSchema.extend({
   file_size: z.coerce.number().int().min(1).max(20 * 1024 * 1024),
 });
 
+export const evidenceReplacementSchema = z.object({
+  storage_path: z.string().min(1),
+  original_file_name: z.string().min(1).max(255),
+  mime_type: z.string().min(1).max(160),
+  file_size: z.coerce.number().int().min(1).max(20 * 1024 * 1024),
+});
+
 export const evidenceUrlOnlySchema = evidenceMetadataSchema.superRefine((v, ctx) => {
   if ((v.type === "ARTICLE" || v.type === "TWEET") && !v.source_url) {
     ctx.addIssue({ code: "custom", message: "Source URL is required for ARTICLE and TWEET evidence." });
@@ -47,7 +57,7 @@ export const timelineSchema = z.object({
   event_date: z.string().min(1).transform((v) => new Date(v).toISOString()),
   description: z.string().max(10000).default(""),
   related_entity_type: z.string().trim().optional().transform((v) => v || null),
-  related_entity_id: z.string().uuid().optional().or(z.literal("")).transform((v) => v || null),
+  related_entity_id: optionalUuidSchema.transform((v) => v ?? null),
 });
 
 export const taskSchema = z.object({
@@ -55,7 +65,7 @@ export const taskSchema = z.object({
   description: z.string().max(10000).default(""),
   status: z.enum(taskStatuses),
   priority: z.enum(taskPriorities),
-  assigned_user_id: z.string().uuid().optional().or(z.literal("")).transform((v) => v || null),
+  assigned_user_id: optionalUuidSchema.transform((v) => v ?? null),
   deadline: z.string().optional().transform((v) => v ? new Date(v).toISOString() : null),
 });
 
