@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { KnowledgeGraph } from "@/components/graph/knowledge-graph";
 import { notFound } from "next/navigation";
 import { deleteProject, updateProject } from "@/app/actions";
 import { ProjectForm } from "@/components/project-form";
@@ -60,6 +61,7 @@ const tabs = [
   "malware",
   "cves",
   "mitre",
+  "graph",
 ];
 function tagText(a: unknown) {
   return aa(a).join(", ");
@@ -215,6 +217,7 @@ export default async function Page({
         />
       )}{" "}
       {tab === "overview" && <Overview project={project} />}{" "}
+      {tab === "graph" && <KnowledgeGraph projectId={id} />}{" "}
       {tab === "notes" && (
         <Notes
           id={id}

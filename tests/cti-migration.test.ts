@@ -8,7 +8,7 @@ describe("phase 3 migration regression coverage",()=>{
   it("adds reverse lookup indexes for relationship detail pages",()=>{for(const name of ["campaign_threat_actors_actor_idx","threat_actor_malware_malware_idx","campaign_indicators_indicator_idx","malware_mitre_techniques_mitre_idx"]){expect(sql).toContain(name);}});
 
   it("quotes reserved references column identifiers",()=>{
-    expect(sql.match(/"references"\\s+text\\[\\]/g)?.length).toBe(2);
-    expect(sql).not.toMatch(/,\\s*references\\s+text\\[\\]/i);
+    expect(sql.match(/"references"\s+text\[\]/g)?.length).toBe(2);
+    expect(sql).not.toMatch(/,\s*references\s+text\[\]/i);
   });
 });
