@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import {
   deterministicPosition,
+  positionWithSavedFallback,
   filterGraph,
   preservedPosition,
   syncRelationshipFilters,
+  upsertSavedPosition,
 } from "@/lib/graph/filters";
 import {
   addUniqueGraphEdge,
@@ -12,6 +14,7 @@ import {
   semanticJoinDefs,
 } from "@/lib/graph/service";
 import {
+  graphLayoutPatchSchema,
   manualRelationshipSchema,
   nodeId,
   type GraphEdge,
@@ -171,6 +174,81 @@ describe("knowledge graph helpers", () => {
     expect(out.meta.truncated).toBe(true);
   });
 
+  it("keeps live dragged positions ahead of stale saved positions during rerenders", () => {
+    let saved = new Map([["actor:a", { x: 10, y: 20 }]]);
+    expect(
+      positionWithSavedFallback(undefined, saved, "actor:a", 0, 2),
+    ).toEqual({ x: 10, y: 20 });
+
+    saved = upsertSavedPosition(saved, "actor:a", { x: 30, y: 40 });
+    expect(
+      positionWithSavedFallback({ x: 30, y: 40 }, saved, "actor:a", 0, 2),
+    ).toEqual({ x: 30, y: 40 });
+    expect(
+      positionWithSavedFallback(
+        { x: 30, y: 40 },
+        new Map([["actor:a", { x: 10, y: 20 }]]),
+        "actor:a",
+        0,
+        2,
+      ),
+    ).toEqual({ x: 30, y: 40 });
+  });
+
+  it("restores the new server position on refetch/remount and lays out new nodes deterministically", () => {
+    const refetched = new Map([["actor:a", { x: 30, y: 40 }]]);
+    expect(
+      positionWithSavedFallback(undefined, refetched, "actor:a", 0, 2),
+    ).toEqual({ x: 30, y: 40 });
+    expect(
+      positionWithSavedFallback(undefined, refetched, "malware:m", 1, 2),
+    ).toEqual(deterministicPosition(1, 2));
+  });
+
+  it("validates layout batches and rejects non-finite coordinates", () => {
+    expect(
+      graphLayoutPatchSchema.safeParse({
+        positions: [
+          {
+            entityType: "ACTOR",
+            entityId: "11111111-1111-4111-8111-111111111111",
+            x: 1,
+            y: 2,
+          },
+        ],
+      }).success,
+    ).toBe(true);
+    for (const x of [
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      1000001,
+    ]) {
+      expect(
+        graphLayoutPatchSchema.safeParse({
+          positions: [
+            {
+              entityType: "ACTOR",
+              entityId: "11111111-1111-4111-8111-111111111111",
+              x,
+              y: 2,
+            },
+          ],
+        }).success,
+      ).toBe(false);
+    }
+    expect(
+      graphLayoutPatchSchema.safeParse({
+        positions: Array.from({ length: 501 }, () => ({
+          entityType: "ACTOR",
+          entityId: "11111111-1111-4111-8111-111111111111",
+          x: 1,
+          y: 2,
+        })),
+      }).success,
+    ).toBe(false);
+  });
+
   it("preserves dragged positions during selection/style updates", () => {
     const existing = new Map([
       ["actor:a", { id: "actor:a", position: { x: 99, y: 101 } }],
@@ -200,6 +278,18 @@ describe("knowledge graph helpers", () => {
         "new_label",
       ]).relationships,
     ).toEqual([]);
+  });
+
+  it("graph payload exposes no sensitive Evidence storage data", () => {
+    const source = fs.readFileSync("src/lib/graph/service.ts", "utf8");
+    const evidenceDef =
+      source.match(/type: "EVIDENCE"[\s\S]*?meta: \[[\s\S]*?\],/)?.[0] ?? "";
+    expect(evidenceDef).toContain(
+      'select: "id,title,type,collection_date,tags,created_at"',
+    );
+    expect(evidenceDef).not.toContain("storage_path");
+    expect(evidenceDef).not.toContain("signed");
+    expect(evidenceDef).not.toContain("token");
   });
 
   it("semantic edge deduplication removes identical rendered edges but keeps manual distinct", () => {
@@ -253,5 +343,46 @@ describe("phase 4 migration", () => {
     expect(sql).toContain("relationship_type = btrim(relationship_type)");
     expect(sql).toContain("char_length(relationship_type) between 2 and 80");
     expect(sql).toContain("^[A-Za-z0-9][A-Za-z0-9 _.:/-]*$");
+  });
+});
+
+describe("phase 4 graph node position hotfix migration", () => {
+  const sql = fs.readFileSync(
+    "supabase/migrations/202607210008_graph_node_positions.sql",
+    "utf8",
+  );
+  it("creates secure additive graph_node_positions storage with finite bounds", () => {
+    expect(sql).toContain("create table public.graph_node_positions");
+    expect(sql).toContain(
+      "primary key (project_id, user_id, entity_type, entity_id)",
+    );
+    expect(sql).toContain("position_x between -1000000 and 1000000");
+    expect(sql).toContain("position_y between -1000000 and 1000000");
+    expect(sql).toContain(
+      "position_x::text not in ('NaN', 'Infinity', '-Infinity')",
+    );
+    expect(sql).toContain(
+      "position_y::text not in ('NaN', 'Infinity', '-Infinity')",
+    );
+    expect(sql).toContain("enable row level security");
+    expect(sql).toContain("user_id = auth.uid()");
+    expect(sql).toContain(
+      "public.graph_entity_exists(new.project_id, new.entity_type, new.entity_id)",
+    );
+    expect(sql).toContain("set_graph_node_positions_updated_at");
+  });
+
+  it("adds cleanup triggers for every Phase 4 graph entity table", () => {
+    expect(sql).toContain("cleanup_graph_node_positions");
+    for (const table of [
+      "threat_actors",
+      "campaigns",
+      "indicators",
+      "malware",
+      "cves",
+      "mitre_techniques",
+      "evidence",
+    ])
+      expect(sql).toContain(`before delete on public.${table}`);
   });
 });

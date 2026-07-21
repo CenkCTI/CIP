@@ -15,14 +15,18 @@ import {
 import {
   deterministicPosition,
   filterGraph,
+  positionWithSavedFallback,
   preservedPosition,
   syncRelationshipFilters,
+  upsertSavedPosition,
 } from "@/lib/graph/filters";
 import {
   graphEntityTypes,
+  nodeId,
   type GraphEdge,
   type GraphEntityType,
   type GraphNode,
+  type GraphNodePosition,
   type GraphResponse,
 } from "@/lib/graph/types";
 
@@ -54,11 +58,19 @@ function graphError(payload: unknown, fallback: string) {
 function GraphCanvas({
   data,
   projectId,
+  savedPositions,
   onReload,
+  onLayoutReset,
+  onPositionSaved,
+  layoutWarning,
 }: {
   data: GraphResponse;
   projectId: string;
+  savedPositions: Map<string, { x: number; y: number }>;
   onReload: () => Promise<void>;
+  onLayoutReset: () => Promise<void>;
+  onPositionSaved: (id: string, position: { x: number; y: number }) => void;
+  layoutWarning: string;
 }) {
   const { fitView } = useReactFlow();
   const [query, setQuery] = useState("");
@@ -98,6 +110,7 @@ function GraphCanvas({
   }, [relationshipOptions]);
 
   const nodesRef = useRef(new Map<string, Node>());
+  const draggedNodeIds = useRef(new Set<string>());
   const filtered = useMemo(
     () =>
       filterGraph(data.nodes, data.edges, {
@@ -110,17 +123,23 @@ function GraphCanvas({
   const makeNodes = useCallback(
     (preservePositions = true) =>
       filtered.nodes.map<Node>((node, index) => {
-        const existing = preservePositions
-          ? preservedPosition(
-              nodesRef.current,
-              node.id,
-              deterministicPosition(index, filtered.nodes.length),
-            )
-          : undefined;
+        const existing =
+          preservePositions && draggedNodeIds.current.has(node.id)
+            ? preservedPosition(
+                nodesRef.current,
+                node.id,
+                deterministicPosition(index, filtered.nodes.length),
+              )
+            : undefined;
         return {
           id: node.id,
-          position:
-            existing ?? deterministicPosition(index, filtered.nodes.length),
+          position: positionWithSavedFallback(
+            existing,
+            savedPositions,
+            node.id,
+            index,
+            filtered.nodes.length,
+          ),
           data: {
             label: (
               <button className="text-left" onClick={() => setDrawer(node)}>
@@ -146,7 +165,7 @@ function GraphCanvas({
           },
         };
       }),
-    [filtered.nodes, query, selected],
+    [filtered.nodes, query, savedPositions, selected],
   );
   const makeEdges = useCallback(
     () =>
@@ -183,7 +202,16 @@ function GraphCanvas({
     setEdges(makeEdges());
   }, [makeEdges, makeNodes, setEdges, setNodes]);
 
-  function resetLayout() {
+  async function resetLayout() {
+    try {
+      await onLayoutReset();
+    } catch {
+      setMessage(
+        "Unable to reset saved graph layout; current layout preserved.",
+      );
+      return;
+    }
+    draggedNodeIds.current.clear();
     setQuery("");
     setTypes([...graphEntityTypes]);
     setRelationships(relationshipOptions);
@@ -200,8 +228,48 @@ function GraphCanvas({
       },
     }));
     setNodes(resetNodes);
+    setMessage("Saved graph layout reset.");
     requestAnimationFrame(() => void fitView({ duration: 250 }));
   }
+
+  const saveNodePosition = useCallback(
+    async (_: MouseEvent | TouchEvent, dragged: Node) => {
+      const graphNode = data.nodes.find((node) => node.id === dragged.id);
+      if (!graphNode) return;
+      draggedNodeIds.current.add(dragged.id);
+      setNodes((current) =>
+        current.map((node) =>
+          node.id === dragged.id
+            ? { ...node, position: dragged.position }
+            : node,
+        ),
+      );
+      onPositionSaved(dragged.id, dragged.position);
+      const response = await fetch(`/api/projects/${projectId}/graph/layout`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          positions: [
+            {
+              entityType: graphNode.type,
+              entityId: graphNode.entityId,
+              x: dragged.position.x,
+              y: dragged.position.y,
+            },
+          ],
+        }),
+      });
+      if (!response.ok) {
+        const payload: unknown = await response.json().catch(() => ({}));
+        setMessage(
+          `${graphError(payload, "Unable to save graph layout.")} Current position is unsaved.`,
+        );
+      } else {
+        setMessage("Graph layout saved.");
+      }
+    },
+    [data.nodes, onPositionSaved, projectId, setNodes],
+  );
 
   async function createLink() {
     if (selected.length !== 2) return;
@@ -330,6 +398,9 @@ function GraphCanvas({
             onChange={(event) => setDescription(event.target.value)}
           />
         </div>
+        {layoutWarning && (
+          <p className="text-sm text-amber-300">{layoutWarning}</p>
+        )}
         {message && <p className="text-sm text-cyan-200">{message}</p>}
         {data.meta.truncated && (
           <p className="text-sm text-amber-300">
@@ -351,6 +422,7 @@ function GraphCanvas({
           fitView
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
+          onNodeDragStop={saveNodePosition}
           onNodeClick={(_, node) =>
             setSelected((current) =>
               current.includes(node.id)
@@ -428,17 +500,43 @@ function GraphCanvas({
 
 export function KnowledgeGraph({ projectId }: { projectId: string }) {
   const [data, setData] = useState<GraphResponse | null>(null);
+  const [savedPositions, setSavedPositions] = useState(
+    new Map<string, { x: number; y: number }>(),
+  );
   const [error, setError] = useState("");
+  const [layoutWarning, setLayoutWarning] = useState("");
   const [loading, setLoading] = useState(true);
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
-    const response = await fetch(`/api/projects/${projectId}/graph`);
+    setLayoutWarning("");
+    const [response, layoutResponse] = await Promise.all([
+      fetch(`/api/projects/${projectId}/graph`),
+      fetch(`/api/projects/${projectId}/graph/layout`),
+    ]);
     if (!response.ok) {
       const payload: unknown = await response.json().catch(() => ({}));
       setError(graphError(payload, "Unable to load the knowledge graph."));
     } else {
-      setData(await response.json());
+      const graph = (await response.json()) as GraphResponse;
+      setData(graph);
+      if (layoutResponse.ok) {
+        const layout = (await layoutResponse.json()) as {
+          positions?: GraphNodePosition[];
+        };
+        setSavedPositions(
+          new Map(
+            (layout.positions ?? []).map((position) => [
+              nodeId(position.entityType, position.entityId),
+              { x: position.x, y: position.y },
+            ]),
+          ),
+        );
+      } else {
+        setLayoutWarning(
+          "Saved graph layout could not be loaded; using automatic layout until positions can be fetched.",
+        );
+      }
     }
     setLoading(false);
   }, [projectId]);
@@ -453,9 +551,29 @@ export function KnowledgeGraph({ projectId }: { projectId: string }) {
       </div>
     );
   }
+  const resetServerLayout = async () => {
+    const response = await fetch(`/api/projects/${projectId}/graph/layout`, {
+      method: "DELETE",
+    });
+    if (!response.ok) throw new Error("Unable to reset graph layout.");
+    setSavedPositions(new Map());
+  };
+  const updateSavedPosition = (
+    id: string,
+    position: { x: number; y: number },
+  ) =>
+    setSavedPositions((current) => upsertSavedPosition(current, id, position));
   return (
     <ReactFlowProvider>
-      <GraphCanvas data={data} projectId={projectId} onReload={load} />
+      <GraphCanvas
+        data={data}
+        projectId={projectId}
+        savedPositions={savedPositions}
+        onReload={load}
+        onLayoutReset={resetServerLayout}
+        onPositionSaved={updateSavedPosition}
+        layoutWarning={layoutWarning}
+      />
     </ReactFlowProvider>
   );
 }
