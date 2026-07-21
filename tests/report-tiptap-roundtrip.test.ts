@@ -2,7 +2,7 @@ import { Editor } from "@tiptap/core";
 import { renderToBuffer } from "@react-pdf/renderer";
 import React from "react";
 import { Document, Page } from "@react-pdf/renderer";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { reportEditorExtensions } from "@/lib/reports/editor-extensions";
 import { parseJsonDoc } from "@/lib/reports/schema";
 import {
@@ -69,29 +69,60 @@ describe("production TipTap report schema round trip", () => {
     expect(pdf.length).toBeGreaterThan(100);
     e.destroy();
   });
-  it("saves real editor JSON through updateReport", async () => {
+  it("round-trips real link attrs through validation and exports", async () => {
     const e = editor();
-    e.commands.insertContent("saved");
+    e.commands.setContent({
+      type: "doc",
+      attrs: { version: 1 },
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            {
+              type: "text",
+              text: "safe",
+              marks: [{ type: "link", attrs: { href: "https://example.com" } }],
+            },
+            { type: "text", text: " bold", marks: [{ type: "bold" }] },
+            { type: "text", text: " italic", marks: [{ type: "italic" }] },
+            { type: "text", text: " code", marks: [{ type: "code" }] },
+          ],
+        },
+      ],
+    });
     const json = e.getJSON();
-    const actions = await import("@/app/actions");
-    const spy = vi
-      .spyOn(actions, "updateReport")
-      .mockResolvedValueOnce({ success: "Report saved." });
-    const fd = new FormData();
-    fd.set("title", "Round Trip");
-    fd.set("type", "CTI");
-    fd.set("status", "DRAFT");
-    fd.set("content", JSON.stringify(json));
-    await expect(
-      actions.updateReport(
-        "00000000-0000-4000-8000-0000000000aa",
-        "00000000-0000-4000-8000-000000000001",
-        {},
-        fd,
+    const link = JSON.stringify(json);
+    expect(link).toContain('"target":"_blank"');
+    expect(link).toContain('"rel":"noopener noreferrer nofollow"');
+    expect(link).toContain('"class":null');
+    expect(link).toContain('"title":null');
+    expect(parseJsonDoc(json).success).toBe(true);
+    expect(
+      standaloneHtml(json, { title: "Link", type: "CTI", status: "DRAFT" }),
+    ).toContain("https://example.com");
+    expect(tiptapToMarkdown(json)).toContain("https://example.com");
+    const pdf = await renderToBuffer(
+      React.createElement(
+        Document,
+        null,
+        React.createElement(Page, null, tiptapToPdfElements(json)),
       ),
-    ).resolves.toEqual({ success: "Report saved." });
-    expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
+    );
+    expect(pdf.length).toBeGreaterThan(100);
+    e.destroy();
+  });
+  it("round-trips real codeBlock attrs and confirms underline is unavailable", () => {
+    const e = editor();
+    expect(e.schema.marks.underline).toBeUndefined();
+    e.commands.setCodeBlock();
+    e.commands.insertContent("const x = 1;");
+    const json = e.getJSON();
+    expect(JSON.stringify(json)).toContain('"language":null');
+    expect(parseJsonDoc(json).success).toBe(true);
+    expect(tiptapToMarkdown(json)).toContain("const x = 1;");
+    expect(
+      standaloneHtml(json, { title: "Code", type: "CTI", status: "DRAFT" }),
+    ).toContain("const x = 1;");
     e.destroy();
   });
   it("still rejects unsafe and unsupported attributes", () => {

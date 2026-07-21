@@ -341,15 +341,44 @@ function titleFor(k: string, r: Row) {
   );
 }
 function summaryFor(k: string, r: Row) {
-  return [
-    s(r.description),
-    s(r.type),
-    s(r.status),
-    s(r.severity),
-    s(r.confidence),
-    s(r.source_url),
-  ]
+  const fields: Record<string, string[]> = {
+    research_notes: ["content", "updated_at"],
+    evidence: ["type", "description", "source_url", "collection_date"],
+    timeline_events: ["event_date", "description"],
+    project_tasks: ["status", "priority", "deadline", "description"],
+    threat_actors: ["aliases", "country", "motivations", "description"],
+    campaigns: ["description", "start_date", "end_date", "targets"],
+    indicators: [
+      "value",
+      "type",
+      "confidence",
+      "source",
+      "first_seen",
+      "last_seen",
+    ],
+    malware: ["name", "family", "description", "behavior"],
+    cves: [
+      "cve_id",
+      "severity",
+      "affected_product",
+      "exploit_status",
+      "description",
+    ],
+    mitre_techniques: [
+      "technique_id",
+      "technique_name",
+      "tactic",
+      "description",
+    ],
+  };
+  const safeFields = fields[k] ?? ["description", "type", "status"];
+  return safeFields
+    .map((field) => {
+      const value = r[field];
+      const text = Array.isArray(value) ? value.join(", ") : s(value);
+      return text ? `${field}: ${text}` : "";
+    })
     .filter(Boolean)
     .join(" · ")
-    .slice(0, 1000);
+    .slice(0, 1500);
 }

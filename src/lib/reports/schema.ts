@@ -119,7 +119,15 @@ const markSchema: z.ZodTypeAny = z
   .superRefine((mark, ctx) => {
     if (mark.type === "link") {
       const attrs = z
-        .object({ href: z.string() })
+        .object({
+          href: z.string(),
+          target: z.union([z.null(), z.literal("_blank")]).optional(),
+          rel: z
+            .union([z.null(), z.literal("noopener noreferrer nofollow")])
+            .optional(),
+          class: z.null().optional(),
+          title: z.union([z.null(), z.string().trim().max(200)]).optional(),
+        })
         .strict()
         .safeParse(mark.attrs ?? {});
       if (!attrs.success || !safeHttpUrl(attrs.data.href))
@@ -169,13 +177,21 @@ const nodeSchema: z.ZodTypeAny = z.lazy(() =>
             code: "custom",
             message: "Headings support levels 1-3.",
           });
+      } else if (node.type === "codeBlock") {
+        const ok = z
+          .object({ language: z.null().default(null) })
+          .strict()
+          .safeParse(attrs).success;
+        if (!ok)
+          ctx.addIssue({
+            code: "custom",
+            message: "Code blocks support only language:null.",
+          });
       } else if (node.type === "orderedList") {
         const ok = z
           .object({
             start: z.number().int().min(1).max(10000).default(1),
-            type: z
-              .union([z.null(), z.enum(["1", "a", "A", "i", "I"])])
-              .default(null),
+            type: z.null().default(null),
           })
           .strict()
           .safeParse(attrs).success;

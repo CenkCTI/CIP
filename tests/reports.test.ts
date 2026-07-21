@@ -163,6 +163,8 @@ describe("report TipTap validation and exports", () => {
       "data:text/html,x",
       "/relative",
       "not a url",
+      "https://user:pass@example.com",
+      " https://example.com",
     ]) {
       expect(
         parseJsonDoc({
@@ -183,6 +185,29 @@ describe("report TipTap validation and exports", () => {
         }).success,
       ).toBe(false);
     }
+    expect(
+      parseJsonDoc({
+        type: "doc",
+        attrs: { version: 1 },
+        content: [
+          {
+            type: "paragraph",
+            content: [
+              {
+                type: "text",
+                text: "x",
+                marks: [
+                  {
+                    type: "link",
+                    attrs: { href: "https://example.com", onclick: "x" },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      }).success,
+    ).toBe(false);
   });
 
   it("renders sanitized standalone HTML", () => {

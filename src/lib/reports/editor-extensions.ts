@@ -21,6 +21,7 @@ export function reportEditorExtensions() {
       link: false,
       strike: false,
       horizontalRule: false,
+      underline: false,
       dropcursor: false,
       gapcursor: false,
     }),

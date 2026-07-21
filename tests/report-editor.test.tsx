@@ -2,7 +2,6 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ReportEditor } from "@/components/reports/report-editor";
-
 let actionResult: { success?: string; error?: string } = {
   success: "Report saved.",
 };
@@ -26,6 +25,7 @@ const report = {
 describe("ReportEditor dirty and insertion behavior", () => {
   beforeEach(() => {
     actionResult = { success: "Report saved." };
+    push.mockClear();
     const rects = [
       {
         width: 0,
@@ -117,6 +117,42 @@ describe("ReportEditor dirty and insertion behavior", () => {
     expect(screen.getByText("Safe evidence")).toBeInTheDocument();
     expect(screen.queryByText(/secret/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByText("Safe evidence"));
+    expect(screen.getByText(/Unsaved changes/i)).toBeInTheDocument();
+  });
+  it("inserts Research Note content and CTI identifying fields", async () => {
+    render(
+      <ReportEditor
+        projectId="p1"
+        report={report}
+        insertables={{
+          research_notes: [
+            {
+              id: "n1",
+              title: "Note title",
+              content: "Observed behavior details",
+            },
+          ],
+          indicators: [
+            { id: "i1", value: "1.2.3.4", type: "IP", confidence: "HIGH" },
+          ],
+          cves: [{ id: "c1", cve_id: "CVE-2026-0001", severity: "HIGH" }],
+          mitre_techniques: [
+            {
+              id: "m1",
+              technique_id: "T1059",
+              technique_name: "Command Shell",
+              tactic: "Execution",
+            },
+          ],
+        }}
+      />,
+    );
+    await userEvent.click(screen.getByText("Note title"));
+    await userEvent.click(screen.getByText("1.2.3.4"));
+    expect(
+      screen.getByText(/content: Observed behavior details/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/value: 1\.2\.3\.4/i)).toBeInTheDocument();
     expect(screen.getByText(/Unsaved changes/i)).toBeInTheDocument();
   });
 });
