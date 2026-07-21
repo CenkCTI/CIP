@@ -212,6 +212,8 @@ export function addUniqueGraphEdge(
 export function limitGraph(
   nodes: GraphNode[],
   edges: GraphEdge[],
+  totalNodeCount = nodes.length,
+  totalEdgeCount = edges.length,
 ): GraphResponse {
   const finalNodes = nodes.slice(0, NODE_LIMIT);
   const nodeSet = new Set(finalNodes.map((node) => node.id));
@@ -219,14 +221,14 @@ export function limitGraph(
     (edge) => nodeSet.has(edge.source) && nodeSet.has(edge.target),
   );
   const finalEdges = validEdges.slice(0, EDGE_LIMIT);
-  const omittedNodes = Math.max(0, nodes.length - finalNodes.length);
-  const omittedEdges = Math.max(0, validEdges.length - finalEdges.length);
+  const omittedNodes = Math.max(0, totalNodeCount - finalNodes.length);
+  const omittedEdges = Math.max(0, totalEdgeCount - finalEdges.length);
   return {
     nodes: finalNodes,
     edges: finalEdges,
     meta: {
-      nodeCount: nodes.length,
-      edgeCount: validEdges.length,
+      nodeCount: totalNodeCount,
+      edgeCount: totalEdgeCount,
       truncated: omittedNodes > 0 || omittedEdges > 0,
       nodeLimit: NODE_LIMIT,
       edgeLimit: EDGE_LIMIT,
@@ -313,7 +315,11 @@ export async function loadProjectGraph(
     }
   });
 
-  const { data: manual, error: manualError } = await supabase
+  const {
+    data: manual,
+    error: manualError,
+    count: manualCount,
+  } = await supabase
     .from("entity_relationships")
     .select(
       "id,source_type,source_id,target_type,target_id,relationship_type,description",
@@ -341,15 +347,19 @@ export async function loadProjectGraph(
     }
   }
 
-  const response = limitGraph(nodes, edges);
-  response.meta.nodeCount = totalNodeCount;
-  response.meta.omittedNodes = Math.max(
+  const totalSemanticEdgeCount = joinResults.reduce(
+    (total, result) => total + (result.count ?? result.data?.length ?? 0),
     0,
-    totalNodeCount - response.nodes.length,
   );
-  response.meta.truncated =
-    response.meta.omittedNodes > 0 || response.meta.omittedEdges > 0;
-  return response;
+  const totalManualEdgeCount = manualError
+    ? 0
+    : (manualCount ?? manual?.length ?? 0);
+  return limitGraph(
+    nodes,
+    edges,
+    totalNodeCount,
+    totalSemanticEdgeCount + totalManualEdgeCount,
+  );
 }
 
 export async function assertGraphEntity(

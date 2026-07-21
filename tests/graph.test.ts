@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
-import { deterministicPosition, filterGraph } from "@/lib/graph/filters";
+import {
+  deterministicPosition,
+  filterGraph,
+  preservedPosition,
+  syncRelationshipFilters,
+} from "@/lib/graph/filters";
 import {
   addUniqueGraphEdge,
   limitGraph,
@@ -160,10 +165,41 @@ describe("knowledge graph helpers", () => {
     expect(out.nodes).toHaveLength(500);
     expect(out.edges).toEqual([graphEdges[0]]);
     expect(out.meta.nodeCount).toBe(501);
-    expect(out.meta.edgeCount).toBe(1);
+    expect(out.meta.edgeCount).toBe(2);
     expect(out.meta.omittedNodes).toBe(1);
-    expect(out.meta.omittedEdges).toBe(0);
+    expect(out.meta.omittedEdges).toBe(1);
     expect(out.meta.truncated).toBe(true);
+  });
+
+  it("preserves dragged positions during selection/style updates", () => {
+    const existing = new Map([
+      ["actor:a", { id: "actor:a", position: { x: 99, y: 101 } }],
+    ]);
+    expect(preservedPosition(existing, "actor:a", { x: 0, y: 0 })).toEqual({
+      x: 99,
+      y: 101,
+    });
+    expect(preservedPosition(existing, "missing", { x: 1, y: 2 })).toEqual({
+      x: 1,
+      y: 2,
+    });
+  });
+
+  it("adds newly discovered relationship types without re-enabling unchecked existing types", () => {
+    const known = new Set(["uses", "related_to"]);
+    const synced = syncRelationshipFilters(["uses"], known, [
+      "uses",
+      "related_to",
+      "new_label",
+    ]);
+    expect(synced.relationships).toEqual(["uses", "new_label"]);
+    expect(
+      syncRelationshipFilters([], synced.known, [
+        "uses",
+        "related_to",
+        "new_label",
+      ]).relationships,
+    ).toEqual([]);
   });
 
   it("semantic edge deduplication removes identical rendered edges but keeps manual distinct", () => {
@@ -190,7 +226,14 @@ describe("phase 4 migration", () => {
     expect(sql).toContain("graph_entity_exists");
     expect(sql).toContain("entity_relationships_unique_exact");
     expect(sql).toContain("enable row level security");
+    expect(sql).toContain(
+      "where p.id = new.project_id and p.owner_id = auth.uid()",
+    );
+    expect(
+      sql.indexOf("where p.id = new.project_id and p.owner_id = auth.uid()"),
+    ).toBeLessThan(sql.indexOf("public.graph_entity_exists(new.project_id"));
     expect(sql).toContain("new.created_by <> old.created_by");
+    expect(sql).toContain("set search_path = ''");
     expect(sql).toContain(
       "revoke all on function public.cleanup_entity_relationships() from public, anon, authenticated",
     );

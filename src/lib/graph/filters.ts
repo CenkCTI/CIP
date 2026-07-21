@@ -37,3 +37,25 @@ export function deterministicPosition(index: number, total: number) {
   const cols = Math.ceil(Math.sqrt(Math.max(total, 1)));
   return { x: (index % cols) * 220, y: Math.floor(index / cols) * 150 };
 }
+
+export function syncRelationshipFilters(
+  current: string[],
+  known: Set<string>,
+  discovered: string[],
+) {
+  const next = [...current];
+  const nextKnown = new Set(known);
+  for (const relationship of discovered) {
+    if (!nextKnown.has(relationship)) {
+      next.push(relationship);
+      nextKnown.add(relationship);
+    }
+  }
+  return { relationships: next, known: nextKnown };
+}
+
+export function preservedPosition<
+  T extends { id: string; position: { x: number; y: number } },
+>(existing: Map<string, T>, id: string, fallback: { x: number; y: number }) {
+  return existing.get(id)?.position ?? fallback;
+}

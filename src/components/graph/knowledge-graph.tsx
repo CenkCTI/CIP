@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
   Controls,
@@ -12,7 +12,12 @@ import {
   type Edge,
   type Node,
 } from "@xyflow/react";
-import { deterministicPosition, filterGraph } from "@/lib/graph/filters";
+import {
+  deterministicPosition,
+  filterGraph,
+  preservedPosition,
+  syncRelationshipFilters,
+} from "@/lib/graph/filters";
 import {
   graphEntityTypes,
   type GraphEdge,
@@ -67,12 +72,32 @@ function GraphCanvas({
   );
   const [relationships, setRelationships] =
     useState<string[]>(relationshipOptions);
+  const knownRelationshipTypes = useRef(new Set(relationshipOptions));
   const [selected, setSelected] = useState<string[]>([]);
   const [drawer, setDrawer] = useState<GraphNode | null>(null);
   const [message, setMessage] = useState("");
   const [label, setLabel] = useState("related_to");
   const [description, setDescription] = useState("");
   const [editing, setEditing] = useState<GraphEdge | null>(null);
+
+  useEffect(() => {
+    const newlyDiscovered = relationshipOptions.filter(
+      (relationship) => !knownRelationshipTypes.current.has(relationship),
+    );
+    if (newlyDiscovered.length) {
+      setRelationships((current) => {
+        const synced = syncRelationshipFilters(
+          current,
+          knownRelationshipTypes.current,
+          relationshipOptions,
+        );
+        knownRelationshipTypes.current = synced.known;
+        return synced.relationships;
+      });
+    }
+  }, [relationshipOptions]);
+
+  const nodesRef = useRef(new Map<string, Node>());
   const filtered = useMemo(
     () =>
       filterGraph(data.nodes, data.edges, {
@@ -83,34 +108,44 @@ function GraphCanvas({
     [data.edges, data.nodes, query, relationships, types],
   );
   const makeNodes = useCallback(
-    () =>
-      filtered.nodes.map<Node>((node, index) => ({
-        id: node.id,
-        position: deterministicPosition(index, filtered.nodes.length),
-        data: {
-          label: (
-            <button className="text-left" onClick={() => setDrawer(node)}>
-              <span aria-hidden>{icons[node.type]}</span> <b>{node.label}</b>
-              <br />
-              <span className="text-xs">
-                {node.type}
-                {node.subtitle ? ` · ${node.subtitle}` : ""}
-              </span>
-            </button>
-          ),
-        },
-        style: {
-          border: `${selected.includes(node.id) ? 4 : 2}px solid ${colors[node.type]}`,
-          background:
-            query && node.label.toLowerCase().includes(query.toLowerCase())
-              ? "#164e63"
-              : selected.includes(node.id)
-                ? "#312e81"
-                : "#020617",
-          color: "white",
-          width: 190,
-        },
-      })),
+    (preservePositions = true) =>
+      filtered.nodes.map<Node>((node, index) => {
+        const existing = preservePositions
+          ? preservedPosition(
+              nodesRef.current,
+              node.id,
+              deterministicPosition(index, filtered.nodes.length),
+            )
+          : undefined;
+        return {
+          id: node.id,
+          position:
+            existing ?? deterministicPosition(index, filtered.nodes.length),
+          data: {
+            label: (
+              <button className="text-left" onClick={() => setDrawer(node)}>
+                <span aria-hidden>{icons[node.type]}</span> <b>{node.label}</b>
+                <br />
+                <span className="text-xs">
+                  {node.type}
+                  {node.subtitle ? ` · ${node.subtitle}` : ""}
+                </span>
+              </button>
+            ),
+          },
+          style: {
+            border: `${selected.includes(node.id) ? 4 : 2}px solid ${colors[node.type]}`,
+            background:
+              query && node.label.toLowerCase().includes(query.toLowerCase())
+                ? "#164e63"
+                : selected.includes(node.id)
+                  ? "#312e81"
+                  : "#020617",
+            color: "white",
+            width: 190,
+          },
+        };
+      }),
     [filtered.nodes, query, selected],
   );
   const makeEdges = useCallback(
@@ -125,11 +160,26 @@ function GraphCanvas({
       })),
     [filtered.edges],
   );
-  const [nodes, setNodes, onNodesChange] = useNodesState(makeNodes());
+  const initialNodes = filtered.nodes.map<Node>((node, index) => ({
+    id: node.id,
+    position: deterministicPosition(index, filtered.nodes.length),
+    data: { label: `${icons[node.type]} ${node.label}` },
+    style: {
+      border: `2px solid ${colors[node.type]}`,
+      background: "#020617",
+      color: "white",
+      width: 190,
+    },
+  }));
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(makeEdges());
 
   useEffect(() => {
-    setNodes(makeNodes());
+    nodesRef.current = new Map(nodes.map((node) => [node.id, node]));
+  }, [nodes]);
+
+  useEffect(() => {
+    setNodes(makeNodes(true));
     setEdges(makeEdges());
   }, [makeEdges, makeNodes, setEdges, setNodes]);
 
@@ -138,10 +188,19 @@ function GraphCanvas({
     setTypes([...graphEntityTypes]);
     setRelationships(relationshipOptions);
     setSelected([]);
-    requestAnimationFrame(() => {
-      setNodes(makeNodes());
-      void fitView({ duration: 250 });
-    });
+    const resetNodes = data.nodes.map<Node>((node, index) => ({
+      id: node.id,
+      position: deterministicPosition(index, data.nodes.length),
+      data: { label: `${icons[node.type]} ${node.label}` },
+      style: {
+        border: `2px solid ${colors[node.type]}`,
+        background: "#020617",
+        color: "white",
+        width: 190,
+      },
+    }));
+    setNodes(resetNodes);
+    requestAnimationFrame(() => void fitView({ duration: 250 }));
   }
 
   async function createLink() {

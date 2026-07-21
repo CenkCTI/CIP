@@ -27,7 +27,7 @@ create index entity_relationships_project_target_idx on public.entity_relationsh
 create index entity_relationships_project_type_idx on public.entity_relationships(project_id, relationship_type);
 
 create or replace function public.graph_entity_exists(p_project_id uuid, p_type public.graph_entity_type, p_id uuid) returns boolean
-language plpgsql stable security definer set search_path = public as $$
+language plpgsql stable security definer set search_path = '' as $$
 begin
   if p_type = 'ACTOR' then
     return exists (select 1 from public.threat_actors where project_id = p_project_id and id = p_id);
@@ -49,10 +49,13 @@ end $$;
 revoke all on function public.graph_entity_exists(uuid, public.graph_entity_type, uuid) from public, anon, authenticated;
 
 create or replace function public.validate_entity_relationship() returns trigger
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = '' as $$
 begin
+  if not exists (select 1 from public.projects p where p.id = new.project_id and p.owner_id = auth.uid()) then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
   if tg_op = 'UPDATE' and new.created_by <> old.created_by then
-    raise exception 'created_by cannot be changed' using errcode = '42501';
+    raise exception 'not authorized' using errcode = '42501';
   end if;
   if new.created_by is distinct from auth.uid() then
     raise exception 'not authorized' using errcode = '42501';
@@ -75,7 +78,7 @@ create policy entity_relationships_update on public.entity_relationships for upd
 create policy entity_relationships_delete on public.entity_relationships for delete to authenticated using (exists (select 1 from public.projects p where p.id = project_id and p.owner_id = auth.uid()));
 
 create or replace function public.cleanup_entity_relationships() returns trigger
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = '' as $$
 declare kind public.graph_entity_type;
 begin
   kind := TG_ARGV[0]::public.graph_entity_type;
