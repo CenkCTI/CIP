@@ -104,6 +104,19 @@ export default async function Detail({
       supabase.from("cves").select("*").eq("project_id", id),
       supabase.from("mitre_techniques").select("*").eq("project_id", id),
     ]);
+  if (
+    [actors, campaigns, indicators, malware, cves, mitre].some(
+      (result) => result.error,
+    )
+  ) {
+    return (
+      <section className="mx-auto max-w-5xl">
+        <div className="card text-red-300">
+          Unable to load CTI relationship options. Please refresh and try again.
+        </div>
+      </section>
+    );
+  }
   const optionRows = {
     actors: actors.data ?? [],
     campaigns: campaigns.data ?? [],
@@ -129,8 +142,15 @@ export default async function Detail({
         .eq(relationConfig[tab].find((c) => c[0] === join)![1], entityId),
     ),
   );
-  if (relRows.some((r) => r.error))
-    throw new Error("Unable to load CTI relationships.");
+  if (relRows.some((r) => r.error)) {
+    return (
+      <section className="mx-auto max-w-5xl">
+        <div className="card text-red-300">
+          Unable to load CTI relationships. Please refresh and try again.
+        </div>
+      </section>
+    );
+  }
   const selected: Record<string, string[]> = {};
   const related = relationConfig[tab].map((cfg, i) => {
     const [, , other, target] = cfg;

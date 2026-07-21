@@ -10,6 +10,8 @@ import {
   cveSeverities,
   exploitStatuses,
   indicatorTypes,
+  formatDateInput,
+  formatDateTimeLocalInput,
 } from "@/lib/cti-schema";
 
 type Tab = (typeof ctiTabs)[number];
@@ -96,14 +98,19 @@ function Text({
           className="field mt-1"
           type={type}
           name={name}
-          defaultValue={
-            Array.isArray(row?.[name]) ? csv(row?.[name]) : s(row?.[name])
-          }
+          defaultValue={formatFieldValue(row?.[name], type)}
         />
       )}
     </label>
   );
 }
+function formatFieldValue(value: unknown, type: string) {
+  if (Array.isArray(value)) return csv(value);
+  if (type === "date") return formatDateInput(value);
+  if (type === "datetime-local") return formatDateTimeLocalInput(value);
+  return s(value);
+}
+
 function Select({
   name,
   label,
@@ -266,7 +273,7 @@ function Relationships({
     </fieldset>
   );
 }
-function SearchableChecks({
+export function SearchableChecks({
   name,
   rows,
   selected,
@@ -276,7 +283,8 @@ function SearchableChecks({
   selected: string[];
 }) {
   const [q, setQ] = useState("");
-  const chosen = new Set(selected);
+  const [selectedIds, setSelectedIds] = useState(() => [...new Set(selected)]);
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const filtered = useMemo(
     () =>
       rows
@@ -290,8 +298,25 @@ function SearchableChecks({
         ),
     [rows, q],
   );
+  function toggle(id: string, checked: boolean) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return [...next];
+    });
+  }
   return (
     <div className="rounded border border-slate-800 p-2">
+      {selectedIds.map((id) => (
+        <input
+          key={id}
+          type="hidden"
+          name={name}
+          value={id}
+          data-testid={`${name}-hidden`}
+        />
+      ))}
       <label
         className="text-sm font-medium text-slate-300"
         htmlFor={`${name}-search`}
@@ -315,20 +340,22 @@ function SearchableChecks({
         aria-live="polite"
       >
         {filtered.length ? (
-          filtered.map((r) => (
-            <label
-              key={s(r.id)}
-              className="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-300 hover:bg-slate-800"
-            >
-              <input
-                type="checkbox"
-                name={name}
-                value={s(r.id)}
-                defaultChecked={chosen.has(s(r.id))}
-              />
-              <span>{ctiRecordTitle(r)}</span>
-            </label>
-          ))
+          filtered.map((r) => {
+            const id = s(r.id);
+            return (
+              <label
+                key={id}
+                className="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-300 hover:bg-slate-800"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedSet.has(id)}
+                  onChange={(e) => toggle(id, e.currentTarget.checked)}
+                />
+                <span>{ctiRecordTitle(r)}</span>
+              </label>
+            );
+          })
         ) : (
           <p className="text-sm text-slate-500">No matching records.</p>
         )}
@@ -336,6 +363,7 @@ function SearchableChecks({
     </div>
   );
 }
+
 export function CtiDelete({
   tab,
   projectId,

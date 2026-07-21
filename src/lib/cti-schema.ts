@@ -334,3 +334,15 @@ export function buildRelationshipRpcPayload(
     p_mitre_technique_ids: selections.mitre_technique_ids ?? [],
   };
 }
+export function formatDateInput(value: unknown) {
+  if (!value) return "";
+  const d = new Date(String(value));
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString().slice(0, 10);
+}
+export function formatDateTimeLocalInput(value: unknown) {
+  if (!value) return "";
+  const d = new Date(String(value));
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString().slice(0, 16);
+}

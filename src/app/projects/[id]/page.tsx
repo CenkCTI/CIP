@@ -22,6 +22,15 @@ import {
 } from "@/components/workspace-forms";
 import { requireUser } from "@/lib/auth";
 import { ctiDetailPath } from "@/lib/cti-schema";
+import {
+  filterActors,
+  filterCampaigns,
+  filterCves,
+  filterIndicators,
+  filterMalware,
+  filterMitre,
+  type CtiSearchParams,
+} from "@/lib/cti-filters";
 import type { Project } from "@/lib/projects/schema";
 import {
   evidenceTypes,
@@ -29,24 +38,11 @@ import {
   taskStatuses,
 } from "@/lib/workspace/schema";
 
-type SP = {
+type SP = CtiSearchParams & {
   tab?: string;
-  q?: string;
-  tag?: string;
-  sort?: string;
-  type?: string;
   status?: string;
   priority?: string;
   deadline?: string;
-  country?: string;
-  motivation?: string;
-  confidence?: string;
-  severity?: string;
-  exploit_status?: string;
-  tactic?: string;
-  actor?: string;
-  family?: string;
-  active?: string;
 };
 type Row = Record<string, unknown>;
 const ss = (v: unknown) => String(v ?? "");
@@ -209,7 +205,15 @@ export default async function Page({
           </Link>
         ))}
       </nav>
-      {tab !== "overview" && <SearchBar id={id} tab={tab} />}{" "}
+      {tab !== "overview" && (
+        <SearchBar
+          id={id}
+          tab={tab}
+          sp={sp}
+          actors={(actors ?? []) as Row[]}
+          campaigns={(campaigns ?? []) as Row[]}
+        />
+      )}{" "}
       {tab === "overview" && <Overview project={project} />}{" "}
       {tab === "notes" && (
         <Notes
@@ -247,124 +251,6 @@ export default async function Page({
           ]).sort((a, b) => ss(a.event_date).localeCompare(ss(b.event_date)))}
         />
       )}{" "}
-      {tab === "actors" && (
-        <>
-          <input
-            className="field max-w-40"
-            name="country"
-            placeholder="Country"
-          />
-          <input
-            className="field max-w-40"
-            name="motivation"
-            placeholder="Motivation"
-          />
-        </>
-      )}
-      {tab === "campaigns" && (
-        <>
-          <select className="field max-w-40" name="active">
-            <option value="">Any active state</option>
-            <option value="true">Active/no end</option>
-          </select>
-          <input
-            className="field max-w-40"
-            name="start"
-            type="date"
-            aria-label="Start after"
-          />
-          <input
-            className="field max-w-40"
-            name="end"
-            type="date"
-            aria-label="End before"
-          />
-          <input
-            className="field max-w-40"
-            name="actor"
-            placeholder="Linked actor ID"
-          />
-        </>
-      )}
-      {tab === "indicators" && (
-        <>
-          <select className="field max-w-40" name="type">
-            <option value="">All types</option>
-            {["IP", "DOMAIN", "URL", "HASH", "EMAIL", "FILE", "REGISTRY"].map(
-              (t) => (
-                <option key={t}>{t}</option>
-              ),
-            )}
-          </select>
-          <select className="field max-w-40" name="confidence">
-            <option value="">Any confidence</option>
-            {["LOW", "MEDIUM", "HIGH"].map((t) => (
-              <option key={t}>{t}</option>
-            ))}
-          </select>
-          <input
-            className="field max-w-40"
-            name="first"
-            type="date"
-            aria-label="First seen after"
-          />
-          <input
-            className="field max-w-40"
-            name="last"
-            type="date"
-            aria-label="Last seen before"
-          />
-        </>
-      )}
-      {tab === "malware" && (
-        <>
-          <input
-            className="field max-w-40"
-            name="family"
-            placeholder="Family"
-          />
-          <input
-            className="field max-w-40"
-            name="actor"
-            placeholder="Linked actor ID"
-          />
-          <input
-            className="field max-w-40"
-            name="campaign"
-            placeholder="Linked campaign ID"
-          />
-        </>
-      )}
-      {tab === "cves" && (
-        <>
-          <select className="field max-w-40" name="severity">
-            <option value="">Any severity</option>
-            {["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((t) => (
-              <option key={t}>{t}</option>
-            ))}
-          </select>
-          <select className="field max-w-40" name="exploit_status">
-            <option value="">Any exploit status</option>
-            {["NONE", "POC", "WEAPONIZED", "ACTIVE_EXPLOITATION"].map((t) => (
-              <option key={t}>{t}</option>
-            ))}
-          </select>
-        </>
-      )}
-      {tab === "mitre" && (
-        <>
-          <input
-            className="field max-w-40"
-            name="tactic"
-            placeholder="Tactic"
-          />
-          <input
-            className="field max-w-40"
-            name="type"
-            placeholder="Technique ID"
-          />
-        </>
-      )}
       {tab === "tasks" && (
         <Tasks
           id={id}
@@ -385,14 +271,7 @@ export default async function Page({
         <CtiList
           tab="actors"
           id={id}
-          rows={ctiFilter(
-            (actors ?? []) as Row[],
-            sp,
-            ["name", "country", "description", "known_ttps"],
-            (r) =>
-              (!sp.country || ss(r.country) === sp.country) &&
-              (!sp.motivation || aa(r.motivations).includes(sp.motivation)),
-          )}
+          rows={filterActors((actors ?? []) as Row[], sp)}
           options={ctiOptions}
           rels={rels}
         />
@@ -401,15 +280,7 @@ export default async function Page({
         <CtiList
           tab="campaigns"
           id={id}
-          rows={ctiFilter(
-            (campaigns ?? []) as Row[],
-            sp,
-            ["name", "description"],
-            (r) =>
-              !sp.active ||
-              !r.end_date ||
-              new Date(ss(r.end_date)) >= new Date(),
-          )}
+          rows={filterCampaigns((campaigns ?? []) as Row[], sp, rels)}
           options={ctiOptions}
           rels={rels}
         />
@@ -418,15 +289,7 @@ export default async function Page({
         <CtiList
           tab="indicators"
           id={id}
-          rows={ctiFilter(
-            (indicators ?? []) as Row[],
-            sp,
-            ["value", "source"],
-            (r) =>
-              (!sp.type || ss(r.type) === sp.type) &&
-              (!sp.confidence || ss(r.confidence) === sp.confidence) &&
-              (!sp.tag || aa(r.tags).includes(sp.tag)),
-          )}
+          rows={filterIndicators((indicators ?? []) as Row[], sp)}
           options={ctiOptions}
           rels={rels}
         />
@@ -435,12 +298,7 @@ export default async function Page({
         <CtiList
           tab="malware"
           id={id}
-          rows={ctiFilter(
-            (malware ?? []) as Row[],
-            sp,
-            ["name", "family", "behavior"],
-            (r) => !sp.family || ss(r.family) === sp.family,
-          )}
+          rows={filterMalware((malware ?? []) as Row[], sp, rels)}
           options={ctiOptions}
           rels={rels}
         />
@@ -449,15 +307,7 @@ export default async function Page({
         <CtiList
           tab="cves"
           id={id}
-          rows={ctiFilter(
-            (cves ?? []) as Row[],
-            sp,
-            ["cve_id", "affected_product", "description"],
-            (r) =>
-              (!sp.severity || ss(r.severity) === sp.severity) &&
-              (!sp.exploit_status ||
-                ss(r.exploit_status) === sp.exploit_status),
-          )}
+          rows={filterCves((cves ?? []) as Row[], sp)}
           options={ctiOptions}
           rels={rels}
         />
@@ -466,14 +316,7 @@ export default async function Page({
         <CtiList
           tab="mitre"
           id={id}
-          rows={ctiFilter(
-            (mitre ?? []) as Row[],
-            sp,
-            ["technique_id", "technique_name", "tactic"],
-            (r) =>
-              (!sp.tactic || ss(r.tactic) === sp.tactic) &&
-              (!sp.type || ss(r.technique_id).startsWith(sp.type!)),
-          )}
+          rows={filterMitre((mitre ?? []) as Row[], sp)}
           options={ctiOptions}
           rels={rels}
         />
@@ -481,13 +324,39 @@ export default async function Page({
     </section>
   );
 }
-function SearchBar({ id, tab }: { id: string; tab: string }) {
+function SearchBar({
+  id,
+  tab,
+  sp,
+  actors,
+  campaigns,
+}: {
+  id: string;
+  tab: string;
+  sp: SP;
+  actors: Row[];
+  campaigns: Row[];
+}) {
   return (
     <form className="my-4 flex flex-wrap gap-2">
       <input type="hidden" name="tab" value={tab} />
-      <input className="field max-w-xs" name="q" placeholder="Search" />
-      <input className="field max-w-40" name="tag" placeholder="Tag filter" />
-      <select className="field max-w-40" name="sort">
+      <input
+        className="field max-w-xs"
+        name="q"
+        placeholder="Search"
+        defaultValue={sp.q ?? ""}
+      />
+      <input
+        className="field max-w-40"
+        name="tag"
+        placeholder="Tag filter"
+        defaultValue={sp.tag ?? ""}
+      />
+      <select
+        className="field max-w-40"
+        name="sort"
+        defaultValue={sp.sort ?? ""}
+      >
         <option value="">Default sort</option>
         <option value="title">Title</option>
         <option value="created">Newest</option>
@@ -506,43 +375,62 @@ function SearchBar({ id, tab }: { id: string; tab: string }) {
           <input
             className="field max-w-40"
             name="country"
+            defaultValue={sp.country ?? ""}
             placeholder="Country"
           />
           <input
             className="field max-w-40"
             name="motivation"
+            defaultValue={sp.motivation ?? ""}
             placeholder="Motivation"
           />
         </>
       )}
       {tab === "campaigns" && (
         <>
-          <select className="field max-w-40" name="active">
+          <select
+            className="field max-w-40"
+            name="active"
+            defaultValue={sp.active ?? ""}
+          >
             <option value="">Any active state</option>
             <option value="true">Active/no end</option>
           </select>
           <input
             className="field max-w-40"
             name="start"
+            defaultValue={sp.start ?? ""}
             type="date"
             aria-label="Start after"
           />
           <input
             className="field max-w-40"
             name="end"
+            defaultValue={sp.end ?? ""}
             type="date"
             aria-label="End before"
           />
-          <input
-            className="field max-w-40"
+          <select
+            className="field max-w-48"
             name="actor"
-            placeholder="Linked actor ID"
-          />
+            defaultValue={sp.actor ?? ""}
+          >
+            <option value="">Any actor</option>
+            {actors.map((a) => (
+              <option key={ss(a.id)} value={ss(a.id)}>
+                {ss(a.name)}
+              </option>
+            ))}
+          </select>
         </>
       )}
       {tab === "indicators" && (
         <>
-          <select className="field max-w-40" name="type">
+          <select
+            className="field max-w-40"
+            name="type"
+            defaultValue={sp.type ?? ""}
+          >
             <option value="">All types</option>
             {["IP", "DOMAIN", "URL", "HASH", "EMAIL", "FILE", "REGISTRY"].map(
               (t) => (
@@ -550,7 +438,11 @@ function SearchBar({ id, tab }: { id: string; tab: string }) {
               ),
             )}
           </select>
-          <select className="field max-w-40" name="confidence">
+          <select
+            className="field max-w-40"
+            name="confidence"
+            defaultValue={sp.confidence ?? ""}
+          >
             <option value="">Any confidence</option>
             {["LOW", "MEDIUM", "HIGH"].map((t) => (
               <option key={t}>{t}</option>
@@ -559,12 +451,14 @@ function SearchBar({ id, tab }: { id: string; tab: string }) {
           <input
             className="field max-w-40"
             name="first"
+            defaultValue={sp.first ?? ""}
             type="date"
             aria-label="First seen after"
           />
           <input
             className="field max-w-40"
             name="last"
+            defaultValue={sp.last ?? ""}
             type="date"
             aria-label="Last seen before"
           />
@@ -575,29 +469,52 @@ function SearchBar({ id, tab }: { id: string; tab: string }) {
           <input
             className="field max-w-40"
             name="family"
+            defaultValue={sp.family ?? ""}
             placeholder="Family"
           />
-          <input
-            className="field max-w-40"
+          <select
+            className="field max-w-48"
             name="actor"
-            placeholder="Linked actor ID"
-          />
-          <input
-            className="field max-w-40"
+            defaultValue={sp.actor ?? ""}
+          >
+            <option value="">Any actor</option>
+            {actors.map((a) => (
+              <option key={ss(a.id)} value={ss(a.id)}>
+                {ss(a.name)}
+              </option>
+            ))}
+          </select>
+          <select
+            className="field max-w-48"
             name="campaign"
-            placeholder="Linked campaign ID"
-          />
+            defaultValue={sp.campaign ?? ""}
+          >
+            <option value="">Any campaign</option>
+            {campaigns.map((c) => (
+              <option key={ss(c.id)} value={ss(c.id)}>
+                {ss(c.name)}
+              </option>
+            ))}
+          </select>
         </>
       )}
       {tab === "cves" && (
         <>
-          <select className="field max-w-40" name="severity">
+          <select
+            className="field max-w-40"
+            name="severity"
+            defaultValue={sp.severity ?? ""}
+          >
             <option value="">Any severity</option>
             {["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((t) => (
               <option key={t}>{t}</option>
             ))}
           </select>
-          <select className="field max-w-40" name="exploit_status">
+          <select
+            className="field max-w-40"
+            name="exploit_status"
+            defaultValue={sp.exploit_status ?? ""}
+          >
             <option value="">Any exploit status</option>
             {["NONE", "POC", "WEAPONIZED", "ACTIVE_EXPLOITATION"].map((t) => (
               <option key={t}>{t}</option>
@@ -610,11 +527,13 @@ function SearchBar({ id, tab }: { id: string; tab: string }) {
           <input
             className="field max-w-40"
             name="tactic"
+            defaultValue={sp.tactic ?? ""}
             placeholder="Tactic"
           />
           <input
             className="field max-w-40"
             name="type"
+            defaultValue={sp.type ?? ""}
             placeholder="Technique ID"
           />
         </>
@@ -832,20 +751,6 @@ function Tasks({
   );
 }
 
-function ctiFilter(
-  rows: Row[],
-  sp: SP,
-  fields: string[],
-  extra: (r: Row) => boolean,
-) {
-  return filtered(rows.filter(extra), sp, fields).sort((a, b) =>
-    sp.sort === "created"
-      ? ss(b.created_at).localeCompare(ss(a.created_at))
-      : ss(a.name || a.value || a.cve_id || a.technique_id).localeCompare(
-          ss(b.name || b.value || b.cve_id || b.technique_id),
-        ) || ss(a.id).localeCompare(ss(b.id)),
-  );
-}
 function CtiList({
   tab,
   id,
