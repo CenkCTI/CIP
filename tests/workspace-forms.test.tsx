@@ -3,10 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const PROJECT_ID = "33333333-3333-4333-8333-333333333333";
-const authorizeEvidenceUploadMock = vi.fn(async () => ({ path: `user/${PROJECT_ID}/uuid-proof.pdf`, token: "token" }));
-const finalizeEvidenceUploadMock = vi.fn(async () => ({ success: "Evidence saved." }));
+const authorizeEvidenceUploadMock = vi.fn<(...args: unknown[]) => Promise<{ path?: string; token?: string; error?: string }>>(async () => ({ path: `user/${PROJECT_ID}/uuid-proof.pdf`, token: "token" }));
+const finalizeEvidenceUploadMock = vi.fn<(...args: unknown[]) => Promise<{ success?: string; error?: string }>>(async () => ({ success: "Evidence saved." }));
 const createUrlEvidenceMock = vi.fn(async () => ({ success: "Evidence saved." }));
-const uploadToSignedUrlMock = vi.fn(async () => ({ error: null }));
+const uploadToSignedUrlMock = vi.fn<(...args: unknown[]) => Promise<{ error: null | { message: string } }>>(async () => ({ error: null }));
 
 vi.mock("@/app/actions", () => ({
   authorizeEvidenceUpload: authorizeEvidenceUploadMock,
@@ -63,6 +63,9 @@ describe("EvidenceUpload client signed upload flow", () => {
     await waitFor(() => expect(authorizeEvidenceUploadMock).toHaveBeenCalled());
     expect((authorizeEvidenceUploadMock.mock.calls as unknown as unknown[][])[0][0]).toBe(PROJECT_ID);
     expect(uploadToSignedUrlMock).toHaveBeenCalledWith(`user/${PROJECT_ID}/uuid-proof.pdf`, "token", expect.any(File));
+    const authorized = await authorizeEvidenceUploadMock.mock.results[0].value;
+    expect((uploadToSignedUrlMock.mock.calls as unknown[][])[0][0]).toBe(authorized.path);
+    expect((uploadToSignedUrlMock.mock.calls as unknown[][])[0][1]).toBe(authorized.token);
     expect((finalizeEvidenceUploadMock.mock.calls as unknown as unknown[][])[0][0]).toBe(PROJECT_ID);
     expect(await screen.findByText("Evidence saved.")).toBeInTheDocument();
   });
@@ -79,4 +82,39 @@ describe("EvidenceUpload client signed upload flow", () => {
     expect(authorizeEvidenceUploadMock).not.toHaveBeenCalled();
     expect(uploadToSignedUrlMock).not.toHaveBeenCalled();
   });
+
+  it("labels signed upload authorization failures without uploading bytes", async () => {
+    authorizeEvidenceUploadMock.mockResolvedValueOnce({ error: "Signed upload authorization failed: new row violates row-level security policy" });
+    const { EvidenceUpload } = await import("@/components/workspace-forms");
+    render(<EvidenceUpload projectId={PROJECT_ID} />);
+
+    await fillEvidenceFileForm();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Signed upload authorization failed: new row violates row-level security policy");
+    expect(uploadToSignedUrlMock).not.toHaveBeenCalled();
+  });
+
+  it("labels signed byte upload failures separately from authorization", async () => {
+    uploadToSignedUrlMock.mockResolvedValueOnce({ error: { message: "network body upload failed" } });
+    const { EvidenceUpload } = await import("@/components/workspace-forms");
+    render(<EvidenceUpload projectId={PROJECT_ID} />);
+
+    await fillEvidenceFileForm();
+
+    expect(uploadToSignedUrlMock).toHaveBeenCalledWith(`user/${PROJECT_ID}/uuid-proof.pdf`, "token", expect.any(File));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Signed byte upload failed: network body upload failed");
+    expect(finalizeEvidenceUploadMock).not.toHaveBeenCalled();
+  });
+
+  it("labels metadata finalization failures after a successful byte upload", async () => {
+    finalizeEvidenceUploadMock.mockResolvedValueOnce({ error: "insert failed" });
+    const { EvidenceUpload } = await import("@/components/workspace-forms");
+    render(<EvidenceUpload projectId={PROJECT_ID} />);
+
+    await fillEvidenceFileForm();
+
+    expect(uploadToSignedUrlMock).toHaveBeenCalledWith(`user/${PROJECT_ID}/uuid-proof.pdf`, "token", expect.any(File));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Evidence metadata finalization failed: insert failed");
+  });
+
 });
