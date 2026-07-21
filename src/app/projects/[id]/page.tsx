@@ -153,7 +153,12 @@ export default async function Page({
     supabase.from("malware").select("*").eq("project_id", id),
     supabase.from("cves").select("*").eq("project_id", id),
     supabase.from("mitre_techniques").select("*").eq("project_id", id),
-    supabase.from("reports").select("*").eq("project_id", id),
+    supabase
+      .from("reports")
+      .select("id,title,type,status,content,updated_at")
+      .eq("project_id", id)
+      .order("updated_at", { ascending: false })
+      .order("id", { ascending: true }),
     supabase.from("campaign_threat_actors").select("*").eq("project_id", id),
     supabase.from("threat_actor_malware").select("*").eq("project_id", id),
     supabase.from("threat_actor_indicators").select("*").eq("project_id", id),
@@ -993,11 +998,13 @@ function filterReports(rows: Row[], sp: SP) {
           .toLowerCase()
           .includes(q),
     );
-  return out.sort((a, b) =>
-    sp.sort === "title"
-      ? ss(a.title).localeCompare(ss(b.title))
-      : ss(b.updated_at).localeCompare(ss(a.updated_at)),
-  );
+  return out.sort((a, b) => {
+    const primary =
+      sp.sort === "title"
+        ? ss(a.title).localeCompare(ss(b.title))
+        : ss(b.updated_at).localeCompare(ss(a.updated_at));
+    return primary || ss(a.id).localeCompare(ss(b.id));
+  });
 }
 function Reports({ id, rows }: { id: string; rows: Row[] }) {
   return (

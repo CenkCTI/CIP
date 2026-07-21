@@ -14,7 +14,8 @@ create table public.reports (
   updated_at timestamptz not null default now(),
   constraint reports_project_id_id_unique unique (project_id, id),
   constraint reports_title_length check (char_length(btrim(title)) between 1 and 200),
-  constraint reports_content_object check (jsonb_typeof(content) = 'object')
+  constraint reports_content_object check (jsonb_typeof(content) = 'object'),
+  constraint reports_content_version check (content->>'type' = 'doc' and content#>>'{attrs,version}' = '1')
 );
 
 create index reports_project_updated_idx on public.reports(project_id, updated_at desc);

@@ -1,6 +1,7 @@
 "use client";
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
+import { useRouter } from "next/navigation";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import LinkExt from "@tiptap/extension-link";
@@ -9,7 +10,11 @@ import TableRow from "@tiptap/extension-table-row";
 import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
 import { updateReport } from "@/app/actions";
-import { reportStatuses, reportTypes } from "@/lib/reports/schema";
+import {
+  canonicalReportRevision,
+  reportStatuses,
+  reportTypes,
+} from "@/lib/reports/schema";
 
 type Row = Record<string, unknown>;
 const s = (v: unknown) => String(v ?? "");
@@ -33,14 +38,22 @@ export function ReportEditor({
   report: Row;
   insertables: Record<string, Row[]>;
 }) {
-  const [state, action] = useActionState(
-    updateReport.bind(null, projectId, s(report.id)),
-    {},
-  );
+  const router = useRouter();
+  const [state, setState] = useState<{ success?: string; error?: string }>({});
+  const [title, setTitle] = useState(s(report.title));
+  const [type, setType] = useState(s(report.type));
+  const [status, setStatus] = useState(s(report.status));
   const [content, setContent] = useState<Record<string, unknown>>(
     report.content as Record<string, unknown>,
   );
-  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const initialRevision = canonicalReportRevision({
+    title: s(report.title),
+    type: s(report.type),
+    status: s(report.status),
+    content: report.content,
+  });
+  const [savedRevision, setSavedRevision] = useState(initialRevision);
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -64,9 +77,15 @@ export function ReportEditor({
     },
     onUpdate: ({ editor }) => {
       setContent(editor.getJSON());
-      setDirty(true);
     },
   });
+  const currentRevision = canonicalReportRevision({
+    title,
+    type,
+    status,
+    content,
+  });
+  const dirty = currentRevision !== savedRevision;
   useEffect(() => {
     const h = (e: BeforeUnloadEvent) => {
       if (dirty) {
@@ -108,19 +127,49 @@ export function ReportEditor({
     <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_320px]">
       <form
         action={async (fd) => {
+          const revision = canonicalReportRevision({
+            title,
+            type,
+            status,
+            content,
+          });
+          fd.set("title", title);
+          fd.set("type", type);
+          fd.set("status", status);
           fd.set("content", JSON.stringify(content));
-          await action(fd);
-          setDirty(false);
+          setSaving(true);
+          const result = await updateReport(projectId, s(report.id), {}, fd);
+          setState(result);
+          setSaving(false);
+          const displayed = canonicalReportRevision({
+            title,
+            type,
+            status,
+            content,
+          });
+          if (result.success && displayed === revision)
+            setSavedRevision(revision);
         }}
         className="space-y-3"
       >
+        <button
+          type="button"
+          className="rounded border border-slate-700 px-3 py-2 text-sm"
+          onClick={() => {
+            if (!dirty || confirm("Discard unsaved report changes?"))
+              router.push(`/projects/${projectId}?tab=reports`);
+          }}
+        >
+          Back to reports
+        </button>
         <input type="hidden" name="content" value={JSON.stringify(content)} />
         <label className="block text-sm text-slate-300">
           Title
           <input
             className="field mt-1"
             name="title"
-            defaultValue={s(report.title)}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
           />
         </label>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -129,7 +178,8 @@ export function ReportEditor({
             <select
               className="field mt-1"
               name="type"
-              defaultValue={s(report.type)}
+              value={type}
+              onChange={(e) => setType(e.target.value)}
             >
               {reportTypes.map((t) => (
                 <option key={t}>{t}</option>
@@ -141,7 +191,8 @@ export function ReportEditor({
             <select
               className="field mt-1"
               name="status"
-              defaultValue={s(report.status)}
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
             >
               {reportStatuses.map((t) => (
                 <option key={t}>{t}</option>
@@ -152,13 +203,24 @@ export function ReportEditor({
         <Toolbar editor={editor} />
         <EditorContent editor={editor} />
         <p className="text-sm text-slate-400" aria-live="polite">
-          {dirty ? "Unsaved changes" : state.success ? "Saved" : "Loaded"}
-          {state.error ? ` · ${state.error}` : ""}
+          {saving
+            ? "Saving…"
+            : state.error
+              ? `Error: ${state.error}`
+              : dirty
+                ? "Unsaved changes"
+                : state.success
+                  ? "Saved"
+                  : "Loaded"}
         </p>
         <Submit />
       </form>
       <aside className="space-y-4">
-        <Exports projectId={projectId} reportId={s(report.id)} />
+        <Exports
+          projectId={projectId}
+          reportId={s(report.id)}
+          dirty={dirty || saving}
+        />
         <InsertPanel data={insertables} onInsert={insertBlock} />
       </aside>
     </div>
@@ -207,9 +269,11 @@ function Toolbar({ editor }: { editor: Editor | null }) {
 function Exports({
   projectId,
   reportId,
+  dirty,
 }: {
   projectId: string;
   reportId: string;
+  dirty: boolean;
 }) {
   return (
     <div className="card">
@@ -219,9 +283,16 @@ function Exports({
           <a
             key={f}
             className="rounded border border-slate-700 px-3 py-2 text-sm"
-            href={`/api/projects/${projectId}/reports/${reportId}/export/${f}`}
+            href={
+              dirty
+                ? undefined
+                : `/api/projects/${projectId}/reports/${reportId}/export/${f}`
+            }
+            aria-disabled={dirty}
           >
-            Download {f.toUpperCase()}
+            {dirty
+              ? `Save before ${f.toUpperCase()}`
+              : `Download ${f.toUpperCase()}`}
           </a>
         ))}
       </div>

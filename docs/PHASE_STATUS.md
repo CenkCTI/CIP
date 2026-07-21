@@ -43,9 +43,9 @@
 
 - [x] Additive reports migrations authored for report schema, RLS, safe author assignment, REPORT graph enum support, graph validation, and delete cleanup.
 - [x] Reports tab and edit route implemented with authenticated persistent CRUD, filters, dirty-state warning, and delete confirmation.
-- [x] TipTap editor implemented with supported rich-text controls and structured JSON persistence.
+- [x] TipTap editor implemented with supported rich-text controls, strict versioned JSON validation, dirty-state protection, and structured JSON persistence.
 - [x] Insert Project Data panel implemented for current-project workspace and CTI records.
-- [x] Authenticated PDF, Markdown, and standalone HTML export routes implemented with safe filenames and generated content.
+- [x] Authenticated PDF, Markdown, and standalone HTML export routes implemented with safe filenames, structured TipTap rendering, controlled errors, and generated content.
 - [x] Knowledge Graph extended with Report nodes, styles, detail links, manual relationships, and saved position validation.
 - [ ] Phase 5 migrations applied to live Supabase database (blocked unless `SUPABASE_DB_URL` is configured in the execution environment).
 - [ ] Browser acceptance against live Supabase for report editor/export flows.

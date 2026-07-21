@@ -762,6 +762,26 @@ export async function deleteCti(
   return { success: "CTI record deleted." };
 }
 
+async function assertReport(projectId: string, reportId: string) {
+  const { supabase, projectId: pid } = await assertProject(projectId);
+  const report = parseRequiredUuid(reportId, "Report");
+  if (!report.ok) return { ok: false as const, error: "Report not found." };
+  const { data, error } = await supabase
+    .from("reports")
+    .select("id,project_id,title")
+    .eq("project_id", pid)
+    .eq("id", report.id)
+    .single();
+  if (error || !data) return { ok: false as const, error: "Report not found." };
+  return {
+    ok: true as const,
+    supabase,
+    projectId: pid,
+    reportId: report.id,
+    title: String(data.title),
+  };
+}
+
 export async function createReport(
   projectId: string,
   _: State,
@@ -781,7 +801,7 @@ export async function createReport(
     })
     .select("id")
     .single();
-  if (error) return { error: error.message };
+  if (error || !data) return { error: "Unable to create report." };
   revalidatePath(`/projects/${pid}`);
   redirect(`/projects/${pid}/reports/${data.id}`);
 }
@@ -791,7 +811,8 @@ export async function updateReport(
   _: State,
   fd: FormData,
 ): Promise<State> {
-  const { supabase, projectId: pid } = await assertProject(projectId);
+  const report = await assertReport(projectId, reportId);
+  if (!report.ok) return { error: report.error };
   let parsedContent: unknown;
   try {
     parsedContent = JSON.parse(String(fd.get("content") || "null"));
@@ -804,29 +825,45 @@ export async function updateReport(
   });
   if (!p.success)
     return { error: p.error.issues[0]?.message ?? "Invalid report" };
-  const { error } = await supabase
+  const { data, error } = await report.supabase
     .from("reports")
     .update(p.data)
-    .eq("project_id", pid)
-    .eq("id", reportId);
-  if (error) return { error: error.message };
-  revalidatePath(`/projects/${pid}`);
-  revalidatePath(`/projects/${pid}/reports/${reportId}`);
+    .eq("project_id", report.projectId)
+    .eq("id", report.reportId)
+    .select("id")
+    .single();
+  if (error || !data) return { error: "Unable to save report." };
+  revalidatePath(`/projects/${report.projectId}`);
+  revalidatePath(`/projects/${report.projectId}/reports/${report.reportId}`);
   return { success: "Report saved." };
 }
 export async function deleteReport(
   projectId: string,
   reportId: string,
-  title: string,
+  _title: string,
   fd: FormData,
-) {
-  if (String(fd.get("confirm") || "") !== title) return;
-  const { supabase, projectId: pid } = await assertProject(projectId);
-  await supabase
+): Promise<State> {
+  const report = await assertReport(projectId, reportId);
+  if (!report.ok) return { error: report.error };
+  if (String(fd.get("confirm") || "") !== report.title)
+    return { error: "Confirmation does not match the current report title." };
+  const { data: rels } = await report.supabase
+    .from("entity_relationships")
+    .select("id", { count: "exact" })
+    .eq("project_id", report.projectId)
+    .or(
+      `and(source_type.eq.REPORT,source_id.eq.${report.reportId}),and(target_type.eq.REPORT,target_id.eq.${report.reportId})`,
+    );
+  const { data, error } = await report.supabase
     .from("reports")
     .delete()
-    .eq("project_id", pid)
-    .eq("id", reportId);
-  revalidatePath(`/projects/${pid}`);
-  redirect(`/projects/${pid}?tab=reports`);
+    .eq("project_id", report.projectId)
+    .eq("id", report.reportId)
+    .select("id")
+    .single();
+  if (error || !data) return { error: "Unable to delete report." };
+  revalidatePath(`/projects/${report.projectId}`);
+  redirect(
+    `/projects/${report.projectId}?tab=reports&deleted=report&relationships=${rels?.length ?? 0}`,
+  );
 }
