@@ -32,3 +32,9 @@ psql "$SUPABASE_DB_URL" -f supabase/migrations/202607210002_phase2_workspace.sql
 ```
 
 The Phase 2 migration configures the bucket as private with a 20 MB limit and MIME restrictions for PNG, JPEG, PDF, PCAP, LOG, and TXT evidence. Object paths are scoped as `{userId}/{projectId}/{uuid}-{sanitizedFileName}` and Storage RLS only allows authenticated project owners to read, upload, or delete their own project evidence objects.
+
+## Phase 3 CTI relationship model
+
+Cyber Research OS models CTI with project-owned Threat Actors, Campaigns, Indicators, Malware, CVEs, and MITRE Techniques. Semantic relationships are represented by explicit join tables rather than polymorphic links. Each join table includes `project_id`, the two entity IDs, `created_at`, a duplicate-safe unique pair constraint, and composite foreign keys back to `(project_id, id)` on both sides. This guarantees that relationships cannot connect records from different projects, while cascade delete removes orphaned relationship rows when an entity or project is deleted.
+
+The Phase 3 UI adds project tabs for Actors, Campaigns, Indicators, Malware, CVEs, and MITRE Mapping. These tabs provide create, list, edit, delete, search/filter/sort, and multi-select relationship management backed by authenticated server actions and Zod validation.

@@ -20,3 +20,11 @@
 - [x] Edit UI implemented for Research Notes, Evidence, Timeline Events, and Tasks.
 - [ ] Phase 2 migration applied to live Supabase database (blocked unless `SUPABASE_DB_URL` is configured in the execution environment).
 - [ ] Browser acceptance against live Supabase for Phase 2 workspace modules.
+
+
+## Phase 3
+- [x] Additive migration authored for CTI entities, relationship tables, constraints, indexes, updated_at triggers, and RLS policies.
+- [x] Project CTI tabs implemented for Threat Actors, Campaigns, Indicators, Malware, CVEs, and MITRE Mapping with authenticated create, list, edit, delete, search/filter/sort, validation, and relationship multi-select controls.
+- [x] CTI relationship model documented in README.md and docs/RELATIONSHIPS.md.
+- [ ] Phase 3 migration applied to live Supabase database (blocked unless `SUPABASE_DB_URL` is configured in the execution environment).
+- [ ] Browser acceptance against live Supabase for Phase 3 CTI modules.
