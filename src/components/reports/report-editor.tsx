@@ -1,0 +1,299 @@
+"use client";
+import { useActionState, useEffect, useMemo, useState } from "react";
+import { useFormStatus } from "react-dom";
+import { EditorContent, useEditor, type Editor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import LinkExt from "@tiptap/extension-link";
+import { Table } from "@tiptap/extension-table";
+import TableRow from "@tiptap/extension-table-row";
+import TableCell from "@tiptap/extension-table-cell";
+import TableHeader from "@tiptap/extension-table-header";
+import { updateReport } from "@/app/actions";
+import { reportStatuses, reportTypes } from "@/lib/reports/schema";
+
+type Row = Record<string, unknown>;
+const s = (v: unknown) => String(v ?? "");
+function Submit() {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      disabled={pending}
+      className="rounded-lg bg-cyan-400 px-4 py-2 font-semibold text-slate-950 disabled:opacity-60"
+    >
+      {pending ? "Saving…" : "Save report"}
+    </button>
+  );
+}
+export function ReportEditor({
+  projectId,
+  report,
+  insertables,
+}: {
+  projectId: string;
+  report: Row;
+  insertables: Record<string, Row[]>;
+}) {
+  const [state, action] = useActionState(
+    updateReport.bind(null, projectId, s(report.id)),
+    {},
+  );
+  const [content, setContent] = useState<Record<string, unknown>>(
+    report.content as Record<string, unknown>,
+  );
+  const [dirty, setDirty] = useState(false);
+  const editor = useEditor({
+    immediatelyRender: false,
+    extensions: [
+      StarterKit,
+      LinkExt.configure({
+        openOnClick: false,
+        autolink: true,
+        protocols: ["http", "https"],
+      }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
+    ],
+    content,
+    editorProps: {
+      attributes: {
+        class:
+          "min-h-96 rounded border border-slate-700 bg-slate-950 p-4 text-slate-100 outline-none prose-invert",
+      },
+    },
+    onUpdate: ({ editor }) => {
+      setContent(editor.getJSON());
+      setDirty(true);
+    },
+  });
+  useEffect(() => {
+    const h = (e: BeforeUnloadEvent) => {
+      if (dirty) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
+  }, [dirty]);
+  const insertBlock = (kind: string, row: Row) =>
+    editor
+      ?.chain()
+      .focus()
+      .insertContent({
+        type: "blockquote",
+        content: [
+          {
+            type: "paragraph",
+            content: [
+              { type: "text", marks: [{ type: "bold" }], text: `${kind}: ` },
+              { type: "text", text: titleFor(kind, row) },
+            ],
+          },
+          {
+            type: "paragraph",
+            content: [
+              { type: "text", text: `Reference: ${kind}:${s(row.id)}` },
+            ],
+          },
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: summaryFor(kind, row) }],
+          },
+        ],
+      })
+      .run();
+  return (
+    <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_320px]">
+      <form
+        action={async (fd) => {
+          fd.set("content", JSON.stringify(content));
+          await action(fd);
+          setDirty(false);
+        }}
+        className="space-y-3"
+      >
+        <input type="hidden" name="content" value={JSON.stringify(content)} />
+        <label className="block text-sm text-slate-300">
+          Title
+          <input
+            className="field mt-1"
+            name="title"
+            defaultValue={s(report.title)}
+          />
+        </label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm text-slate-300">
+            Type
+            <select
+              className="field mt-1"
+              name="type"
+              defaultValue={s(report.type)}
+            >
+              {reportTypes.map((t) => (
+                <option key={t}>{t}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-sm text-slate-300">
+            Status
+            <select
+              className="field mt-1"
+              name="status"
+              defaultValue={s(report.status)}
+            >
+              {reportStatuses.map((t) => (
+                <option key={t}>{t}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <Toolbar editor={editor} />
+        <EditorContent editor={editor} />
+        <p className="text-sm text-slate-400" aria-live="polite">
+          {dirty ? "Unsaved changes" : state.success ? "Saved" : "Loaded"}
+          {state.error ? ` · ${state.error}` : ""}
+        </p>
+        <Submit />
+      </form>
+      <aside className="space-y-4">
+        <Exports projectId={projectId} reportId={s(report.id)} />
+        <InsertPanel data={insertables} onInsert={insertBlock} />
+      </aside>
+    </div>
+  );
+}
+function Toolbar({ editor }: { editor: Editor | null }) {
+  if (!editor) return null;
+  const b = (label: string, fn: () => void) => (
+    <button
+      type="button"
+      onClick={fn}
+      className="rounded border border-slate-700 px-2 py-1 text-sm"
+    >
+      {label}
+    </button>
+  );
+  return (
+    <div className="flex flex-wrap gap-2">
+      {b("H1", () => editor.chain().focus().toggleHeading({ level: 1 }).run())}
+      {b("H2", () => editor.chain().focus().toggleHeading({ level: 2 }).run())}
+      {b("Bold", () => editor.chain().focus().toggleBold().run())}
+      {b("Italic", () => editor.chain().focus().toggleItalic().run())}
+      {b("Bullets", () => editor.chain().focus().toggleBulletList().run())}
+      {b("Numbers", () => editor.chain().focus().toggleOrderedList().run())}
+      {b("Quote", () => editor.chain().focus().toggleBlockquote().run())}
+      {b("Code", () => editor.chain().focus().toggleCodeBlock().run())}
+      {b("Link", () => {
+        const href = prompt("HTTP/HTTPS URL");
+        if (href) editor.chain().focus().setLink({ href }).run();
+      })}
+      {b("Table", () =>
+        editor
+          .chain()
+          .focus()
+          .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+          .run(),
+      )}
+      {b("Clear", () =>
+        editor.chain().focus().unsetAllMarks().clearNodes().run(),
+      )}
+      {b("Undo", () => editor.chain().focus().undo().run())}
+      {b("Redo", () => editor.chain().focus().redo().run())}
+    </div>
+  );
+}
+function Exports({
+  projectId,
+  reportId,
+}: {
+  projectId: string;
+  reportId: string;
+}) {
+  return (
+    <div className="card">
+      <h3 className="font-semibold text-white">Downloads</h3>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {["pdf", "md", "html"].map((f) => (
+          <a
+            key={f}
+            className="rounded border border-slate-700 px-3 py-2 text-sm"
+            href={`/api/projects/${projectId}/reports/${reportId}/export/${f}`}
+          >
+            Download {f.toUpperCase()}
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+function InsertPanel({
+  data,
+  onInsert,
+}: {
+  data: Record<string, Row[]>;
+  onInsert: (k: string, r: Row) => void;
+}) {
+  const [q, setQ] = useState("");
+  const entries = useMemo(
+    () =>
+      Object.entries(data)
+        .flatMap(([k, rows]) => rows.map((r) => ({ k, r })))
+        .filter((x) =>
+          titleFor(x.k, x.r).toLowerCase().includes(q.toLowerCase()),
+        )
+        .slice(0, 80),
+    [data, q],
+  );
+  return (
+    <div className="card">
+      <h3 className="font-semibold text-white">Insert Project Data</h3>
+      <input
+        className="field mt-3"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Search current project records"
+      />
+      <div className="mt-3 max-h-96 space-y-2 overflow-auto">
+        {entries.map(({ k, r }) => (
+          <button
+            key={`${k}-${s(r.id)}`}
+            type="button"
+            onClick={() => onInsert(k, r)}
+            className="block w-full rounded border border-slate-800 p-2 text-left text-sm hover:border-cyan-400"
+          >
+            <span className="font-semibold text-cyan-200">{k}</span>
+            <br />
+            {titleFor(k, r)}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+function titleFor(k: string, r: Row) {
+  return (
+    s(r.title) ||
+    s(r.name) ||
+    s(r.event_name) ||
+    s(r.task_name) ||
+    s(r.value) ||
+    s(r.cve_id) ||
+    `${s(r.technique_id)} ${s(r.technique_name)}`.trim() ||
+    s(r.id)
+  );
+}
+function summaryFor(k: string, r: Row) {
+  return [
+    s(r.description),
+    s(r.type),
+    s(r.status),
+    s(r.severity),
+    s(r.confidence),
+    s(r.source_url),
+  ]
+    .filter(Boolean)
+    .join(" · ")
+    .slice(0, 1000);
+}

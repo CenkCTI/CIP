@@ -8,6 +8,7 @@ export const graphEntityTypes = [
   "CVE",
   "MITRE",
   "EVIDENCE",
+  "REPORT",
 ] as const;
 export type GraphEntityType = (typeof graphEntityTypes)[number];
 export type GraphSourceKind = "semantic" | "manual";
@@ -81,6 +82,7 @@ export const graphPrefix: Record<GraphEntityType, string> = {
   CVE: "cve",
   MITRE: "mitre",
   EVIDENCE: "evidence",
+  REPORT: "report",
 };
 export function nodeId(type: GraphEntityType, id: string) {
   return `${graphPrefix[type]}:${id}`;
@@ -111,4 +113,5 @@ export const entityTableMap: Record<GraphEntityType, string> = {
   CVE: "cves",
   MITRE: "mitre_techniques",
   EVIDENCE: "evidence",
+  REPORT: "reports",
 };

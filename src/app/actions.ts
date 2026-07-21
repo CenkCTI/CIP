@@ -5,6 +5,12 @@ import { createClient } from "@/lib/supabase/server";
 import { parseProjectForm } from "@/lib/projects/schema";
 import { requireUser } from "@/lib/auth";
 import {
+  reportMetaSchema,
+  reportSchema,
+  formObject as reportFormObject,
+  emptyTiptapDoc,
+} from "@/lib/reports/schema";
+import {
   buildEvidencePath,
   evidenceFinalizeSchema,
   evidenceMetadataSchema,
@@ -754,4 +760,73 @@ export async function deleteCti(
   if (error) return { error: "Record could not be deleted." };
   revalidatePath(`/projects/${pid}`);
   return { success: "CTI record deleted." };
+}
+
+export async function createReport(
+  projectId: string,
+  _: State,
+  fd: FormData,
+): Promise<State> {
+  const { supabase, user, projectId: pid } = await assertProject(projectId);
+  const p = reportMetaSchema.safeParse(reportFormObject(fd));
+  if (!p.success)
+    return { error: p.error.issues[0]?.message ?? "Invalid report" };
+  const { data, error } = await supabase
+    .from("reports")
+    .insert({
+      ...p.data,
+      content: emptyTiptapDoc,
+      project_id: pid,
+      author_id: user.id,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+  revalidatePath(`/projects/${pid}`);
+  redirect(`/projects/${pid}/reports/${data.id}`);
+}
+export async function updateReport(
+  projectId: string,
+  reportId: string,
+  _: State,
+  fd: FormData,
+): Promise<State> {
+  const { supabase, projectId: pid } = await assertProject(projectId);
+  let parsedContent: unknown;
+  try {
+    parsedContent = JSON.parse(String(fd.get("content") || "null"));
+  } catch {
+    return { error: "Report content must be valid JSON." };
+  }
+  const p = reportSchema.safeParse({
+    ...reportFormObject(fd),
+    content: parsedContent,
+  });
+  if (!p.success)
+    return { error: p.error.issues[0]?.message ?? "Invalid report" };
+  const { error } = await supabase
+    .from("reports")
+    .update(p.data)
+    .eq("project_id", pid)
+    .eq("id", reportId);
+  if (error) return { error: error.message };
+  revalidatePath(`/projects/${pid}`);
+  revalidatePath(`/projects/${pid}/reports/${reportId}`);
+  return { success: "Report saved." };
+}
+export async function deleteReport(
+  projectId: string,
+  reportId: string,
+  title: string,
+  fd: FormData,
+) {
+  if (String(fd.get("confirm") || "") !== title) return;
+  const { supabase, projectId: pid } = await assertProject(projectId);
+  await supabase
+    .from("reports")
+    .delete()
+    .eq("project_id", pid)
+    .eq("id", reportId);
+  revalidatePath(`/projects/${pid}`);
+  redirect(`/projects/${pid}?tab=reports`);
 }
