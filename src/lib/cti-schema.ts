@@ -47,7 +47,8 @@ const csv = z
   )
   .default([]);
 const dateNull = z
-  .preprocess((v) => (v === "" ? null : v), z.string().nullable().optional())
+  .preprocess(normalizeDateInput, z.union([z.string(), z.null()]).optional())
+  .refine(validDateOrNull, "Use a valid date/time value.")
   .transform((v) => v || null);
 const text = (max = 20000) => z.string().trim().max(max).default("");
 export const relKeys = [
@@ -65,6 +66,35 @@ export const relSchema = z.object(
   >,
 );
 
+export type RelationshipSelections = Record<(typeof relKeys)[number], string[]>;
+export function parseRelationshipSelections(
+  formData: FormData,
+):
+  | { success: true; data: RelationshipSelections }
+  | { success: false; error: string } {
+  const out = Object.fromEntries(
+    relKeys.map((key) => [key, [] as string[]]),
+  ) as RelationshipSelections;
+  for (const key of relKeys) {
+    const seen = new Set<string>();
+    for (const raw of formData.getAll(key)) {
+      const value = String(raw).trim();
+      if (!value) continue;
+      const parsed = z.string().uuid().safeParse(value);
+      if (!parsed.success)
+        return {
+          success: false,
+          error: `${key.replaceAll("_", " ")} contains an invalid ID.`,
+        };
+      if (!seen.has(parsed.data)) {
+        seen.add(parsed.data);
+        out[key].push(parsed.data);
+      }
+    }
+  }
+  return { success: true, data: out };
+}
+
 export function normalizeIndicatorValue(value: string, type: string) {
   const v = value.trim();
   return type === "DOMAIN" || type === "EMAIL" ? v.toLowerCase() : v;
@@ -73,13 +103,8 @@ export function validateIndicator(value: string, type: string) {
   const v = value.trim();
   if (!v) return "Indicator value is required.";
   if (type === "IP") {
-    const parts = v.split(".");
-    if (
-      parts.length === 4 &&
-      parts.every((p) => /^\d+$/.test(p) && Number(p) >= 0 && Number(p) <= 255)
-    )
+    if (z.ipv4().safeParse(v).success || z.ipv6().safeParse(v).success)
       return null;
-    if (/^[0-9a-f:]+$/i.test(v) && v.includes(":")) return null;
     return "Use a valid IPv4 or IPv6 address.";
   }
   if (type === "URL") {
@@ -105,6 +130,34 @@ export function validateIndicator(value: string, type: string) {
       ? null
       : "Use a valid email address.";
   return null;
+}
+function normalizeDateInput(v: unknown) {
+  if (v === "" || v == null) return null;
+  if (typeof v !== "string") return v;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? v : d.toISOString();
+}
+function validDateOrNull(v: unknown) {
+  return (
+    v === null ||
+    (typeof v === "string" && !Number.isNaN(new Date(v).getTime()))
+  );
+}
+const supportedHashLengths: Record<string, number> = {
+  md5: 32,
+  sha1: 40,
+  sha256: 64,
+};
+function validateHashObject(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  return Object.entries(value).every(([key, raw]) => {
+    const expected = supportedHashLengths[key.toLowerCase()];
+    return (
+      expected !== undefined &&
+      typeof raw === "string" &&
+      new RegExp(`^[a-fA-F0-9]{${expected}}$`).test(raw)
+    );
+  });
 }
 const indicatorValue = z
   .string()
@@ -167,7 +220,10 @@ export const indicatorSchema = z
   })
   .transform((v) => ({
     ...v,
-    value: normalizeIndicatorValue(v.value, v.type),
+    value:
+      v.type === "HASH"
+        ? v.value.trim().toLowerCase()
+        : normalizeIndicatorValue(v.value, v.type),
   }));
 export const malwareSchema = z.object({
   name: z.string().trim().min(1).max(180),
@@ -183,7 +239,20 @@ export const malwareSchema = z.object({
     .transform((v, ctx) => {
       if (!v) return {};
       try {
-        return JSON.parse(v);
+        const parsed: unknown = JSON.parse(v);
+        if (!validateHashObject(parsed)) {
+          ctx.addIssue({
+            code: "custom",
+            message:
+              "Hashes must be a JSON object with md5, sha1, or sha256 hex string values.",
+          });
+          return z.NEVER;
+        }
+        return Object.fromEntries(
+          Object.entries(parsed as Record<string, string>).map(
+            ([key, value]) => [key.toLowerCase(), String(value).toLowerCase()],
+          ),
+        );
       } catch {
         ctx.addIssue({ code: "custom", message: "Hashes must be valid JSON." });
         return z.NEVER;
@@ -230,4 +299,38 @@ export const schemas = {
 };
 export function formObj(fd: FormData) {
   return Object.fromEntries(fd.entries());
+}
+export const ctiModuleLabels = {
+  actors: "Threat Actor",
+  campaigns: "Campaign",
+  indicators: "Indicator",
+  malware: "Malware",
+  cves: "CVE",
+  mitre: "MITRE Technique",
+} as const;
+export function ctiRecordTitle(row: Record<string, unknown>) {
+  return String(
+    row.name ?? row.value ?? row.cve_id ?? row.technique_id ?? "CTI record",
+  );
+}
+export function ctiDetailPath(
+  projectId: string,
+  tab: keyof typeof entityTables,
+  id: string,
+) {
+  return `/projects/${projectId}/${tab}/${id}`;
+}
+export function buildRelationshipRpcPayload(
+  tab: keyof typeof entityTables,
+  selections: Record<string, string[]>,
+) {
+  return {
+    p_entity_type: tab,
+    p_threat_actor_ids: selections.threat_actor_ids ?? [],
+    p_campaign_ids: selections.campaign_ids ?? [],
+    p_indicator_ids: selections.indicator_ids ?? [],
+    p_malware_ids: selections.malware_ids ?? [],
+    p_cve_ids: selections.cve_ids ?? [],
+    p_mitre_technique_ids: selections.mitre_technique_ids ?? [],
+  };
 }

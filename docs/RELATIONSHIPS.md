@@ -16,3 +16,7 @@ All CTI relationships are explicit, project-scoped join tables. Each join table 
 | `malware_mitre_techniques` | `malware` | `mitre_techniques` | Maps malware behavior to ATT&CK techniques. |
 
 RLS policies on every entity and join table authorize through the parent project owner. Server actions additionally verify the session, project ownership, entity ownership, and related-entity ownership before changing relationship rows.
+
+## Atomic replacement
+
+Relationship edits call `public.replace_cti_relationships`, an authenticated PostgreSQL function that verifies project ownership, edited entity membership, and every submitted related ID before replacing any allowed relationship set. Because validation, deletion, and insertion happen inside one PostgreSQL function call, failures leave prior relationship rows unchanged.

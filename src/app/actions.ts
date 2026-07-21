@@ -545,8 +545,8 @@ import {
   ctiTabs,
   entityTables,
   formObj,
-  relKeys,
-  relSchema,
+  parseRelationshipSelections,
+  buildRelationshipRpcPayload,
   schemas,
 } from "@/lib/cti-schema";
 type CtiTab = (typeof ctiTabs)[number];
@@ -646,46 +646,33 @@ async function syncRelationships(
   id: string,
   fd: FormData,
 ) {
-  const parsed = relSchema.safeParse(formObj(fd));
-  if (!parsed.success)
-    return parsed.error.issues[0]?.message ?? "Invalid relationships.";
+  const parsed = parseRelationshipSelections(fd);
+  if (!parsed.success) return parsed.error;
   const defs = relationMap[tab] as Record<
     string,
     readonly [string, string, string]
   >;
-  for (const key of relKeys) {
-    const def = defs[key];
-    if (!def) continue;
-    const desired = [...new Set(parsed.data[key])].filter(Boolean);
+  for (const key of Object.keys(defs) as Array<keyof typeof parsed.data>) {
+    const desired = parsed.data[key];
     if (desired.length) {
-      const { count } = await supabase
+      const { count, error } = await supabase
         .from(relatedTable[key])
         .select("id", { count: "exact", head: true })
         .eq("project_id", projectId)
         .in("id", desired);
-      if (count !== desired.length)
-        return "One or more related records were not found in this project.";
-    }
-    const [join, selfCol, otherCol] = def;
-    await supabase
-      .from(join)
-      .delete()
-      .eq("project_id", projectId)
-      .eq(selfCol, id);
-    if (desired.length) {
-      const { error } = await supabase.from(join).insert(
-        desired.map((other) => ({
-          project_id: projectId,
-          [selfCol]: id,
-          [otherCol]: other,
-        })),
-      );
-      if (error)
-        return error.code === "23505"
-          ? "Relationship already exists."
-          : error.message;
+      if (error || count !== desired.length)
+        return "One or more related records could not be linked.";
     }
   }
+  const { data, error } = await supabase.rpc("replace_cti_relationships", {
+    p_project_id: projectId,
+    p_entity_id: id,
+    ...buildRelationshipRpcPayload(tab, parsed.data),
+  });
+  if (error) return "Relationships could not be updated.";
+  const result = data as { ok?: boolean; error?: string } | null;
+  if (!result?.ok)
+    return result?.error ?? "Relationships could not be updated.";
 }
 export async function createCti(
   tab: CtiTab,
@@ -751,17 +738,20 @@ export async function deleteCti(
   id: string,
   name: string,
   fd: FormData,
-) {
-  if (String(fd.get("confirm") || "") !== name) return;
+): Promise<State> {
+  if (String(fd.get("confirm") || "") !== name)
+    return { error: "Type the record name/value to confirm deletion." };
   const {
     supabase,
     projectId: pid,
     id: cid,
   } = await assertCti(projectId, tab, id);
-  await supabase
+  const { error } = await supabase
     .from(ctiTable(tab))
     .delete()
     .eq("project_id", pid)
     .eq("id", cid);
+  if (error) return { error: "Record could not be deleted." };
   revalidatePath(`/projects/${pid}`);
+  return { success: "CTI record deleted." };
 }

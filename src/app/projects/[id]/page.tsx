@@ -21,6 +21,7 @@ import {
   TimelineEdit,
 } from "@/components/workspace-forms";
 import { requireUser } from "@/lib/auth";
+import { ctiDetailPath } from "@/lib/cti-schema";
 import type { Project } from "@/lib/projects/schema";
 import {
   evidenceTypes,
@@ -97,26 +98,26 @@ export default async function Page({
     .single<Project>();
   if (error || !project) notFound();
   const [
-    { data: notes },
-    { data: evidence },
-    { data: events },
-    { data: tasks },
-    { data: actors },
-    { data: campaigns },
-    { data: indicators },
-    { data: malware },
-    { data: cves },
-    { data: mitre },
-    { data: campaignThreatActors },
-    { data: threatActorMalware },
-    { data: threatActorIndicators },
-    { data: campaignMalware },
-    { data: campaignIndicators },
-    { data: malwareIndicators },
-    { data: cveMalware },
-    { data: threatActorMitre },
-    { data: campaignMitre },
-    { data: malwareMitre },
+    { data: notes, error: notesError },
+    { data: evidence, error: evidenceError },
+    { data: events, error: eventsError },
+    { data: tasks, error: tasksError },
+    { data: actors, error: actorsError },
+    { data: campaigns, error: campaignsError },
+    { data: indicators, error: indicatorsError },
+    { data: malware, error: malwareError },
+    { data: cves, error: cvesError },
+    { data: mitre, error: mitreError },
+    { data: campaignThreatActors, error: campaignThreatActorsError },
+    { data: threatActorMalware, error: threatActorMalwareError },
+    { data: threatActorIndicators, error: threatActorIndicatorsError },
+    { data: campaignMalware, error: campaignMalwareError },
+    { data: campaignIndicators, error: campaignIndicatorsError },
+    { data: malwareIndicators, error: malwareIndicatorsError },
+    { data: cveMalware, error: cveMalwareError },
+    { data: threatActorMitre, error: threatActorMitreError },
+    { data: campaignMitre, error: campaignMitreError },
+    { data: malwareMitre, error: malwareMitreError },
   ] = await Promise.all([
     supabase.from("research_notes").select("*").eq("project_id", id),
     supabase.from("evidence").select("*").eq("project_id", id),
@@ -142,6 +143,37 @@ export default async function Page({
     supabase.from("campaign_mitre_techniques").select("*").eq("project_id", id),
     supabase.from("malware_mitre_techniques").select("*").eq("project_id", id),
   ]);
+
+  const moduleLoadError = [
+    notesError,
+    evidenceError,
+    eventsError,
+    tasksError,
+    actorsError,
+    campaignsError,
+    indicatorsError,
+    malwareError,
+    cvesError,
+    mitreError,
+    campaignThreatActorsError,
+    threatActorMalwareError,
+    threatActorIndicatorsError,
+    campaignMalwareError,
+    campaignIndicatorsError,
+    malwareIndicatorsError,
+    cveMalwareError,
+    threatActorMitreError,
+    campaignMitreError,
+    malwareMitreError,
+  ].find(Boolean);
+  if (moduleLoadError)
+    return (
+      <section className="mx-auto max-w-6xl">
+        <div className="card text-red-300">
+          Unable to load this project module. Please refresh and try again.
+        </div>
+      </section>
+    );
   const ctiOptions = {
     threat_actor_ids: (actors ?? []) as Row[],
     campaign_ids: (campaigns ?? []) as Row[],
@@ -215,6 +247,124 @@ export default async function Page({
           ]).sort((a, b) => ss(a.event_date).localeCompare(ss(b.event_date)))}
         />
       )}{" "}
+      {tab === "actors" && (
+        <>
+          <input
+            className="field max-w-40"
+            name="country"
+            placeholder="Country"
+          />
+          <input
+            className="field max-w-40"
+            name="motivation"
+            placeholder="Motivation"
+          />
+        </>
+      )}
+      {tab === "campaigns" && (
+        <>
+          <select className="field max-w-40" name="active">
+            <option value="">Any active state</option>
+            <option value="true">Active/no end</option>
+          </select>
+          <input
+            className="field max-w-40"
+            name="start"
+            type="date"
+            aria-label="Start after"
+          />
+          <input
+            className="field max-w-40"
+            name="end"
+            type="date"
+            aria-label="End before"
+          />
+          <input
+            className="field max-w-40"
+            name="actor"
+            placeholder="Linked actor ID"
+          />
+        </>
+      )}
+      {tab === "indicators" && (
+        <>
+          <select className="field max-w-40" name="type">
+            <option value="">All types</option>
+            {["IP", "DOMAIN", "URL", "HASH", "EMAIL", "FILE", "REGISTRY"].map(
+              (t) => (
+                <option key={t}>{t}</option>
+              ),
+            )}
+          </select>
+          <select className="field max-w-40" name="confidence">
+            <option value="">Any confidence</option>
+            {["LOW", "MEDIUM", "HIGH"].map((t) => (
+              <option key={t}>{t}</option>
+            ))}
+          </select>
+          <input
+            className="field max-w-40"
+            name="first"
+            type="date"
+            aria-label="First seen after"
+          />
+          <input
+            className="field max-w-40"
+            name="last"
+            type="date"
+            aria-label="Last seen before"
+          />
+        </>
+      )}
+      {tab === "malware" && (
+        <>
+          <input
+            className="field max-w-40"
+            name="family"
+            placeholder="Family"
+          />
+          <input
+            className="field max-w-40"
+            name="actor"
+            placeholder="Linked actor ID"
+          />
+          <input
+            className="field max-w-40"
+            name="campaign"
+            placeholder="Linked campaign ID"
+          />
+        </>
+      )}
+      {tab === "cves" && (
+        <>
+          <select className="field max-w-40" name="severity">
+            <option value="">Any severity</option>
+            {["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((t) => (
+              <option key={t}>{t}</option>
+            ))}
+          </select>
+          <select className="field max-w-40" name="exploit_status">
+            <option value="">Any exploit status</option>
+            {["NONE", "POC", "WEAPONIZED", "ACTIVE_EXPLOITATION"].map((t) => (
+              <option key={t}>{t}</option>
+            ))}
+          </select>
+        </>
+      )}
+      {tab === "mitre" && (
+        <>
+          <input
+            className="field max-w-40"
+            name="tactic"
+            placeholder="Tactic"
+          />
+          <input
+            className="field max-w-40"
+            name="type"
+            placeholder="Technique ID"
+          />
+        </>
+      )}
       {tab === "tasks" && (
         <Tasks
           id={id}
@@ -340,6 +490,8 @@ function SearchBar({ id, tab }: { id: string; tab: string }) {
       <select className="field max-w-40" name="sort">
         <option value="">Default sort</option>
         <option value="title">Title</option>
+        <option value="created">Newest</option>
+        <option value="id">ID tie-break</option>
       </select>
       {tab === "evidence" && (
         <select className="field max-w-40" name="type">
@@ -348,6 +500,124 @@ function SearchBar({ id, tab }: { id: string; tab: string }) {
             <option key={t}>{t}</option>
           ))}
         </select>
+      )}
+      {tab === "actors" && (
+        <>
+          <input
+            className="field max-w-40"
+            name="country"
+            placeholder="Country"
+          />
+          <input
+            className="field max-w-40"
+            name="motivation"
+            placeholder="Motivation"
+          />
+        </>
+      )}
+      {tab === "campaigns" && (
+        <>
+          <select className="field max-w-40" name="active">
+            <option value="">Any active state</option>
+            <option value="true">Active/no end</option>
+          </select>
+          <input
+            className="field max-w-40"
+            name="start"
+            type="date"
+            aria-label="Start after"
+          />
+          <input
+            className="field max-w-40"
+            name="end"
+            type="date"
+            aria-label="End before"
+          />
+          <input
+            className="field max-w-40"
+            name="actor"
+            placeholder="Linked actor ID"
+          />
+        </>
+      )}
+      {tab === "indicators" && (
+        <>
+          <select className="field max-w-40" name="type">
+            <option value="">All types</option>
+            {["IP", "DOMAIN", "URL", "HASH", "EMAIL", "FILE", "REGISTRY"].map(
+              (t) => (
+                <option key={t}>{t}</option>
+              ),
+            )}
+          </select>
+          <select className="field max-w-40" name="confidence">
+            <option value="">Any confidence</option>
+            {["LOW", "MEDIUM", "HIGH"].map((t) => (
+              <option key={t}>{t}</option>
+            ))}
+          </select>
+          <input
+            className="field max-w-40"
+            name="first"
+            type="date"
+            aria-label="First seen after"
+          />
+          <input
+            className="field max-w-40"
+            name="last"
+            type="date"
+            aria-label="Last seen before"
+          />
+        </>
+      )}
+      {tab === "malware" && (
+        <>
+          <input
+            className="field max-w-40"
+            name="family"
+            placeholder="Family"
+          />
+          <input
+            className="field max-w-40"
+            name="actor"
+            placeholder="Linked actor ID"
+          />
+          <input
+            className="field max-w-40"
+            name="campaign"
+            placeholder="Linked campaign ID"
+          />
+        </>
+      )}
+      {tab === "cves" && (
+        <>
+          <select className="field max-w-40" name="severity">
+            <option value="">Any severity</option>
+            {["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((t) => (
+              <option key={t}>{t}</option>
+            ))}
+          </select>
+          <select className="field max-w-40" name="exploit_status">
+            <option value="">Any exploit status</option>
+            {["NONE", "POC", "WEAPONIZED", "ACTIVE_EXPLOITATION"].map((t) => (
+              <option key={t}>{t}</option>
+            ))}
+          </select>
+        </>
+      )}
+      {tab === "mitre" && (
+        <>
+          <input
+            className="field max-w-40"
+            name="tactic"
+            placeholder="Tactic"
+          />
+          <input
+            className="field max-w-40"
+            name="type"
+            placeholder="Technique ID"
+          />
+        </>
       )}
       {tab === "tasks" && (
         <>
@@ -573,7 +843,7 @@ function ctiFilter(
       ? ss(b.created_at).localeCompare(ss(a.created_at))
       : ss(a.name || a.value || a.cve_id || a.technique_id).localeCompare(
           ss(b.name || b.value || b.cve_id || b.technique_id),
-        ),
+        ) || ss(a.id).localeCompare(ss(b.id)),
   );
 }
 function CtiList({
@@ -598,7 +868,12 @@ function CtiList({
         rows.map((r) => (
           <article className="card" id={ss(r.id)} key={ss(r.id)}>
             <h3 className="font-semibold text-white">
-              {ss(r.name || r.value || r.cve_id || r.technique_id)}{" "}
+              <Link
+                className="hover:text-cyan-200"
+                href={ctiDetailPath(id, tab, ss(r.id))}
+              >
+                {ss(r.name || r.value || r.cve_id || r.technique_id)}
+              </Link>{" "}
               <span className="text-xs text-cyan-200">
                 {ss(r.type || r.severity || r.tactic || r.family)}
               </span>

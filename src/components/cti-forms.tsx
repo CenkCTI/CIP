@@ -1,9 +1,11 @@
 "use client";
-import { useActionState } from "react";
+import { useActionState, useMemo, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { createCti, deleteCti, updateCti } from "@/app/actions";
-
 import {
   confidenceLevels,
+  ctiModuleLabels,
+  ctiRecordTitle,
   ctiTabs,
   cveSeverities,
   exploitStatuses,
@@ -14,14 +16,6 @@ type Tab = (typeof ctiTabs)[number];
 type Row = Record<string, unknown>;
 const s = (v: unknown) => String(v ?? "");
 const csv = (v: unknown) => (Array.isArray(v) ? v.join(", ") : "");
-const labels = {
-  actors: "Threat Actor",
-  campaigns: "Campaign",
-  indicators: "Indicator",
-  malware: "Malware",
-  cves: "CVE",
-  mitre: "MITRE Technique",
-};
 export function CtiForm({
   tab,
   projectId,
@@ -48,7 +42,7 @@ export function CtiForm({
       className="space-y-3 rounded border border-slate-800 p-3"
     >
       <h3 className="font-semibold text-white">
-        {row ? "Edit" : "New"} {labels[tab]}
+        {row ? "Edit" : "New"} {ctiModuleLabels[tab]}
       </h3>
       {fields(tab, row)}
       <Relationships tab={tab} options={options} selected={selected} />
@@ -60,10 +54,19 @@ export function CtiForm({
       {state.success && (
         <p className="text-sm text-emerald-300">{state.success}</p>
       )}
-      <button className="rounded-lg bg-cyan-400 px-4 py-2 font-semibold text-slate-950">
-        {row ? "Save" : "Create"}
-      </button>
+      <Submit>{row ? "Save" : "Create"}</Submit>
     </form>
+  );
+}
+function Submit({ children }: { children: React.ReactNode }) {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      disabled={pending}
+      className="rounded-lg bg-cyan-400 px-4 py-2 font-semibold text-slate-950 disabled:opacity-60"
+    >
+      {pending ? "Saving…" : children}
+    </button>
   );
 }
 function Text({
@@ -248,28 +251,89 @@ function Relationships({
     mitre: ["threat_actor_ids", "campaign_ids", "malware_ids"],
   };
   return (
-    <fieldset className="grid gap-2 md:grid-cols-2">
+    <fieldset className="grid gap-3 md:grid-cols-2">
       <legend className="text-sm font-semibold text-cyan-200">
         Relationships
       </legend>
       {map[tab].map((k) => (
-        <label key={k} className="text-sm text-slate-300">
-          {k.replaceAll("_", " ")}
-          <select
-            className="field mt-1 h-28"
-            name={k}
-            multiple
-            defaultValue={selected?.[k] ?? []}
-          >
-            {(options[k] ?? []).map((o) => (
-              <option key={s(o.id)} value={s(o.id)}>
-                {s(o.name || o.value || o.cve_id || o.technique_id)}
-              </option>
-            ))}
-          </select>
-        </label>
+        <SearchableChecks
+          key={k}
+          name={k}
+          rows={options[k] ?? []}
+          selected={selected?.[k] ?? []}
+        />
       ))}
     </fieldset>
+  );
+}
+function SearchableChecks({
+  name,
+  rows,
+  selected,
+}: {
+  name: string;
+  rows: Row[];
+  selected: string[];
+}) {
+  const [q, setQ] = useState("");
+  const chosen = new Set(selected);
+  const filtered = useMemo(
+    () =>
+      rows
+        .filter((r) =>
+          ctiRecordTitle(r).toLowerCase().includes(q.toLowerCase()),
+        )
+        .sort(
+          (a, b) =>
+            ctiRecordTitle(a).localeCompare(ctiRecordTitle(b)) ||
+            s(a.id).localeCompare(s(b.id)),
+        ),
+    [rows, q],
+  );
+  return (
+    <div className="rounded border border-slate-800 p-2">
+      <label
+        className="text-sm font-medium text-slate-300"
+        htmlFor={`${name}-search`}
+      >
+        {name.replaceAll("_", " ")}
+      </label>
+      <input
+        id={`${name}-search`}
+        className="field mt-1"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Search relationships"
+      />
+      <p className="mt-1 text-xs text-slate-500">
+        {rows.length
+          ? `${filtered.length} matching records`
+          : "No records available to link."}
+      </p>
+      <div
+        className="mt-2 max-h-44 space-y-1 overflow-y-auto"
+        aria-live="polite"
+      >
+        {filtered.length ? (
+          filtered.map((r) => (
+            <label
+              key={s(r.id)}
+              className="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-300 hover:bg-slate-800"
+            >
+              <input
+                type="checkbox"
+                name={name}
+                value={s(r.id)}
+                defaultChecked={chosen.has(s(r.id))}
+              />
+              <span>{ctiRecordTitle(r)}</span>
+            </label>
+          ))
+        ) : (
+          <p className="text-sm text-slate-500">No matching records.</p>
+        )}
+      </div>
+    </div>
   );
 }
 export function CtiDelete({
@@ -281,12 +345,14 @@ export function CtiDelete({
   projectId: string;
   row: Row;
 }) {
-  const name = s(row.name || row.value || row.cve_id || row.technique_id);
+  const name = ctiRecordTitle(row);
+  const deleteAction = async (
+    _: { error?: string; success?: string },
+    fd: FormData,
+  ) => deleteCti(tab, projectId, s(row.id), name, fd);
+  const [state, action] = useActionState(deleteAction, {});
   return (
-    <form
-      action={deleteCti.bind(null, tab, projectId, s(row.id), name)}
-      className="mt-3 rounded border border-red-900 p-3"
-    >
+    <form action={action} className="mt-3 rounded border border-red-900 p-3">
       <p className="text-sm text-red-200">
         Delete {name}. Related CTI links will be removed.
       </p>
@@ -295,9 +361,12 @@ export function CtiDelete({
         name="confirm"
         placeholder={`Type ${name}`}
       />
-      <button className="rounded bg-red-500 px-3 py-2 text-sm font-semibold text-white">
-        Delete
-      </button>
+      {state.error && (
+        <p role="alert" className="text-sm text-red-300">
+          {state.error}
+        </p>
+      )}
+      <Submit>Delete</Submit>
     </form>
   );
 }
