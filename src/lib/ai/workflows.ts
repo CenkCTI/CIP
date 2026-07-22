@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { aiChat, AiError } from "./client";
-import { buildPrompt } from "./pure";
+import { buildPrompt, buildRepairPrompt } from "./pure";
 export { validateExtractedIndicator, missingProtectedTokens } from "./pure";
 import { parseAiJson } from "./json";
 import { type AiWorkflow } from "./config";
@@ -19,11 +19,18 @@ export const translationSchema = z.object({ translated_text: text(50000), target
 export const schemas = { summarize_research: summarizeSchema, extract_indicators: indicatorExtractionSchema, extract_entities: entityExtractionSchema, suggest_mitre_mapping: mitreSchema, generate_report_draft: reportDraftSchema, translate_document: translationSchema } as const;
 export type WorkflowResult<W extends AiWorkflow = AiWorkflow> = z.infer<(typeof schemas)[W]>;
 
-export async function runStructuredWorkflow<W extends AiWorkflow>(workflow: W, sourceData: unknown) {
+function validationIssueSummary(error: unknown) {
+  if (error instanceof z.ZodError) {
+    return error.issues.map((issue) => `${issue.path.join(".") || "<root>"}: ${issue.message}`);
+  }
+  return ["<root>: response was not exactly one valid JSON object matching the contract"];
+}
+
+export async function runStructuredWorkflow<W extends AiWorkflow>(workflow: W, sourceData: unknown, chat: typeof aiChat = aiChat) {
   const schema = schemas[workflow] as z.ZodTypeAny;
-  const first = await aiChat(buildPrompt(workflow, sourceData));
-  try { return parseAiJson(first, schema) as WorkflowResult<W>; } catch {
-    const repaired = await aiChat([{ role: "system", content: "Repair malformed JSON. Return exactly one valid JSON object for the same schema. Do not add facts." }, { role: "user", content: first.slice(0, 12000) }]);
+  const first = await chat(buildPrompt(workflow, sourceData));
+  try { return parseAiJson(first, schema) as WorkflowResult<W>; } catch (firstError) {
+    const repaired = await chat(buildRepairPrompt(workflow, first, validationIssueSummary(firstError)));
     try { return parseAiJson(repaired, schema) as WorkflowResult<W>; } catch { throw new AiError("malformed_output"); }
   }
 }

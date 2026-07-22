@@ -54,6 +54,6 @@ Project Reports provide authenticated CRUD, a TipTap rich-text editor, insertion
 
 Migrations now run from `202607210001` through `202607210012_phase6_ai_usage.sql`. The AI Workspace is an owned-project tab that uses local Ollama only and never persists AI output without explicit approval.
 
-Quick start: copy `.env.example` to `.env.local`, set `AI_ENABLED=true`, `AI_PROVIDER=ollama`, `AI_BASE_URL=http://127.0.0.1:11434/v1`, set `AI_MODEL` to a model you installed with Ollama, leave `AI_API_KEY` blank for local no-key Ollama, then run `npm run dev`. Use `npm run ai:smoke` only when Ollama is running.
+Quick start: copy `.env.example` to `.env.local`, set `AI_ENABLED=true`, `AI_PROVIDER=ollama`, `AI_BASE_URL=http://127.0.0.1:11434/v1`, set `AI_MODEL` to a model you installed with Ollama, leave `AI_API_KEY` blank for local no-key Ollama, then run `npm run dev`. `npm run ai:smoke` loads `.env.local` automatically and should be used only when Ollama is running.
 
 Production note: Vercel cannot reach a laptop-local Ollama endpoint. Keep AI disabled in Vercel unless you later provide a separately secured reachable HTTPS OpenAI-compatible endpoint.

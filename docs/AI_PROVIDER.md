@@ -9,7 +9,8 @@ Phase 6 supports only local Ollama through its OpenAI-compatible `/v1` API. AI s
 4. Copy `.env.example` to `.env.local`.
 5. Set `AI_ENABLED=true`, `AI_PROVIDER=ollama`, `AI_BASE_URL=http://127.0.0.1:11434/v1`, and `AI_MODEL` to the installed model name.
 6. Keep `AI_API_KEY` blank for a local no-key Ollama instance.
-7. Run the Next.js app locally and open the AI Workspace or `/api/ai/status`.
+7. Run `npm run ai:smoke`; it loads `.env.local` automatically while allowing shell variables to override file values.
+8. Run the Next.js app locally and open the AI Workspace or `/api/ai/status`.
 
 ## Privacy and security boundary
 The server re-fetches authorized project records, sends only whitelisted fields, treats all project text as untrusted data, validates JSON output with Zod, and requires explicit approval before saving. Usage logging stores metadata only.
