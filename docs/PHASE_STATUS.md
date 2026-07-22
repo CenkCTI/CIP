@@ -54,3 +54,5 @@
 - Code added for server-only Ollama configuration/status, JSON validation, metadata usage limiting migration 012, project AI Workspace UI, generation routes, and explicit approval routes.
 - Operator-reported prior live acceptance for Phases 1-5 is recorded separately from checks run in this environment.
 - Migration 012 was authored but not applied in this container because no live Supabase connection was configured.
+- Follow-up audit repaired MITRE approval to accept ATT&CK technique IDs, resolve them server-side to project-owned `mitre_techniques.id` values, and report linked/already-linked/rejected suggestions without trusting client UUIDs.
+- Added executable Phase 6 regression tests for MITRE ID resolution, generation no-mutation/source whitelisting, six approval payloads, and client-side AI secret exposure checks.

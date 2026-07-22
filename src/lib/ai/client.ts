@@ -2,13 +2,14 @@ import "server-only";
 import { getAiConfig, getAiSafeStatus, validateAiEndpoint, type AiSafeStatus } from "./config";
 export type AiMessage = { role: "system" | "user" | "assistant"; content: string };
 export class AiError extends Error { constructor(public code: string, message = code) { super(message); } }
+function aiUrl(endpoint: URL, path: string) { return `${endpoint.origin}${endpoint.pathname.replace(/\/$/, "")}/${path.replace(/^\//, "")}`; }
 export async function checkAiProviderStatus(): Promise<AiSafeStatus> {
   const cfg = getAiConfig(); const safe = getAiSafeStatus(cfg);
   if (!cfg.enabled || !safe.configured) return safe;
   const endpoint = validateAiEndpoint(cfg.baseUrl); if (!endpoint.ok) return { ...safe, status: "configuration_required", configured: false, message: endpoint.reason };
   const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), Math.min(cfg.timeoutMs, 5000));
   try {
-    const res = await fetch(`${endpoint.url.origin}${endpoint.url.pathname}/models`, { headers: cfg.apiKey ? { Authorization: `Bearer ${cfg.apiKey}` } : {}, signal: ctrl.signal, cache: "no-store" });
+    const res = await fetch(aiUrl(endpoint.url, "models"), { headers: cfg.apiKey ? { Authorization: `Bearer ${cfg.apiKey}` } : {}, signal: ctrl.signal, cache: "no-store" });
     if (!res.ok) return { ...safe, status: res.status === 404 ? "configuration_required" : "unreachable", message: "Ollama provider is not reachable or rejected the status check." };
     const body = await res.json().catch(() => null) as { data?: { id?: string }[] } | null;
     if (cfg.model && body?.data && !body.data.some((m) => m.id === cfg.model)) return { ...safe, status: "configuration_required", message: "Configured AI_MODEL was not listed by Ollama." };
@@ -24,7 +25,7 @@ export async function aiChat(messages: AiMessage[], opts?: { signal?: AbortSigna
   const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), cfg.timeoutMs);
   opts?.signal?.addEventListener("abort", () => ctrl.abort(), { once: true });
   try {
-    const res = await fetch(`${endpoint.url.origin}${endpoint.url.pathname}/chat/completions`, { method: "POST", headers: { "content-type":"application/json", ...(cfg.apiKey ? { Authorization: `Bearer ${cfg.apiKey}` } : {}) }, body: JSON.stringify({ model: cfg.model, messages, temperature: 0.1, max_tokens: cfg.maxOutputTokens, response_format: { type: "json_object" }, stream: false }), signal: ctrl.signal, cache: "no-store" });
+    const res = await fetch(aiUrl(endpoint.url, "chat/completions"), { method: "POST", headers: { "content-type":"application/json", ...(cfg.apiKey ? { Authorization: `Bearer ${cfg.apiKey}` } : {}) }, body: JSON.stringify({ model: cfg.model, messages, temperature: 0.1, max_tokens: cfg.maxOutputTokens, response_format: { type: "json_object" }, stream: false }), signal: ctrl.signal, cache: "no-store" });
     if (!res.ok) throw new AiError(res.status === 404 ? "missing_model" : res.status >= 500 ? "unreachable" : "provider_error");
     const body = await res.json() as { choices?: { message?: { content?: string } }[] };
     const content = body.choices?.[0]?.message?.content;
