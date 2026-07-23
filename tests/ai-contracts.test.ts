@@ -6,7 +6,7 @@ import { buildPrompt, buildRepairPrompt } from "@/lib/ai/pure";
 const required: Record<AiWorkflow, string[]> = {
   summarize_research: ["title_suggestion", "executive_summary", "key_findings", "intelligence_gaps", "caveats", "cited_source_note_ids", "disclaimer"],
   extract_indicators: ["indicators", "value", "type", "IP", "DOMAIN", "URL", "HASH", "EMAIL", "FILE", "REGISTRY", "confidence", "LOW", "MEDIUM", "HIGH", "evidence_context", "source_ref", "warnings", "disclaimer"],
-  extract_entities: ["entities", "entity_type", "actors", "malware", "campaigns", "cves", "name", "confidence", "LOW", "MEDIUM", "HIGH", "evidence_excerpt", "caveats", "source_ref", "warnings", "disclaimer"],
+  extract_entities: ["entities", "entity_type", "actors", "malware", "campaigns", "cves", "name", "confidence", "LOW", "MEDIUM", "HIGH", "evidence_excerpt", "caveats", "source_ref", "warnings", "disclaimer", "not a reason to omit", "no browser or external threat-intelligence/CVE database"],
   suggest_mitre_mapping: ["mappings", "technique_id", "T1059", "T1059.001", "never use or invent database UUIDs", "technique_name", "confidence", "LOW", "MEDIUM", "HIGH", "reasoning", "evidence_excerpt", "source_record_ids", "warnings", "disclaimer"],
   generate_report_draft: ["title", "report_type_suggestion", "TECHNICAL", "EXECUTIVE", "CTI", "AI_SECURITY", "OSINT", "sections", "heading", "paragraphs", "source_tokens", "caveats", "disclaimer"],
   translate_document: ["translated_text", "disclaimer", "Do not output target_language", "Preserve"],

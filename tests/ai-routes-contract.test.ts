@@ -32,6 +32,13 @@ describe("AI route and UI contracts", () => {
 
 
 
+
+  it("entity extraction uses candidate repair and removes untrusted provenance", () => {
+    expect(generate).toContain("runEntityExtractionWorkflow(source)");
+    expect(generate).toContain("allowedRefs.has");
+    expect(generate).toContain("source_ref: entity.source_ref");
+  });
+
   it("translation generation uses server-owned target/source canonicalization", () => {
     expect(generate).toContain('runTranslationWorkflow(parsed.targetLanguage!');
     expect(generate).toContain('Select exactly one note or evidence source for translation.');
@@ -55,6 +62,13 @@ describe("AI route and UI contracts", () => {
     expect(approve).toContain("verifyReportDraftRefs");
     expect(approve).toContain('select("id", { count: "exact", head: true })');
     expect(approve).toContain("Report draft contains unavailable source references.");
+  });
+
+
+  it("entity approval preserves duplicate and CVE validation paths", () => {
+    expect(approve).toContain('cveSchema.parse');
+    expect(approve).toContain('duplicate: true');
+    expect(approve).toContain('uniqueCol');
   });
 
   it("MITRE approval accepts technique IDs, not UUID arrays", () => {

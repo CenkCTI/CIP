@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { aiChat, AiError } from "./client";
-import { buildPrompt, buildRepairPrompt, buildTranslationPrompt, buildTranslationRepairPrompt, protectedTokens, missingProtectedTokens } from "./pure";
-export { validateExtractedIndicator, missingProtectedTokens, protectedTokens } from "./pure";
+import { buildPrompt, buildRepairPrompt, buildTranslationPrompt, buildTranslationRepairPrompt, buildEntityExtractionRepairPrompt, sourceTextForEntityExtraction, hasExplicitEntityMarkers, extractExplicitEntityCandidates, protectedTokens, missingProtectedTokens } from "./pure";
+export { validateExtractedIndicator, missingProtectedTokens, protectedTokens, sourceTextForEntityExtraction } from "./pure";
 import { parseAiJson } from "./json";
 import { type AiWorkflow } from "./config";
 import { aliasMapByToken, type ReportSourceAlias } from "./provenance";
@@ -29,6 +29,18 @@ function validationIssueSummary(error: unknown) {
     return error.issues.map((issue) => `${issue.path.join(".") || "<root>"}: ${issue.message}`);
   }
   return ["<root>: response was not exactly one valid JSON object matching the contract"];
+}
+
+export async function runEntityExtractionWorkflow(sourceData: unknown, chat: typeof aiChat = aiChat) {
+  const sourceText = sourceTextForEntityExtraction(sourceData);
+  const first = await chat(buildPrompt("extract_entities", sourceData));
+  const firstResult = parseAiJson(first, entityExtractionSchema);
+  if (firstResult.entities.length || !hasExplicitEntityMarkers(sourceText)) return firstResult;
+  const repaired = await chat(buildEntityExtractionRepairPrompt(sourceText, first, ["First response returned entities: [] despite explicit entity markers in authorized source text."]));
+  const repairedResult = parseAiJson(repaired, entityExtractionSchema);
+  if (repairedResult.entities.length) return repairedResult;
+  const deterministic = extractExplicitEntityCandidates(sourceText);
+  return entityExtractionSchema.parse({ entities: deterministic, warnings: deterministic.length ? ["Deterministic extraction used explicit source markers after empty model output."] : [], disclaimer: firstResult.disclaimer || "AI-generated suggestions require analyst review." });
 }
 
 export async function runStructuredWorkflow<W extends AiWorkflow>(workflow: W, sourceData: unknown, chat: typeof aiChat = aiChat) {

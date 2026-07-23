@@ -52,7 +52,8 @@ export const workflowContracts: Record<AiWorkflow, WorkflowContract> = {
     "source_ref": optional or null; ${sourceRef}
   "warnings": array of strings, max 10 items, each max 400 chars, required,
   "disclaimer": string, max 500 chars, required
-}`,
+}
+Extract explicitly named supported entity candidates from the authorized source. Supported entity types are actors, malware, campaigns, and cves. Synthetic, fictional, internal, unknown, or unverified status is not a reason to omit an explicitly named candidate; represent uncertainty with LOW or MEDIUM confidence and caveats. Do not claim an entity is real, officially registered, publicly documented, absent from public databases, or externally verified unless that claim exists in the source. You have no browser or external threat-intelligence/CVE database. Extract only names explicitly present in the source; do not invent names. A syntactically valid CVE mentioned in the source may be extracted as a LOW-confidence candidate with an unverified caveat.`,
   },
   suggest_mitre_mapping: {
     workflow: "suggest_mitre_mapping",
