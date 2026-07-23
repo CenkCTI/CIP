@@ -31,16 +31,34 @@ function validationIssueSummary(error: unknown) {
   return ["<root>: response was not exactly one valid JSON object matching the contract"];
 }
 
+function parseEntityExtractionResponse(raw: string) {
+  try {
+    return { ok: true as const, data: parseAiJson(raw, entityExtractionSchema) };
+  } catch (error) {
+    return { ok: false as const, issues: validationIssueSummary(error) };
+  }
+}
+
+function deterministicEntityExtraction(sourceText: string, disclaimer = "AI-generated suggestions require analyst review.") {
+  const deterministic = extractExplicitEntityCandidates(sourceText);
+  return entityExtractionSchema.parse({ entities: deterministic, warnings: deterministic.length ? ["Deterministic extraction used explicit source markers after malformed or empty model output."] : [], disclaimer });
+}
+
 export async function runEntityExtractionWorkflow(sourceData: unknown, chat: typeof aiChat = aiChat) {
   const sourceText = sourceTextForEntityExtraction(sourceData);
+  const hasMarkers = hasExplicitEntityMarkers(sourceText);
   const first = await chat(buildPrompt("extract_entities", sourceData));
-  const firstResult = parseAiJson(first, entityExtractionSchema);
-  if (firstResult.entities.length || !hasExplicitEntityMarkers(sourceText)) return firstResult;
-  const repaired = await chat(buildEntityExtractionRepairPrompt(sourceText, first, ["First response returned entities: [] despite explicit entity markers in authorized source text."]));
-  const repairedResult = parseAiJson(repaired, entityExtractionSchema);
-  if (repairedResult.entities.length) return repairedResult;
-  const deterministic = extractExplicitEntityCandidates(sourceText);
-  return entityExtractionSchema.parse({ entities: deterministic, warnings: deterministic.length ? ["Deterministic extraction used explicit source markers after empty model output."] : [], disclaimer: firstResult.disclaimer || "AI-generated suggestions require analyst review." });
+  const firstResult = parseEntityExtractionResponse(first);
+  if (firstResult.ok && (firstResult.data.entities.length || !hasMarkers)) return firstResult.data;
+  const issues = firstResult.ok ? ["First response returned entities: [] despite explicit entity markers in authorized source text."] : firstResult.issues;
+  const repaired = await chat(buildEntityExtractionRepairPrompt(sourceText, first, issues));
+  const repairedResult = parseEntityExtractionResponse(repaired);
+  if (repairedResult.ok) {
+    if (repairedResult.data.entities.length || !hasMarkers) return repairedResult.data;
+    return deterministicEntityExtraction(sourceText, repairedResult.data.disclaimer);
+  }
+  if (hasMarkers) return deterministicEntityExtraction(sourceText);
+  throw new AiError("malformed_output");
 }
 
 export async function runStructuredWorkflow<W extends AiWorkflow>(workflow: W, sourceData: unknown, chat: typeof aiChat = aiChat) {

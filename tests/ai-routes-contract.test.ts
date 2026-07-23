@@ -33,6 +33,13 @@ describe("AI route and UI contracts", () => {
 
 
 
+
+  it("generation maps model entity shape failures to controlled malformed output", () => {
+    expect(generate).toContain('code === "malformed_output"');
+    expect(generate).toContain('AI output did not match the required schema.');
+    expect(generate).not.toContain('internal_failure" ? "AI request could not be completed."');
+  });
+
   it("entity extraction uses candidate repair and removes untrusted provenance", () => {
     expect(generate).toContain("runEntityExtractionWorkflow(source)");
     expect(generate).toContain("allowedRefs.has");

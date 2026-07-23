@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { workflowContractText } from "@/lib/ai/contracts";
 import { extractExplicitEntityCandidates, hasExplicitEntityMarkers } from "@/lib/ai/pure";
+import { AiError } from "@/lib/ai/client";
 import { runEntityExtractionWorkflow } from "@/lib/ai/workflows";
 
 const liveNote = "Project record: Campaign Winter Echo is associated with threat actor Gray Lantern. Gray Lantern uses malware named ExampleLoader. The campaign also references vulnerability identifier CVE-2025-99999.";
@@ -39,6 +40,38 @@ describe("AI entity extraction candidate behavior", () => {
     expect(chat).toHaveBeenCalledTimes(2);
     expect(chat.mock.calls[1][0][1].content).toContain(liveNote);
     expect(chat.mock.calls[1][0][1].content).toContain("candidate extraction, not authoritative external verification");
+  });
+
+
+  it("malformed first response plus valid repaired response succeeds", async () => {
+    const chat = vi.fn().mockResolvedValueOnce("not-json").mockResolvedValueOnce(JSON.stringify(repaired));
+    const result = await runEntityExtractionWorkflow({ notes: [{ content: liveNote }] }, chat);
+    expect(result.entities.map((e) => e.name)).toEqual(["Winter Echo", "Gray Lantern", "ExampleLoader", "CVE-2025-99999"]);
+    expect(chat).toHaveBeenCalledTimes(2);
+    expect(chat.mock.calls[1][0][1].content).toContain("response was not exactly one valid JSON object");
+  });
+
+  it("malformed first and repaired responses with explicit markers use deterministic extraction", async () => {
+    const chat = vi.fn().mockResolvedValueOnce("not-json").mockResolvedValueOnce("still-not-json");
+    const result = await runEntityExtractionWorkflow({ notes: [{ content: liveNote }] }, chat);
+    expect(result.entities.map((e) => e.name)).toEqual(["Winter Echo", "Gray Lantern", "ExampleLoader", "CVE-2025-99999"]);
+  });
+
+  it("valid empty first response plus malformed repair with explicit markers uses deterministic extraction", async () => {
+    const chat = vi.fn().mockResolvedValueOnce(JSON.stringify(empty)).mockResolvedValueOnce("still-not-json");
+    const result = await runEntityExtractionWorkflow({ notes: [{ content: liveNote }] }, chat);
+    expect(result.entities.map((e) => e.name)).toEqual(["Winter Echo", "Gray Lantern", "ExampleLoader", "CVE-2025-99999"]);
+  });
+
+  it("malformed responses without markers fail with malformed_output", async () => {
+    const chat = vi.fn().mockResolvedValueOnce("not-json").mockResolvedValueOnce("still-not-json");
+    await expect(runEntityExtractionWorkflow({ notes: [{ content: "No CTI markers here." }] }, chat)).rejects.toMatchObject({ code: "malformed_output" });
+  });
+
+  it("provider AiError failures propagate without deterministic extraction", async () => {
+    const chat = vi.fn().mockRejectedValue(new AiError("timeout"));
+    await expect(runEntityExtractionWorkflow({ notes: [{ content: liveNote }] }, chat)).rejects.toMatchObject({ code: "timeout" });
+    expect(chat).toHaveBeenCalledTimes(1);
   });
 
   it("source without entity markers may legitimately remain empty without repair", async () => {
