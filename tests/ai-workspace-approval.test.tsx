@@ -61,4 +61,38 @@ describe("AI Workspace approval payloads", () => {
     expect(payload.source).toEqual({ kind: "note", id: "11111111-1111-4111-8111-111111111111" });
     expect(payload.sourceText).toBeUndefined();
   });
+
+  it("prevents report generation without a selected source", async () => {
+    const user = userEvent.setup();
+    render(<AiWorkspace projectId={projectId} notes={[]} evidence={[]} campaigns={[]} malware={[]} />);
+    await user.click(await screen.findByRole("button", { name: "Generate Report Draft" }));
+    await user.click(screen.getByRole("button", { name: "Generate AI Suggestions" }));
+    expect(await screen.findByText("Select at least one available report source.")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not show Save as Draft Report for an invalid empty draft", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ result: { title: "", report_type_suggestion: "TECHNICAL", sections: [], caveats: [], disclaimer: "limited" } }) });
+    const user = userEvent.setup();
+    render(<AiWorkspace projectId={projectId} notes={[{ id: "11111111-1111-4111-8111-111111111111", label: "Note" }]} evidence={[]} campaigns={[]} malware={[]} />);
+    await user.click(await screen.findByRole("button", { name: "Generate Report Draft" }));
+    await user.click(screen.getByRole("checkbox", { name: "Note" }));
+    await user.click(screen.getByRole("button", { name: "Generate AI Suggestions" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Report draft is incomplete");
+    expect(screen.queryByRole("button", { name: "Save as Draft Report" })).not.toBeInTheDocument();
+  });
+
+  it("a valid canonical report draft can be approved as a DRAFT report", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ result: { title: "Report", report_type_suggestion: "TECHNICAL", sections: [{ heading: "Findings", paragraphs: ["Body"], source_refs: [] }], caveats: [], disclaimer: "AI-generated; review required." } }) });
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, id: "22222222-2222-4222-8222-222222222222" }) });
+    const user = userEvent.setup();
+    render(<AiWorkspace projectId={projectId} notes={[{ id: "11111111-1111-4111-8111-111111111111", label: "Note" }]} evidence={[]} campaigns={[]} malware={[]} />);
+    await user.click(await screen.findByRole("button", { name: "Generate Report Draft" }));
+    await user.click(screen.getByRole("checkbox", { name: "Note" }));
+    await user.click(screen.getByRole("button", { name: "Generate AI Suggestions" }));
+    await user.click(await screen.findByRole("button", { name: "Save as Draft Report" }));
+    const payload = JSON.parse(fetchMock.mock.calls[2][1].body);
+    expect(payload.kind).toBe("save_report_draft");
+    expect(payload.draft.title).toBe("Report");
+  });
 });

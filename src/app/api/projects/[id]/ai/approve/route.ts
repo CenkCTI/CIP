@@ -154,13 +154,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ ok: true, linked: results.filter((r) => r.status === "linked"), alreadyLinked: results.filter((r) => r.status === "already_linked"), rejected: results.filter((r) => r.status === "unavailable" || r.status === "invalid") });
     }
 
-    const doc = toTiptapDoc(body.draft);
-    const report = reportSchema.parse({ title: body.draft.title, type: body.draft.report_type_suggestion, status: "DRAFT", content: doc });
-    reportMetaSchema.parse(report);
-    const { data, error } = await supabase.from("reports").insert({ ...report, project_id: id, author_id: user.id }).select("id").single();
-    if (error || !data) return NextResponse.json({ error: "Unable to save report." }, { status: 400 });
-    revalidatePath(`/projects/${id}`);
-    return NextResponse.json({ ok: true, id: data.id });
+    try {
+      const doc = toTiptapDoc(body.draft);
+      const report = reportSchema.parse({ title: body.draft.title, type: body.draft.report_type_suggestion, status: "DRAFT", content: doc });
+      reportMetaSchema.parse(report);
+      const { data, error } = await supabase.from("reports").insert({ ...report, project_id: id, author_id: user.id }).select("id").single();
+      if (error || !data) return NextResponse.json({ error: "Unable to save report draft." }, { status: 400 });
+      revalidatePath(`/projects/${id}`);
+      return NextResponse.json({ ok: true, id: data.id });
+    } catch {
+      return NextResponse.json({ error: "Report draft is incomplete and cannot be saved." }, { status: 400 });
+    }
   } catch {
     return NextResponse.json({ error: "Approval could not be completed." }, { status: 400 });
   }

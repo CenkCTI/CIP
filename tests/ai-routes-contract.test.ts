@@ -19,6 +19,15 @@ describe("AI route and UI contracts", () => {
     expect(generate).toContain('malware: "id,name,family,hashes,description,behavior"');
     expect(generate).toContain('cves: "id,cve_id,description,severity,affected_product,exploit_status,references"');
     expect(generate).toContain('mitre_techniques: "id,technique_id,technique_name,tactic,description"');
+    expect(generate).toContain('reportSourceCount === 0');
+    expect(generate).toContain('Select at least one available report source.');
+  });
+
+
+  it("report draft generation uses canonical note/evidence selections without generic duplication", () => {
+    expect(generate).toContain('if (parsed.workflow !== "generate_report_draft")');
+    expect(generate).toContain('parsed.selections');
+    expect(generate).toContain('research_notes: "id,title,content,tags"');
   });
 
   it("approval exposes all six explicit approval payloads", () => {

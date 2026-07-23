@@ -1,4 +1,3 @@
-import "server-only";
 import { getAiConfig, getAiSafeStatus, validateAiEndpoint, type AiSafeStatus } from "./config";
 export type AiMessage = { role: "system" | "user" | "assistant"; content: string };
 export class AiError extends Error { constructor(public code: string, message = code) { super(message); } }
