@@ -48,18 +48,31 @@ describe("AI Workspace approval payloads", () => {
     expect(payload).toEqual({ kind: "add_indicators", indicators: [{ value: "8.8.8.8", type: "IP", confidence: "MEDIUM", source_ref: null }] });
   });
 
-  it("translation approval sends server-verifiable source identity instead of source text", async () => {
-    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ result: { translated_text: "hola CVE-2024-12345", target_language: "Spanish", source_record_id: "11111111-1111-4111-8111-111111111111", preservation_warnings: [], disclaimer: "review" } }) });
+  it("valid Turkish translation can be saved with server-verifiable source identity", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ result: { translated_text: "Türkçe çeviri CVE-2024-12345", target_language: "Turkish", source_record_id: "11111111-1111-4111-8111-111111111111", preservation_warnings: [], disclaimer: "review" } }) });
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, id: "22222222-2222-4222-8222-222222222222" }) });
     const user = userEvent.setup();
     render(<AiWorkspace projectId={projectId} notes={[{ id: "11111111-1111-4111-8111-111111111111", label: "Note" }]} evidence={[]} campaigns={[]} malware={[]} />);
     await user.click(await screen.findByRole("button", { name: "Translate Document" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Target language" }), "Turkish");
     await user.click(screen.getByRole("checkbox", { name: "Note" }));
     await user.click(screen.getByRole("button", { name: "Generate AI Suggestions" }));
     await user.click(await screen.findByRole("button", { name: "Save as New Note" }));
     const payload = JSON.parse(fetchMock.mock.calls[2][1].body);
     expect(payload.source).toEqual({ kind: "note", id: "11111111-1111-4111-8111-111111111111" });
     expect(payload.sourceText).toBeUndefined();
+    expect(payload.title).toBe("AI translation to Turkish");
+  });
+
+  it("translation save is disabled for actual preservation warnings", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ result: { translated_text: "eksik", target_language: "Turkish", source_record_id: "11111111-1111-4111-8111-111111111111", preservation_warnings: ["Protected token missing or changed: 198.51.100.42"], disclaimer: "review" } }) });
+    const user = userEvent.setup();
+    render(<AiWorkspace projectId={projectId} notes={[{ id: "11111111-1111-4111-8111-111111111111", label: "Note" }]} evidence={[]} campaigns={[]} malware={[]} />);
+    await user.click(await screen.findByRole("button", { name: "Translate Document" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Target language" }), "Turkish");
+    await user.click(screen.getByRole("checkbox", { name: "Note" }));
+    await user.click(screen.getByRole("button", { name: "Generate AI Suggestions" }));
+    expect(await screen.findByRole("button", { name: "Save as New Note" })).toBeDisabled();
   });
 
   it("prevents report generation without a selected source", async () => {

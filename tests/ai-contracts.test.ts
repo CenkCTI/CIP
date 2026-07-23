@@ -9,7 +9,7 @@ const required: Record<AiWorkflow, string[]> = {
   extract_entities: ["entities", "entity_type", "actors", "malware", "campaigns", "cves", "name", "confidence", "LOW", "MEDIUM", "HIGH", "evidence_excerpt", "caveats", "source_ref", "warnings", "disclaimer"],
   suggest_mitre_mapping: ["mappings", "technique_id", "T1059", "T1059.001", "never use or invent database UUIDs", "technique_name", "confidence", "LOW", "MEDIUM", "HIGH", "reasoning", "evidence_excerpt", "source_record_ids", "warnings", "disclaimer"],
   generate_report_draft: ["title", "report_type_suggestion", "TECHNICAL", "EXECUTIVE", "CTI", "AI_SECURITY", "OSINT", "sections", "heading", "paragraphs", "source_tokens", "caveats", "disclaimer"],
-  translate_document: ["translated_text", "target_language", "source_record_id", "preservation_warnings", "disclaimer"],
+  translate_document: ["translated_text", "disclaimer", "Do not output target_language", "Preserve"],
 };
 
 describe("AI workflow prompt contracts", () => {

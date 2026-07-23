@@ -88,15 +88,13 @@ Use only facts present in authorized source data. Do not invent timestamps, dura
   },
   translate_document: {
     workflow: "translate_document",
-    topLevelKeys: ["translated_text", "target_language", "source_record_id", "preservation_warnings", "disclaimer"],
+    topLevelKeys: ["translated_text", "disclaimer"],
     text: `Return exactly one JSON object with no additional keys:
 {
   "translated_text": string max 50000 chars, required,
-  "target_language": string max 60 chars, required and must match the requested target language,
-  "source_record_id": UUID string copied only from the one authorized source record ID,
-  "preservation_warnings": array of strings, max 20 items, each max 500 chars, required; include warnings for any protected IOC/hash/CVE/MITRE/URL/email/file/registry/code token preservation concern,
   "disclaimer": string max 500 chars, required
-}`,
+}
+Do not output target_language, source_record_id, preservation_warnings, or any source UUID. The server owns those fields. Preserve every protected IOC, hash, CVE, MITRE ID, URL, email, file path, registry path, and code/log token exactly.`,
   },
 };
 

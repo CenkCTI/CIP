@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { aiChat, AiError } from "./client";
-import { buildPrompt, buildRepairPrompt } from "./pure";
-export { validateExtractedIndicator, missingProtectedTokens } from "./pure";
+import { buildPrompt, buildRepairPrompt, buildTranslationPrompt, buildTranslationRepairPrompt, protectedTokens, missingProtectedTokens } from "./pure";
+export { validateExtractedIndicator, missingProtectedTokens, protectedTokens } from "./pure";
 import { parseAiJson } from "./json";
 import { type AiWorkflow } from "./config";
 import { aliasMapByToken, type ReportSourceAlias } from "./provenance";
@@ -20,6 +20,7 @@ export const mitreSchema = z.object({ mappings: z.array(z.object({ technique_id:
 export const reportDraftSchema = z.object({ title: nonEmptyText(180), report_type_suggestion: z.enum(["TECHNICAL","EXECUTIVE","CTI","AI_SECURITY","OSINT"]), sections: z.array(z.object({ heading: nonEmptyText(120), paragraphs: z.array(nonEmptyText(2000)).min(1).max(6), source_refs: z.array(reportSourceRef).min(1).max(20) }).strict()).min(1).max(12), caveats: z.array(text(500)).max(10), disclaimer: nonEmptyText(500) }).strict();
 export const reportDraftModelSchema = z.object({ title: nonEmptyText(180), report_type_suggestion: z.enum(["TECHNICAL","EXECUTIVE","CTI","AI_SECURITY","OSINT"]), sections: z.array(z.object({ heading: nonEmptyText(120), paragraphs: z.array(nonEmptyText(2000)).min(1).max(6), source_tokens: z.array(sourceToken).min(1).max(20) }).strict()).min(1).max(12), caveats: z.array(text(500)).max(10), disclaimer: nonEmptyText(500) }).strict();
 export const translationSchema = z.object({ translated_text: text(50000), target_language: text(60), source_record_id: z.string().uuid(), preservation_warnings: z.array(text(500)).max(20), disclaimer: text(500) }).strict();
+export const translationModelSchema = z.object({ translated_text: text(50000), disclaimer: text(500) }).strict();
 export const schemas = { summarize_research: summarizeSchema, extract_indicators: indicatorExtractionSchema, extract_entities: entityExtractionSchema, suggest_mitre_mapping: mitreSchema, generate_report_draft: reportDraftSchema, translate_document: translationSchema } as const;
 export type WorkflowResult<W extends AiWorkflow = AiWorkflow> = z.infer<(typeof schemas)[W]>;
 
@@ -77,6 +78,48 @@ export async function runReportDraftWorkflow(sourceData: unknown, aliases: Repor
       return canonicalizeReportDraftTokens(parseAiJson(repaired, reportDraftModelSchema), aliases);
     } catch {
       throw new AiError("report_provenance_unreliable");
+    }
+  }
+}
+
+function normalizedText(textValue: string) {
+  return textValue.replace(/\s+/g, " ").trim();
+}
+
+export function buildCanonicalTranslationResult(modelResult: z.infer<typeof translationModelSchema>, targetLanguage: string, sourceRecordId: string, sourceText: string) {
+  return translationSchema.parse({
+    translated_text: modelResult.translated_text,
+    target_language: targetLanguage,
+    source_record_id: sourceRecordId,
+    preservation_warnings: missingProtectedTokens(sourceText, modelResult.translated_text).map((token) => `Protected token missing or changed: ${token}`),
+    disclaimer: modelResult.disclaimer,
+  });
+}
+
+function translationInvalid(result: z.infer<typeof translationSchema>, sourceText: string) {
+  return (result.target_language !== "English" && normalizedText(result.translated_text) === normalizedText(sourceText)) || result.preservation_warnings.length > 0;
+}
+
+export async function runTranslationWorkflow(targetLanguage: string, sourceRecordId: string, sourceText: string, chat: typeof aiChat = aiChat) {
+  const tokens = protectedTokens(sourceText);
+  const sourceData = { source_text: sourceText, protected_tokens: tokens };
+  const first = await chat(buildTranslationPrompt(targetLanguage, sourceData, tokens));
+  try {
+    const result = buildCanonicalTranslationResult(parseAiJson(first, translationModelSchema), targetLanguage, sourceRecordId, sourceText);
+    if (!translationInvalid(result, sourceText)) return result;
+    const repaired = await chat(buildTranslationRepairPrompt(targetLanguage, first, ["Translation was unchanged or protected tokens were missing/changed."], tokens));
+    const repairedResult = buildCanonicalTranslationResult(parseAiJson(repaired, translationModelSchema), targetLanguage, sourceRecordId, sourceText);
+    if (!translationInvalid(repairedResult, sourceText)) return repairedResult;
+    throw new AiError("translation_invalid");
+  } catch (firstError) {
+    if (firstError instanceof AiError && firstError.code === "translation_invalid") throw firstError;
+    const repaired = await chat(buildTranslationRepairPrompt(targetLanguage, first, modelIssueSummary(firstError), tokens));
+    try {
+      const repairedResult = buildCanonicalTranslationResult(parseAiJson(repaired, translationModelSchema), targetLanguage, sourceRecordId, sourceText);
+      if (translationInvalid(repairedResult, sourceText)) throw new AiError("translation_invalid");
+      return repairedResult;
+    } catch {
+      throw new AiError("translation_invalid");
     }
   }
 }

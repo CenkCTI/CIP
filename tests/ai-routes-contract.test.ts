@@ -31,6 +31,13 @@ describe("AI route and UI contracts", () => {
   });
 
 
+
+  it("translation generation uses server-owned target/source canonicalization", () => {
+    expect(generate).toContain('runTranslationWorkflow(parsed.targetLanguage!');
+    expect(generate).toContain('Select exactly one note or evidence source for translation.');
+    expect(generate).toContain('translation_invalid');
+  });
+
   it("report generation returns report source IDs from canonical aliases", () => {
     expect(generate).toContain('sourceRecordIds: parsed.workflow === "generate_report_draft"');
     expect(generate).toContain('reportAliases.map((a) => a.id)');

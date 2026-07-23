@@ -30,6 +30,36 @@ export function buildRepairPrompt(workflow: AiWorkflow, malformedOutput: string,
   ];
 }
 
+export function buildTranslationPrompt(targetLanguage: string, sourceData: unknown, protectedTokens: string[]) {
+  return [
+    { role: "system" as const, content: "You are a CTI translation assistant. You have no tools, database, filesystem, browser, secrets, or write capability. Translate only the delimited source text. Preserve protected technical tokens exactly. Return exactly one JSON object matching the translation contract. Do not include markdown." },
+    { role: "user" as const, content: `${workflowContractText("translate_document")}
+
+TRUSTED TRANSLATION INSTRUCTION: Translate the source text into exactly: ${targetLanguage}.
+Protected tokens that must remain exact: ${protectedTokens.length ? protectedTokens.join(", ") : "none"}.
+---BEGIN UNTRUSTED SOURCE DATA---
+${JSON.stringify(sourceData).slice(0, getAiConfig().maxInputChars)}
+---END UNTRUSTED SOURCE DATA---` },
+  ];
+}
+
+export function buildTranslationRepairPrompt(targetLanguage: string, malformedOutput: string, issues: string[], protectedTokens: string[]) {
+  return [
+    { role: "system" as const, content: "Repair the translation JSON only. Do not add facts. Do not output server-owned fields. Preserve protected tokens exactly. Return exactly one JSON object matching the translation contract." },
+    { role: "user" as const, content: `${workflowContractText("translate_document")}
+
+TRUSTED TRANSLATION INSTRUCTION: Translate the source text into exactly: ${targetLanguage}.
+Protected tokens that must remain exact: ${protectedTokens.length ? protectedTokens.join(", ") : "none"}.
+Validation issues from the first response:
+${issues.slice(0, 20).join("\n")}
+
+Malformed or untranslated model output to repair, truncated if necessary:
+---BEGIN MALFORMED OUTPUT---
+${malformedOutput.slice(0, 12000)}
+---END MALFORMED OUTPUT---` },
+  ];
+}
+
 export function validateExtractedIndicator(s: { value: string; type: (typeof indicatorTypes)[number] | string }) {
   const normalized = normalizeIndicatorValue(s.value, s.type);
   const error = validateIndicator(normalized, s.type);
