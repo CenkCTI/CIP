@@ -49,3 +49,13 @@
 - [x] Knowledge Graph extended with Report nodes, styles, detail links, manual relationships, and saved position validation.
 - [ ] Phase 5 migrations applied to live Supabase database (blocked unless `SUPABASE_DB_URL` is configured in the execution environment).
 - [ ] Browser acceptance against live Supabase for report editor/export flows.
+
+## Phase 6 — Local Ollama AI Workspace
+- Code added for server-only Ollama configuration/status, JSON validation, metadata usage limiting migration 012, project AI Workspace UI, generation routes, and explicit approval routes.
+- Operator-reported prior live acceptance for Phases 1-5 is recorded separately from checks run in this environment.
+- Migration 012 was authored but not applied in this container because no live Supabase connection was configured.
+- Follow-up audit repaired MITRE approval to accept ATT&CK technique IDs, resolve them server-side to project-owned `mitre_techniques.id` values, and report linked/already-linked/rejected suggestions without trusting client UUIDs.
+- Added executable Phase 6 regression tests for MITRE ID resolution, generation no-mutation/source whitelisting, six approval payloads, and client-side AI secret exposure checks.
+- Live acceptance repair added migration 013 for AI usage-rate hardening after migration 012 was applied; migration 013 was authored but not applied in this Codex environment.
+- Repaired live defects for indicator approval payloads/bulk approval, MITRE `technique_name` projections, report source projections, canonical translation approval source checks, and misleading cancel control copy.
+- Live acceptance repair canonicalized Generate Report Draft source loading, hardened empty report draft validation, and blocked report generation/approval when no usable source or valid draft exists.
