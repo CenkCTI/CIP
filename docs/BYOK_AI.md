@@ -1,6 +1,6 @@
 # BYOK Cloud AI
 
-BYOK means Bring Your Own Key. Cyber Research OS does not provide or pay for cloud LLM API keys. The server receives the key once over HTTPS for an explicit connection test, encrypts it into a short-lived HttpOnly SameSite=Strict cookie using Node `crypto` AES-256-GCM, then discards plaintext except immediately before provider requests. This is not end-to-end encryption.
+BYOK means Bring Your Own Key. Cyber Research OS does not provide or pay for cloud LLM API keys. The server receives the key once over HTTPS for an explicit connection test, encrypts it into a short-lived HttpOnly SameSite=Strict cookie scoped to `/api` using Node `crypto` AES-256-GCM, then discards plaintext except immediately before provider requests. This is not end-to-end encryption.
 
 Generate `BYOK_COOKIE_ENCRYPTION_KEY` with:
 
@@ -29,3 +29,8 @@ The same BYOK connection panel is used on `/demo/ai` and in the authenticated Pr
 ## NVIDIA NIM
 
 NVIDIA NIM is available as a fourth fixed BYOK provider using the official hosted NVIDIA Build endpoint `https://integrate.api.nvidia.com/v1/chat/completions`. Cyber Research OS does not provide NVIDIA API keys or pay for NVIDIA usage; visitors and authenticated users must supply their own NVIDIA key temporarily. The NVIDIA model selector is bounded to documented text/chat model IDs, including `nvidia/nemotron-3-super-120b-a12b` while it is listed in the official NVIDIA Build catalog. NVIDIA hosted/free catalog endpoints may have access, quota, latency, or availability limits controlled by NVIDIA. The NVIDIA request adapter omits `response_format` because the documented NIM chat-completions compatibility does not guarantee that parameter across catalog models. For allowlisted NVIDIA Nemotron models, requests include `chat_template_kwargs: { enable_thinking: false }` so default reasoning does not consume the bounded JSON output budget; server-side Zod parsing and the single repair/fail-closed workflow behavior remain enforced.
+
+
+## Cookie route scope
+
+The encrypted BYOK cookie is scoped to `Path=/api`, not `/` and not the legacy `/api/ai` path. This is required because status/connect/disconnect live under `/api/ai/byok`, authenticated generation lives under `/api/projects/[id]/ai/generate`, and guest generation lives under `/api/demo/ai/generate`. The cookie remains HttpOnly, SameSite=Strict, Secure in production, encrypted with AES-256-GCM, inaccessible to browser JavaScript, and decrypted only inside authorized AI server routes after user or guest binding checks. Reconnect clears the legacy `/api/ai` cookie before setting the current `/api` cookie; disconnect clears both paths.

@@ -68,3 +68,5 @@
 - [x] Guest AI flow added with Turnstile-gated session creation, fixed pasted-text workflows, and no project persistence.
 - [x] Authenticated AI workspace now exposes explicit Ollama vs connected BYOK selection without silent fallback.
 - [x] Phase 7 PR repair added a shared accessible BYOK connection panel used by both guest demo AI and authenticated Project AI Workspace users.
+
+- [x] Phase 7 PR repair moved the encrypted BYOK cookie to `Path=/api`, clears the legacy `/api/ai` path, and added safe generation error messages for missing/expired/mis-bound BYOK credentials.
