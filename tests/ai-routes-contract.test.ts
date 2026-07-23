@@ -30,6 +30,12 @@ describe("AI route and UI contracts", () => {
     expect(generate).toContain('research_notes: "id,title,content,tags"');
   });
 
+
+  it("report generation returns report source IDs from canonical aliases", () => {
+    expect(generate).toContain('sourceRecordIds: parsed.workflow === "generate_report_draft"');
+    expect(generate).toContain('reportAliases.map((a) => a.id)');
+  });
+
   it("approval exposes all six explicit approval payloads", () => {
     for (const kind of ["save_summary_note", "add_indicator", "add_indicators", "add_entity", "link_mitre", "save_report_draft", "save_translation_note"]) {
       expect(approve).toContain(kind);

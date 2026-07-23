@@ -29,7 +29,7 @@ describe("AI report provenance validation", () => {
   it("report prompt prohibits unsupported timestamps and facts", () => {
     const prompt = workflowContractText("generate_report_draft");
     expect(prompt).toContain("Do not invent timestamps");
-    expect(prompt).toContain("source_ref");
-    expect(prompt).toContain("copied exactly");
+    expect(prompt).toContain("source_tokens");
+    expect(prompt).toContain("Never output raw database UUIDs");
   });
 });

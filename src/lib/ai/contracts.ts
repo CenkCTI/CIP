@@ -80,11 +80,11 @@ export const workflowContracts: Record<AiWorkflow, WorkflowContract> = {
   "sections": array, min 1 item and max 12 items, required. Each item is an object with exactly:
     "heading": string max 120 chars,
     "paragraphs": array of strings, min 1 item and max 6 items, each max 2000 chars,
-    "source_refs": array, min 1 item and max 20 items. Each factual section must cite at least one allowed source_ref. Each source_ref is an object with exactly: kind one of "research_note", "evidence", "timeline_event", "task", "threat_actor", "campaign", "indicator", "malware", "cve", "mitre_technique"; id UUID string copied exactly from the authorized source IDs. Never reconstruct IDs from memory
+    "source_tokens": array, min 1 item and max 20 items. Each factual section must cite at least one allowed source token such as "SRC_001". Use only tokens from allowed_source_tokens in the source data. Never output raw database UUIDs, source_refs, source_ref objects, or reconstructed IDs
   "caveats": array of strings, max 10 items, each max 500 chars, required,
   "disclaimer": string, max 500 chars, required
 }
-Use only facts present in authorized source data. Do not invent timestamps, durations, attribution, causality, compromise, execution, or impact. Keep uncertain claims qualified.`,
+Use only facts present in authorized source data. Do not invent timestamps, durations, attribution, causality, compromise, execution, or impact. Keep uncertain claims qualified. The server will map source_tokens to canonical source_refs after validation.`,
   },
   translate_document: {
     workflow: "translate_document",

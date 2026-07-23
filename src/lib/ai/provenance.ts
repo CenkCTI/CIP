@@ -18,6 +18,40 @@ export const reportSourceTableMap: Record<ReportSourceKind, { table: string; sou
 };
 export const tableToReportSourceKind: Record<string, ReportSourceKind> = Object.fromEntries(Object.entries(reportSourceTableMap).map(([kind, cfg]) => [cfg.sourceKey, kind])) as Record<string, ReportSourceKind>;
 
+export type ReportSourceAlias = ReportSourceRef & { source_token: string };
+
+export function buildReportSourceAliases(source: Record<string, unknown>) {
+  const raw = buildAllowedReportRefs(source);
+  const rank = new Map<ReportSourceKind, number>(reportSourceKinds.map((kind, index) => [kind, index]));
+  return raw
+    .sort((a, b) => (rank.get(a.kind) ?? 999) - (rank.get(b.kind) ?? 999) || a.id.localeCompare(b.id))
+    .map((ref, index) => ({ ...ref, source_token: `SRC_${String(index + 1).padStart(3, "0")}` }));
+}
+
+export function buildModelFacingReportSource(source: Record<string, unknown>, aliases: ReportSourceAlias[]) {
+  const aliasByKey = new Map(aliases.map((alias) => [refKey(alias), alias]));
+  const modelSource: Record<string, unknown> = { allowed_source_tokens: aliases.map((alias) => alias.source_token) };
+  for (const [sourceKey, value] of Object.entries(source)) {
+    const kind = tableToReportSourceKind[sourceKey];
+    if (!kind || !Array.isArray(value)) continue;
+    modelSource[sourceKey] = value.flatMap((row) => {
+      if (!row || typeof row !== "object") return [];
+      const record = row as Record<string, unknown>;
+      const id = String(record.id ?? "");
+      const alias = aliasByKey.get(refKey({ kind, id }));
+      if (!alias) return [];
+      const { id: _id, ...safeRecord } = record;
+      void _id;
+      return [{ source_token: alias.source_token, ...safeRecord }];
+    });
+  }
+  return modelSource;
+}
+
+export function aliasMapByToken(aliases: ReportSourceAlias[]) {
+  return new Map(aliases.map((alias) => [alias.source_token, alias]));
+}
+
 export function refKey(ref: ReportSourceRef) { return `${ref.kind}:${ref.id}`; }
 export function buildAllowedReportRefs(source: Record<string, unknown>) {
   const refs: ReportSourceRef[] = [];
