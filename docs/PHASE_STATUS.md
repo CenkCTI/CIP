@@ -67,3 +67,4 @@
 - [x] Metadata-only guest session and usage migration 014 authored; not applied in this Codex environment because no live Supabase connection is configured.
 - [x] Guest AI flow added with Turnstile-gated session creation, fixed pasted-text workflows, and no project persistence.
 - [x] Authenticated AI workspace now exposes explicit Ollama vs connected BYOK selection without silent fallback.
+- [x] Phase 7 PR repair added a shared accessible BYOK connection panel used by both guest demo AI and authenticated Project AI Workspace users.

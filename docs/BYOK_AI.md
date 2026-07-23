@@ -19,3 +19,8 @@ Guest users can run fixed preview-only workflows with pasted text: Summarize Res
 Turnstile uses `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and server-only `TURNSTILE_SECRET_KEY`. Production fails closed without verification. Development can use the literal `CIP_DEV_TURNSTILE_BYPASS`; production rejects that bypass.
 
 Run `npm run guest:cleanup -- --no-dry-run` from a trusted server environment to delete expired guest sessions and cascade guest usage metadata. Without `--no-dry-run`, it reports a safe summary only.
+
+
+## Shared connection UI
+
+The same BYOK connection panel is used on `/demo/ai` and in the authenticated Project AI Workspace. Users can view enabled/connected/expired state, choose OpenAI/OpenRouter/Groq, enter a key only for Test and Connect, see structured provider errors, see expiration, disconnect the HttpOnly credential cookie, and explicitly choose Local Ollama or BYOK for generation.
