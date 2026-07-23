@@ -16,10 +16,13 @@ describe("AI route and UI contracts", () => {
     expect(generate).toContain('const allowed: Record<string, string>');
     expect(generate).not.toContain('.select("*")');
     expect(generate).toContain('evidence: "id,title,type,description,source_url,collection_date,tags"');
+    expect(generate).toContain('malware: "id,name,family,hashes,description,behavior"');
+    expect(generate).toContain('cves: "id,cve_id,description,severity,affected_product,exploit_status,references"');
+    expect(generate).toContain('mitre_techniques: "id,technique_id,technique_name,tactic,description"');
   });
 
   it("approval exposes all six explicit approval payloads", () => {
-    for (const kind of ["save_summary_note", "add_indicator", "add_entity", "link_mitre", "save_report_draft", "save_translation_note"]) {
+    for (const kind of ["save_summary_note", "add_indicator", "add_indicators", "add_entity", "link_mitre", "save_report_draft", "save_translation_note"]) {
       expect(approve).toContain(kind);
       expect(ui).toContain(kind);
     }
@@ -27,6 +30,7 @@ describe("AI route and UI contracts", () => {
 
   it("MITRE approval accepts technique IDs, not UUID arrays", () => {
     expect(approve).toContain('techniques: z.array');
+    expect(approve).toContain('technique_name');
     expect(approve).toContain('mitreAttackIdSchema');
     expect(approve).not.toContain('techniqueIds: z.array(uuid)');
   });

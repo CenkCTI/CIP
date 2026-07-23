@@ -1,4 +1,3 @@
-import "server-only";
 import { z } from "zod";
 import { aiChat, AiError } from "./client";
 import { buildPrompt, buildRepairPrompt } from "./pure";

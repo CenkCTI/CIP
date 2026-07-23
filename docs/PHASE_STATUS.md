@@ -56,3 +56,5 @@
 - Migration 012 was authored but not applied in this container because no live Supabase connection was configured.
 - Follow-up audit repaired MITRE approval to accept ATT&CK technique IDs, resolve them server-side to project-owned `mitre_techniques.id` values, and report linked/already-linked/rejected suggestions without trusting client UUIDs.
 - Added executable Phase 6 regression tests for MITRE ID resolution, generation no-mutation/source whitelisting, six approval payloads, and client-side AI secret exposure checks.
+- Live acceptance repair added migration 013 for AI usage-rate hardening after migration 012 was applied; migration 013 was authored but not applied in this Codex environment.
+- Repaired live defects for indicator approval payloads/bulk approval, MITRE `technique_name` projections, report source projections, canonical translation approval source checks, and misleading cancel control copy.
