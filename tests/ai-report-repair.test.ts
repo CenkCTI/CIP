@@ -11,6 +11,6 @@ describe("AI report draft validation", () => {
     expect(reportDraftSchema.safeParse({ title: "Report", report_type_suggestion: "TECHNICAL", sections: [{ heading: "Findings", paragraphs: ["body"], source_refs: [] }], caveats: [], disclaimer: "" }).success).toBe(false);
   });
   it("accepts a valid canonical report draft", () => {
-    expect(reportDraftSchema.safeParse({ title: "Report", report_type_suggestion: "TECHNICAL", sections: [{ heading: "Findings", paragraphs: ["body"], source_refs: [] }], caveats: [], disclaimer: "AI-generated; review required." }).success).toBe(true);
+    expect(reportDraftSchema.safeParse({ title: "Report", report_type_suggestion: "TECHNICAL", sections: [{ heading: "Findings", paragraphs: ["body"], source_refs: [{ kind: "research_note", id: "11111111-1111-4111-8111-111111111111" }] }], caveats: [], disclaimer: "AI-generated; review required." }).success).toBe(true);
   });
 });

@@ -15,6 +15,7 @@ import { reportMetaSchema, reportSchema } from "@/lib/reports/schema";
 import { noteSchema } from "@/lib/workspace/schema";
 import { mitreAttackIdSchema, resolveMitreSuggestionsForProject } from "@/lib/ai/mitre";
 import { missingProtectedTokens, reportDraftSchema, toTiptapDoc } from "@/lib/ai/workflows";
+import { reportSourceKinds, reportSourceTableMap, type ReportSourceKind } from "@/lib/ai/provenance";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,6 +44,24 @@ async function projectCtx(id: string) {
   const { data, error } = await supabase.from("projects").select("id,owner_id").eq("id", id).single();
   if (error || !data || data.owner_id !== user.id) throw new Error("not_found");
   return { supabase, user, projectId: id };
+}
+
+async function verifyReportDraftRefs(supabase: Awaited<ReturnType<typeof requireUser>>["supabase"], projectId: string, draft: z.infer<typeof reportDraftSchema>) {
+  const grouped = new Map<ReportSourceKind, Set<string>>();
+  for (const section of draft.sections) {
+    for (const ref of section.source_refs) {
+      if (!reportSourceKinds.includes(ref.kind)) return false;
+      const set = grouped.get(ref.kind) ?? new Set<string>();
+      set.add(ref.id);
+      grouped.set(ref.kind, set);
+    }
+  }
+  for (const [kind, ids] of grouped) {
+    const { table } = reportSourceTableMap[kind];
+    const { count, error } = await supabase.from(table).select("id", { count: "exact", head: true }).eq("project_id", projectId).in("id", Array.from(ids));
+    if (error || count !== ids.size) return false;
+  }
+  return true;
 }
 
 function provenanceLabel(sourceRef?: { kind: string; id: string } | null) {
@@ -155,6 +174,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     try {
+      if (!(await verifyReportDraftRefs(supabase, id, body.draft))) return NextResponse.json({ error: "Report draft contains unavailable source references." }, { status: 400 });
       const doc = toTiptapDoc(body.draft);
       const report = reportSchema.parse({ title: body.draft.title, type: body.draft.report_type_suggestion, status: "DRAFT", content: doc });
       reportMetaSchema.parse(report);

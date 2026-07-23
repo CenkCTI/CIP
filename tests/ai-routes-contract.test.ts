@@ -37,6 +37,13 @@ describe("AI route and UI contracts", () => {
     }
   });
 
+
+  it("report approval batches same-project provenance checks", () => {
+    expect(approve).toContain("verifyReportDraftRefs");
+    expect(approve).toContain('select("id", { count: "exact", head: true })');
+    expect(approve).toContain("Report draft contains unavailable source references.");
+  });
+
   it("MITRE approval accepts technique IDs, not UUID arrays", () => {
     expect(approve).toContain('techniques: z.array');
     expect(approve).toContain('technique_name');

@@ -77,13 +77,14 @@ export const workflowContracts: Record<AiWorkflow, WorkflowContract> = {
 {
   "title": string max 180 chars, required,
   "report_type_suggestion": one of "TECHNICAL", "EXECUTIVE", "CTI", "AI_SECURITY", "OSINT",
-  "sections": array, max 12 items, required. Each item is an object with exactly:
+  "sections": array, min 1 item and max 12 items, required. Each item is an object with exactly:
     "heading": string max 120 chars,
-    "paragraphs": array of strings, max 6 items, each max 2000 chars,
-    "source_refs": array, max 20 items. Each item is an object with exactly: kind string max 40 chars, id UUID string copied only from authorized source IDs
+    "paragraphs": array of strings, min 1 item and max 6 items, each max 2000 chars,
+    "source_refs": array, min 1 item and max 20 items. Each factual section must cite at least one allowed source_ref. Each source_ref is an object with exactly: kind one of "research_note", "evidence", "timeline_event", "task", "threat_actor", "campaign", "indicator", "malware", "cve", "mitre_technique"; id UUID string copied exactly from the authorized source IDs. Never reconstruct IDs from memory
   "caveats": array of strings, max 10 items, each max 500 chars, required,
   "disclaimer": string, max 500 chars, required
-}`,
+}
+Use only facts present in authorized source data. Do not invent timestamps, durations, attribution, causality, compromise, execution, or impact. Keep uncertain claims qualified.`,
   },
   translate_document: {
     workflow: "translate_document",

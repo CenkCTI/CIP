@@ -83,7 +83,7 @@ describe("AI Workspace approval payloads", () => {
   });
 
   it("a valid canonical report draft can be approved as a DRAFT report", async () => {
-    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ result: { title: "Report", report_type_suggestion: "TECHNICAL", sections: [{ heading: "Findings", paragraphs: ["Body"], source_refs: [] }], caveats: [], disclaimer: "AI-generated; review required." } }) });
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ result: { title: "Report", report_type_suggestion: "TECHNICAL", sections: [{ heading: "Findings", paragraphs: ["Body"], source_refs: [{ kind: "research_note", id: "11111111-1111-4111-8111-111111111111" }] }], caveats: [], disclaimer: "AI-generated; review required." } }) });
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, id: "22222222-2222-4222-8222-222222222222" }) });
     const user = userEvent.setup();
     render(<AiWorkspace projectId={projectId} notes={[{ id: "11111111-1111-4111-8111-111111111111", label: "Note" }]} evidence={[]} campaigns={[]} malware={[]} />);
