@@ -16,7 +16,7 @@ Cloud provider model IDs must be explicit, bounded, and match conservative chara
 
 Guest users can run fixed preview-only workflows with pasted text: Summarize Research, Extract Indicators, Extract Entities, Suggest MITRE Mapping, Generate Report Draft, and Translate Document. Authenticated users can explicitly select BYOK in the project AI workspace and still use existing protected approval routes. Prompts, outputs, API keys, storage paths, signed URLs, and file bytes are not stored in usage metadata.
 
-Turnstile uses `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and server-only `TURNSTILE_SECRET_KEY`. Production fails closed without verification. Development can use the literal `CIP_DEV_TURNSTILE_BYPASS`; production rejects that bypass.
+Turnstile uses client-visible `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and server-only `TURNSTILE_SECRET_KEY`. `/demo/ai` renders the Cloudflare Turnstile widget, submits only the widget-generated token to `/api/demo/guest/start`, and the server verifies it against Cloudflare siteverify with `Cache-Control: no-store`. Production fails closed when the site key or secret is missing, and raw Cloudflare response bodies are never returned. Local/test development can use the literal `CIP_DEV_TURNSTILE_BYPASS` only when server-only `TURNSTILE_DEV_BYPASS=true` and `NODE_ENV` is not production; production rejects that bypass.
 
 Run `npm run guest:cleanup -- --no-dry-run` from a trusted server environment to delete expired guest sessions and cascade guest usage metadata. Without `--no-dry-run`, it reports a safe summary only.
 
@@ -38,3 +38,11 @@ The encrypted BYOK cookie is scoped to `Path=/api`, not `/` and not the legacy `
 ## Defanged IOC normalization
 
 Extract Indicators keeps the model-observed value for analyst context and separately computes a canonical value for validation, duplicate checks, and optional approval. Conservative Phase 7 normalization supports common defanged domain/URL forms such as `[.]`, `hxxp://`, and `hxxps://`; it is deterministic and idempotent, does not extract from unrelated prose, and fails closed for malformed candidates. When observed and normalized values differ, the review UI shows both. No AI result is persisted unless an authenticated analyst explicitly approves the canonical indicator.
+
+## Migration 015 and guest NVIDIA usage
+
+Migration `202607230015_phase7_guest_nvidia_provider_constraint.sql` updates only the guest usage provider check constraint so guest BYOK usage metadata accepts `openai`, `openrouter`, `groq`, and `nvidia_nim`. It does not add Local Ollama to guest cloud usage and does not modify migration 014. Apply migration 015 after migration 014 before enabling NVIDIA NIM in the public demo.
+
+## Vercel and Cloudflare setup
+
+Configure Vercel Preview and Production with `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (public browser key) and `TURNSTILE_SECRET_KEY` (server-only secret). In Cloudflare Turnstile, allow the exact Vercel Preview hostname(s) used for PR #14 and the Production hostname, for example `cip-omega.vercel.app` plus any assigned preview deployment hostnames. Keep `TURNSTILE_DEV_BYPASS=false` or unset in Vercel.

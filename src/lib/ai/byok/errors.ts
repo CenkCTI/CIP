@@ -8,6 +8,11 @@ export function safeAiErrorMessage(code: string) {
     : code === "provider_unreachable" ? "AI provider is unreachable."
     : code === "nvidia_output_exhausted" ? "NVIDIA returned no final answer because output was exhausted; reconnect or try again with the allowlisted model."
     : code === "malformed_output" ? "AI output did not match the required schema."
+    : code === "turnstile_missing" ? "Complete the Turnstile challenge before starting the demo session."
+    : code === "turnstile_expired" ? "Turnstile token expired or was already used. Please try the challenge again."
+    : code === "turnstile_rejected" ? "Turnstile verification was rejected. Please try again."
+    : code === "turnstile_timeout" ? "Turnstile verification timed out. Please try again."
+    : code === "turnstile_unavailable" ? "Turnstile verification is unavailable or not configured."
     : code;
 }
 export function safeAiErrorCode(e: unknown) { return e && typeof e === "object" && "code" in e && typeof (e as { code?: unknown }).code === "string" ? (e as { code: string }).code : e instanceof Error ? e.message : "request_failed"; }
