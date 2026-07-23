@@ -10,7 +10,7 @@ openssl rand -base64 32
 
 Rotating this key invalidates existing BYOK sessions. `GUEST_SESSION_HMAC_KEY` can be generated the same way and is used to HMAC guest tokens/IPs; raw values are not stored. `SUPABASE_SERVICE_ROLE_KEY` is a powerful server-only secret used only for metadata-only guest sessions, usage events, and cleanup.
 
-Supported fixed providers are the SSRF boundary: OpenAI `https://api.openai.com/v1` (`/models`, `/chat/completions`), OpenRouter `https://openrouter.ai/api/v1` (`/models`, `/chat/completions`), and Groq `https://api.groq.com/openai/v1` (`/models`, `/chat/completions`). Provider base URLs, headers, tools, web search, code execution, custom OpenAI-compatible URLs, and MCP servers are never accepted from clients.
+Supported fixed providers are the SSRF boundary: OpenAI `https://api.openai.com/v1` (`/models`, `/chat/completions`), OpenRouter `https://openrouter.ai/api/v1` (`/models`, `/chat/completions`), Groq `https://api.groq.com/openai/v1` (`/models`, `/chat/completions`), and NVIDIA NIM `https://integrate.api.nvidia.com/v1` (`/chat/completions`). Provider base URLs, headers, tools, web search, code execution, custom OpenAI-compatible URLs, and MCP servers are never accepted from clients.
 
 Cloud provider model IDs must be explicit, bounded, and match conservative characters. Connection tests may make a minimal chat-completions request and may consume a tiny amount of provider quota. There is no silent fallback between Local Ollama and BYOK.
 
@@ -24,3 +24,8 @@ Run `npm run guest:cleanup -- --no-dry-run` from a trusted server environment to
 ## Shared connection UI
 
 The same BYOK connection panel is used on `/demo/ai` and in the authenticated Project AI Workspace. Users can view enabled/connected/expired state, choose OpenAI/OpenRouter/Groq, enter a key only for Test and Connect, see structured provider errors, see expiration, disconnect the HttpOnly credential cookie, and explicitly choose Local Ollama or BYOK for generation.
+
+
+## NVIDIA NIM
+
+NVIDIA NIM is available as a fourth fixed BYOK provider using the official hosted NVIDIA Build endpoint `https://integrate.api.nvidia.com/v1/chat/completions`. Cyber Research OS does not provide NVIDIA API keys or pay for NVIDIA usage; visitors and authenticated users must supply their own NVIDIA key temporarily. The NVIDIA model selector is bounded to documented text/chat model IDs, including `nvidia/nemotron-3-super-120b-a12b` while it is listed in the official NVIDIA Build catalog. NVIDIA hosted/free catalog endpoints may have access, quota, latency, or availability limits controlled by NVIDIA. The NVIDIA request adapter omits `response_format` because the documented NIM chat-completions compatibility does not guarantee that parameter across catalog models; server-side Zod parsing and the single repair/fail-closed workflow behavior remain enforced.

@@ -5,7 +5,7 @@ import { z } from "zod";
 import { getByokProvider, modelIdSchema, type ByokProviderId } from "./providers";
 export const BYOK_COOKIE = "cip_byok";
 export const GUEST_COOKIE = "cip_guest";
-const payloadSchema = z.object({ v: z.literal(1), providerId: z.enum(["openai","openrouter","groq"]), model: modelIdSchema, apiKey: z.string().min(8).max(4096), exp: z.number().int(), binding: z.object({ kind: z.enum(["user","guest"]), id: z.string().min(8).max(128) }).strict() }).strict();
+const payloadSchema = z.object({ v: z.literal(1), providerId: z.enum(["openai","openrouter","groq","nvidia_nim"]), model: modelIdSchema, apiKey: z.string().min(8).max(4096), exp: z.number().int(), binding: z.object({ kind: z.enum(["user","guest"]), id: z.string().min(8).max(128) }).strict() }).strict();
 export type ByokBinding = { kind: "user"|"guest"; id: string };
 export type ByokCredential = z.infer<typeof payloadSchema>;
 function key() { const raw = process.env.BYOK_COOKIE_ENCRYPTION_KEY ?? ""; const buf = /^[A-Za-z0-9+/]+={0,2}$/.test(raw) ? Buffer.from(raw, "base64") : Buffer.from(raw, "hex"); if (buf.length < 32) throw new Error("byok_not_configured"); return buf.subarray(0,32); }

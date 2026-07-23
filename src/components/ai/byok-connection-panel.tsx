@@ -2,14 +2,16 @@
 import { useCallback, useEffect, useId, useState, useTransition } from "react";
 
 type Scope = "guest" | "user";
-type ByokStatus = { enabled?: boolean; connected?: boolean; state?: string; provider?: string; providerId?: string; model?: string; expiresAt?: string; providers?: { id: string; displayName: string }[]; error?: string };
-const providers = [{ id: "openai", displayName: "OpenAI" }, { id: "openrouter", displayName: "OpenRouter" }, { id: "groq", displayName: "Groq" }];
+type ByokProviderOption = { id: string; displayName: string; modelAllowlist?: string[] };
+type ByokStatus = { enabled?: boolean; connected?: boolean; state?: string; provider?: string; providerId?: string; model?: string; expiresAt?: string; providers?: ByokProviderOption[]; error?: string };
+const providers: ByokProviderOption[] = [{ id: "openai", displayName: "OpenAI" }, { id: "openrouter", displayName: "OpenRouter" }, { id: "groq", displayName: "Groq" }, { id: "nvidia_nim", displayName: "NVIDIA NIM", modelAllowlist: ["nvidia/nemotron-3-super-120b-a12b", "nvidia/nemotron-3-nano-30b-a3b", "nvidia/nemotron-3-ultra-550b-a55b", "nvidia/llama-3.1-nemotron-nano-8b-v1", "nvidia/llama-3.3-nemotron-super-49b-v1.5"] }];
 const errorText: Record<string, string> = { key_rejected: "Provider rejected the API key.", provider_rate_limited: "Provider rate limit reached.", timeout: "Provider timed out.", provider_unreachable: "Provider is unreachable.", unsupported_model: "The selected model is unsupported.", byok_unavailable: "BYOK is not enabled on this server.", auth_required: "Sign in to connect BYOK for project workflows.", guest_session_required: "Start an AI demo session before connecting BYOK." };
 export function ByokConnectionPanel({ scope, onStatusChange, initialStatus, autoLoad = process.env.NODE_ENV !== "test" }: { scope: Scope; onStatusChange?: (status: ByokStatus) => void; initialStatus?: ByokStatus; autoLoad?: boolean }) {
   const [status, setStatus] = useState<ByokStatus>(initialStatus ?? { connected: false, state: "disconnected", providers });
   const [providerId, setProviderId] = useState("openai");
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const selectedProvider = providers.find((p) => p.id === providerId);
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
   const id = useId();
@@ -26,7 +28,7 @@ export function ByokConnectionPanel({ scope, onStatusChange, initialStatus, auto
     <p className="text-sm text-slate-300">Status: <strong>{state}</strong>{status.provider ? ` — ${status.provider}` : ""}{status.model ? ` / ${status.model}` : ""}{status.expiresAt ? `; expires ${new Date(status.expiresAt).toLocaleString()}` : ""}</p>
     <div className="grid gap-2 md:grid-cols-3">
       <label className="text-sm">Provider<select aria-label="BYOK provider" value={providerId} onChange={(e) => setProviderId(e.target.value)} className="mt-1 w-full rounded bg-slate-950 p-2 text-white">{providers.map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}</select></label>
-      <label className="text-sm">Model ID<input aria-label="BYOK model ID" value={model} onChange={(e) => setModel(e.target.value)} maxLength={120} pattern="[A-Za-z0-9._:/+\-]+" placeholder="Explicit supported model" className="mt-1 w-full rounded bg-slate-950 p-2 text-white" /></label>
+      <label className="text-sm">Model ID<input aria-label="BYOK model ID" list={`${id}-models`} value={model} onChange={(e) => setModel(e.target.value)} maxLength={120} pattern="[A-Za-z0-9._:/+\-]+" placeholder="Explicit supported model" className="mt-1 w-full rounded bg-slate-950 p-2 text-white" /><datalist id={`${id}-models`}>{(selectedProvider?.modelAllowlist ?? []).map((m) => <option key={m} value={m} />)}</datalist></label>
       <label className="text-sm">API key<input aria-label="BYOK API key" value={apiKey} onChange={(e) => setApiKey(e.target.value)} type="password" autoComplete="off" placeholder="Paste key for Test and Connect" className="mt-1 w-full rounded bg-slate-950 p-2 text-white" /></label>
     </div>
     <div className="flex flex-wrap gap-2"><button type="button" onClick={connect} disabled={pending || !model || !apiKey} className="rounded bg-cyan-600 px-4 py-2 font-semibold text-white disabled:opacity-50">{pending ? "Working…" : "Test and Connect"}</button><button type="button" onClick={disconnect} disabled={pending || !status.connected} className="rounded border border-slate-700 px-4 py-2 disabled:opacity-50">Disconnect BYOK</button><button type="button" onClick={refresh} className="rounded border border-slate-700 px-4 py-2">Refresh BYOK status</button></div>

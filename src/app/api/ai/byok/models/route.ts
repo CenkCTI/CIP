@@ -1,3 +1,3 @@
 import { z } from "zod"; import { apiKeySchema, parseModelList } from "@/lib/ai/byok/providers"; import { listProviderModels } from "@/lib/ai/byok/client"; import { noStore, readJsonLimited, safeErr, validateOrigin } from "@/lib/ai/byok/security";
-export const runtime="nodejs"; export const dynamic="force-dynamic"; const schema=z.object({providerId:z.enum(["openai","openrouter","groq"]),apiKey:apiKeySchema}).strict();
+export const runtime="nodejs"; export const dynamic="force-dynamic"; const schema=z.object({providerId:z.enum(["openai","openrouter","groq","nvidia_nim"]),apiKey:apiKeySchema}).strict();
 export async function POST(req:Request){ try{ validateOrigin(req); const b=schema.parse(await readJsonLimited(req)); const body=await listProviderModels(b.providerId,b.apiKey); return noStore({models:parseModelList(b.providerId,body)}); }catch(e){ return safeErr(e); } }

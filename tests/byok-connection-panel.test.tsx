@@ -15,6 +15,7 @@ describe("shared BYOK connection panel", () => {
     expect(screen.getByTestId("byok-connection-panel")).toBeInTheDocument();
     rerender(<AiWorkspace projectId="33333333-3333-4333-8333-333333333333" notes={[]} evidence={[]} campaigns={[]} malware={[]} />);
     expect(screen.getByTestId("byok-connection-panel")).toBeInTheDocument();
+    expect(screen.getAllByRole("option", { name: "NVIDIA NIM" }).length).toBeGreaterThan(0);
   });
 
   it("connects without rendering plaintext key and disconnects with structured responses", async () => {
@@ -22,7 +23,7 @@ describe("shared BYOK connection panel", () => {
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ connected: false, state: "disconnected" }) });
     const user = userEvent.setup(); const onStatusChange = vi.fn();
     render(<ByokConnectionPanel scope="user" onStatusChange={onStatusChange} />);
-    await user.type(screen.getByRole("textbox", { name: "BYOK model ID" }), "gpt-4.1-mini");
+    await user.type(screen.getByLabelText("BYOK model ID"), "gpt-4.1-mini");
     await user.type(screen.getByLabelText("BYOK API key"), "sk-secret-test-value");
     await user.click(screen.getByRole("button", { name: "Test and Connect" }));
     await screen.findByText(/Connected to OpenAI/);
@@ -38,11 +39,24 @@ describe("shared BYOK connection panel", () => {
     fetchMock.mockResolvedValueOnce({ ok: false, json: async () => ({ error: "key_rejected" }) });
     const user = userEvent.setup();
     render(<ByokConnectionPanel scope="guest" />);
-    await user.type(screen.getByRole("textbox", { name: "BYOK model ID" }), "openai/gpt-4o-mini");
+    await user.type(screen.getByLabelText("BYOK model ID"), "openai/gpt-4o-mini");
     await user.type(screen.getByLabelText("BYOK API key"), "or-secret-test-value");
     await user.click(screen.getByRole("button", { name: "Test and Connect" }));
     await screen.findByText("Provider rejected the API key.");
     expect(document.body.textContent).not.toContain("or-secret-test-value");
+  });
+
+  it("never renders an NVIDIA key in the shared panel", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ connected: true, provider: "NVIDIA NIM", providerId: "nvidia_nim", model: "nvidia/nemotron-3-super-120b-a12b", expiresAt: "2026-07-23T20:00:00.000Z" }) });
+    const user = userEvent.setup();
+    render(<ByokConnectionPanel scope="user" />);
+    await user.selectOptions(screen.getByRole("combobox", { name: "BYOK provider" }), "nvidia_nim");
+    await user.type(screen.getByLabelText("BYOK model ID"), "nvidia/nemotron-3-super-120b-a12b");
+    await user.type(screen.getByLabelText("BYOK API key"), "nvapi-secret-test-value");
+    await user.click(screen.getByRole("button", { name: "Test and Connect" }));
+    await screen.findByText(/Connected to NVIDIA NIM/);
+    expect(document.body.textContent).not.toContain("nvapi-secret-test-value");
+    expect(JSON.stringify(fetchMock.mock.calls[0])).toContain("nvapi-secret-test-value");
   });
 
   it("authenticated users can connect, select BYOK, generate, disconnect, and return to Ollama", async () => {
@@ -53,7 +67,7 @@ describe("shared BYOK connection panel", () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ connected: false, state: "disconnected" }) });
     const user = userEvent.setup();
     render(<AiWorkspace projectId="33333333-3333-4333-8333-333333333333" notes={[]} evidence={[]} campaigns={[]} malware={[]} />);
-    await user.type(screen.getByRole("textbox", { name: "BYOK model ID" }), "llama-3.1-8b-instant");
+    await user.type(screen.getByLabelText("BYOK model ID"), "llama-3.1-8b-instant");
     await user.type(screen.getByLabelText("BYOK API key"), "gsk-secret-test-value");
     await user.click(screen.getByRole("button", { name: "Test and Connect" }));
     await screen.findByText(/Connected to Groq/);
