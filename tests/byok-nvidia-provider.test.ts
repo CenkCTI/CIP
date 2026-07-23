@@ -1,7 +1,7 @@
 import { vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import { describe, expect, it, beforeEach } from "vitest";
-import { byokChat } from "@/lib/ai/byok/client";
+import { buildByokChatRequest, byokChat } from "@/lib/ai/byok/client";
 import { byokProviders, fixedProviderUrl, getByokProvider, nvidiaNimModelAllowlist, publicProviderList, validateProviderModel } from "@/lib/ai/byok/providers";
 import { runStructuredWorkflow } from "@/lib/ai/workflows";
 
@@ -28,8 +28,27 @@ describe("NVIDIA NIM BYOK provider", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("https://integrate.api.nvidia.com/v1/chat/completions");
     expect(fetchMock.mock.calls[0][1].headers.authorization).toBe("Bearer nvapi-secret");
     expect(nvidiaBody.response_format).toBeUndefined();
+    expect(nvidiaBody.chat_template_kwargs).toEqual({ enable_thinking: false });
+    expect(nvidiaBody.max_tokens).toBe(4096);
     expect(openAiBody.response_format).toEqual({ type: "json_object" });
+    expect(openAiBody.chat_template_kwargs).toBeUndefined();
     expect(JSON.stringify(openAiBody)).not.toContain("allow_fallbacks");
+  });
+
+  it("uses a larger bounded NVIDIA connection test profile", () => {
+    const body = buildByokChatRequest("nvidia_nim", "nvidia/nemotron-3-super-120b-a12b", [{ role: "user", content: "Return JSON" }], "connection_test");
+    expect(body.max_tokens).toBe(64);
+    expect(body.chat_template_kwargs).toEqual({ enable_thinking: false });
+    expect(body.response_format).toBeUndefined();
+    const openAiBody = buildByokChatRequest("openai", "gpt-4.1-mini", [{ role: "user", content: "Return JSON" }], "connection_test");
+    expect(openAiBody.max_tokens).toBe(16);
+    expect(openAiBody.response_format).toEqual({ type: "json_object" });
+    expect(openAiBody.chat_template_kwargs).toBeUndefined();
+  });
+
+  it("does not return NVIDIA reasoning content and maps exhausted output safely", async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ choices: [{ finish_reason: "length", message: { reasoning_content: "secret reasoning" } }] }) });
+    await expect(byokChat("nvidia_nim", "nvidia/nemotron-3-super-120b-a12b", "nvapi-secret", [{ role: "user", content: "Return JSON" }], "connection_test")).rejects.toMatchObject({ code: "nvidia_output_exhausted" });
   });
 
   it("fails closed when malformed NVIDIA output does not satisfy workflow schemas", async () => {
