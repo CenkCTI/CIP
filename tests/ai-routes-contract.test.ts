@@ -72,8 +72,16 @@ describe("AI route and UI contracts", () => {
   });
 
 
+
+  it("entity approval validates with controlled errors and canonical duplicate keys", () => {
+    expect(approve).toContain("buildEntityApprovalPayload");
+    expect(approve).toContain("Entity suggestion could not be validated.");
+    expect(approve).toContain("eq(entity.uniqueCol, entity.uniqueValue)");
+    expect(approve).toContain("Unable to save entity.");
+  });
+
   it("entity approval preserves duplicate and CVE validation paths", () => {
-    expect(approve).toContain('cveSchema.parse');
+    expect(fs.readFileSync("src/lib/ai/entity-approval.ts", "utf8")).toContain('cveSchema.parse');
     expect(approve).toContain('duplicate: true');
     expect(approve).toContain('uniqueCol');
   });

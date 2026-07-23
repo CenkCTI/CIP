@@ -3,11 +3,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import {
-  actorSchema,
-  campaignSchema,
-  cveSchema,
   indicatorSchema,
-  malwareSchema,
   normalizeIndicatorValue,
   validateIndicator,
 } from "@/lib/cti-schema";
@@ -16,6 +12,7 @@ import { noteSchema } from "@/lib/workspace/schema";
 import { mitreAttackIdSchema, resolveMitreSuggestionsForProject } from "@/lib/ai/mitre";
 import { missingProtectedTokens, reportDraftSchema, toTiptapDoc } from "@/lib/ai/workflows";
 import { reportSourceKinds, reportSourceTableMap, type ReportSourceKind } from "@/lib/ai/provenance";
+import { buildEntityApprovalPayload } from "@/lib/ai/entity-approval";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -135,19 +132,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     if (body.kind === "add_entity") {
-      const table = ({ actors: "threat_actors", malware: "malware", campaigns: "campaigns", cves: "cves" } as const)[body.entityType];
-      const payload = body.entityType === "actors"
-        ? actorSchema.parse({ name: body.name, description: body.description ?? "", aliases: [], country: null, motivations: [], known_ttps: "", references: [] })
-        : body.entityType === "campaigns"
-          ? campaignSchema.parse({ name: body.name, description: body.description ?? "", start_date: null, end_date: null, targets: [] })
-          : body.entityType === "malware"
-            ? malwareSchema.parse({ name: body.name, description: body.description ?? "", family: null, hashes: "{}", behavior: "" })
-            : cveSchema.parse({ cve_id: body.name, description: body.description ?? "", severity: "LOW", affected_product: "", exploit_status: "NONE", references: [] });
-      const uniqueCol = body.entityType === "cves" ? "cve_id" : "name";
-      const { data: dup, error: dupError } = await supabase.from(table).select("id").eq("project_id", id).eq(uniqueCol, body.name).maybeSingle();
+      let entity;
+      try {
+        entity = buildEntityApprovalPayload(body.entityType, body.name, body.description ?? "");
+      } catch {
+        return NextResponse.json({ error: "Entity suggestion could not be validated." }, { status: 400 });
+      }
+      const { data: dup, error: dupError } = await supabase.from(entity.table).select("id").eq("project_id", id).eq(entity.uniqueCol, entity.uniqueValue).maybeSingle();
       if (dupError) return NextResponse.json({ error: "Unable to save entity." }, { status: 400 });
       if (dup) return NextResponse.json({ ok: true, id: dup.id, duplicate: true });
-      const { data, error } = await supabase.from(table).insert({ ...payload, project_id: id }).select("id").single();
+      const { data, error } = await supabase.from(entity.table).insert({ ...entity.payload, project_id: id }).select("id").single();
       if (error || !data) return NextResponse.json({ error: "Unable to save entity." }, { status: 400 });
       revalidatePath(`/projects/${id}`);
       return NextResponse.json({ ok: true, id: data.id });

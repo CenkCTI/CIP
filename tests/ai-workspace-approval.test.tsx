@@ -53,8 +53,11 @@ describe("AI Workspace approval payloads", () => {
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ result: { entities: [
       { entity_type: "campaigns", name: "Winter Echo", confidence: "LOW", evidence_excerpt: "Campaign Winter Echo", caveats: ["unverified"], source_ref: { kind: "note", id: "11111111-1111-4111-8111-111111111111" } },
       { entity_type: "actors", name: "Gray Lantern", confidence: "LOW", evidence_excerpt: "threat actor Gray Lantern", caveats: ["unverified"], source_ref: null },
+      { entity_type: "malware", name: "ExampleLoader", confidence: "LOW", evidence_excerpt: "malware ExampleLoader", caveats: ["unverified"], source_ref: null },
     ], warnings: [], disclaimer: "review" } }) });
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, id: "existing", duplicate: true }) });
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, id: "created-actor" }) });
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, id: "created-malware" }) });
     const user = userEvent.setup();
     render(<AiWorkspace projectId={projectId} notes={[{ id: "11111111-1111-4111-8111-111111111111", label: "Note" }]} evidence={[]} campaigns={[]} malware={[]} />);
     await user.click(await screen.findByRole("button", { name: "Extract Entities" }));
@@ -68,6 +71,16 @@ describe("AI Workspace approval payloads", () => {
     expect(await screen.findByText("existing")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save Winter Echo" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Save Gray Lantern" })).not.toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Save Gray Lantern" }));
+    expect(await screen.findByText("created")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save Gray Lantern" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save ExampleLoader" })).not.toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Save ExampleLoader" }));
+    expect(screen.getByRole("button", { name: "Save ExampleLoader" })).toBeDisabled();
+    const actorPayload = JSON.parse(fetchMock.mock.calls[3][1].body);
+    const malwarePayload = JSON.parse(fetchMock.mock.calls[4][1].body);
+    expect(actorPayload).toEqual({ kind: "add_entity", entityType: "actors", name: "Gray Lantern", description: "threat actor Gray Lantern" });
+    expect(malwarePayload).toEqual({ kind: "add_entity", entityType: "malware", name: "ExampleLoader", description: "malware ExampleLoader" });
   });
 
   it("valid Turkish translation can be saved with server-verifiable source identity", async () => {
