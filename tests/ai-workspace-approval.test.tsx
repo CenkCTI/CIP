@@ -21,15 +21,16 @@ describe("AI Workspace approval payloads", () => {
     render(<AiWorkspace projectId={projectId} notes={[]} evidence={[]} campaigns={[]} malware={[]} />);
     await user.click(await screen.findByRole("button", { name: "Extract Indicators" }));
     await user.click(screen.getByRole("button", { name: "Generate AI Suggestions" }));
-    await user.click(await screen.findByRole("button", { name: "Add Example.COM" }));
+    await user.click(await screen.findByRole("button", { name: "Add example.com" }));
+    expect(screen.getByText(/Observed Example.COM → normalized example.com/)).toBeInTheDocument();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     const payload = JSON.parse(fetchMock.mock.calls[2][1].body);
-    expect(payload).toEqual({ kind: "add_indicator", indicator: { value: "Example.COM", type: "DOMAIN", confidence: "HIGH", source_ref: { kind: "note", id: "11111111-1111-4111-8111-111111111111" } } });
+    expect(payload).toEqual({ kind: "add_indicator", indicator: { value: "example.com", type: "DOMAIN", confidence: "HIGH", source_ref: { kind: "note", id: "11111111-1111-4111-8111-111111111111" } } });
     expect(JSON.stringify(payload)).not.toContain("evidence_context");
     expect(JSON.stringify(payload)).not.toContain("validation");
     expect(JSON.stringify(payload)).not.toContain("duplicate_id");
     expect(await screen.findByText("created")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add Example.COM" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Add example.com" })).toBeDisabled();
   });
 
   it("bulk adds only valid unsaved indicators with allowlisted primitive fields", async () => {
