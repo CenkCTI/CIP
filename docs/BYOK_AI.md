@@ -34,3 +34,7 @@ NVIDIA NIM is available as a fourth fixed BYOK provider using the official hoste
 ## Cookie route scope
 
 The encrypted BYOK cookie is scoped to `Path=/api`, not `/` and not the legacy `/api/ai` path. This is required because status/connect/disconnect live under `/api/ai/byok`, authenticated generation lives under `/api/projects/[id]/ai/generate`, and guest generation lives under `/api/demo/ai/generate`. The cookie remains HttpOnly, SameSite=Strict, Secure in production, encrypted with AES-256-GCM, inaccessible to browser JavaScript, and decrypted only inside authorized AI server routes after user or guest binding checks. Reconnect clears the legacy `/api/ai` cookie before setting the current `/api` cookie; disconnect clears both paths.
+
+## Defanged IOC normalization
+
+Extract Indicators keeps the model-observed value for analyst context and separately computes a canonical value for validation, duplicate checks, and optional approval. Conservative Phase 7 normalization supports common defanged domain/URL forms such as `[.]`, `hxxp://`, and `hxxps://`; it is deterministic and idempotent, does not extract from unrelated prose, and fails closed for malformed candidates. When observed and normalized values differ, the review UI shows both. No AI result is persisted unless an authenticated analyst explicitly approves the canonical indicator.
