@@ -1,0 +1,6 @@
+import { vi } from "vitest";
+vi.mock("server-only", () => ({}));
+import { describe, expect, it, beforeEach } from "vitest";
+import { decryptCredential, encryptCredential } from "@/lib/ai/byok/vault";
+beforeEach(()=>{ process.env.BYOK_ENABLED="true"; process.env.BYOK_COOKIE_ENCRYPTION_KEY=Buffer.alloc(32, 7).toString("base64"); });
+describe("BYOK vault",()=>{ const binding={kind:"guest" as const,id:"guest-12345678"}; it("round trips and uses unique nonce",()=>{ const a=encryptCredential({providerId:"openai",model:"gpt-4.1-mini",apiKey:"sk-test-key",binding}); const b=encryptCredential({providerId:"openai",model:"gpt-4.1-mini",apiKey:"sk-test-key",binding}); expect(a).not.toBe(b); expect(decryptCredential(a,binding).apiKey).toBe("sk-test-key"); }); it("rejects tampering, expiry, wrong binding",()=>{ const c=encryptCredential({providerId:"groq",model:"llama-3.1-8b-instant",apiKey:"gsk_test_key",binding,now:Date.now()-9*3600*1000}); expect(()=>decryptCredential(c,binding)).toThrow(); const good=encryptCredential({providerId:"openrouter",model:"openai/gpt-4o-mini",apiKey:"or_test_key",binding}); expect(()=>decryptCredential(good,{kind:"guest",id:"other-guest"})).toThrow(); expect(()=>decryptCredential(good.slice(0, -2)+"AA",binding)).toThrow(); }); });

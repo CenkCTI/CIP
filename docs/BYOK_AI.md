@@ -1,0 +1,21 @@
+# BYOK Cloud AI
+
+BYOK means Bring Your Own Key. Cyber Research OS does not provide or pay for cloud LLM API keys. The server receives the key once over HTTPS for an explicit connection test, encrypts it into a short-lived HttpOnly SameSite=Strict cookie using Node `crypto` AES-256-GCM, then discards plaintext except immediately before provider requests. This is not end-to-end encryption.
+
+Generate `BYOK_COOKIE_ENCRYPTION_KEY` with:
+
+```bash
+openssl rand -base64 32
+```
+
+Rotating this key invalidates existing BYOK sessions. `GUEST_SESSION_HMAC_KEY` can be generated the same way and is used to HMAC guest tokens/IPs; raw values are not stored. `SUPABASE_SERVICE_ROLE_KEY` is a powerful server-only secret used only for metadata-only guest sessions, usage events, and cleanup.
+
+Supported fixed providers are the SSRF boundary: OpenAI `https://api.openai.com/v1` (`/models`, `/chat/completions`), OpenRouter `https://openrouter.ai/api/v1` (`/models`, `/chat/completions`), and Groq `https://api.groq.com/openai/v1` (`/models`, `/chat/completions`). Provider base URLs, headers, tools, web search, code execution, custom OpenAI-compatible URLs, and MCP servers are never accepted from clients.
+
+Cloud provider model IDs must be explicit, bounded, and match conservative characters. Connection tests may make a minimal chat-completions request and may consume a tiny amount of provider quota. There is no silent fallback between Local Ollama and BYOK.
+
+Guest users can run fixed preview-only workflows with pasted text: Summarize Research, Extract Indicators, Extract Entities, Suggest MITRE Mapping, Generate Report Draft, and Translate Document. Authenticated users can explicitly select BYOK in the project AI workspace and still use existing protected approval routes. Prompts, outputs, API keys, storage paths, signed URLs, and file bytes are not stored in usage metadata.
+
+Turnstile uses `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and server-only `TURNSTILE_SECRET_KEY`. Production fails closed without verification. Development can use the literal `CIP_DEV_TURNSTILE_BYPASS`; production rejects that bypass.
+
+Run `npm run guest:cleanup -- --no-dry-run` from a trusted server environment to delete expired guest sessions and cascade guest usage metadata. Without `--no-dry-run`, it reports a safe summary only.

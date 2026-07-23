@@ -1,0 +1,4 @@
+import { z } from "zod"; import { createGuestSession, verifyTurnstile } from "@/lib/ai/byok/guest"; import { noStore, readJsonLimited, safeErr, validateOrigin } from "@/lib/ai/byok/security";
+export const runtime="nodejs"; export const dynamic="force-dynamic";
+const schema=z.object({ turnstileToken:z.string().min(1).max(2048) }).strict();
+export async function POST(req:Request){ try{ validateOrigin(req); const body=schema.parse(await readJsonLimited(req)); const ok=await verifyTurnstile(body.turnstileToken); if(!ok) return noStore({error:"captcha_required"},{status:403}); const session=await createGuestSession(req.headers.get("cf-connecting-ip")??req.headers.get("x-forwarded-for")?.split(",")[0]); return noStore({started:true, expiresAt:session.expiresAt}); }catch(e){ return safeErr(e); } }

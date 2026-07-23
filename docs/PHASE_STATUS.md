@@ -59,3 +59,11 @@
 - Live acceptance repair added migration 013 for AI usage-rate hardening after migration 012 was applied; migration 013 was authored but not applied in this Codex environment.
 - Repaired live defects for indicator approval payloads/bulk approval, MITRE `technique_name` projections, report source projections, canonical translation approval source checks, and misleading cancel control copy.
 - Live acceptance repair canonicalized Generate Report Draft source loading, hardened empty report draft validation, and blocked report generation/approval when no usable source or valid draft exists.
+
+## Phase 7 — Public Demo and BYOK Cloud AI
+- [x] Public synthetic `/demo` and `/demo/ai` routes added with clear no-persistence boundaries.
+- [x] Fixed server-only BYOK provider registry added for OpenAI, OpenRouter, and Groq, while preserving local Ollama as a separate explicit provider.
+- [x] AES-256-GCM temporary HttpOnly BYOK credential cookie implemented with user/guest binding and expiry.
+- [x] Metadata-only guest session and usage migration 014 authored; not applied in this Codex environment because no live Supabase connection is configured.
+- [x] Guest AI flow added with Turnstile-gated session creation, fixed pasted-text workflows, and no project persistence.
+- [x] Authenticated AI workspace now exposes explicit Ollama vs connected BYOK selection without silent fallback.
