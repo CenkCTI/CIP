@@ -16,10 +16,10 @@ export function CitemLogo({
   return (
     <span className={`citem-logo citem-logo-${variant} ${className}`.trim()}>
       <Image
-        src="/brand/citem-owl-mark.svg"
+        src="/brand/citem-owl-mark-original.webp"
         width={compact ? 52 : 48}
         height={compact ? 67 : 62}
-        alt="CİTEM half-owl eye logo"
+        alt="CİTEM original half-owl eye logo"
         className="citem-logo-mark"
         style={compact ? { height: "3.6rem", width: "auto" } : undefined}
         priority={priority}
