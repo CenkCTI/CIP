@@ -1,17 +1,17 @@
 import Link from "next/link";
 
 import { signUp } from "@/app/actions";
+import { CitemLogo } from "@/components/citem-logo";
 import { ActionForm, SubmitButton } from "@/components/form-status";
 
 export default function Page() {
   return (
-    <main className="citem-landing grid min-h-screen place-items-center px-4 py-12">
-      <section className="relative z-10 w-full max-w-md">
-        <Link href="/" className="mb-5 flex items-center justify-center gap-3">
-          <span className="citem-wordmark">CİTEM</span>
-          <span className="citem-brand-kicker">BAYKUSH / CTI</span>
+    <main className="citem-landing citem-auth-page">
+      <section className="citem-auth-shell">
+        <Link href="/" className="citem-auth-brand" aria-label="CİTEM home">
+          <CitemLogo priority />
         </Link>
-        <div className="card panel-corners p-7 md:p-9">
+        <div className="card panel-corners citem-auth-card">
           <p className="citem-eyebrow">Create analyst workspace</p>
           <h1 className="citem-title mt-3 text-3xl">Create account</h1>
           <p className="mt-3 text-sm leading-6 text-stone-500">
@@ -25,7 +25,7 @@ export default function Page() {
           </ActionForm>
           <p className="mt-5 text-sm text-stone-500">
             Already registered?{" "}
-            <Link className="text-amber-300 hover:text-amber-200" href="/auth/sign-in">Sign in</Link>
+            <Link className="citem-text-link" href="/auth/sign-in">Sign in</Link>
           </p>
         </div>
       </section>
