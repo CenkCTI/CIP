@@ -1,15 +1,16 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
 export const runtime = "nodejs";
 
 const EMBEDDED_IMAGE_PATTERN = /data:image\/webp;base64,([^\"]+)/;
 
-export async function GET() {
-  const source = readFileSync(
-    join(process.cwd(), "public", "brand", "citem-owl-mark.svg"),
-    "utf8",
-  );
+export async function GET(request: Request) {
+  const assetUrl = new URL("/brand/citem-owl-mark.svg", request.url);
+  const assetResponse = await fetch(assetUrl, { cache: "force-cache" });
+
+  if (!assetResponse.ok) {
+    return new Response("CİTEM logo asset is unavailable.", { status: 404 });
+  }
+
+  const source = await assetResponse.text();
   const match = EMBEDDED_IMAGE_PATTERN.exec(source);
 
   if (!match?.[1]) {
