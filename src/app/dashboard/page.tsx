@@ -7,6 +7,13 @@ function priorityCount(projects: Project[], priority: string) {
   return projects.filter((project) => project.priority.toUpperCase() === priority).length;
 }
 
+function priorityTone(priority: string) {
+  const normalized = priority.toUpperCase();
+  if (normalized === "CRITICAL") return "critical";
+  if (normalized === "HIGH" || normalized === "MEDIUM") return "attention";
+  return "neutral";
+}
+
 export default async function Page() {
   const { supabase } = await requireUser();
   const { data = [] } = await supabase
@@ -72,7 +79,7 @@ export default async function Page() {
               <p className="citem-label">Current operations</p>
               <h2 className="citem-section-title mt-2">Recent intelligence projects</h2>
             </div>
-            <Link href="/projects" className="text-xs text-amber-300 hover:text-amber-200">
+            <Link href="/projects" className="citem-text-link text-xs">
               View registry →
             </Link>
           </div>
@@ -91,7 +98,7 @@ export default async function Page() {
                       {project.research_type} · updated {new Date(project.updated_at).toLocaleDateString()}
                     </span>
                   </span>
-                  <span className="citem-badge">{project.priority}</span>
+                  <span className="citem-badge" data-tone={priorityTone(project.priority)}>{project.priority}</span>
                 </Link>
               ))
             ) : (
@@ -130,10 +137,10 @@ export default async function Page() {
             ))}
           </div>
 
-          <div className="mt-6 border-t border-amber-900/30 pt-4">
+          <div className="citem-controls-summary mt-6">
             <div className="citem-status-row">
               <span>Workspace controls</span>
-              <span className="text-amber-300">ACTIVE</span>
+              <span className="citem-badge" data-tone="secure">Active</span>
             </div>
             <div className="mt-3 grid gap-2 text-xs text-stone-500">
               <p>• Project ownership and RLS isolation</p>
