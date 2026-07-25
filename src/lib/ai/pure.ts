@@ -60,10 +60,63 @@ ${malformedOutput.slice(0, 12000)}
   ];
 }
 
+const surroundingPunctuation = /^[<"'`(\s]+|[>"'`)\s]+$/g;
+const defangedDot = /\[\.\]/gi;
+const whitespace = /\s/;
+
+function cleanCandidate(value: string) {
+  return value.trim().replace(surroundingPunctuation, "");
+}
+
+function normalizeDefangedDomain(value: string) {
+  const candidate = cleanCandidate(value);
+  if (!candidate || whitespace.test(candidate) || /[/:?#@]/.test(candidate)) return candidate;
+  const normalized = candidate.replace(defangedDot, ".");
+  return normalizeIndicatorValue(normalized, "DOMAIN");
+}
+
+function splitUrlAuthority(rawUrl: string) {
+  const schemeMatch = /^(hxxps?|https?):\/\//i.exec(rawUrl);
+  if (!schemeMatch) return null;
+  const schemeEnd = schemeMatch[0].length;
+  const rest = rawUrl.slice(schemeEnd);
+  const firstPath = rest.search(/[/?#]/);
+  const authority = firstPath === -1 ? rest : rest.slice(0, firstPath);
+  const suffix = firstPath === -1 ? "" : rest.slice(firstPath);
+  return { scheme: schemeMatch[1].toLowerCase(), authority, suffix };
+}
+
+function normalizeDefangedUrl(value: string) {
+  const candidate = cleanCandidate(value);
+  if (!candidate || whitespace.test(candidate)) return candidate;
+  const parts = splitUrlAuthority(candidate);
+  if (!parts) return normalizeIndicatorValue(candidate, "URL");
+  if (parts.authority.includes("@") || !parts.authority) return candidate;
+  const scheme = parts.scheme === "hxxp" ? "http" : parts.scheme === "hxxps" ? "https" : parts.scheme;
+  const authority = parts.authority.replace(defangedDot, ".");
+  const hostOnly = authority.startsWith("[") ? authority : authority.split(":")[0];
+  if (hostOnly.endsWith(".") || hostOnly.includes("..")) return candidate;
+  const normalized = `${scheme}://${authority}${parts.suffix}`;
+  try {
+    const parsed = new URL(normalized);
+    if (parsed.username || parsed.password) return candidate;
+    return parsed.toString();
+  } catch {
+    return normalized;
+  }
+}
+
+export function normalizeObservedIndicatorValue(value: string, type: (typeof indicatorTypes)[number] | string) {
+  if (type === "DOMAIN") return normalizeDefangedDomain(value);
+  if (type === "URL") return normalizeDefangedUrl(value);
+  return normalizeIndicatorValue(value, type);
+}
+
 export function validateExtractedIndicator(s: { value: string; type: (typeof indicatorTypes)[number] | string }) {
-  const normalized = normalizeIndicatorValue(s.value, s.type);
+  const observed = String(s.value ?? "");
+  const normalized = normalizeObservedIndicatorValue(observed, s.type);
   const error = validateIndicator(normalized, s.type);
-  return { normalized, valid: !error, error };
+  return { observed, normalized, valid: !error, error, defanged: observed.trim() !== normalized };
 }
 export function protectedTokens(text: string) { return Array.from(new Set(text.match(/(?:CVE-\d{4}-\d{4,}|T\d{4}(?:\.\d{3})?|https?:\/\/\S+|[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}|\b[a-fA-F0-9]{32,64}\b|HKEY_[A-Z_\\\\\w.-]+|\b\d{1,3}(?:\.\d{1,3}){3}\b)/g) ?? [])); }
 export function missingProtectedTokens(source: string, translated: string) { return protectedTokens(source).filter((t) => !translated.includes(t)); }

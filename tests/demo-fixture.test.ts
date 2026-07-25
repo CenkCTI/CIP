@@ -1,0 +1,2 @@
+import { describe, expect, it } from "vitest"; import { demoBanner, demoData } from "@/lib/demo/fixture";
+describe("public demo fixture",()=>{ it("is synthetic and contains no obvious production secrets",()=>{ const json=JSON.stringify(demoData); expect(demoBanner).toContain("synthetic"); expect(json).toContain("198.51.100.42"); expect(json).toContain("example.com"); expect(json).not.toMatch(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i); expect(json).not.toContain("signedUrl"); expect(json).not.toContain("supabase.co/storage"); }); });

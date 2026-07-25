@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "ai:smoke": "node scripts/ai-smoke.mjs"
+    "ai:smoke": "node scripts/ai-smoke.mjs",
+    "guest:cleanup": "node scripts/guest-cleanup.mjs"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",

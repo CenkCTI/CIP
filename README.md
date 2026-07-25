@@ -57,3 +57,11 @@ Migrations now run from `202607210001` through `202607210012_phase6_ai_usage.sql
 Quick start: copy `.env.example` to `.env.local`, set `AI_ENABLED=true`, `AI_PROVIDER=ollama`, `AI_BASE_URL=http://127.0.0.1:11434/v1`, set `AI_MODEL` to a model you installed with Ollama, leave `AI_API_KEY` blank for local no-key Ollama, then run `npm run dev`. `npm run ai:smoke` loads `.env.local` automatically and should be used only when Ollama is running.
 
 Production note: Vercel cannot reach a laptop-local Ollama endpoint. Keep AI disabled in Vercel unless you later provide a separately secured reachable HTTPS OpenAI-compatible endpoint.
+
+## Phase 7 Public Demo and BYOK AI
+
+Open `/demo` for a no-account synthetic workspace and `/demo/ai` for a pasted-text BYOK playground. Demo data is deterministic, fictional, and not persisted. Visitors cannot access real Supabase project data, upload evidence, or approve/save AI output.
+
+BYOK supports fixed server-owned endpoints for OpenAI, OpenRouter, and Groq. Users provide their own API key temporarily; keys are never configured as server provider keys and are held only in an encrypted HttpOnly cookie for the session. Local Ollama remains a separate explicit provider for authenticated project workflows; the app does not silently fall back between providers.
+
+Required Phase 7 variables are documented in `.env.example`. Apply migration `202607230014_phase7_guest_byok.sql` before enabling guest AI, configure Turnstile, and run `npm run guest:cleanup` from a trusted server environment for expired guest metadata cleanup.
