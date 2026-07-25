@@ -17,7 +17,9 @@ describe("CİTEM visual identity", () => {
     expect(logo).toContain("/brand/citem-owl-mark.svg");
     expect(logo).toContain('"compact" | "horizontal"');
     expect(logo).toContain("CİTEM half-owl eye logo");
-    expect(asset).toContain("data:image/webp;base64,");
+    expect(asset).toContain("<path");
+    expect(asset).toContain("eyeGlow");
+    expect(asset).not.toContain("data:image/");
     expect(shell).not.toContain("Cyber Research OS");
   });
 
