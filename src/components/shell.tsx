@@ -14,8 +14,9 @@ export function AppShell({
   return (
     <div className="citem-shell">
       <aside className="citem-sidebar">
-        <Link href="/dashboard" className="citem-brand" aria-label="CİTEM dashboard">
-          <CitemLogo priority />
+        <Link href="/dashboard" className="citem-brand gap-3" aria-label="CİTEM dashboard">
+          <CitemLogo variant="compact" priority />
+          <span className="citem-wordmark">CİTEM</span>
         </Link>
 
         <div className="citem-sidebar-section-label">
@@ -43,10 +44,9 @@ export function AppShell({
 
       <div className="citem-main">
         <header className="citem-topbar">
-          <div className="citem-topbar-copy">
-            <p className="citem-eyebrow">Cyber threat intelligence</p>
-            <p className="citem-topbar-title">Collection · Analysis · Operational direction</p>
-          </div>
+          <p className="font-mono text-[0.78rem] font-semibold tracking-[0.48em] text-[#b9822f] sm:text-[0.86rem]">
+            B A Y K U S H
+          </p>
 
           <div className="citem-topbar-actions">
             <span className="citem-user" title={email}>{email}</span>
