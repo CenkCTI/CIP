@@ -3,24 +3,35 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("CİTEM visual identity", () => {
-  it("uses the CİTEM brand in primary user-facing surfaces", () => {
+  it("uses the approved CİTEM brand in primary user-facing surfaces", () => {
     const layout = readFileSync("src/app/layout.tsx", "utf8");
     const shell = readFileSync("src/components/shell.tsx", "utf8");
     const home = readFileSync("src/app/page.tsx", "utf8");
+    const logo = readFileSync("src/components/citem-logo.tsx", "utf8");
+    const asset = readFileSync("public/brand/citem-owl-mark.svg", "utf8");
 
     expect(layout).toContain("CİTEM | Cyber Threat Intelligence");
-    expect(shell).toContain("CİTEM");
+    expect(shell).toContain("CitemLogo");
+    expect(home).toContain("CitemLogo");
     expect(home).toContain("BAYKUSH");
+    expect(logo).toContain("/brand/citem-owl-mark.svg");
+    expect(logo).toContain('"compact" | "horizontal"');
+    expect(logo).toContain("CİTEM half-owl eye logo");
+    expect(asset).toContain("data:image/webp;base64,");
     expect(shell).not.toContain("Cyber Research OS");
   });
 
-  it("defines the command-center visual tokens and accessible focus treatment", () => {
+  it("defines layered graphite surfaces, muted amber, and accessible motion/focus treatment", () => {
     const styles = readFileSync("src/app/globals.css", "utf8");
 
-    expect(styles).toContain("--amber:");
+    expect(styles).toContain("--background: #0b0e11");
+    expect(styles).toContain("--surface-panel: #14191d");
+    expect(styles).toContain("--surface-raised: #181e22");
+    expect(styles).toContain("--amber: #b9822f");
     expect(styles).toContain(".command-hero");
     expect(styles).toContain(".citem-sidebar");
     expect(styles).toContain("focus-visible");
+    expect(styles).toContain("prefers-reduced-motion");
   });
 
   it("keeps the dashboard metrics grounded in project data", () => {
