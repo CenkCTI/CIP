@@ -21,6 +21,15 @@ describe("CİTEM visual identity", () => {
     expect(shell).not.toContain("Cyber Research OS");
   });
 
+  it("keeps the authenticated shell branding minimal and BAYKUSH-led", () => {
+    const shell = readFileSync("src/components/shell.tsx", "utf8");
+
+    expect(shell).toContain('<CitemLogo variant="compact" priority />');
+    expect(shell).toContain("B A Y K U S H");
+    expect(shell).not.toContain("Collection · Analysis · Operational direction");
+    expect(shell).not.toContain("BAYKUSH / CYBER INTELLIGENCE");
+  });
+
   it("defines layered graphite surfaces, muted amber, and accessible motion/focus treatment", () => {
     const styles = readFileSync("src/app/globals.css", "utf8");
 
