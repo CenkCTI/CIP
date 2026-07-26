@@ -9,22 +9,18 @@ describe("CİTEM visual identity", () => {
     const home = readFileSync("src/app/page.tsx", "utf8");
     const logo = readFileSync("src/components/citem-logo.tsx", "utf8");
     const asset = readFileSync("public/brand/citem-owl-mark.svg", "utf8");
-    const route = readFileSync(
-      "src/app/brand/citem-owl-mark-original.webp/route.ts",
-      "utf8",
-    );
 
     expect(layout).toContain("CİTEM | Cyber Threat Intelligence");
     expect(shell).toContain("CitemLogo");
     expect(home).toContain("CitemLogo");
     expect(home).toContain("BAYKUSH");
-    expect(logo).toContain("/brand/citem-owl-mark-original.webp");
+    expect(logo).toContain("/brand/citem-owl-mark.svg?v=approved-original-20260725");
     expect(logo).toContain('"compact" | "horizontal"');
-    expect(logo).toContain("CİTEM original half-owl eye logo");
+    expect(logo).toContain("CİTEM owl-eye logo");
+    expect(logo).toContain("<img");
+    expect(logo).not.toContain("citem-owl-mark-original.webp");
     expect(asset).toContain("data:image/webp;base64,");
     expect(asset).not.toContain("eyeGlow");
-    expect(route).toContain("Buffer.from(match[1], \"base64\")");
-    expect(route).toContain('"Content-Type": "image/webp"');
     expect(shell).not.toContain("Cyber Research OS");
   });
 
