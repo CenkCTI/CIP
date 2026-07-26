@@ -7,23 +7,23 @@ type CitemLogoProps = {
 export function CitemLogo({
   variant = "horizontal",
   className = "",
+  priority = false,
 }: CitemLogoProps) {
   const compact = variant === "compact";
 
   return (
     <span className={`citem-logo citem-logo-${variant} ${className}`.trim()}>
-      {/*
-        Use the approved uploaded artwork directly. A version query prevents
-        browsers from reusing the earlier hand-redrawn SVG from cache.
-      */}
       <img
-        src="/brand/citem-owl-mark.svg?v=approved-original-20260725"
+        src="/brand/citem-owl-mark-original?v=approved-original-20260725-2"
         width={compact ? 52 : 48}
         height={compact ? 67 : 62}
-        alt="CİTEM owl-eye logo"
+        alt=""
+        aria-hidden="true"
         className="citem-logo-mark"
         style={compact ? { height: "3.6rem", width: "auto" } : undefined}
         decoding="async"
+        loading={priority ? "eager" : "lazy"}
+        fetchPriority={priority ? "high" : "auto"}
       />
       {!compact && (
         <span className="citem-logo-copy">
