@@ -14,9 +14,9 @@ export function CitemLogo({
   return (
     <span className={`citem-logo citem-logo-${variant} ${className}`.trim()}>
       <img
-        src="/brand/citem-owl-mark-original?v=approved-original-20260725-2"
-        width={compact ? 52 : 48}
-        height={compact ? 67 : 62}
+        src="/brand/citem-owl-mark-original.png?v=original-20260726"
+        width={compact ? 78 : 68}
+        height={compact ? 52 : 45}
         alt=""
         aria-hidden="true"
         className="citem-logo-mark"
