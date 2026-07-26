@@ -1,34 +1,29 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
+const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+
 describe("CİTEM visual identity", () => {
-  it("uses the approved CİTEM brand in primary user-facing surfaces", () => {
+  it("uses the approved original CİTEM PNG in primary user-facing surfaces", () => {
     const layout = readFileSync("src/app/layout.tsx", "utf8");
     const shell = readFileSync("src/components/shell.tsx", "utf8");
     const home = readFileSync("src/app/page.tsx", "utf8");
     const logo = readFileSync("src/components/citem-logo.tsx", "utf8");
-    const asset = readFileSync("public/brand/citem-owl-mark.svg", "utf8");
-    const endpoint = readFileSync(
-      "src/app/brand/citem-owl-mark-original/route.ts",
-      "utf8",
-    );
+    const assetPath = "public/brand/citem-owl-mark-original.png";
 
     expect(layout).toContain("CİTEM | Cyber Threat Intelligence");
     expect(shell).toContain("CitemLogo");
     expect(home).toContain("CitemLogo");
     expect(home).toContain("BAYKUSH");
-    expect(logo).toContain(
-      "/brand/citem-owl-mark-original?v=approved-original-20260725-2",
-    );
+    expect(logo).toContain("/brand/citem-owl-mark-original.png?v=original-20260726");
     expect(logo).toContain('"compact" | "horizontal"');
     expect(logo).toContain("<img");
     expect(logo).toContain('alt=""');
-    expect(logo).not.toContain("CİTEM original");
-    expect(asset).toContain("data:image/webp;base64,");
-    expect(asset).not.toContain("eyeGlow");
-    expect(endpoint).toContain('"Content-Type": "image/webp"');
-    expect(endpoint).toContain("EMBEDDED_IMAGE_PATTERN");
+    expect(logo).not.toContain("citem-owl-mark-original.webp");
+    expect(logo).not.toContain("citem-owl-mark.svg");
+    expect(existsSync(assetPath)).toBe(true);
+    expect(readFileSync(assetPath).subarray(0, 8)).toEqual(PNG_SIGNATURE);
     expect(shell).not.toContain("Cyber Research OS");
   });
 
