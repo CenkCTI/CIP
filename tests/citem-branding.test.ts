@@ -22,6 +22,7 @@ describe("CİTEM visual identity", () => {
     expect(logo).toContain('alt=""');
     expect(logo).not.toContain("citem-owl-mark-original.webp");
     expect(logo).not.toContain("citem-owl-mark.svg");
+    expect(logo).not.toContain("BAYKUSH / CYBER INTELLIGENCE");
     expect(existsSync(assetPath)).toBe(true);
     expect(readFileSync(assetPath).subarray(0, 8)).toEqual(PNG_SIGNATURE);
     expect(shell).not.toContain("Cyber Research OS");
@@ -36,10 +37,21 @@ describe("CİTEM visual identity", () => {
     expect(shell).not.toContain("BAYKUSH / CYBER INTELLIGENCE");
   });
 
-  it("defines layered graphite surfaces, muted amber, and accessible motion/focus treatment", () => {
-    const styles = readFileSync("src/app/globals.css", "utf8");
+  it("uses the expanded CİTEM name on the public landing surface", () => {
+    const home = readFileSync("src/app/page.tsx", "utf8");
 
-    expect(styles).toContain("--background: #0b0e11");
+    expect(home).toContain("Cyber Intelligence Threat Evaluation and Monitoring");
+    expect(home).not.toContain("Cyber threat intelligence environment");
+  });
+
+  it("defines layered graphite surfaces, muted amber, and the approved olive background", () => {
+    const styles = readFileSync("src/app/globals.css", "utf8");
+    const backgroundOverrides = readFileSync(
+      "src/app/background-overrides.css",
+      "utf8",
+    );
+    const layout = readFileSync("src/app/layout.tsx", "utf8");
+
     expect(styles).toContain("--surface-panel: #14191d");
     expect(styles).toContain("--surface-raised: #181e22");
     expect(styles).toContain("--amber: #b9822f");
@@ -47,6 +59,11 @@ describe("CİTEM visual identity", () => {
     expect(styles).toContain(".citem-sidebar");
     expect(styles).toContain("focus-visible");
     expect(styles).toContain("prefers-reduced-motion");
+    expect(backgroundOverrides).toContain("--background: #404e27");
+    expect(backgroundOverrides).toContain(".citem-landing");
+    expect(backgroundOverrides).toContain(".citem-main");
+    expect(backgroundOverrides).toContain("background: #404e27");
+    expect(layout).toContain('import "./background-overrides.css"');
   });
 
   it("keeps the dashboard metrics grounded in project data", () => {
