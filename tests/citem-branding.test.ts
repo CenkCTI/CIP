@@ -65,6 +65,8 @@ describe("CİTEM visual identity", () => {
     expect(backgroundOverrides).toContain("--amber-soft: #d4a958");
     expect(backgroundOverrides).toContain("--foreground: #e8e1d6");
     expect(backgroundOverrides).toContain("background: #1f2a1b");
+    expect(backgroundOverrides).toContain(".citem-auth-page");
+    expect(backgroundOverrides).toContain("background: #182118");
     expect(backgroundOverrides).toContain("background: #111713");
     expect(layout).toContain('import "./background-overrides.css"');
   });
