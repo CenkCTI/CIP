@@ -25,12 +25,7 @@ export function CitemLogo({
         loading={priority ? "eager" : "lazy"}
         fetchPriority={priority ? "high" : "auto"}
       />
-      {!compact && (
-        <span className="citem-logo-copy">
-          <span className="citem-wordmark block">CİTEM</span>
-          <span className="citem-brand-kicker block">BAYKUSH / CYBER INTELLIGENCE</span>
-        </span>
-      )}
+      {!compact && <span className="citem-wordmark block">CİTEM</span>}
     </span>
   );
 }
