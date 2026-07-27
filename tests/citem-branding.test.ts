@@ -44,7 +44,7 @@ describe("CİTEM visual identity", () => {
     expect(home).not.toContain("Cyber threat intelligence environment");
   });
 
-  it("defines layered graphite surfaces, muted amber, and the approved olive background", () => {
+  it("defines the approved military-map olive and amber palette", () => {
     const styles = readFileSync("src/app/globals.css", "utf8");
     const backgroundOverrides = readFileSync(
       "src/app/background-overrides.css",
@@ -52,17 +52,20 @@ describe("CİTEM visual identity", () => {
     );
     const layout = readFileSync("src/app/layout.tsx", "utf8");
 
-    expect(styles).toContain("--surface-panel: #14191d");
-    expect(styles).toContain("--surface-raised: #181e22");
-    expect(styles).toContain("--amber: #b9822f");
     expect(styles).toContain(".command-hero");
     expect(styles).toContain(".citem-sidebar");
     expect(styles).toContain("focus-visible");
     expect(styles).toContain("prefers-reduced-motion");
-    expect(backgroundOverrides).toContain("--background: #2a3721");
-    expect(backgroundOverrides).toContain(".citem-landing");
-    expect(backgroundOverrides).toContain(".citem-main");
-    expect(backgroundOverrides).toContain("background: #2a3721");
+    expect(backgroundOverrides).toContain("--background: #1f2a1b");
+    expect(backgroundOverrides).toContain("--sidebar: #151b13");
+    expect(backgroundOverrides).toContain("--surface: #111713");
+    expect(backgroundOverrides).toContain("--surface-panel: #171e18");
+    expect(backgroundOverrides).toContain("--surface-raised: #1c241b");
+    expect(backgroundOverrides).toContain("--amber: #b9822f");
+    expect(backgroundOverrides).toContain("--amber-soft: #d4a958");
+    expect(backgroundOverrides).toContain("--foreground: #e8e1d6");
+    expect(backgroundOverrides).toContain("background: #1f2a1b");
+    expect(backgroundOverrides).toContain("background: #111713");
     expect(layout).toContain('import "./background-overrides.css"');
   });
 
