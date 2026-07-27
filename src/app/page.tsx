@@ -18,7 +18,7 @@ export default function Home() {
 
         <section className="citem-landing-hero">
           <div>
-            <p className="citem-eyebrow">Cyber threat intelligence environment</p>
+            <p className="citem-eyebrow">Cyber Intelligence Threat Evaluation and Monitoring</p>
             <h1 className="citem-landing-title mt-6">
               See the signal. <strong>Direct the response.</strong>
             </h1>
