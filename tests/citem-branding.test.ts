@@ -59,10 +59,10 @@ describe("CİTEM visual identity", () => {
     expect(styles).toContain(".citem-sidebar");
     expect(styles).toContain("focus-visible");
     expect(styles).toContain("prefers-reduced-motion");
-    expect(backgroundOverrides).toContain("--background: #404e27");
+    expect(backgroundOverrides).toContain("--background: #2a3721");
     expect(backgroundOverrides).toContain(".citem-landing");
     expect(backgroundOverrides).toContain(".citem-main");
-    expect(backgroundOverrides).toContain("background: #404e27");
+    expect(backgroundOverrides).toContain("background: #2a3721");
     expect(layout).toContain('import "./background-overrides.css"');
   });
 
