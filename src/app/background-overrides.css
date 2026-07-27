@@ -14,12 +14,12 @@
 html,
 body,
 .citem-landing,
-.citem-shell {
-  background: #1f2a1b;
-}
-
 .citem-auth-page {
   background: #182118;
+}
+
+.citem-shell {
+  background: #1f2a1b;
 }
 
 .citem-sidebar {
