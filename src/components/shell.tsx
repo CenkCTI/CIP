@@ -1,3 +1,63 @@
-import Link from "next/link";import { signOut } from "@/app/actions";
-const nav=[['/dashboard','Dashboard'],['/projects','Projects']];
-export function AppShell({children,email}:{children:React.ReactNode;email?:string}){return <div className="min-h-screen md:flex"><aside className="border-b border-slate-800 bg-slate-950/80 p-4 md:w-64 md:border-b-0 md:border-r"><Link href="/dashboard" className="font-bold text-white">Cyber Research OS</Link><nav className="mt-6 flex gap-2 md:block">{nav.map(([href,label])=><Link key={href} className="block rounded-lg px-3 py-2 text-slate-200 hover:bg-slate-800" href={href}>{label}</Link>)}<span className="block rounded-lg px-3 py-2 text-slate-500" aria-disabled="true">Findings · coming soon</span></nav></aside><div className="flex-1"><header className="flex items-center justify-between border-b border-slate-800 p-4"><span className="text-sm text-slate-400">{email}</span><form action={signOut}><button className="rounded-lg border border-slate-700 px-3 py-2 text-sm">Sign out</button></form></header><main className="p-4 md:p-8">{children}</main></div></div>}
+import Link from "next/link";
+
+import { signOut } from "@/app/actions";
+import { CitemLogo } from "@/components/citem-logo";
+import { ShellNav } from "@/components/shell-nav";
+
+export function AppShell({
+  children,
+  email,
+}: {
+  children: React.ReactNode;
+  email?: string;
+}) {
+  return (
+    <div className="citem-shell">
+      <aside className="citem-sidebar">
+        <Link href="/dashboard" className="citem-brand gap-3" aria-label="CİTEM dashboard">
+          <CitemLogo variant="compact" priority />
+          <span className="citem-wordmark">CİTEM</span>
+        </Link>
+
+        <div className="citem-sidebar-section-label">
+          <p className="citem-label">Intelligence operations</p>
+        </div>
+        <ShellNav />
+
+        <div className="citem-sidebar-footer">
+          <div className="citem-security-panel panel-corners">
+            <div className="citem-status-row">
+              <span><span className="citem-status-dot" data-tone="secure" />Operational status</span>
+              <span className="citem-badge" data-tone="secure">Secure</span>
+            </div>
+            <div className="citem-control-bars mt-3" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+            <p className="mt-3 text-[11px] leading-5 text-stone-500">
+              Private workspace · RLS enforced · analyst-controlled AI
+            </p>
+          </div>
+        </div>
+      </aside>
+
+      <div className="citem-main">
+        <header className="citem-topbar">
+          <p className="font-mono text-[0.78rem] font-semibold tracking-[0.48em] text-[#b9822f] sm:text-[0.86rem]">
+            B A Y K U S H
+          </p>
+
+          <div className="citem-topbar-actions">
+            <span className="citem-user" title={email}>{email}</span>
+            <form action={signOut}>
+              <button className="citem-button-ghost" type="submit">Sign out</button>
+            </form>
+          </div>
+        </header>
+
+        <main className="citem-content">{children}</main>
+      </div>
+    </div>
+  );
+}

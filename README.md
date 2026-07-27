@@ -1,6 +1,6 @@
-# Cyber Research OS
+# CİTEM
 
-Cyber Research OS is a dark-first cyber research workspace built with Next.js, Supabase, and TypeScript.
+CİTEM is BAYKUSH's dark-first cyber threat intelligence workspace, built with Next.js, Supabase, and TypeScript.
 
 ## Setup for non-developers
 
@@ -40,7 +40,7 @@ The Phase 2 migration configures the bucket as private with a 20 MB limit and MI
 
 ## Phase 3 CTI relationship model
 
-Cyber Research OS models CTI with project-owned Threat Actors, Campaigns, Indicators, Malware, CVEs, and MITRE Techniques. Semantic relationships are represented by explicit join tables rather than polymorphic links. Each join table includes `project_id`, the two entity IDs, `created_at`, a duplicate-safe unique pair constraint, and composite foreign keys back to `(project_id, id)` on both sides. This guarantees that relationships cannot connect records from different projects, while cascade delete removes orphaned relationship rows when an entity or project is deleted.
+CİTEM models CTI with project-owned Threat Actors, Campaigns, Indicators, Malware, CVEs, and MITRE Techniques. Semantic relationships are represented by explicit join tables rather than polymorphic links. Each join table includes `project_id`, the two entity IDs, `created_at`, a duplicate-safe unique pair constraint, and composite foreign keys back to `(project_id, id)` on both sides. This guarantees that relationships cannot connect records from different projects, while cascade delete removes orphaned relationship rows when an entity or project is deleted.
 
 The Phase 3 UI adds project tabs for Actors, Campaigns, Indicators, Malware, CVEs, and MITRE Mapping. These tabs provide create, list, edit, delete, search/filter/sort, and multi-select relationship management backed by authenticated server actions and Zod validation.
 
@@ -62,6 +62,6 @@ Production note: Vercel cannot reach a laptop-local Ollama endpoint. Keep AI dis
 
 Open `/demo` for a no-account synthetic workspace and `/demo/ai` for a pasted-text BYOK playground. Demo data is deterministic, fictional, and not persisted. Visitors cannot access real Supabase project data, upload evidence, or approve/save AI output.
 
-BYOK supports fixed server-owned endpoints for OpenAI, OpenRouter, and Groq. Users provide their own API key temporarily; keys are never configured as server provider keys and are held only in an encrypted HttpOnly cookie for the session. Local Ollama remains a separate explicit provider for authenticated project workflows; the app does not silently fall back between providers.
+BYOK supports fixed server-owned endpoints for OpenAI, OpenRouter, Groq, and NVIDIA NIM. Users provide their own API key temporarily; keys are never configured as server provider keys and are held only in an encrypted HttpOnly cookie for the session. Local Ollama remains a separate explicit provider for authenticated project workflows; the app does not silently fall back between providers.
 
-Required Phase 7 variables are documented in `.env.example`. Apply migration `202607230014_phase7_guest_byok.sql` before enabling guest AI, configure Turnstile, and run `npm run guest:cleanup` from a trusted server environment for expired guest metadata cleanup.
+Required Phase 7 variables are documented in `.env.example`. Apply migrations `202607230014_phase7_guest_byok.sql` and `202607230015_phase7_guest_nvidia_provider_constraint.sql` before enabling guest AI, configure Turnstile, and run `npm run guest:cleanup` from a trusted server environment for expired guest metadata cleanup.

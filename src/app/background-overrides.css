@@ -1,0 +1,37 @@
+:root {
+  --background: #1f2a1b;
+  --sidebar: #151b13;
+  --header: rgba(17, 23, 19, 0.96);
+  --surface: #111713;
+  --surface-panel: #171e18;
+  --surface-raised: #1c241b;
+  --surface-input: #111713;
+  --foreground: #e8e1d6;
+  --amber: #b9822f;
+  --amber-soft: #d4a958;
+}
+
+html,
+body,
+.citem-landing,
+.citem-auth-page {
+  background: #182118;
+}
+
+.citem-shell {
+  background: #1f2a1b;
+}
+
+.citem-sidebar {
+  background:
+    radial-gradient(circle at 48% 3%, rgba(185, 130, 47, 0.055), transparent 17rem),
+    #151b13;
+}
+
+.citem-main {
+  background: #111713;
+}
+
+body {
+  background-image: none;
+}
