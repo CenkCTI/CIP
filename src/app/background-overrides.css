@@ -1,0 +1,16 @@
+:root {
+  --background: #404e27;
+}
+
+html,
+body,
+.citem-landing,
+.citem-shell,
+.citem-main,
+.citem-auth-page {
+  background: #404e27;
+}
+
+body {
+  background-image: none;
+}
