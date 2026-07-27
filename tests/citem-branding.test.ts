@@ -37,11 +37,37 @@ describe("CİTEM visual identity", () => {
     expect(shell).not.toContain("BAYKUSH / CYBER INTELLIGENCE");
   });
 
-  it("uses the expanded CİTEM name on the public landing surface", () => {
+  it("uses the approved public landing message", () => {
     const home = readFileSync("src/app/page.tsx", "utf8");
 
     expect(home).toContain("Cyber Intelligence Threat Evaluation and Monitoring");
-    expect(home).not.toContain("Cyber threat intelligence environment");
+    expect(home).toContain("Detect. <strong>Assess. Direct.</strong>");
+    expect(home).toContain(
+      "CİTEM gives cyber intelligence teams a structured environment to collect evidence, analyze threat activity, and turn assessments into coordinated action.",
+    );
+    expect(home).not.toContain("See the signal");
+    expect(home).not.toContain("CİTEM is the operational cyber intelligence module");
+  });
+
+  it("replaces the landing logo orbit with an accessible animated intelligence globe", () => {
+    const home = readFileSync("src/app/page.tsx", "utf8");
+    const globe = readFileSync("src/components/intelligence-globe.tsx", "utf8");
+    const globeStyles = readFileSync(
+      "src/components/intelligence-globe.module.css",
+      "utf8",
+    );
+
+    expect(home).toContain("IntelligenceGlobe");
+    expect(home).toContain("<IntelligenceGlobe />");
+    expect(home).not.toContain("citem-orbit-logo");
+    expect(globe).toContain("Animated world globe showing cyber intelligence data flows");
+    expect(globe).toContain("animateMotion");
+    expect(globe).toContain("GLOBAL SIGNAL FLOW");
+    expect(globeStyles).toContain("@keyframes route-flow");
+    expect(globeStyles).toContain("@keyframes orbit-rotate");
+    expect(globeStyles).toContain("prefers-reduced-motion");
+    expect(globeStyles).toContain("#d4a958");
+    expect(globeStyles).toContain("#6f9b79");
   });
 
   it("defines the approved military-map olive and amber palette", () => {
