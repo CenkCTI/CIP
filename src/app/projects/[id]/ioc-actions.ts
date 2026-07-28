@@ -6,7 +6,7 @@ import { z } from "zod";
 import {
   MAX_BULK_IOC_INPUT_CHARS,
   parseBulkIndicatorInput,
-  summarizeBulkIocRows,
+  type BulkIocClassification,
   type ParsedBulkIocRow,
 } from "@/lib/cti/indicators";
 import { confidenceLevels } from "@/lib/cti-schema";
@@ -50,10 +50,28 @@ type ExistingIndicator = {
   normalized_value: string;
 };
 
+type BulkSummary = Record<BulkIocClassification, number>;
+
+function summarizeBulkIocRows(rows: ParsedBulkIocRow[]): BulkSummary {
+  return rows.reduce<BulkSummary>(
+    (summary, row) => {
+      summary[row.classification] += 1;
+      return summary;
+    },
+    {
+      NEW: 0,
+      DUPLICATE_IN_INPUT: 0,
+      ALREADY_EXISTS: 0,
+      INVALID: 0,
+      UNSUPPORTED_CVE: 0,
+    },
+  );
+}
+
 type PreviewSuccess = {
   ok: true;
   rows: ParsedBulkIocRow[];
-  summary: ReturnType<typeof summarizeBulkIocRows>;
+  summary: BulkSummary;
 };
 type PreviewFailure = { ok: false; error: string };
 export type BulkIocPreviewResult = PreviewSuccess | PreviewFailure;
