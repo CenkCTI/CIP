@@ -13,7 +13,10 @@ describe("Phase 2.1B repository integration", () => {
     expect(sourcePage).toContain('.from("sources")');
     expect(sourcePage).toContain('.from("evidence")');
     expect(registry).toContain(
-      "Source records identify where information came from. Evidence stores the actual research artefact.",
+      "Source records identify where information came from",
+    );
+    expect(registry).toContain(
+      "Evidence stores the actual research artefact",
     );
     expect(aiProvenance).toContain("ReportSourceRef");
     expect(aiProvenance).not.toContain("enrichment_results");
