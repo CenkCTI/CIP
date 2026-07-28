@@ -73,3 +73,30 @@
 - [x] Phase 7 PR repair added conservative defanged IOC normalization for Extract Indicators, preserving observed `[.]`/`hxxp(s)` values while using validated canonical values for duplicate checks and explicit approval.
 - [x] Phase 7 PR repair replaced the `/demo/ai` hard-coded Turnstile bypass with the real Cloudflare widget and server-side siteverify flow.
 - [x] Migration 015 authored to add `nvidia_nim` to the strict guest BYOK usage provider constraint without editing migration 014.
+
+## CİTEM Product Roadmap Phase 2.1A — Investigation Foundation and IOC Workbench
+
+- [x] Existing `projects` table and `/projects` routes preserved as the internal storage and routing model.
+- [x] User-facing Project registry, create flow, dashboard metrics, and navigation changed to Investigation terminology.
+- [x] Additive migration 016 authored for Investigation status/metadata, Indicator status/rationale/relevance, and project-owned Indicator observations.
+- [x] Existing Project rows remain compatible through nullable metadata and default `DRAFT` status.
+- [x] Project validation distinguishes new-Investigation research-question requirements from legacy edit compatibility.
+- [x] Investigation list filters added for status, assessment confidence, open/closed state, type, priority, search, and sorting.
+- [x] Investigation Overview now displays metadata, lifecycle dates, ownership label, and real counts from existing workspace tables.
+- [x] Existing `tab=indicators` route retained and presented as IOC Workbench.
+- [x] Shared pure IOC module added for type detection, conservative refanging, canonical normalization, validation, defanged display, hash identification, and bounded bulk parsing.
+- [x] Existing AI extracted-Indicator validation refactored to reuse the same shared IOC functions without weakening prompt-injection boundaries.
+- [x] Two-step bulk IOC preview/import added with mixed input, per-line classification, database duplicate checks, partial success, and accurate result counts.
+- [x] CVEs remain in the CVE module; FILE and REGISTRY remain available through the existing manual Indicator form.
+- [x] Indicator observations preserve exact accepted observed forms, observation/ingestion times, origin, source label, note, confidence, and creator.
+- [x] Composite same-project foreign key, cascade cleanup, RLS, created-by checks, and security-invoker transactional import RPC added.
+- [x] Existing Indicator create/edit/delete and CTI relationship controls preserved and extended with status, rationale, and current relevance.
+- [x] Existing Indicator detail route extended with canonical/safe display summary and observation history.
+- [x] Unit/static migration and workflow tests authored for Investigation validation, IOC detection/normalization/bulk parsing, RLS boundaries, AI normalizer reuse, and scope control.
+- [ ] Migration 016 applied to live Supabase database.
+- [ ] Critical browser acceptance completed against a migrated live/preview Supabase environment.
+- [ ] Cross-user browser acceptance for Indicator observations completed against two live test users.
+
+### Explicitly deferred from Phase 2.1A
+
+Structured Sources, enrichment providers, infrastructure clusters, enhanced Graph provenance, Timeline redesign, Attribution Analysis, specialised report types, immutable report versions, feeds, alerts, SIEM/SOAR integrations, and strategic analysis remain out of scope and were not started in this implementation unit.

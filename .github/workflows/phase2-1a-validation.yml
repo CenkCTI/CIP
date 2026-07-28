@@ -1,0 +1,78 @@
+name: Phase 2.1A validation
+
+on:
+  push:
+    branches:
+      - feat/citem-phase-2-1a-investigation-ioc-workbench
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase2-1a-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run all validation commands
+        id: validation
+        shell: bash
+        run: |
+          mkdir -p validation-logs
+          failed=0
+
+          run_check() {
+            name="$1"
+            shift
+            echo "Running ${name}..."
+            if "$@" >"validation-logs/${name}.log" 2>&1; then
+              echo "${name}=passed" | tee -a validation-logs/summary.txt
+            else
+              code=$?
+              echo "${name}=failed (exit ${code})" | tee -a validation-logs/summary.txt
+              failed=1
+            fi
+          }
+
+          run_check lint npm run lint
+          run_check typecheck npm run typecheck
+          run_check test npm test
+          run_check build npm run build
+
+          cat validation-logs/summary.txt
+          echo "failed=${failed}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload validation logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase2-1a-validation-logs
+          path: validation-logs
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce validation result
+        if: always()
+        run: |
+          if [ "${{ steps.validation.outputs.failed }}" != "0" ]; then
+            echo "One or more validation commands failed. Inspect the uploaded logs."
+            exit 1
+          fi

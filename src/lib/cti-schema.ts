@@ -1,15 +1,21 @@
 import { z } from "zod";
+import {
+  indicatorTypes,
+  normalizeIndicatorValue,
+  validateIndicator,
+} from "@/lib/cti/indicators";
 
-export const indicatorTypes = [
-  "IP",
-  "DOMAIN",
-  "URL",
-  "HASH",
-  "EMAIL",
-  "FILE",
-  "REGISTRY",
-] as const;
+export { indicatorTypes, normalizeIndicatorValue, validateIndicator };
 export const confidenceLevels = ["LOW", "MEDIUM", "HIGH"] as const;
+export const indicatorStatuses = [
+  "UNVERIFIED",
+  "SUSPICIOUS",
+  "MALICIOUS",
+  "BENIGN",
+  "FALSE_POSITIVE",
+  "INACTIVE",
+  "EXPIRED",
+] as const;
 export const cveSeverities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
 export const exploitStatuses = [
   "NONE",
@@ -51,6 +57,13 @@ const dateNull = z
   .refine(validDateOrNull, "Use a valid date/time value.")
   .transform((v) => v || null);
 const text = (max = 20000) => z.string().trim().max(max).default("");
+const nullableText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .optional()
+    .transform((v) => v || null);
 export const relKeys = [
   "threat_actor_ids",
   "campaign_ids",
@@ -95,42 +108,6 @@ export function parseRelationshipSelections(
   return { success: true, data: out };
 }
 
-export function normalizeIndicatorValue(value: string, type: string) {
-  const v = value.trim();
-  return type === "DOMAIN" || type === "EMAIL" ? v.toLowerCase() : v;
-}
-export function validateIndicator(value: string, type: string) {
-  const v = value.trim();
-  if (!v) return "Indicator value is required.";
-  if (type === "IP") {
-    if (z.ipv4().safeParse(v).success || z.ipv6().safeParse(v).success)
-      return null;
-    return "Use a valid IPv4 or IPv6 address.";
-  }
-  if (type === "URL") {
-    try {
-      const u = new URL(v);
-      return ["http:", "https:"].includes(u.protocol)
-        ? null
-        : "Use an HTTP or HTTPS URL.";
-    } catch {
-      return "Use a valid HTTP or HTTPS URL.";
-    }
-  }
-  if (type === "DOMAIN")
-    return /^(?!-)([a-z0-9-]{1,63}\.)+[a-z]{2,63}$/i.test(v)
-      ? null
-      : "Use a valid domain name.";
-  if (type === "HASH")
-    return /^(?:[a-f0-9]{32}|[a-f0-9]{40}|[a-f0-9]{64})$/i.test(v)
-      ? null
-      : "Use a common MD5, SHA-1, or SHA-256 hex hash.";
-  if (type === "EMAIL")
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
-      ? null
-      : "Use a valid email address.";
-  return null;
-}
 function normalizeDateInput(v: unknown) {
   if (v === "" || v == null) return null;
   if (typeof v !== "string") return v;
@@ -199,6 +176,7 @@ export const indicatorSchema = z
     value: indicatorValue,
     type: z.enum(indicatorTypes),
     confidence: z.enum(confidenceLevels),
+    status: z.enum(indicatorStatuses).default("UNVERIFIED"),
     source: z
       .string()
       .trim()
@@ -207,6 +185,8 @@ export const indicatorSchema = z
     tags: csv,
     first_seen: dateNull,
     last_seen: dateNull,
+    analyst_rationale: nullableText(5000),
+    current_relevance: nullableText(2000),
   })
   .superRefine((v, ctx) => {
     const err = validateIndicator(v.value, v.type);

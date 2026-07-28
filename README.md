@@ -7,7 +7,7 @@ CİTEM is BAYKUSH's dark-first cyber threat intelligence workspace, built with N
 1. Install Node.js 20+ and npm.
 2. Copy `.env.example` to `.env.local` and fill in the Supabase values from your Supabase project.
 3. In Supabase Auth, set the Site URL to `http://localhost:3000` for local testing and add your Vercel URL before production.
-4. Apply the database migration: `psql "$SUPABASE_DB_URL" -f supabase/migrations/202607210001_phase1_foundation.sql`.
+4. Apply the database migrations in filename order.
 5. Run `npm install`, then `npm run dev`, and open `http://localhost:3000`.
 
 ## Commands
@@ -65,3 +65,46 @@ Open `/demo` for a no-account synthetic workspace and `/demo/ai` for a pasted-te
 BYOK supports fixed server-owned endpoints for OpenAI, OpenRouter, Groq, and NVIDIA NIM. Users provide their own API key temporarily; keys are never configured as server provider keys and are held only in an encrypted HttpOnly cookie for the session. Local Ollama remains a separate explicit provider for authenticated project workflows; the app does not silently fall back between providers.
 
 Required Phase 7 variables are documented in `.env.example`. Apply migrations `202607230014_phase7_guest_byok.sql` and `202607230015_phase7_guest_nvidia_provider_constraint.sql` before enabling guest AI, configure Turnstile, and run `npm run guest:cleanup` from a trusted server environment for expired guest metadata cleanup.
+
+## CİTEM Product Roadmap Phase 2.1A
+
+Phase 2.1A introduces the Investigation foundation and IOC Workbench without replacing the internal `projects` storage model or `/projects` routes. `Project`, `projectId`, and `project_id` remain stable internal names because Evidence, CTI entities, Graph, Reports, AI, Storage paths, RLS, and tests depend on them. The user-facing term is **Investigation**.
+
+Apply the additive migration after migration 015:
+
+```bash
+psql "$SUPABASE_DB_URL" -f supabase/migrations/202607280016_phase2_1a_investigation_ioc_workbench.sql
+```
+
+### Investigation metadata
+
+Existing project rows remain valid. New Investigations add a research question, analytical status, current assessment, assessment confidence, and optional closed date. Status and assessment confidence are separately filterable in the existing `/projects` registry.
+
+### IOC Workbench
+
+The existing `tab=indicators` route and Indicators table remain authoritative. The UI presents this tab as **IOC Workbench** and keeps single-Indicator CRUD plus existing Threat Actor, Campaign, and Malware relationships.
+
+Bulk intake has two explicit steps:
+
+1. **Preview** — server-side type detection, conservative refanging, validation, input-duplicate detection, and database duplicate checks. Preview performs no writes and never fetches or resolves an IOC.
+2. **Import** — the server repeats every check, imports only valid unique candidates, preserves successful rows when other rows are invalid, and returns exact partial-success counts.
+
+Supported automatic bulk types are IPv4, IPv6, domain, URL, MD5, SHA-1, SHA-256, and email. Common `[.]`, `hxxp://`, and `hxxps://` forms are handled conservatively. CVE identifiers are explicitly redirected to the existing CVE module. FILE and REGISTRY remain available in the manual Indicator form.
+
+### Observed, canonical, and defanged values
+
+- **Observed value** is the trimmed line exactly accepted from analyst input.
+- **Canonical value** is the validated value used by the existing project/type/normalized-value uniqueness rule.
+- **Safe defanged display** is presentation-only and is not used as the canonical database identity.
+
+`indicator_observations` stores observed value, observed/ingested time, origin, source label, analyst note, confidence, and `created_by`. A composite `(project_id, indicator_id)` foreign key prevents cross-Investigation links. RLS uses existing project ownership and requires `created_by = auth.uid()` for writes. Deleting an Indicator cascades its observations.
+
+### Indicator assessment
+
+Indicators now have an analyst status, rationale, and current relevance. Status answers the analyst's present verdict; confidence answers how strong the supporting information is. Existing confidence and relationship behavior remain intact.
+
+### Security boundaries and limitations
+
+Bulk actions use the authenticated Supabase client and existing RLS; no service-role key is used. The import RPC is security-invoker, checks owned-project access, preserves canonical uniqueness, and writes the Indicator plus observation in one transaction.
+
+Phase 2.1A does **not** add structured Sources, enrichment providers, passive DNS/WHOIS/reputation queries, infrastructure clusters, Graph provenance fields, Attribution Analysis, new report types, report versions, feeds, alerts, SIEM/SOAR integration, or strategic analysis. Those capabilities require separately reviewed later phases.

@@ -1,7 +1,11 @@
 "use client";
+
 import { useActionState, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
+
 import { createCti, deleteCti, updateCti } from "@/app/actions";
+import { createManualIndicator } from "@/app/projects/[id]/ioc-actions";
+import { BulkIocIntake } from "@/components/ioc-workbench/bulk-ioc-intake";
 import {
   confidenceLevels,
   ctiModuleLabels,
@@ -9,15 +13,17 @@ import {
   ctiTabs,
   cveSeverities,
   exploitStatuses,
-  indicatorTypes,
   formatDateInput,
   formatDateTimeLocalInput,
+  indicatorStatuses,
+  indicatorTypes,
 } from "@/lib/cti-schema";
 
 type Tab = (typeof ctiTabs)[number];
 type Row = Record<string, unknown>;
-const s = (v: unknown) => String(v ?? "");
-const csv = (v: unknown) => (Array.isArray(v) ? v.join(", ") : "");
+const s = (value: unknown) => String(value ?? "");
+const csv = (value: unknown) => (Array.isArray(value) ? value.join(", ") : "");
+
 export function CtiForm({
   tab,
   projectId,
@@ -33,33 +39,49 @@ export function CtiForm({
 }) {
   const action = row
     ? updateCti.bind(null, tab, projectId, s(row.id))
-    : createCti.bind(null, tab, projectId);
+    : tab === "indicators"
+      ? createManualIndicator.bind(null, projectId)
+      : createCti.bind(null, tab, projectId);
   const [state, formAction] = useActionState(action, {
     error: "",
     success: "",
   });
+
   return (
-    <form
-      action={formAction}
-      className="space-y-3 rounded border border-slate-800 p-3"
-    >
-      <h3 className="font-semibold text-white">
-        {row ? "Edit" : "New"} {ctiModuleLabels[tab]}
-      </h3>
-      {fields(tab, row)}
-      <Relationships tab={tab} options={options} selected={selected} />
-      {state.error && (
-        <p role="alert" className="text-sm text-red-300">
-          {state.error}
-        </p>
-      )}
-      {state.success && (
-        <p className="text-sm text-emerald-300">{state.success}</p>
-      )}
-      <Submit>{row ? "Save" : "Create"}</Submit>
-    </form>
+    <>
+      {tab === "indicators" && !row ? (
+        <BulkIocIntake projectId={projectId} />
+      ) : null}
+
+      <form
+        action={formAction}
+        className="space-y-3 rounded border border-slate-800 p-3"
+      >
+        <h3 className="font-semibold text-white">
+          {row ? "Edit" : "New"} {ctiModuleLabels[tab]}
+        </h3>
+        {tab === "indicators" && !row ? (
+          <p className="text-xs leading-5 text-stone-500">
+            Single Indicator creation remains available below the bulk IOC intake
+            workflow.
+          </p>
+        ) : null}
+        {fields(tab, row)}
+        <Relationships tab={tab} options={options} selected={selected} />
+        {state.error && (
+          <p role="alert" className="text-sm text-red-300">
+            {state.error}
+          </p>
+        )}
+        {state.success && (
+          <p className="text-sm text-emerald-300">{state.success}</p>
+        )}
+        <Submit>{row ? "Save" : "Create"}</Submit>
+      </form>
+    </>
   );
 }
+
 function Submit({ children }: { children: React.ReactNode }) {
   const { pending } = useFormStatus();
   return (
@@ -71,18 +93,23 @@ function Submit({ children }: { children: React.ReactNode }) {
     </button>
   );
 }
+
 function Text({
   name,
   label,
   row,
   area,
   type = "text",
+  maxLength,
+  help,
 }: {
   name: string;
   label: string;
   row?: Row;
   area?: boolean;
   type?: string;
+  maxLength?: number;
+  help?: string;
 }) {
   return (
     <label className="block text-sm text-slate-300">
@@ -91,6 +118,7 @@ function Text({
         <textarea
           className="field mt-1"
           name={name}
+          maxLength={maxLength}
           defaultValue={s(row?.[name])}
         />
       ) : (
@@ -98,12 +126,19 @@ function Text({
           className="field mt-1"
           type={type}
           name={name}
+          maxLength={maxLength}
           defaultValue={formatFieldValue(row?.[name], type)}
         />
       )}
+      {help ? (
+        <span className="mt-1 block text-xs leading-5 text-stone-500">
+          {help}
+        </span>
+      ) : null}
     </label>
   );
 }
+
 function formatFieldValue(value: unknown, type: string) {
   if (Array.isArray(value)) return csv(value);
   if (type === "date") return formatDateInput(value);
@@ -116,27 +151,35 @@ function Select({
   label,
   values,
   row,
+  help,
 }: {
   name: string;
   label: string;
   values: readonly string[];
   row?: Row;
+  help?: string;
 }) {
   return (
     <label className="block text-sm text-slate-300">
       {label}
       <select className="field mt-1" name={name} defaultValue={s(row?.[name])}>
-        {values.map((v) => (
-          <option key={v} value={v}>
-            {v}
+        {values.map((value) => (
+          <option key={value} value={value}>
+            {value}
           </option>
         ))}
       </select>
+      {help ? (
+        <span className="mt-1 block text-xs leading-5 text-stone-500">
+          {help}
+        </span>
+      ) : null}
     </label>
   );
 }
+
 function fields(tab: Tab, row?: Row) {
-  if (tab === "actors")
+  if (tab === "actors") {
     return (
       <>
         <Text name="name" label="Name" row={row} />
@@ -148,7 +191,8 @@ function fields(tab: Tab, row?: Row) {
         <Text name="references" label="References" row={row} />
       </>
     );
-  if (tab === "campaigns")
+  }
+  if (tab === "campaigns") {
     return (
       <>
         <Text name="name" label="Name" row={row} />
@@ -158,17 +202,28 @@ function fields(tab: Tab, row?: Row) {
         <Text name="targets" label="Targets" row={row} />
       </>
     );
-  if (tab === "indicators")
+  }
+  if (tab === "indicators") {
     return (
       <>
-        <Text name="value" label="Value" row={row} />
+        <Text name="value" label="Canonical value" row={row} />
         <Select name="type" label="Type" values={indicatorTypes} row={row} />
-        <Select
-          name="confidence"
-          label="Confidence"
-          values={confidenceLevels}
-          row={row}
-        />
+        <div className="grid gap-3 md:grid-cols-2">
+          <Select
+            name="status"
+            label="Indicator status"
+            values={indicatorStatuses}
+            row={row ?? { status: "UNVERIFIED" }}
+            help="The analyst’s present verdict about the Indicator."
+          />
+          <Select
+            name="confidence"
+            label="Confidence"
+            values={confidenceLevels}
+            row={row ?? { confidence: "MEDIUM" }}
+            help="How strong the supporting information is. Status and confidence are separate judgments."
+          />
+        </div>
         <Text name="source" label="Source" row={row} />
         <Text name="tags" label="Tags" row={row} />
         <Text
@@ -183,9 +238,26 @@ function fields(tab: Tab, row?: Row) {
           type="datetime-local"
           row={row}
         />
+        <Text
+          name="analyst_rationale"
+          label="Analyst rationale"
+          row={row}
+          area
+          maxLength={5000}
+          help="Why the current status and confidence are justified."
+        />
+        <Text
+          name="current_relevance"
+          label="Current relevance"
+          row={row}
+          area
+          maxLength={2000}
+          help="How this IOC currently matters to the Investigation."
+        />
       </>
     );
-  if (tab === "malware")
+  }
+  if (tab === "malware") {
     return (
       <>
         <Text name="name" label="Name" row={row} />
@@ -199,7 +271,8 @@ function fields(tab: Tab, row?: Row) {
         <Text name="behavior" label="Behavior" row={row} area />
       </>
     );
-  if (tab === "cves")
+  }
+  if (tab === "cves") {
     return (
       <>
         <Text name="cve_id" label="CVE ID" row={row} />
@@ -220,6 +293,7 @@ function fields(tab: Tab, row?: Row) {
         <Text name="references" label="References" row={row} />
       </>
     );
+  }
   return (
     <>
       <Text name="technique_id" label="Technique ID" row={row} />
@@ -229,6 +303,7 @@ function fields(tab: Tab, row?: Row) {
     </>
   );
 }
+
 function Relationships({
   tab,
   options,
@@ -262,17 +337,18 @@ function Relationships({
       <legend className="text-sm font-semibold text-cyan-200">
         Relationships
       </legend>
-      {map[tab].map((k) => (
+      {map[tab].map((name) => (
         <SearchableChecks
-          key={k}
-          name={k}
-          rows={options[k] ?? []}
-          selected={selected?.[k] ?? []}
+          key={name}
+          name={name}
+          rows={options[name] ?? []}
+          selected={selected?.[name] ?? []}
         />
       ))}
     </fieldset>
   );
 }
+
 export function SearchableChecks({
   name,
   rows,
@@ -282,22 +358,23 @@ export function SearchableChecks({
   rows: Row[];
   selected: string[];
 }) {
-  const [q, setQ] = useState("");
+  const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState(() => [...new Set(selected)]);
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const filtered = useMemo(
     () =>
       rows
-        .filter((r) =>
-          ctiRecordTitle(r).toLowerCase().includes(q.toLowerCase()),
+        .filter((row) =>
+          ctiRecordTitle(row).toLowerCase().includes(query.toLowerCase()),
         )
         .sort(
-          (a, b) =>
-            ctiRecordTitle(a).localeCompare(ctiRecordTitle(b)) ||
-            s(a.id).localeCompare(s(b.id)),
+          (left, right) =>
+            ctiRecordTitle(left).localeCompare(ctiRecordTitle(right)) ||
+            s(left.id).localeCompare(s(right.id)),
         ),
-    [rows, q],
+    [rows, query],
   );
+
   function toggle(id: string, checked: boolean) {
     setSelectedIds((current) => {
       const next = new Set(current);
@@ -306,6 +383,7 @@ export function SearchableChecks({
       return [...next];
     });
   }
+
   return (
     <div className="rounded border border-slate-800 p-2">
       {selectedIds.map((id) => (
@@ -326,8 +404,8 @@ export function SearchableChecks({
       <input
         id={`${name}-search`}
         className="field mt-1"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
         placeholder="Search relationships"
       />
       <p className="mt-1 text-xs text-slate-500">
@@ -340,8 +418,8 @@ export function SearchableChecks({
         aria-live="polite"
       >
         {filtered.length ? (
-          filtered.map((r) => {
-            const id = s(r.id);
+          filtered.map((row) => {
+            const id = s(row.id);
             return (
               <label
                 key={id}
@@ -350,9 +428,9 @@ export function SearchableChecks({
                 <input
                   type="checkbox"
                   checked={selectedSet.has(id)}
-                  onChange={(e) => toggle(id, e.currentTarget.checked)}
+                  onChange={(event) => toggle(id, event.currentTarget.checked)}
                 />
-                <span>{ctiRecordTitle(r)}</span>
+                <span>{ctiRecordTitle(row)}</span>
               </label>
             );
           })
@@ -376,8 +454,8 @@ export function CtiDelete({
   const name = ctiRecordTitle(row);
   const deleteAction = async (
     _: { error?: string; success?: string },
-    fd: FormData,
-  ) => deleteCti(tab, projectId, s(row.id), name, fd);
+    formData: FormData,
+  ) => deleteCti(tab, projectId, s(row.id), name, formData);
   const [state, action] = useActionState(deleteAction, {});
   return (
     <form action={action} className="mt-3 rounded border border-red-900 p-3">

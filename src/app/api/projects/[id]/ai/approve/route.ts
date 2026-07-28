@@ -2,11 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
+import { indicatorSchema } from "@/lib/cti-schema";
 import {
-  indicatorSchema,
-  normalizeIndicatorValue,
-  validateIndicator,
-} from "@/lib/cti-schema";
+  normalizeObservedIndicatorValue,
+  validateObservedIndicator,
+} from "@/lib/cti/indicators";
 import { reportMetaSchema, reportSchema } from "@/lib/reports/schema";
 import { noteSchema } from "@/lib/workspace/schema";
 import { mitreAttackIdSchema, resolveMitreSuggestionsForProject } from "@/lib/ai/mitre";
@@ -66,17 +66,36 @@ function provenanceLabel(sourceRef?: { kind: string; id: string } | null) {
   return `AI-reviewed ${sourceRef.kind}:${sourceRef.id}`;
 }
 
+type IndicatorImportOutcome = {
+  ok?: boolean;
+  indicator_id?: string;
+  indicator_created?: boolean;
+  observation_created?: boolean;
+};
+
 async function approveIndicator(supabase: Awaited<ReturnType<typeof requireUser>>["supabase"], projectId: string, input: z.infer<typeof indicatorApprovalSchema>) {
-  const normalized = normalizeIndicatorValue(input.value, input.type);
-  const invalid = validateIndicator(normalized, input.type);
-  if (invalid) return { value: input.value, type: input.type, status: "invalid" as const, error: invalid };
-  const p = indicatorSchema.parse({ value: normalized, type: input.type, confidence: input.confidence, source: provenanceLabel(input.source_ref), tags: ["ai-generated"], first_seen: null, last_seen: null });
-  const { data: dup, error: dupError } = await supabase.from("indicators").select("id").eq("project_id", projectId).eq("type", p.type).eq("value", p.value).maybeSingle();
-  if (dupError) return { value: p.value, type: p.type, status: "failed" as const };
-  if (dup) return { value: p.value, type: p.type, status: "existing" as const, id: dup.id };
-  const { data, error } = await supabase.from("indicators").insert({ ...p, project_id: projectId }).select("id").single();
-  if (error || !data) return { value: p.value, type: p.type, status: "failed" as const };
-  return { value: p.value, type: p.type, status: "created" as const, id: data.id };
+  const checked = validateObservedIndicator({ value: input.value, type: input.type });
+  if (!checked.valid) return { value: input.value, type: input.type, status: "invalid" as const, error: checked.error ?? "Invalid Indicator." };
+  const source = provenanceLabel(input.source_ref);
+  const p = indicatorSchema.parse({ value: checked.normalized, type: input.type, confidence: input.confidence, status: "UNVERIFIED", source, tags: ["ai-generated"], first_seen: null, last_seen: null, analyst_rationale: "", current_relevance: "" });
+  const { data, error } = await supabase.rpc("import_indicator_observation", {
+    p_project_id: projectId,
+    p_value: p.value,
+    p_type: p.type,
+    p_confidence: p.confidence,
+    p_source: p.source,
+    p_tags: p.tags,
+    p_first_seen: null,
+    p_observed_value: input.value,
+    p_observed_at: null,
+    p_origin_kind: "AI_APPROVAL",
+    p_source_label: source,
+    p_analyst_note: "AI-generated Indicator suggestion explicitly approved by the analyst.",
+    p_add_observation_when_existing: true,
+  });
+  const outcome = data as IndicatorImportOutcome | null;
+  if (error || !outcome?.ok || !outcome.indicator_id) return { value: p.value, type: p.type, status: "failed" as const };
+  return { value: p.value, type: p.type, status: outcome.indicator_created ? "created" as const : "existing" as const, id: outcome.indicator_id, observation_created: Boolean(outcome.observation_created) };
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -119,7 +138,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       const seen = new Set<string>();
       const results = [];
       for (const item of body.indicators) {
-        const key = `${item.type}:${normalizeIndicatorValue(item.value, item.type)}`;
+        const key = `${item.type}:${normalizeObservedIndicatorValue(item.value, item.type)}`;
         if (seen.has(key)) {
           results.push({ value: item.value, type: item.type, status: "existing" as const, error: "Duplicate in this approval request." });
           continue;
