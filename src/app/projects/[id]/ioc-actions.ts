@@ -55,10 +55,8 @@ type ExistingIndicator = {
   type: string;
   normalized_value: string;
 };
-
 type BulkSummary = Record<BulkIocClassification, number>;
 type FormState = { error?: string; success?: string };
-
 type ImportRpcOutcome = {
   ok?: boolean;
   error?: string;
@@ -66,22 +64,6 @@ type ImportRpcOutcome = {
   indicator_created?: boolean;
   observation_created?: boolean;
 };
-
-function summarizeBulkIocRows(rows: ParsedBulkIocRow[]): BulkSummary {
-  return rows.reduce<BulkSummary>(
-    (summary, row) => {
-      summary[row.classification] += 1;
-      return summary;
-    },
-    {
-      NEW: 0,
-      DUPLICATE_IN_INPUT: 0,
-      ALREADY_EXISTS: 0,
-      INVALID: 0,
-      UNSUPPORTED_CVE: 0,
-    },
-  );
-}
 
 type PreviewSuccess = {
   ok: true;
@@ -103,6 +85,22 @@ export type BulkIocImportResult =
       conflictsEncountered: number;
     }
   | { ok: false; error: string };
+
+function summarizeBulkIocRows(rows: ParsedBulkIocRow[]): BulkSummary {
+  return rows.reduce<BulkSummary>(
+    (summary, row) => {
+      summary[row.classification] += 1;
+      return summary;
+    },
+    {
+      NEW: 0,
+      DUPLICATE_IN_INPUT: 0,
+      ALREADY_EXISTS: 0,
+      INVALID: 0,
+      UNSUPPORTED_CVE: 0,
+    },
+  );
+}
 
 function chunk<T>(values: T[], size: number) {
   const chunks: T[][] = [];
@@ -286,7 +284,6 @@ export async function createManualIndicator(
     const { data: relationshipResult, error: relationshipError } =
       await context.supabase.rpc("replace_cti_relationships", {
         p_project_id: context.projectId,
-        p_entity_type: "indicators",
         p_entity_id: indicatorId,
         ...buildRelationshipRpcPayload("indicators", relationships.data),
       });
@@ -317,11 +314,7 @@ export async function previewBulkIndicators(
   try {
     const result = await preparePreview(projectId, input);
     if (!result.ok) return result;
-    return {
-      ok: true,
-      rows: result.rows,
-      summary: result.summary,
-    };
+    return { ok: true, rows: result.rows, summary: result.summary };
   } catch {
     return { ok: false, error: "Investigation not found." };
   }
@@ -376,7 +369,6 @@ export async function importBulkIndicators(
             prepared.metadata.addObservationsForExisting,
         },
       );
-
       const outcome = data as ImportRpcOutcome | null;
 
       if (error || !outcome?.ok) {
@@ -390,7 +382,6 @@ export async function importBulkIndicators(
     }
 
     revalidatePath(`/projects/${prepared.context.projectId}`);
-
     return {
       ok: true,
       indicatorsCreated,
