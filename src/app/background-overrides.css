@@ -35,3 +35,14 @@ body,
 body {
   background-image: none;
 }
+
+/* Preserve the existing tab=indicators route while presenting the product term. */
+nav a[href$="?tab=indicators"] {
+  font-size: 0;
+}
+
+nav a[href$="?tab=indicators"]::after {
+  content: "IOC Workbench";
+  font-size: 0.875rem;
+  text-transform: none;
+}
