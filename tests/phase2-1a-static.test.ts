@@ -21,6 +21,7 @@ describe("Phase 2.1A Investigation and IOC Workbench integration", () => {
     expect(forms).toContain("BulkIocIntake");
     expect(forms).toContain('tab === "indicators" && !row');
     expect(forms).toContain("Single Indicator creation remains available");
+    expect(forms).toContain("createManualIndicator");
     expect(forms).toContain("Relationships");
     expect(forms).toContain("createCti");
     expect(forms).toContain("updateCti");
@@ -46,6 +47,19 @@ describe("Phase 2.1A Investigation and IOC Workbench integration", () => {
     expect(actions).not.toContain("service_role");
   });
 
+  it("records manual Indicator creation and preserves relationship controls", () => {
+    const actions = readFileSync(
+      "src/app/projects/[id]/ioc-actions.ts",
+      "utf8",
+    );
+
+    expect(actions).toContain("export async function createManualIndicator");
+    expect(actions).toContain('p_origin_kind: "MANUAL"');
+    expect(actions).toContain("parseRelationshipSelections(formData)");
+    expect(actions).toContain('rpc("replace_cti_relationships"');
+    expect(actions).toContain("buildRelationshipRpcPayload");
+  });
+
   it("shows Indicator observation history through the existing detail route", () => {
     const detail = readFileSync(
       "src/app/projects/[id]/[module]/[entityId]/page.tsx",
@@ -59,12 +73,19 @@ describe("Phase 2.1A Investigation and IOC Workbench integration", () => {
     expect(detail).toContain("CtiDelete");
   });
 
-  it("reuses the shared IOC normalizer in AI approval workflows", () => {
+  it("reuses the shared IOC normalizer and preserves AI-approved observations", () => {
     const aiPure = readFileSync("src/lib/ai/pure.ts", "utf8");
+    const aiApprove = readFileSync(
+      "src/app/api/projects/[id]/ai/approve/route.ts",
+      "utf8",
+    );
     const indicatorModule = readFileSync("src/lib/cti/indicators.ts", "utf8");
 
     expect(aiPure).toContain('from "@/lib/cti/indicators"');
     expect(aiPure).toContain("validateObservedIndicator");
+    expect(aiApprove).toContain("validateObservedIndicator");
+    expect(aiApprove).toContain('p_origin_kind: "AI_APPROVAL"');
+    expect(aiApprove).toContain('rpc("import_indicator_observation"');
     expect(indicatorModule).toContain("normalizeObservedIndicatorValue");
     expect(indicatorModule).toContain("parseBulkIndicatorInput");
   });
