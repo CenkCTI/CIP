@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+
 import { CtiDelete, CtiForm } from "@/components/cti-forms";
 import { requireUser } from "@/lib/auth";
+import {
+  detectHashAlgorithm,
+  safeDefangIndicatorValue,
+} from "@/lib/cti/indicators";
 import {
   ctiDetailPath,
   ctiModuleLabels,
@@ -11,9 +16,11 @@ import {
 } from "@/lib/cti-schema";
 
 type Row = Record<string, unknown>;
-const ss = (v: unknown) => String(v ?? "");
-const aa = (v: unknown) =>
-  Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+const ss = (value: unknown) => String(value ?? "");
+const aa = (value: unknown) =>
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
 const relationConfig = {
   actors: [
     ["threat_actor_malware", "threat_actor_id", "malware_id", "malware"],
@@ -34,7 +41,12 @@ const relationConfig = {
     ["campaign_threat_actors", "campaign_id", "threat_actor_id", "actors"],
     ["campaign_malware", "campaign_id", "malware_id", "malware"],
     ["campaign_indicators", "campaign_id", "indicator_id", "indicators"],
-    ["campaign_mitre_techniques", "campaign_id", "mitre_technique_id", "mitre"],
+    [
+      "campaign_mitre_techniques",
+      "campaign_id",
+      "mitre_technique_id",
+      "mitre",
+    ],
   ],
   indicators: [
     ["threat_actor_indicators", "indicator_id", "threat_actor_id", "actors"],
@@ -46,7 +58,12 @@ const relationConfig = {
     ["campaign_malware", "malware_id", "campaign_id", "campaigns"],
     ["malware_indicators", "malware_id", "indicator_id", "indicators"],
     ["cve_malware", "malware_id", "cve_id", "cves"],
-    ["malware_mitre_techniques", "malware_id", "mitre_technique_id", "mitre"],
+    [
+      "malware_mitre_techniques",
+      "malware_id",
+      "mitre_technique_id",
+      "mitre",
+    ],
   ],
   cves: [["cve_malware", "cve_id", "malware_id", "malware"]],
   mitre: [
@@ -62,7 +79,12 @@ const relationConfig = {
       "campaign_id",
       "campaigns",
     ],
-    ["malware_mitre_techniques", "mitre_technique_id", "malware_id", "malware"],
+    [
+      "malware_mitre_techniques",
+      "mitre_technique_id",
+      "malware_id",
+      "malware",
+    ],
   ],
 } as const;
 const optionKeys = {
@@ -73,6 +95,176 @@ const optionKeys = {
   cves: "cve_ids",
   mitre: "mitre_technique_ids",
 } as const;
+
+function formatOptionalDate(value: unknown) {
+  if (!value) return "Not recorded";
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? "Not recorded" : date.toLocaleString();
+}
+
+function IndicatorSummary({ row }: { row: Row }) {
+  const type = ss(row.type);
+  const canonical = ss(row.normalized_value || row.value);
+  const hashAlgorithm = type === "HASH" ? detectHashAlgorithm(canonical) : null;
+
+  return (
+    <article className="card">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="citem-label">IOC summary</p>
+          <h1 className="mt-2 break-all font-mono text-2xl font-semibold text-stone-100">
+            {canonical}
+          </h1>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <span className="citem-badge" data-tone="attention">
+            {ss(row.status || "UNVERIFIED")}
+          </span>
+          <span className="citem-badge">{type}</span>
+          {hashAlgorithm ? <span className="citem-badge">{hashAlgorithm}</span> : null}
+        </div>
+      </div>
+
+      <dl className="mt-5 grid gap-4 md:grid-cols-2">
+        <div>
+          <dt className="citem-label">Canonical value</dt>
+          <dd className="mt-1 break-all font-mono text-sm text-stone-300">
+            {canonical}
+          </dd>
+        </div>
+        <div>
+          <dt className="citem-label">Safe defanged display</dt>
+          <dd className="mt-1 break-all font-mono text-sm text-stone-300">
+            {safeDefangIndicatorValue(canonical, type)}
+          </dd>
+        </div>
+        <div>
+          <dt className="citem-label">Confidence</dt>
+          <dd className="mt-1 text-sm text-stone-300">{ss(row.confidence)}</dd>
+        </div>
+        <div>
+          <dt className="citem-label">First / last seen</dt>
+          <dd className="mt-1 text-sm text-stone-300">
+            {formatOptionalDate(row.first_seen)} · {formatOptionalDate(row.last_seen)}
+          </dd>
+        </div>
+        <div>
+          <dt className="citem-label">Source</dt>
+          <dd className="mt-1 text-sm text-stone-300">
+            {ss(row.source) || "No source label recorded"}
+          </dd>
+        </div>
+        <div>
+          <dt className="citem-label">Tags</dt>
+          <dd className="mt-1 text-sm text-stone-300">
+            {aa(row.tags).length ? aa(row.tags).join(", ") : "No tags"}
+          </dd>
+        </div>
+        <div>
+          <dt className="citem-label">Analyst rationale</dt>
+          <dd className="mt-1 whitespace-pre-wrap text-sm text-stone-300">
+            {ss(row.analyst_rationale) || "No rationale recorded"}
+          </dd>
+        </div>
+        <div>
+          <dt className="citem-label">Current relevance</dt>
+          <dd className="mt-1 whitespace-pre-wrap text-sm text-stone-300">
+            {ss(row.current_relevance) || "Current relevance not assessed"}
+          </dd>
+        </div>
+      </dl>
+    </article>
+  );
+}
+
+function ObservationHistory({
+  rows,
+  currentUserId,
+}: {
+  rows: Row[];
+  currentUserId: string;
+}) {
+  return (
+    <section className="card">
+      <div>
+        <p className="citem-label">Provenance</p>
+        <h2 className="mt-2 text-lg font-semibold text-stone-100">
+          Observation history
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-stone-500">
+          The canonical Indicator remains unique while every accepted observed form
+          is preserved separately.
+        </p>
+      </div>
+
+      {rows.length ? (
+        <ol className="mt-4 grid gap-3">
+          {rows.map((observation) => (
+            <li
+              className="rounded border border-stone-800/80 bg-black/10 p-3"
+              key={ss(observation.id)}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <code className="break-all text-sm text-stone-200">
+                  {ss(observation.observed_value)}
+                </code>
+                <span className="citem-badge">
+                  {ss(observation.origin_kind)}
+                </span>
+              </div>
+              <dl className="mt-3 grid gap-2 text-xs md:grid-cols-2">
+                <div>
+                  <dt className="text-stone-600">Observed time</dt>
+                  <dd className="mt-1 text-stone-400">
+                    {formatOptionalDate(observation.observed_at)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-stone-600">Ingested time</dt>
+                  <dd className="mt-1 text-stone-400">
+                    {formatOptionalDate(observation.ingested_at)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-stone-600">Source label</dt>
+                  <dd className="mt-1 text-stone-400">
+                    {ss(observation.source_label) || "Not supplied"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-stone-600">Confidence</dt>
+                  <dd className="mt-1 text-stone-400">
+                    {ss(observation.confidence) || "Not assessed"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-stone-600">Creator</dt>
+                  <dd className="mt-1 text-stone-400">
+                    {ss(observation.created_by) === currentUserId
+                      ? "Current analyst"
+                      : "Authorized analyst"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-stone-600">Analyst note</dt>
+                  <dd className="mt-1 whitespace-pre-wrap text-stone-400">
+                    {ss(observation.analyst_note) || "No note"}
+                  </dd>
+                </div>
+              </dl>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="mt-4 text-sm text-stone-500">
+          No observation records exist yet. Legacy Indicators remain valid and can
+          receive new observations through bulk intake.
+        </p>
+      )}
+    </section>
+  );
+}
+
 export default async function Detail({
   params,
 }: {
@@ -81,7 +273,7 @@ export default async function Detail({
   const { id, module, entityId } = await params;
   if (!ctiTabs.includes(module as never)) notFound();
   const tab = module as keyof typeof entityTables;
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   const { data: project, error: projectError } = await supabase
     .from("projects")
     .select("id,name")
@@ -95,6 +287,20 @@ export default async function Detail({
     .eq("id", entityId)
     .single();
   if (error || !row) notFound();
+
+  const { data: observations, error: observationsError } =
+    tab === "indicators"
+      ? await supabase
+          .from("indicator_observations")
+          .select("*")
+          .eq("project_id", id)
+          .eq("indicator_id", entityId)
+          .order("observed_at", { ascending: false, nullsFirst: false })
+          .order("ingested_at", { ascending: false })
+          .order("id", { ascending: true })
+      : { data: [] as Row[], error: null };
+  if (observationsError) notFound();
+
   const [actors, campaigns, indicators, malware, cves, mitre] =
     await Promise.all([
       supabase.from("threat_actors").select("*").eq("project_id", id),
@@ -139,10 +345,10 @@ export default async function Detail({
         .from(join)
         .select("*")
         .eq("project_id", id)
-        .eq(relationConfig[tab].find((c) => c[0] === join)![1], entityId),
+        .eq(relationConfig[tab].find((config) => config[0] === join)![1], entityId),
     ),
   );
-  if (relRows.some((r) => r.error)) {
+  if (relRows.some((result) => result.error)) {
     return (
       <section className="mx-auto max-w-5xl">
         <div className="card text-red-300">
@@ -152,49 +358,66 @@ export default async function Detail({
     );
   }
   const selected: Record<string, string[]> = {};
-  const related = relationConfig[tab].map((cfg, i) => {
-    const [, , other, target] = cfg;
-    const ids = (relRows[i].data ?? []).map((r) => ss((r as Row)[other]));
+  const related = relationConfig[tab].map((configuration, index) => {
+    const [, , other, target] = configuration;
+    const ids = (relRows[index].data ?? []).map((item) =>
+      ss((item as Row)[other]),
+    );
     selected[optionKeys[target]] = ids;
     return {
       target,
-      items: (optionRows[target] as Row[]).filter((r) =>
-        ids.includes(ss(r.id)),
+      items: (optionRows[target] as Row[]).filter((item) =>
+        ids.includes(ss(item.id)),
       ),
     };
   });
+  const moduleLabel = tab === "indicators" ? "IOC Workbench" : ctiModuleLabels[tab];
+
   return (
     <section className="mx-auto max-w-5xl space-y-6">
       <Link
         className="text-sm text-cyan-200"
         href={`/projects/${id}?tab=${tab}`}
       >
-        ← Back to {ctiModuleLabels[tab]}
+        ← Back to {moduleLabel}
       </Link>
-      <article className="card">
-        <p className="text-sm text-slate-400">{ctiModuleLabels[tab]}</p>
-        <h1 className="text-3xl font-bold text-white">
-          {ctiRecordTitle(row as Row)}
-        </h1>
-        <dl className="mt-4 grid gap-3 md:grid-cols-2">
-          {Object.entries(row as Row)
-            .filter(([k]) => !["id", "project_id"].includes(k))
-            .map(([k, v]) => (
-              <div key={k}>
-                <dt className="text-xs uppercase text-slate-500">
-                  {k.replaceAll("_", " ")}
-                </dt>
-                <dd className="whitespace-pre-wrap text-sm text-slate-200">
-                  {Array.isArray(v)
-                    ? aa(v).join(", ")
-                    : typeof v === "object" && v
-                      ? JSON.stringify(v, null, 2)
-                      : ss(v)}
-                </dd>
-              </div>
-            ))}
-        </dl>
-      </article>
+
+      {tab === "indicators" ? (
+        <IndicatorSummary row={row as Row} />
+      ) : (
+        <article className="card">
+          <p className="text-sm text-slate-400">{ctiModuleLabels[tab]}</p>
+          <h1 className="text-3xl font-bold text-white">
+            {ctiRecordTitle(row as Row)}
+          </h1>
+          <dl className="mt-4 grid gap-3 md:grid-cols-2">
+            {Object.entries(row as Row)
+              .filter(([key]) => !["id", "project_id"].includes(key))
+              .map(([key, value]) => (
+                <div key={key}>
+                  <dt className="text-xs uppercase text-slate-500">
+                    {key.replaceAll("_", " ")}
+                  </dt>
+                  <dd className="whitespace-pre-wrap text-sm text-slate-200">
+                    {Array.isArray(value)
+                      ? aa(value).join(", ")
+                      : typeof value === "object" && value
+                        ? JSON.stringify(value, null, 2)
+                        : ss(value)}
+                  </dd>
+                </div>
+              ))}
+          </dl>
+        </article>
+      )}
+
+      {tab === "indicators" ? (
+        <ObservationHistory
+          rows={(observations ?? []) as Row[]}
+          currentUserId={user.id}
+        />
+      ) : null}
+
       <section className="card">
         <h2 className="font-semibold text-white">Related entities</h2>
         {related.map((group) => (
