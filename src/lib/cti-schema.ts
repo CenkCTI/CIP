@@ -1,5 +1,4 @@
 import { z } from "zod";
-
 import {
   indicatorTypes,
   normalizeIndicatorValue,
@@ -7,7 +6,6 @@ import {
 } from "@/lib/cti/indicators";
 
 export { indicatorTypes, normalizeIndicatorValue, validateIndicator };
-
 export const confidenceLevels = ["LOW", "MEDIUM", "HIGH"] as const;
 export const indicatorStatuses = [
   "UNVERIFIED",
@@ -44,20 +42,20 @@ export const entityTables = {
 
 const csv = z
   .preprocess(
-    (value) =>
-      typeof value === "string"
-        ? value
+    (v) =>
+      typeof v === "string"
+        ? v
             .split(",")
-            .map((item) => item.trim())
+            .map((s) => s.trim())
             .filter(Boolean)
-        : value,
+        : v,
     z.array(z.string().trim().min(1).max(300)).max(50),
   )
   .default([]);
 const dateNull = z
   .preprocess(normalizeDateInput, z.union([z.string(), z.null()]).optional())
   .refine(validDateOrNull, "Use a valid date/time value.")
-  .transform((value) => value || null);
+  .transform((v) => v || null);
 const text = (max = 20000) => z.string().trim().max(max).default("");
 const nullableText = (max: number) =>
   z
@@ -65,8 +63,7 @@ const nullableText = (max: number) =>
     .trim()
     .max(max)
     .optional()
-    .transform((value) => value || null);
-
+    .transform((v) => v || null);
 export const relKeys = [
   "threat_actor_ids",
   "campaign_ids",
@@ -76,7 +73,7 @@ export const relKeys = [
   "mitre_technique_ids",
 ] as const;
 export const relSchema = z.object(
-  Object.fromEntries(relKeys.map((key) => [key, csv])) as Record<
+  Object.fromEntries(relKeys.map((k) => [k, csv])) as Record<
     (typeof relKeys)[number],
     typeof csv
   >,
@@ -97,12 +94,11 @@ export function parseRelationshipSelections(
       const value = String(raw).trim();
       if (!value) continue;
       const parsed = z.string().uuid().safeParse(value);
-      if (!parsed.success) {
+      if (!parsed.success)
         return {
           success: false,
           error: `${key.replaceAll("_", " ")} contains an invalid ID.`,
         };
-      }
       if (!seen.has(parsed.data)) {
         seen.add(parsed.data);
         out[key].push(parsed.data);
@@ -112,16 +108,16 @@ export function parseRelationshipSelections(
   return { success: true, data: out };
 }
 
-function normalizeDateInput(value: unknown) {
-  if (value === "" || value == null) return null;
-  if (typeof value !== "string") return value;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toISOString();
+function normalizeDateInput(v: unknown) {
+  if (v === "" || v == null) return null;
+  if (typeof v !== "string") return v;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? v : d.toISOString();
 }
-function validDateOrNull(value: unknown) {
+function validDateOrNull(v: unknown) {
   return (
-    value === null ||
-    (typeof value === "string" && !Number.isNaN(new Date(value).getTime()))
+    v === null ||
+    (typeof v === "string" && !Number.isNaN(new Date(v).getTime()))
   );
 }
 const supportedHashLengths: Record<string, number> = {
@@ -140,8 +136,17 @@ function validateHashObject(value: unknown) {
     );
   });
 }
-const indicatorValue = z.string().trim().min(1);
-
+const indicatorValue = z
+  .string()
+  .trim()
+  .min(1)
+  .superRefine((v, ctx) => {
+    const type = String(
+      (ctx as unknown as { parent?: { type?: string } }).parent?.type ?? "",
+    );
+    const err = type ? validateIndicator(v, type) : null;
+    if (err) ctx.addIssue({ code: "custom", message: err });
+  });
 export const actorSchema = z.object({
   name: z.string().trim().min(1).max(180),
   aliases: csv,
@@ -149,7 +154,7 @@ export const actorSchema = z.object({
     .string()
     .trim()
     .optional()
-    .transform((value) => value || null),
+    .transform((v) => v || null),
   motivations: csv,
   description: text(),
   known_ttps: text(),
@@ -163,13 +168,9 @@ export const campaignSchema = z
     end_date: dateNull,
     targets: csv,
   })
-  .refine(
-    (value) =>
-      !value.start_date ||
-      !value.end_date ||
-      value.end_date >= value.start_date,
-    { message: "End date must be on or after start date." },
-  );
+  .refine((v) => !v.start_date || !v.end_date || v.end_date >= v.start_date, {
+    message: "End date must be on or after start date.",
+  });
 export const indicatorSchema = z
   .object({
     value: indicatorValue,
@@ -180,40 +181,29 @@ export const indicatorSchema = z
       .string()
       .trim()
       .optional()
-      .transform((value) => value || null),
+      .transform((v) => v || null),
     tags: csv,
     first_seen: dateNull,
     last_seen: dateNull,
     analyst_rationale: nullableText(5000),
     current_relevance: nullableText(2000),
   })
-  .superRefine((value, context) => {
-    const error = validateIndicator(value.value, value.type);
-    if (error) {
-      context.addIssue({
-        code: "custom",
-        path: ["value"],
-        message: error,
-      });
-    }
-    if (
-      value.first_seen &&
-      value.last_seen &&
-      value.last_seen < value.first_seen
-    ) {
-      context.addIssue({
+  .superRefine((v, ctx) => {
+    const err = validateIndicator(v.value, v.type);
+    if (err) ctx.addIssue({ code: "custom", path: ["value"], message: err });
+    if (v.first_seen && v.last_seen && v.last_seen < v.first_seen)
+      ctx.addIssue({
         code: "custom",
         path: ["last_seen"],
         message: "Last seen must be after first seen.",
       });
-    }
   })
-  .transform((value) => ({
-    ...value,
+  .transform((v) => ({
+    ...v,
     value:
-      value.type === "HASH"
-        ? value.value.trim().toLowerCase()
-        : normalizeIndicatorValue(value.value, value.type),
+      v.type === "HASH"
+        ? v.value.trim().toLowerCase()
+        : normalizeIndicatorValue(v.value, v.type),
   }));
 export const malwareSchema = z.object({
   name: z.string().trim().min(1).max(180),
@@ -221,17 +211,17 @@ export const malwareSchema = z.object({
     .string()
     .trim()
     .optional()
-    .transform((value) => value || null),
+    .transform((v) => v || null),
   hashes: z
     .string()
     .trim()
     .optional()
-    .transform((value, context) => {
-      if (!value) return {};
+    .transform((v, ctx) => {
+      if (!v) return {};
       try {
-        const parsed: unknown = JSON.parse(value);
+        const parsed: unknown = JSON.parse(v);
         if (!validateHashObject(parsed)) {
-          context.addIssue({
+          ctx.addIssue({
             code: "custom",
             message:
               "Hashes must be a JSON object with md5, sha1, or sha256 hex string values.",
@@ -240,11 +230,11 @@ export const malwareSchema = z.object({
         }
         return Object.fromEntries(
           Object.entries(parsed as Record<string, string>).map(
-            ([key, item]) => [key.toLowerCase(), String(item).toLowerCase()],
+            ([key, value]) => [key.toLowerCase(), String(value).toLowerCase()],
           ),
         );
       } catch {
-        context.addIssue({ code: "custom", message: "Hashes must be valid JSON." });
+        ctx.addIssue({ code: "custom", message: "Hashes must be valid JSON." });
         return z.NEVER;
       }
     }),
@@ -287,8 +277,8 @@ export const schemas = {
   cves: cveSchema,
   mitre: mitreSchema,
 };
-export function formObj(formData: FormData) {
-  return Object.fromEntries(formData.entries());
+export function formObj(fd: FormData) {
+  return Object.fromEntries(fd.entries());
 }
 export const ctiModuleLabels = {
   actors: "Threat Actor",
@@ -326,13 +316,13 @@ export function buildRelationshipRpcPayload(
 }
 export function formatDateInput(value: unknown) {
   if (!value) return "";
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 10);
+  const d = new Date(String(value));
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString().slice(0, 10);
 }
 export function formatDateTimeLocalInput(value: unknown) {
   if (!value) return "";
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 16);
+  const d = new Date(String(value));
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString().slice(0, 16);
 }
