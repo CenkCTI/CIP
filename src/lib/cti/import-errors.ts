@@ -30,7 +30,7 @@ export function mapIndicatorImportError(
         text.includes("does not exist") ||
         text.includes("schema cache")))
   ) {
-    return "IOC import is unavailable because database migration 016 has not been applied to this Supabase environment. Apply supabase/migrations/202607280016_phase2_1a_investigation_ioc_workbench.sql and retry.";
+    return "IOC import is unavailable because migration 016 is missing or the Supabase API schema cache has not reloaded. Apply supabase/migrations/202607280016_phase2_1a_investigation_ioc_workbench.sql, run NOTIFY pgrst, 'reload schema'; in the SQL editor, and retry.";
   }
 
   if (
