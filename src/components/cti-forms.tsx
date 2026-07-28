@@ -4,6 +4,7 @@ import { useActionState, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { createCti, deleteCti, updateCti } from "@/app/actions";
+import { createManualIndicator } from "@/app/projects/[id]/ioc-actions";
 import { BulkIocIntake } from "@/components/ioc-workbench/bulk-ioc-intake";
 import {
   confidenceLevels,
@@ -38,7 +39,9 @@ export function CtiForm({
 }) {
   const action = row
     ? updateCti.bind(null, tab, projectId, s(row.id))
-    : createCti.bind(null, tab, projectId);
+    : tab === "indicators"
+      ? createManualIndicator.bind(null, projectId)
+      : createCti.bind(null, tab, projectId);
   const [state, formAction] = useActionState(action, {
     error: "",
     success: "",
