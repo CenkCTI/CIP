@@ -11,6 +11,7 @@ vi.mock("@/app/actions", () => ({
 }));
 
 vi.mock("@/app/projects/[id]/ioc-actions", () => ({
+  createManualIndicator: vi.fn(),
   previewBulkIndicators: vi.fn(),
   importBulkIndicators: vi.fn(),
 }));
