@@ -16,7 +16,9 @@ describe("CİTEM visual identity", () => {
     expect(shell).toContain("CitemLogo");
     expect(home).toContain("CitemLogo");
     expect(home).toContain("BAYKUSH");
-    expect(logo).toContain("/brand/citem-owl-mark-original.png?v=original-20260726");
+    expect(logo).toContain(
+      "/brand/citem-owl-mark-original.png?v=original-20260726",
+    );
     expect(logo).toContain('"compact" | "horizontal"');
     expect(logo).toContain("<img");
     expect(logo).toContain('alt=""');
@@ -46,7 +48,9 @@ describe("CİTEM visual identity", () => {
       "CİTEM gives cyber intelligence teams a structured environment to collect evidence, analyze threat activity, and turn assessments into coordinated action.",
     );
     expect(home).not.toContain("See the signal");
-    expect(home).not.toContain("CİTEM is the operational cyber intelligence module");
+    expect(home).not.toContain(
+      "CİTEM is the operational cyber intelligence module",
+    );
   });
 
   it("replaces the landing logo orbit with an accessible animated intelligence globe", () => {
@@ -60,7 +64,9 @@ describe("CİTEM visual identity", () => {
     expect(home).toContain("IntelligenceGlobe");
     expect(home).toContain("<IntelligenceGlobe />");
     expect(home).not.toContain("citem-orbit-logo");
-    expect(globe).toContain("Animated world globe showing cyber intelligence data flows");
+    expect(globe).toContain(
+      "Animated world globe showing cyber intelligence data flows",
+    );
     expect(globe).toContain("animateMotion");
     expect(globe).toContain("GLOBAL SIGNAL FLOW");
     expect(globeStyles).toContain("@keyframes route-flow");
@@ -99,11 +105,12 @@ describe("CİTEM visual identity", () => {
     expect(layout).toContain('import "./background-overrides.css"');
   });
 
-  it("keeps the dashboard metrics grounded in project data", () => {
+  it("keeps dashboard metrics grounded in owned Investigation data", () => {
     const dashboard = readFileSync("src/app/dashboard/page.tsx", "utf8");
 
-    expect(dashboard).toContain('from("projects")');
-    expect(dashboard).toContain("projects.length");
+    expect(dashboard).toContain('.from("projects")');
+    expect(dashboard).toContain("investigations.length");
+    expect(dashboard).toContain("openInvestigations");
     expect(dashboard).not.toContain("24,837");
     expect(dashboard).not.toContain("1,248");
   });
