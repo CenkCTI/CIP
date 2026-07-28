@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import {
+  isCanonicalIndicatorConflict,
+  mapIndicatorImportError,
+} from "@/lib/cti/import-errors";
+import {
   MAX_BULK_IOC_INPUT_CHARS,
   parseBulkIndicatorInput,
   type BulkIocClassification,
@@ -252,7 +256,7 @@ export async function createManualIndicator(
     const outcome = data as ImportRpcOutcome | null;
 
     if (error || !outcome?.ok || !outcome.indicator_id) {
-      return { error: "Indicator could not be created." };
+      return { error: mapIndicatorImportError(error, outcome?.error) };
     }
     if (!outcome.indicator_created) {
       return {
@@ -371,9 +375,18 @@ export async function importBulkIndicators(
       );
       const outcome = data as ImportRpcOutcome | null;
 
-      if (error || !outcome?.ok) {
-        conflictsEncountered += 1;
-        continue;
+      if (error) {
+        return { ok: false, error: mapIndicatorImportError(error) };
+      }
+      if (!outcome?.ok) {
+        if (isCanonicalIndicatorConflict(outcome?.error)) {
+          conflictsEncountered += 1;
+          continue;
+        }
+        return {
+          ok: false,
+          error: mapIndicatorImportError(null, outcome?.error),
+        };
       }
 
       if (outcome.indicator_created) indicatorsCreated += 1;
