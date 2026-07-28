@@ -30,10 +30,8 @@ export default async function Page() {
   const researchTypes = new Set(
     investigations.map((investigation) => investigation.research_type),
   ).size;
-  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const activeThisWeek = investigations.filter(
-    (investigation) =>
-      new Date(investigation.updated_at).getTime() >= sevenDaysAgo,
+  const openInvestigations = investigations.filter(
+    (investigation) => !investigation.closed_at,
   ).length;
 
   return (
@@ -81,11 +79,9 @@ export default async function Page() {
           <p className="metric-caption">Distinct Investigation research types</p>
         </article>
         <article className="metric-card panel-corners">
-          <p className="citem-label">Updated 7 days</p>
-          <p className="metric-value">{activeThisWeek}</p>
-          <p className="metric-caption">
-            Investigations with recent analyst activity
-          </p>
+          <p className="citem-label">Open investigations</p>
+          <p className="metric-value">{openInvestigations}</p>
+          <p className="metric-caption">Investigations without a closed date</p>
         </article>
       </div>
 
