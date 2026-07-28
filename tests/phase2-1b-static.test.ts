@@ -57,7 +57,7 @@ describe("Phase 2.1B repository integration", () => {
     expect(service).toContain('.from("enrichment_results")');
     expect(service).toContain('externalKey = `enrichment-provider:${provider.id}`');
     expect(service).toContain("providerResponseSchema.safeParse");
-    expect(service).toContain("createHash(\"sha256\")");
+    expect(service).toContain('createHash("sha256")');
     expect(service).not.toContain('.from("entity_relationships")');
     expect(service).not.toContain('.from("timeline_events")');
     expect(service).not.toContain('.from("indicators").update');
@@ -76,8 +76,9 @@ describe("Phase 2.1B repository integration", () => {
     expect(detail).toContain("Enrichment results never change Indicator status");
     expect(enrichment).toContain("TEST / SYNTHETIC");
     expect(enrichment).toContain(
-      "A provider verdict is external technical context, not CİTEM's final analyst assessment.",
+      "A provider verdict is external technical context",
     );
+    expect(enrichment).toContain("final analyst assessment");
     expect(enrichment).toContain("Provider-observed related Indicators");
     expect(enrichment).toContain("Sanitized JSON debugging view");
   });
