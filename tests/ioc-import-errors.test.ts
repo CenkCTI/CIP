@@ -6,14 +6,14 @@ import {
 } from "@/lib/cti/import-errors";
 
 describe("IOC import database error mapping", () => {
-  it("reports a missing migration instead of five false conflicts", () => {
-    expect(
-      mapIndicatorImportError({
-        code: "PGRST202",
-        message:
-          "Could not find the function public.import_indicator_observation in the schema cache",
-      }),
-    ).toContain("migration 016 has not been applied");
+  it("reports a missing migration or stale schema cache instead of five false conflicts", () => {
+    const message = mapIndicatorImportError({
+      code: "PGRST202",
+      message:
+        "Could not find the function public.import_indicator_observation in the schema cache",
+    });
+    expect(message).toContain("migration 016 is missing");
+    expect(message).toContain("NOTIFY pgrst, 'reload schema'");
   });
 
   it("recognizes PostgreSQL missing-function errors", () => {
