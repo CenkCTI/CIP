@@ -9,7 +9,13 @@ import {
   type BulkIocClassification,
   type ParsedBulkIocRow,
 } from "@/lib/cti/indicators";
-import { confidenceLevels } from "@/lib/cti-schema";
+import {
+  buildRelationshipRpcPayload,
+  confidenceLevels,
+  formObj,
+  indicatorSchema,
+  parseRelationshipSelections,
+} from "@/lib/cti-schema";
 import { requireOwnedProject } from "@/lib/projects/ownership";
 
 const optionalDate = z.preprocess(
@@ -51,6 +57,15 @@ type ExistingIndicator = {
 };
 
 type BulkSummary = Record<BulkIocClassification, number>;
+type FormState = { error?: string; success?: string };
+
+type ImportRpcOutcome = {
+  ok?: boolean;
+  error?: string;
+  indicator_id?: string;
+  indicator_created?: boolean;
+  observation_created?: boolean;
+};
 
 function summarizeBulkIocRows(rows: ParsedBulkIocRow[]): BulkSummary {
   return rows.reduce<BulkSummary>(
@@ -198,6 +213,103 @@ async function preparePreview(projectId: string, input: BulkIocInput) {
   }
 }
 
+export async function createManualIndicator(
+  projectId: string,
+  _state: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  try {
+    const context = await requireOwnedProject(projectId);
+    const observedValue = String(formData.get("value") ?? "");
+    const parsedIndicator = indicatorSchema.safeParse(formObj(formData));
+    if (!parsedIndicator.success) {
+      return {
+        error:
+          parsedIndicator.error.issues[0]?.message ?? "Invalid Indicator input.",
+      };
+    }
+
+    const relationships = parseRelationshipSelections(formData);
+    if (!relationships.success) return { error: relationships.error };
+
+    const indicator = parsedIndicator.data;
+    const { data, error } = await context.supabase.rpc(
+      "import_indicator_observation",
+      {
+        p_project_id: context.projectId,
+        p_value: indicator.value,
+        p_type: indicator.type,
+        p_confidence: indicator.confidence,
+        p_source: indicator.source,
+        p_tags: indicator.tags,
+        p_first_seen: indicator.first_seen,
+        p_observed_value: observedValue,
+        p_observed_at: indicator.first_seen,
+        p_origin_kind: "MANUAL",
+        p_source_label: indicator.source,
+        p_analyst_note: indicator.analyst_rationale ?? "",
+        p_add_observation_when_existing: false,
+      },
+    );
+    const outcome = data as ImportRpcOutcome | null;
+
+    if (error || !outcome?.ok || !outcome.indicator_id) {
+      return { error: "Indicator could not be created." };
+    }
+    if (!outcome.indicator_created) {
+      return {
+        error: "A matching Indicator already exists in this Investigation.",
+      };
+    }
+
+    const indicatorId = outcome.indicator_id;
+    const { error: assessmentError } = await context.supabase
+      .from("indicators")
+      .update({
+        status: indicator.status,
+        analyst_rationale: indicator.analyst_rationale,
+        current_relevance: indicator.current_relevance,
+        last_seen: indicator.last_seen,
+      })
+      .eq("project_id", context.projectId)
+      .eq("id", indicatorId);
+
+    if (assessmentError) {
+      await context.supabase
+        .from("indicators")
+        .delete()
+        .eq("project_id", context.projectId)
+        .eq("id", indicatorId);
+      return { error: "Indicator assessment could not be saved." };
+    }
+
+    const { data: relationshipResult, error: relationshipError } =
+      await context.supabase.rpc("replace_cti_relationships", {
+        p_project_id: context.projectId,
+        p_entity_type: "indicators",
+        p_entity_id: indicatorId,
+        ...buildRelationshipRpcPayload("indicators", relationships.data),
+      });
+    const relationshipOutcome = relationshipResult as
+      | { ok?: boolean; error?: string }
+      | null;
+
+    if (relationshipError || !relationshipOutcome?.ok) {
+      await context.supabase
+        .from("indicators")
+        .delete()
+        .eq("project_id", context.projectId)
+        .eq("id", indicatorId);
+      return { error: "Indicator relationships could not be saved." };
+    }
+
+    revalidatePath(`/projects/${context.projectId}`);
+    return { success: "Indicator and manual observation created." };
+  } catch {
+    return { error: "Investigation not found." };
+  }
+}
+
 export async function previewBulkIndicators(
   projectId: string,
   input: BulkIocInput,
@@ -265,13 +377,7 @@ export async function importBulkIndicators(
         },
       );
 
-      const outcome = data as
-        | {
-            ok?: boolean;
-            indicator_created?: boolean;
-            observation_created?: boolean;
-          }
-        | null;
+      const outcome = data as ImportRpcOutcome | null;
 
       if (error || !outcome?.ok) {
         conflictsEncountered += 1;
