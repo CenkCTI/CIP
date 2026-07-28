@@ -78,7 +78,7 @@ describe("Phase 2.1B repository integration", () => {
     expect(enrichment).toContain(
       "A provider verdict is external technical context",
     );
-    expect(enrichment).toContain("final analyst assessment");
+    expect(enrichment).toContain("CİTEM&apos;s final analyst");
     expect(enrichment).toContain("Provider-observed related Indicators");
     expect(enrichment).toContain("Sanitized JSON debugging view");
   });
