@@ -108,3 +108,49 @@ Indicators now have an analyst status, rationale, and current relevance. Status 
 Bulk actions use the authenticated Supabase client and existing RLS; no service-role key is used. The import RPC is security-invoker, checks owned-project access, preserves canonical uniqueness, and writes the Indicator plus observation in one transaction.
 
 Phase 2.1A does **not** add structured Sources, enrichment providers, passive DNS/WHOIS/reputation queries, infrastructure clusters, Graph provenance fields, Attribution Analysis, new report types, report versions, feeds, alerts, SIEM/SOAR integration, or strategic analysis. Those capabilities require separately reviewed later phases.
+
+## CİTEM Product Roadmap Phase 2.1B — Source Registry, Provenance and Enrichment Foundation
+
+Phase 2.1B answers two operational questions: where information came from, and what additional technical context a provider returned for an Indicator.
+
+Apply the additive migration after migration 016:
+
+```bash
+psql "$SUPABASE_DB_URL" -f supabase/migrations/202607280017_phase2_1b_sources_enrichment.sql
+psql "$SUPABASE_DB_URL" -f supabase/migrations/202607290018_phase2_1b_enrichment_hardening.sql
+```
+
+When the migration is applied through Supabase SQL Editor, run this separately afterward:
+
+```sql
+NOTIFY pgrst, 'reload schema';
+```
+
+### Source Registry
+
+Sources are structured project-owned citation identities. They are intentionally distinct from Evidence artefacts, Indicator observations, enrichment results, and AI report-source aliases. The Investigation research-artefact navigation exposes **Evidence** and **Sources**. Source records support create, search, filter, edit, archive, restore, same-project Evidence linking, reference counts, and safe deletion of unreferenced records. Referenced Sources must be archived rather than hard-deleted.
+
+Indicator observations can link, replace, or remove a structured Source while preserving the original `source_label`. Display precedence is structured Source, legacy label, then `No source recorded`.
+
+### Enrichment foundation
+
+Enrichment uses a separate server-only provider registry and never reuses AI BYOK cookies, credentials, vault code, guest sessions, or rate-limit tables. Provider adapters receive only canonical Indicator value/type, an `AbortSignal`, and bounded context. No service-role key or browser-supplied provider URL is used.
+
+Phase 2.1B implements only `fixture_cti` (**Deterministic Test Provider**). It performs no network request, is disabled by default, and is visibly labelled TEST / SYNTHETIC. Enable it for local/Preview acceptance with:
+
+```text
+ENRICHMENT_ENABLED=true
+ENRICHMENT_FIXTURE_ENABLED=true
+```
+
+Fixture results are strict schema-versioned normalized data with bounded attributes and provider-observed related Indicators. They never automatically create Indicators, Graph edges, Timeline events, clusters, or analyst verdicts. A provider verdict remains external context and does not change Indicator status, confidence, rationale, or relevance.
+
+Raw response storage is disabled by default. When explicitly enabled, only bounded sanitized JSON is stored; secret-like keys are stripped and oversized content is replaced by a truncation marker. Enrichment runs preserve history, safe failures, provider Source provenance, timestamps, freshness, and SHA-256 response hashes.
+
+Detailed architecture, security, migration-history verification, environment settings, acceptance steps, known limitations, and Phase 2.1C–E exclusions are documented in `docs/PHASE_2_1B.md`.
+
+Migration 018 makes enrichment results append-only, denies run deletion, freezes run
+identity and terminal history, validates lifecycle/result inserts, and recovers stale
+active runs as `FAILED`/`STALE_RUN` without removing previous results. Limited writes
+remain available to the authenticated server flow; complete prevention of same-owner
+direct Supabase writes requires a stronger trusted-server boundary and is not claimed.

@@ -68,7 +68,6 @@
 - [x] Guest AI flow added with Turnstile-gated session creation, fixed pasted-text workflows, and no project persistence.
 - [x] Authenticated AI workspace now exposes explicit Ollama vs connected BYOK selection without silent fallback.
 - [x] Phase 7 PR repair added a shared accessible BYOK connection panel used by both guest demo AI and authenticated Project AI Workspace users.
-
 - [x] Phase 7 PR repair moved the encrypted BYOK cookie to `Path=/api`, clears the legacy `/api/ai` path, and added safe generation error messages for missing/expired/mis-bound BYOK credentials.
 - [x] Phase 7 PR repair added conservative defanged IOC normalization for Extract Indicators, preserving observed `[.]`/`hxxp(s)` values while using validated canonical values for duplicate checks and explicit approval.
 - [x] Phase 7 PR repair replaced the `/demo/ai` hard-coded Turnstile bypass with the real Cloudflare widget and server-side siteverify flow.
@@ -93,10 +92,39 @@
 - [x] Existing Indicator create/edit/delete and CTI relationship controls preserved and extended with status, rationale, and current relevance.
 - [x] Existing Indicator detail route extended with canonical/safe display summary and observation history.
 - [x] Unit/static migration and workflow tests authored for Investigation validation, IOC detection/normalization/bulk parsing, RLS boundaries, AI normalizer reuse, and scope control.
-- [ ] Migration 016 applied to live Supabase database.
-- [ ] Critical browser acceptance completed against a migrated live/preview Supabase environment.
-- [ ] Cross-user browser acceptance for Indicator observations completed against two live test users.
+- [x] Migration 016 applied. Manually verified by the repository owner against the configured Supabase/Vercel environment.
+- [x] Investigation creation, IOC preview/import, five Indicator/five observation persistence, duplicate/invalid/CVE skips, refresh/re-authentication persistence, and regression checks manually verified by the repository owner against the configured Supabase/Vercel environment.
+- [x] Cross-user isolation for the Investigation, Indicators, and observations manually verified by the repository owner against two configured test users.
 
 ### Explicitly deferred from Phase 2.1A
 
-Structured Sources, enrichment providers, infrastructure clusters, enhanced Graph provenance, Timeline redesign, Attribution Analysis, specialised report types, immutable report versions, feeds, alerts, SIEM/SOAR integrations, and strategic analysis remain out of scope and were not started in this implementation unit.
+Structured Sources, enrichment providers, infrastructure clusters, enhanced Graph provenance, Timeline redesign, Attribution Analysis, specialised report types, immutable report versions, feeds, alerts, SIEM/SOAR integrations, and strategic analysis remained out of scope and were not started in Phase 2.1A.
+
+## CİTEM Product Roadmap Phase 2.1B — Source Registry, Provenance and Enrichment Foundation
+
+**Hardening status (migration 018):** enrichment results are append-only; run
+identity, terminal history, deletion, and state transitions are database-enforced.
+Source routes return controlled not-found responses for malformed, missing,
+mismatched, and foreign records. Bounded stale runs fail with `STALE_RUN` before a
+replacement starts, preserving prior history. Complete same-owner direct-write
+prevention still requires a stronger trusted-server boundary and is not claimed.
+
+- [x] Additive migration 017 authored for Source enums, `sources`, observation Source links, enrichment runs/results, same-project constraints, archive-safe Source behaviour, active-run uniqueness, RLS, identity protection, indexes and triggers.
+- [x] Sources remain distinct from Evidence, Indicator observations, enrichment results and AI `ReportSourceRef` aliases.
+- [x] Evidence/Sources research-artefact navigation and persistent Source Registry create/search/filter/edit/archive/restore/safe-delete workflow added.
+- [x] Referenced Sources are protected from hard deletion; unreferenced Sources may be deleted and archived Sources remain historically visible.
+- [x] Observation Source link/replace/remove and verification-state actions added while retaining legacy `source_label` fallback.
+- [x] Server-only provider-neutral enrichment contracts, registry, safe errors and execution service added without AI BYOK or service-role reuse.
+- [x] Disabled-by-default `fixture_cti` deterministic test provider added with no network requests and visible TEST / SYNTHETIC warnings.
+- [x] Versioned normalized result validation, response hashing, bounded sanitized-raw policy, provider Source creation/reuse, run history and failure preservation added.
+- [x] Existing Indicator URL extended with Summary, Observations, Enrichment, Sources, Relationships and Assessment sections.
+- [x] Provider verdicts remain external context and do not automatically mutate Indicator status, confidence, rationale, relevance, Graph or Timeline.
+- [x] Source/enrichment validation, migration/RLS, fixture provider, safe-error and scope-regression tests added.
+- [ ] Migration 017 applied to the configured Supabase environment.
+- [ ] PostgREST schema cache reloaded and migration-history state manually verified.
+- [ ] Live Source Registry, observation provenance, fixture enrichment history/failure and two-user IDOR acceptance completed.
+- [ ] Live regression acceptance for IOC Workbench, Evidence, Graph, Reports/exports, AI Workspace and BYOK completed.
+
+### Explicitly deferred from Phase 2.1B
+
+Infrastructure Clusters, Graph Source nodes/edge provenance, Timeline redesign, automatic Timeline events, Attribution Analysis, specialised reports, immutable report versions, feeds, watchlists, alerts, scheduled/background enrichment, SIEM/SOAR integration, active scanning, user-stored enrichment keys, world maps, ANLAK integration, strategic analysis and Phase 2.1C–E remain out of scope.
