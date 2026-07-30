@@ -152,3 +152,6 @@ Implemented in migration 021 and Campaign-owned attribution routes: competing hy
 - [x] PostgreSQL 16 disposable smoke script, executable schema tests, security/AI boundaries, and live checklist are documented.
 - [ ] Migration 022 and PostgREST reload completed in live Supabase.
 - [ ] Two-user and full live acceptance checklist completed.
+
+## Phase 2.2A — Research Sources and Secure Feed Ingestion
+Implemented on migration 023: Investigation-scoped feed lifecycle UI, explicit server-only fetches, DNS-pinned SSRF/redirect controls, bounded RSS/Atom parsing, canonical normalized items, URL/content fingerprints, cross-feed observations, atomic leases/finalization, safe health/errors, and complete owner-scoped RLS. Live Supabase acceptance remains required; Research Inbox and scheduling are excluded. See `docs/PHASE_2_2A.md`.

@@ -1,0 +1,10 @@
+export const feedErrorCodes = ["INVALID_URL","FEED_DISABLED","FEED_ARCHIVED","FETCH_ALREADY_RUNNING","FETCH_COOLDOWN","DNS_FAILED","DNS_BLOCKED","CONNECTION_TIMEOUT","REQUEST_TIMEOUT","REDIRECT_BLOCKED","TOO_MANY_REDIRECTS","HTTP_ERROR","CONTENT_TYPE_REJECTED","RESPONSE_TOO_LARGE","EMPTY_RESPONSE","XML_INVALID","XML_UNSAFE","FEED_UNSUPPORTED","ITEM_NORMALIZATION_FAILED","DEDUPLICATION_CONFLICT","INTERNAL_ERROR"] as const;
+export type FeedErrorCode = (typeof feedErrorCodes)[number];
+export class FeedError extends Error {
+  constructor(public readonly code: FeedErrorCode, message?: string) { super(message ?? safeFeedMessage(code)); }
+}
+export function safeFeedMessage(code: FeedErrorCode) {
+  const messages: Record<FeedErrorCode,string> = {
+    INVALID_URL:"The feed URL is not permitted.", FEED_DISABLED:"Enable this feed before fetching.", FEED_ARCHIVED:"Archived feeds cannot be fetched.", FETCH_ALREADY_RUNNING:"A fetch is already in progress.", FETCH_COOLDOWN:"Please wait before fetching this feed again.", DNS_FAILED:"The feed host could not be resolved.", DNS_BLOCKED:"The feed destination is not public.", CONNECTION_TIMEOUT:"The feed connection timed out.", REQUEST_TIMEOUT:"The feed request timed out.", REDIRECT_BLOCKED:"The feed redirect was blocked.", TOO_MANY_REDIRECTS:"The feed redirected too many times.", HTTP_ERROR:"The feed returned an unsuccessful response.", CONTENT_TYPE_REJECTED:"The response is not a supported feed type.", RESPONSE_TOO_LARGE:"The feed response exceeds the size limit.", EMPTY_RESPONSE:"The feed response was empty.", XML_INVALID:"The feed XML is malformed.", XML_UNSAFE:"Unsafe XML was rejected.", FEED_UNSUPPORTED:"Only RSS 2.0 and Atom 1.0 feeds are supported.", ITEM_NORMALIZATION_FAILED:"A feed item could not be normalized.", DEDUPLICATION_CONFLICT:"An item matched conflicting existing records and was skipped.", INTERNAL_ERROR:"The feed could not be fetched safely."
+  }; return messages[code];
+}

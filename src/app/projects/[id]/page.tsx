@@ -43,6 +43,8 @@ import {
   taskStatuses,
 } from "@/lib/workspace/schema";
 import { validTimelineDate } from "@/lib/reconstruction/presentation";
+import { ResearchFeedsWorkspace } from "@/components/research-feeds/research-feeds-workspace";
+import { redactUrl } from "@/lib/research-feeds/url";
 
 type SP = CtiSearchParams & {
   tab?: string;
@@ -79,6 +81,7 @@ const tabs = [
   "infrastructure",
   "graph",
   "ai",
+  "research-feeds",
 ];
 function tagText(a: unknown) {
   return aa(a).join(", ");
@@ -113,6 +116,16 @@ export default async function Page({
     .single<Project>();
   if (error || !project) notFound();
   const mk = (t: string) => `/projects/${id}?tab=${t}`;
+  if (tab === "research-feeds") {
+    const [{ data: feeds, error: feedError }, { data: runs }, { data: observations }] = await Promise.all([
+      supabase.from("research_feed_sources").select("*,research_feed_item_observations(count)").eq("project_id", id).is("archived_at", null).order("created_at", { ascending: false }).limit(100),
+      supabase.from("research_feed_fetch_runs").select("*").eq("project_id", id).order("created_at", { ascending: false }).limit(50),
+      supabase.from("research_feed_item_observations").select("id,feed_source_id,first_seen_at,last_seen_at,research_items(title,canonical_url,published_at)").eq("project_id", id).order("last_seen_at", { ascending: false }).limit(50),
+    ]);
+    if (feedError) return <section className="mx-auto max-w-6xl"><div className="card text-red-300">Unable to load Research Feeds. Apply migration 023 and try again.</div></section>;
+    const itemRows=(observations??[]).map((o:Record<string, unknown>)=>({...o,...(Array.isArray(o.research_items)?o.research_items[0]:o.research_items)}));
+    return <section className="mx-auto max-w-6xl"><h1 className="text-3xl font-bold text-white">{project.name}</h1><nav className="mt-6 flex flex-wrap gap-2 border-b border-slate-800 pb-2">{tabs.map(t=><Link key={t} className={`rounded-t px-4 py-2 capitalize ${tab===t?"bg-slate-800 text-cyan-200":"text-slate-400 hover:text-white"}`} href={mk(t)}>{t.replace("-"," ")}</Link>)}</nav><ResearchFeedsWorkspace projectId={id} feeds={(feeds??[]).map(f=>({...f,display_url:redactUrl(f.configured_url)}))} runs={runs??[]} items={itemRows}/></section>;
+  }
   if (tab === "infrastructure") {
     const { data: clusters, error: clusterError } = await supabase
       .from("infrastructure_clusters")
