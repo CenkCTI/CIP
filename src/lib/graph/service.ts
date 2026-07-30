@@ -258,6 +258,33 @@ export function limitGraph(
   };
 }
 
+
+export function infrastructureMembershipEdges(
+  rows: Row[],
+  projectId: string,
+  visibleNodes: Set<string>,
+): GraphEdge[] {
+  return rows.flatMap((row) => {
+    const source = nodeId("INFRASTRUCTURE_CLUSTER", s(row.cluster_id));
+    const target = nodeId("INDICATOR", s(row.indicator_id));
+    if (!visibleNodes.has(source) || !visibleNodes.has(target)) return [];
+    return [{
+      id: `infrastructure:${s(row.id)}`,
+      source,
+      target,
+      relationshipType: `${s(row.status)} · ${s(row.role)} · ${s(row.confidence)}`,
+      sourceKind: "semantic" as const,
+      description: s(row.rationale).slice(0, 240),
+      detailUrl: `/projects/${projectId}/infrastructure/${s(row.cluster_id)}`,
+    }];
+  });
+}
+
+export function visibleInfrastructureMembershipStatuses(includeHistorical: boolean) {
+  return includeHistorical
+    ? ["POSSIBLE", "CONFIRMED", "REJECTED", "REMOVED"]
+    : ["POSSIBLE", "CONFIRMED"];
+}
 export async function loadProjectGraph(
   projectId: string,
   includeHistoricalInfrastructure = false,
@@ -340,13 +367,16 @@ export async function loadProjectGraph(
     .from("infrastructure_cluster_members")
     .select("id,cluster_id,indicator_id,status,role,confidence,rationale", { count: "exact" })
     .eq("project_id", projectId)
-    .in("status", includeHistoricalInfrastructure ? ["POSSIBLE", "CONFIRMED", "REJECTED", "REMOVED"] : ["POSSIBLE", "CONFIRMED"])
+    .in("status", visibleInfrastructureMembershipStatuses(includeHistoricalInfrastructure))
     .order("id", { ascending: true })
     .limit(EDGE_LIMIT + 1);
   if (clusterMemberError && clusterMemberError.code !== "42P01") throw new Error("Unable to load infrastructure relationships.");
-  for (const row of (clusterMembers ?? []) as unknown as Row[]) {
-    const source=nodeId("INFRASTRUCTURE_CLUSTER",s(row.cluster_id)), target=nodeId("INDICATOR",s(row.indicator_id));
-    if(finalNodeSet.has(source)&&finalNodeSet.has(target)) addUniqueGraphEdge(edges,seen,{id:`infrastructure:${s(row.id)}`,source,target,relationshipType:`${s(row.status)} · ${s(row.role)} · ${s(row.confidence)}`,sourceKind:"semantic",description:s(row.rationale).slice(0,240),detailUrl:`/projects/${projectId}/infrastructure/${s(row.cluster_id)}`});
+  for (const edge of infrastructureMembershipEdges(
+    (clusterMembers ?? []) as unknown as Row[],
+    projectId,
+    finalNodeSet,
+  )) {
+    addUniqueGraphEdge(edges, seen, edge);
   }
 
   const {

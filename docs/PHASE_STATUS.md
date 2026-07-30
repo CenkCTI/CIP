@@ -137,3 +137,4 @@ Infrastructure Clusters, Graph Source nodes/edge provenance, Timeline redesign, 
 - [x] Analyst-controlled boundaries documented; no automatic clustering, attribution, Timeline/report mutation, or Phase 2.1D work added.
 - [ ] Migration 019 applied and PostgREST schema reloaded in live Supabase.
 - [ ] Live two-user IDOR and workflow acceptance completed.
+- [x] Phase 2.1C hardening validated migrations 001–019 in one PostgreSQL 16 transaction, removed same-transaction direct enum comparisons, preserved analytical status across archive/restore, and added executable action/route/Graph coverage.

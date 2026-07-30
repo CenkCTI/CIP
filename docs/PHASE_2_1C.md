@@ -16,18 +16,18 @@ Cluster-wide or membership-specific support points to exactly one existing same-
 
 The Graph derives cluster nodes and membership edges directly from `infrastructure_clusters` and `infrastructure_cluster_members`; no parallel relationship is written. POSSIBLE and CONFIRMED edges appear by default. The explicit historical toggle includes REJECTED and REMOVED edges; edge labels expose status, role, and confidence, with rationale in edge metadata.
 
-All three tables have owner-scoped authenticated RLS. Server actions additionally validate UUIDs, ownership, the owned cluster, and same-Investigation targets. Clusters/members have no DELETE policy; archive/status transitions preserve analysis. Support links may be explicitly unlinked.
+All three tables have owner-scoped authenticated RLS. Server actions additionally validate UUIDs, ownership, the owned cluster, and same-Investigation targets. Clusters/members have no DELETE policy. Archiving stores the prior DRAFT, ASSESSED, or INACTIVE value in a constrained `pre_archive_status`; restore deterministically reinstates it instead of resetting the analysis. Support links may be explicitly unlinked.
 
 ## Apply migration 019
 
-The migration was authored but is not applied by the coding environment. Apply it after 018:
+Migration 019 was validated together with migrations 001–018 inside one real PostgreSQL 16 transaction using `scripts/test-phase2-1c-migration.sh`. It was not applied to live Supabase. Apply it after 018:
 
 ```bash
 psql "$SUPABASE_DB_URL" -f supabase/migrations/202607300019_phase2_1c_infrastructure_analysis.sql
 psql "$SUPABASE_DB_URL" -c "NOTIFY pgrst, 'reload schema';"
 ```
 
-Do not alter Supabase migration history to bypass a mismatch. Verify:
+The final structure remains one migration: 019 extends the enum, then compares the new graph value only through `::text` in same-transaction functions. No direct use of the new enum value occurs before commit. Do not alter Supabase migration history to bypass a mismatch. Verify:
 
 ```sql
 select table_name from information_schema.tables where table_schema='public' and table_name like 'infrastructure_cluster%';

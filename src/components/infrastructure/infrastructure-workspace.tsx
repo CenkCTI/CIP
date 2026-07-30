@@ -1,6 +1,257 @@
 import Link from "next/link";
-import { createCluster,setClusterArchived } from "@/app/projects/[id]/infrastructure-actions";
-import { clusterStatuses,confidenceLevels,label } from "@/lib/infrastructure/schema";
-type Row=Record<string,unknown>;
-export function ClusterFields({cluster}:{cluster?:Row}){const value=(k:string)=>String(cluster?.[k]??"");return <div className="grid gap-3 md:grid-cols-2"><label>Name<input className="field" name="name" required maxLength={160} defaultValue={value("name")}/></label><label>Status<select className="field" name="status" defaultValue={value("status")||"DRAFT"}>{clusterStatuses.filter(s=>s!=="ARCHIVED"||cluster?.archived_at).map(s=><option key={s}>{s}</option>)}</select></label><label>Confidence<select className="field" name="confidence" defaultValue={value("confidence")||"MEDIUM"}>{confidenceLevels.map(s=><option key={s}>{s}</option>)}</select></label><label>First observed<input className="field" type="datetime-local" name="first_observed_at" defaultValue={value("first_observed_at").slice(0,16)}/></label><label>Last observed<input className="field" type="datetime-local" name="last_observed_at" defaultValue={value("last_observed_at").slice(0,16)}/></label><label className="md:col-span-2">Description<textarea className="field" name="description" maxLength={10000} defaultValue={value("description")}/></label><label className="md:col-span-2">Technical purpose <span className="text-slate-500">— what the infrastructure appears to do</span><textarea className="field" name="technical_purpose" maxLength={10000} defaultValue={value("technical_purpose")}/></label><label className="md:col-span-2">Current assessment <span className="text-slate-500">— what you currently conclude</span><textarea className="field" name="current_assessment" maxLength={20000} defaultValue={value("current_assessment")}/></label><label className="md:col-span-2">Operational relevance <span className="text-slate-500">— why it matters now</span><textarea className="field" name="operational_relevance" maxLength={20000} defaultValue={value("operational_relevance")}/></label></div>}
-export function InfrastructureWorkspace({projectId,clusters,sp}:{projectId:string;clusters:Row[];sp:{q?:string;status?:string;confidence?:string;archive?:string;error?:string}}){const q=(sp.q??"").toLowerCase();const rows=clusters.filter(c=>(!q||String(c.name).toLowerCase().includes(q)||String(c.description).toLowerCase().includes(q))&&(!sp.status||c.status===sp.status)&&(!sp.confidence||c.confidence===sp.confidence)&&(sp.archive==="all"||sp.archive==="archived"?Boolean(c.archived_at):!c.archived_at)&&(sp.archive!=="archived"||Boolean(c.archived_at)));return <div className="mt-4 space-y-5">{sp.error&&<p className="card text-red-300">{sp.error}</p>}<p className="text-slate-300">A cluster groups Indicators that may form part of the same attack infrastructure. Memberships remain analyst-controlled and should include rationale and supporting material.</p><form className="card flex flex-wrap gap-2"><input type="hidden" name="tab" value="infrastructure"/><input className="field max-w-xs" name="q" placeholder="Search clusters" defaultValue={sp.q}/><select className="field max-w-44" name="status" defaultValue={sp.status}><option value="">All statuses</option>{clusterStatuses.map(x=><option key={x}>{x}</option>)}</select><select className="field max-w-44" name="confidence" defaultValue={sp.confidence}><option value="">All confidence</option>{confidenceLevels.map(x=><option key={x}>{x}</option>)}</select><select className="field max-w-44" name="archive" defaultValue={sp.archive??"active"}><option value="active">Active</option><option value="archived">Archived</option><option value="all">All</option></select><button className="btn">Filter</button></form><details className="card"><summary className="cursor-pointer font-bold">Create Infrastructure Cluster</summary><form action={createCluster.bind(null,projectId)} className="mt-4 space-y-3"><ClusterFields/><button className="btn">Create cluster</button></form></details>{rows.length===0?<div className="card">No Infrastructure Clusters match this view.</div>:<div className="grid gap-4 md:grid-cols-2">{rows.map(c=><article className="card" key={String(c.id)}><div className="flex justify-between"><h2 className="text-xl font-bold">{String(c.name)}</h2><span>{label(String(c.status))}</span></div><p className="text-sm text-slate-400">{String(c.confidence)} confidence · {String(c.member_count??0)} members</p><p className="mt-2">{String(c.operational_relevance||"Operational relevance not yet assessed.").slice(0,220)}</p><div className="mt-3 flex gap-2"><Link className="btn" href={`/projects/${projectId}/infrastructure/${c.id}`}>Open</Link><form action={setClusterArchived.bind(null,projectId,String(c.id),!c.archived_at)}><button className="btn">{c.archived_at?"Restore":"Archive"}</button></form></div></article>)}</div>}</div>}
+
+import {
+  createCluster,
+  setClusterArchived,
+} from "@/app/projects/[id]/infrastructure-actions";
+import {
+  activeClusterStatuses,
+  clusterStatuses,
+  confidenceLevels,
+  label,
+} from "@/lib/infrastructure/schema";
+
+type Row = Record<string, unknown>;
+
+export function ClusterFields({ cluster }: { cluster?: Row }) {
+  const value = (key: string) => String(cluster?.[key] ?? "");
+  const analyticalStatus = cluster?.archived_at
+    ? String(cluster.pre_archive_status ?? "DRAFT")
+    : value("status") || "DRAFT";
+
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      <label>
+        Name
+        <input
+          className="field"
+          name="name"
+          required
+          maxLength={160}
+          defaultValue={value("name")}
+        />
+      </label>
+      <label>
+        Analytical status
+        <select className="field" name="status" defaultValue={analyticalStatus}>
+          {activeClusterStatuses.map((status) => (
+            <option key={status}>{status}</option>
+          ))}
+        </select>
+        {cluster?.archived_at ? (
+          <span className="text-xs text-slate-400">
+            The cluster remains archived; this status is restored when unarchived.
+          </span>
+        ) : null}
+      </label>
+      <label>
+        Confidence
+        <select
+          className="field"
+          name="confidence"
+          defaultValue={value("confidence") || "MEDIUM"}
+        >
+          {confidenceLevels.map((confidence) => (
+            <option key={confidence}>{confidence}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        First observed
+        <input
+          className="field"
+          type="datetime-local"
+          name="first_observed_at"
+          defaultValue={value("first_observed_at").slice(0, 16)}
+        />
+      </label>
+      <label>
+        Last observed
+        <input
+          className="field"
+          type="datetime-local"
+          name="last_observed_at"
+          defaultValue={value("last_observed_at").slice(0, 16)}
+        />
+      </label>
+      <label className="md:col-span-2">
+        Description
+        <textarea
+          className="field"
+          name="description"
+          maxLength={10_000}
+          defaultValue={value("description")}
+        />
+      </label>
+      <label className="md:col-span-2">
+        Technical purpose{" "}
+        <span className="text-slate-500">— what the infrastructure appears to do</span>
+        <textarea
+          className="field"
+          name="technical_purpose"
+          maxLength={10_000}
+          defaultValue={value("technical_purpose")}
+        />
+      </label>
+      <label className="md:col-span-2">
+        Current assessment{" "}
+        <span className="text-slate-500">— what you currently conclude</span>
+        <textarea
+          className="field"
+          name="current_assessment"
+          maxLength={20_000}
+          defaultValue={value("current_assessment")}
+        />
+      </label>
+      <label className="md:col-span-2">
+        Operational relevance{" "}
+        <span className="text-slate-500">— why it matters now</span>
+        <textarea
+          className="field"
+          name="operational_relevance"
+          maxLength={20_000}
+          defaultValue={value("operational_relevance")}
+        />
+      </label>
+    </div>
+  );
+}
+
+export function InfrastructureWorkspace({
+  projectId,
+  clusters,
+  sp,
+}: {
+  projectId: string;
+  clusters: Row[];
+  sp: {
+    q?: string;
+    status?: string;
+    confidence?: string;
+    archive?: string;
+    error?: string;
+  };
+}) {
+  const query = (sp.q ?? "").toLowerCase();
+  const rows = clusters.filter((cluster) => {
+    const status = cluster.archived_at
+      ? String(cluster.pre_archive_status ?? "")
+      : String(cluster.status);
+    const matchesSearch =
+      !query ||
+      String(cluster.name).toLowerCase().includes(query) ||
+      String(cluster.description).toLowerCase().includes(query);
+    const matchesArchive =
+      sp.archive === "all" ||
+      (sp.archive === "archived" ? Boolean(cluster.archived_at) : !cluster.archived_at);
+    return (
+      matchesSearch &&
+      (!sp.status || status === sp.status) &&
+      (!sp.confidence || cluster.confidence === sp.confidence) &&
+      matchesArchive
+    );
+  });
+
+  return (
+    <div className="mt-4 space-y-5">
+      {sp.error ? <p className="card text-red-300">{sp.error}</p> : null}
+      <p className="text-slate-300">
+        A cluster groups Indicators that may form part of the same attack
+        infrastructure. Memberships remain analyst-controlled and should include
+        rationale and supporting material.
+      </p>
+      <form className="card flex flex-wrap gap-2">
+        <input type="hidden" name="tab" value="infrastructure" />
+        <input
+          className="field max-w-xs"
+          name="q"
+          placeholder="Search clusters"
+          defaultValue={sp.q}
+        />
+        <select className="field max-w-44" name="status" defaultValue={sp.status}>
+          <option value="">All statuses</option>
+          {clusterStatuses.map((status) => (
+            <option key={status}>{status}</option>
+          ))}
+        </select>
+        <select
+          className="field max-w-44"
+          name="confidence"
+          defaultValue={sp.confidence}
+        >
+          <option value="">All confidence</option>
+          {confidenceLevels.map((confidence) => (
+            <option key={confidence}>{confidence}</option>
+          ))}
+        </select>
+        <select
+          className="field max-w-44"
+          name="archive"
+          defaultValue={sp.archive ?? "active"}
+        >
+          <option value="active">Active</option>
+          <option value="archived">Archived</option>
+          <option value="all">All</option>
+        </select>
+        <button className="btn">Filter</button>
+      </form>
+      <details className="card">
+        <summary className="cursor-pointer font-bold">
+          Create Infrastructure Cluster
+        </summary>
+        <form action={createCluster.bind(null, projectId)} className="mt-4 space-y-3">
+          <ClusterFields />
+          <button className="btn">Create cluster</button>
+        </form>
+      </details>
+      {rows.length === 0 ? (
+        <div className="card">No Infrastructure Clusters match this view.</div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {rows.map((cluster) => (
+            <article className="card" key={String(cluster.id)}>
+              <div className="flex justify-between">
+                <h2 className="text-xl font-bold">{String(cluster.name)}</h2>
+                <span>
+                  {cluster.archived_at
+                    ? `Archived · ${label(String(cluster.pre_archive_status))}`
+                    : label(String(cluster.status))}
+                </span>
+              </div>
+              <p className="text-sm text-slate-400">
+                {String(cluster.confidence)} confidence ·{" "}
+                {String(cluster.member_count ?? 0)} members
+              </p>
+              <p className="mt-2">
+                {String(
+                  cluster.operational_relevance ||
+                    "Operational relevance not yet assessed.",
+                ).slice(0, 220)}
+              </p>
+              <div className="mt-3 flex gap-2">
+                <Link
+                  className="btn"
+                  href={`/projects/${projectId}/infrastructure/${cluster.id}`}
+                >
+                  Open
+                </Link>
+                <form
+                  action={setClusterArchived.bind(
+                    null,
+                    projectId,
+                    String(cluster.id),
+                    !cluster.archived_at,
+                  )}
+                >
+                  <button className="btn">
+                    {cluster.archived_at ? "Restore" : "Archive"}
+                  </button>
+                </form>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

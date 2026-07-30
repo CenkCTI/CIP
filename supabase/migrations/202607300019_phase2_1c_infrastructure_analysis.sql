@@ -9,9 +9,12 @@ create table public.infrastructure_clusters (
  status public.infrastructure_cluster_status not null default 'DRAFT', confidence public.confidence_level not null default 'MEDIUM',
  technical_purpose text not null default '' check (char_length(technical_purpose)<=10000), current_assessment text not null default '' check (char_length(current_assessment)<=20000), operational_relevance text not null default '' check (char_length(operational_relevance)<=20000),
  first_observed_at timestamptz, last_observed_at timestamptz, created_by uuid not null references auth.users(id) on delete restrict,
- created_at timestamptz not null default now(), updated_at timestamptz not null default now(), archived_at timestamptz,
+ created_at timestamptz not null default now(), updated_at timestamptz not null default now(), archived_at timestamptz, pre_archive_status public.infrastructure_cluster_status,
  unique(project_id,id), check(first_observed_at is null or last_observed_at is null or first_observed_at<=last_observed_at),
- constraint infrastructure_clusters_archive_consistency check ((status='ARCHIVED')=(archived_at is not null)),
+ constraint infrastructure_clusters_archive_consistency check (
+   (status='ARCHIVED' and archived_at is not null and pre_archive_status in ('DRAFT','ASSESSED','INACTIVE'))
+   or (status<>'ARCHIVED' and archived_at is null and pre_archive_status is null)
+ ),
  constraint infrastructure_clusters_assessed_content check (status<>'ASSESSED' or char_length(trim(current_assessment))>0)
 );
 create table public.infrastructure_cluster_members (
@@ -58,6 +61,14 @@ create policy infrastructure_cluster_support_delete on public.infrastructure_clu
 -- Clusters participate in the existing graph without a parallel relationship table.
 alter type public.graph_entity_type add value if not exists 'INFRASTRUCTURE_CLUSTER';
 create or replace function public.graph_entity_exists(p_project_id uuid,p_type public.graph_entity_type,p_id uuid) returns boolean language plpgsql stable security definer set search_path='' as $$ begin
- if p_type='INFRASTRUCTURE_CLUSTER' then return exists(select 1 from public.infrastructure_clusters where project_id=p_project_id and id=p_id);
+ if p_type::text='INFRASTRUCTURE_CLUSTER' then return exists(select 1 from public.infrastructure_clusters where project_id=p_project_id and id=p_id);
  elsif p_type='ACTOR' then return exists(select 1 from public.threat_actors where project_id=p_project_id and id=p_id); elsif p_type='CAMPAIGN' then return exists(select 1 from public.campaigns where project_id=p_project_id and id=p_id); elsif p_type='INDICATOR' then return exists(select 1 from public.indicators where project_id=p_project_id and id=p_id); elsif p_type='MALWARE' then return exists(select 1 from public.malware where project_id=p_project_id and id=p_id); elsif p_type='CVE' then return exists(select 1 from public.cves where project_id=p_project_id and id=p_id); elsif p_type='MITRE' then return exists(select 1 from public.mitre_techniques where project_id=p_project_id and id=p_id); elsif p_type='EVIDENCE' then return exists(select 1 from public.evidence where project_id=p_project_id and id=p_id); elsif p_type='REPORT' then return exists(select 1 from public.reports where project_id=p_project_id and id=p_id); end if; return false; end $$;
-create trigger cleanup_infrastructure_cluster_graph_positions before delete on public.infrastructure_clusters for each row execute function public.cleanup_graph_node_positions('INFRASTRUCTURE_CLUSTER');
+create or replace function public.cleanup_infrastructure_cluster_graph_positions() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+ delete from public.graph_node_positions
+ where project_id=old.project_id and entity_type::text='INFRASTRUCTURE_CLUSTER' and entity_id=old.id;
+ return old;
+end $$;
+revoke all on function public.cleanup_infrastructure_cluster_graph_positions() from public, anon, authenticated;
+create trigger cleanup_infrastructure_cluster_graph_positions before delete on public.infrastructure_clusters for each row execute function public.cleanup_infrastructure_cluster_graph_positions();
