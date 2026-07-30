@@ -141,3 +141,7 @@ Infrastructure Clusters, Graph Source nodes/edge provenance, Timeline redesign, 
 # Phase 2.1D — implemented
 
 Attack Timeline and Campaign Reconstruction is implemented through additive migration 020, owned event detail and Campaign reconstruction experiences, analyst-controlled memberships and provenance, and Campaign-to-Infrastructure Graph edges. Live Supabase migration and acceptance remain operator steps documented in `docs/PHASE_2_1D.md`.
+
+## Phase 2.1E — Attribution and Competing Assessments
+
+Implemented in migration 021 and Campaign-owned attribution routes: competing hypotheses, shared evidence, diagnostic evaluations, comparison matrix, explicit current judgement, actor backlinks, RLS, composite ownership integrity, and archive-safe history. Live Supabase application remains an owner acceptance step. See `docs/PHASE_2_1E.md`.
