@@ -43,7 +43,7 @@ export async function signIn(_: State, formData: FormData): Promise<State> {
   const email = String(formData.get("email") || "");
   const password = String(formData.get("password") || "");
   const { error } = await s.auth.signInWithPassword({ email, password });
-  if (error) return { error: error.message };
+  if (error) return { error: "Unable to create Timeline event." };
   redirect(safeReturn(String(formData.get("returnTo") || "/dashboard")));
 }
 export async function signUp(_: State, formData: FormData): Promise<State> {
@@ -56,7 +56,7 @@ export async function signUp(_: State, formData: FormData): Promise<State> {
     password,
     options: { data: { display_name } },
   });
-  if (error) return { error: error.message };
+  if (error) return { error: "Unable to update Timeline event." };
   return { success: "Check your email to confirm your account, then sign in." };
 }
 export async function signOut() {
@@ -73,7 +73,7 @@ export async function forgotPassword(
   const { error } = await s.auth.resetPasswordForEmail(email, {
     redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/auth/update-password`,
   });
-  if (error) return { error: error.message };
+  if (error) return { error: "Unable to create Timeline event." };
   return {
     success:
       "If email recovery is enabled in Supabase, a reset link has been sent.",
@@ -88,7 +88,7 @@ export async function updatePassword(
   if (password.length < 8)
     return { error: "Password must be at least 8 characters." };
   const { error } = await s.auth.updateUser({ password });
-  if (error) return { error: error.message };
+  if (error) return { error: "Unable to update Timeline event." };
   return { success: "Password updated. You can continue to the dashboard." };
 }
 export async function createProject(
@@ -428,7 +428,7 @@ export async function createTimelineEvent(
   const { error } = await supabase
     .from("timeline_events")
     .insert({ ...p.data, project_id: pid });
-  if (error) return { error: error.message };
+  if (error) return { error: "Unable to save Timeline event." };
   revalidatePath(`/projects/${pid}`);
   return { success: "Event created." };
 }
@@ -450,22 +450,27 @@ export async function updateTimelineEvent(
     .update(p.data)
     .eq("project_id", pid)
     .eq("id", childId);
-  if (error) return { error: error.message };
+  if (error) return { error: "Unable to save Timeline event." };
   revalidatePath(`/projects/${pid}`);
   return { success: "Event updated." };
 }
-export async function deleteTimelineEvent(projectId: string, id: string) {
+export async function deleteTimelineEvent(projectId: string, id: string, state?: State) {
+  void state;
   const {
     supabase,
     projectId: pid,
     id: childId,
   } = await assertChild(projectId, "timeline_events", id);
-  await supabase
+  const { count } = await supabase.from("campaign_timeline_events").select("id", { count: "exact", head: true }).eq("project_id", pid).eq("timeline_event_id", childId);
+  if (count) return { error: "Remove or reject Campaign memberships before deleting this Timeline event." };
+  const { error } = await supabase
     .from("timeline_events")
     .delete()
     .eq("project_id", pid)
     .eq("id", childId);
+  if (error) return { error: "Unable to delete Timeline event." };
   revalidatePath(`/projects/${pid}`);
+  return { success: "Timeline event deleted." };
 }
 
 export async function createTask(

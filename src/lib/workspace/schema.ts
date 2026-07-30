@@ -58,6 +58,15 @@ export const timelineSchema = z.object({
   description: z.string().max(10000).default(""),
   related_entity_type: z.string().trim().optional().transform((v) => v || null),
   related_entity_id: optionalUuidSchema.transform((v) => v ?? null),
+  occurred_end_at: z.string().optional().transform((v) => v ? new Date(v).toISOString() : null),
+  basis: z.enum(["OBSERVED", "INFERRED"]).default("OBSERVED"),
+  activity_phase: z.enum(["INFRASTRUCTURE_PREPARATION","TARGETING","DELIVERY","INITIAL_ACCESS","EXECUTION","PERSISTENCE","COMMAND_AND_CONTROL","COLLECTION","EXFILTRATION","IMPACT","INFRASTRUCTURE_CHANGE","OTHER","UNKNOWN"]).default("UNKNOWN"),
+  assessment_status: z.enum(["RECORDED","ASSESSED","DISPUTED","RETRACTED"]).default("RECORDED"),
+  confidence: z.enum(["LOW","MEDIUM","HIGH"]).default("MEDIUM"),
+  analyst_rationale: z.string().max(10000).default(""),
+}).superRefine((v, ctx) => {
+  if (v.occurred_end_at && new Date(v.event_date) > new Date(v.occurred_end_at)) ctx.addIssue({ code: "custom", message: "Event end must not precede its start." });
+  if ((v.basis === "INFERRED" || ["DISPUTED","RETRACTED"].includes(v.assessment_status)) && !v.analyst_rationale.trim()) ctx.addIssue({ code: "custom", message: "Analyst rationale is required for inferred, disputed, or retracted events." });
 });
 
 export const taskSchema = z.object({

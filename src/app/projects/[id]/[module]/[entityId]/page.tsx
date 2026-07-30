@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CtiDelete, CtiForm } from "@/components/cti-forms";
+import { ClusterMembershipForm, ReconstructionForm } from "@/components/reconstruction/forms";
 import { requireUser } from "@/lib/auth";
 import {
   detectHashAlgorithm,
@@ -372,6 +373,10 @@ export default async function Detail({
     };
   });
   const moduleLabel = tab === "indicators" ? "IOC Workbench" : ctiModuleLabels[tab];
+  const campaignReconstruction = tab === "campaigns" ? await supabase.from("campaign_reconstructions").select("*").eq("project_id",id).eq("campaign_id",entityId).maybeSingle() : {data:null};
+  const campaignActivity = tab === "campaigns" ? await supabase.from("campaign_timeline_events").select("*,timeline_events(*,timeline_event_entities(id),timeline_event_support(id))").eq("project_id",id).eq("campaign_id",entityId).order("sequence_order",{ascending:true,nullsFirst:false}) : {data:[]};
+  const campaignInfrastructure = tab === "campaigns" ? await supabase.from("campaign_infrastructure_clusters").select("*,infrastructure_clusters(name,status,operational_relevance,infrastructure_cluster_members(count))").eq("project_id",id).eq("campaign_id",entityId) : {data:[]};
+  const availableClusters = tab === "campaigns" ? await supabase.from("infrastructure_clusters").select("id,name").eq("project_id",id).is("archived_at",null) : {data:[]};
 
   return (
     <section className="mx-auto max-w-5xl space-y-6">
@@ -417,6 +422,12 @@ export default async function Detail({
           currentUserId={user.id}
         />
       ) : null}
+      {tab === "campaigns" ? <>
+        <section className="card"><p className="citem-label">Reconstruction Summary</p><h2 className="text-xl font-semibold">Current Campaign Reconstruction</h2><p className="mt-2 text-sm text-stone-500">Campaign Reconstruction organises observed and inferred Timeline events into an analyst-controlled operational sequence. Reconstruction is not Threat Actor attribution.</p><ReconstructionForm projectId={id} campaignId={entityId} row={(campaignReconstruction.data??{}) as Row}/></section>
+        <section className="card"><h2 className="text-xl font-semibold">Ordered Activity</h2><p className="text-sm text-stone-500">Event status and Campaign-membership status are separate. Chronology uses event time; sequence order only assists ties.</p><ol className="mt-3 grid gap-3">{((campaignActivity.data??[]) as Row[]).sort((a,b)=>{const ae=a.timeline_events as Row,be=b.timeline_events as Row;return ss(ae?.event_date).localeCompare(ss(be?.event_date))||(Number(a.sequence_order??999999)-Number(b.sequence_order??999999))||ss(a.id).localeCompare(ss(b.id))}).map(m=>{const e=m.timeline_events as Row;return <li className="rounded border border-stone-800 p-3" key={ss(m.id)}><Link className="font-semibold text-cyan-200" href={`/projects/${id}/timeline/${ss(m.timeline_event_id)}`}>{ss(e?.event_name)}</Link><p>{ss(e?.event_date)} · event {ss(e?.assessment_status)} · membership {ss(m.status)} · {ss(m.confidence)}</p><p>{ss(m.rationale)}</p><p className="text-xs text-stone-500">{Array.isArray(e?.timeline_event_entities)?e.timeline_event_entities.length:0} entities · {Array.isArray(e?.timeline_event_support)?e.timeline_event_support.length:0} supporting records</p></li>})}</ol></section>
+        <section className="card"><h2 className="text-xl font-semibold">Infrastructure</h2><ul className="mt-3">{((campaignInfrastructure.data??[]) as Row[]).map(m=>{const c=m.infrastructure_clusters as Row;return <li key={ss(m.id)}><Link className="text-cyan-200" href={`/projects/${id}/infrastructure/${ss(m.infrastructure_cluster_id)}`}>{ss(c?.name)}</Link> — cluster {ss(c?.status)}, relationship {ss(m.status)} / {ss(m.confidence)} — {ss(m.rationale)}<p className="text-xs text-stone-500">{ss(c?.operational_relevance)}</p></li>})}</ul><ClusterMembershipForm projectId={id} campaignId={entityId} clusters={(availableClusters.data??[]) as Row[]}/></section>
+        <section className="card"><h2 className="text-xl font-semibold">Supporting Events & Current Assessment</h2><p>Supporting Sources, Evidence, and enrichment results remain authoritative at event level. Assess the coherent sequence, observed versus inferred activity, objective, infrastructure, activity status, disputes, likely next activity, and data still required. AI does not write this assessment.</p></section>
+      </> : null}
 
       <section className="card">
         <h2 className="font-semibold text-white">Related entities</h2>
