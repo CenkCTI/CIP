@@ -917,6 +917,14 @@ export async function deleteReport(
   if (!report.ok) return { error: report.error };
   if (String(fd.get("confirm") || "") !== report.title)
     return { error: "Confirmation does not match the current report title." };
+  const { count: versionCount, error: versionCountError } = await report.supabase
+    .from("report_versions")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", report.projectId)
+    .eq("report_id", report.reportId);
+  if (versionCountError) return { error: "Unable to verify Report history." };
+  if ((versionCount ?? 0) > 0)
+    return { error: "Reports with permanent version history cannot be deleted. Archive this Report instead." };
   const { data: rels } = await report.supabase
     .from("entity_relationships")
     .select("id", { count: "exact" })

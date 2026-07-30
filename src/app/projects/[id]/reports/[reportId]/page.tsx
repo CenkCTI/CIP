@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth";
 import { parseJsonDoc } from "@/lib/reports/schema";
 import { reportInsertSources } from "@/lib/reports/insert-sources";
 import { ProductLifecycle } from "@/components/reports/product-lifecycle";
+import { AnalyticalReferences } from "@/components/reports/analytical-references";
 
 type Row = Record<string, unknown>;
 
@@ -78,6 +79,27 @@ export default async function ReportPage({
   );
   const { data: versions, error: versionsError } = await supabase.from("report_versions").select("*,report_version_references(count)").eq("project_id", id).eq("report_id", reportId).order("version_number", { ascending: false });
   if (versionsError) notFound();
+  const authoritativeVersion=(versions??[]).find(v=>v.id===report.authoritative_version_id)??null;
+  const baselineVersion=authoritativeVersion??(versions??[])[0]??null;
+  const [{data:draftReferences,error:draftReferenceError},{data:versionReferences,error:versionReferenceError}]=await Promise.all([
+    supabase.from("report_references").select("*").eq("project_id",id).eq("report_id",reportId).order("created_at"),
+    baselineVersion?supabase.from("report_version_references").select("*").eq("project_id",id).eq("report_version_id",baselineVersion.id):Promise.resolve({data:[],error:null}),
+  ]);
+  if(draftReferenceError||versionReferenceError) notFound();
+  const referenceSources=[
+    ["SOURCE","sources","id,title,source_type,reliability,verification_state,archived_at,updated_at","title"],
+    ["EVIDENCE","evidence","id,title,type,updated_at","title"],
+    ["INDICATOR","indicators","id,value,type,confidence,updated_at","value"],
+    ["ENRICHMENT_RESULT","enrichment_results","id,category,confidence,created_at","category"],
+    ["INFRASTRUCTURE_CLUSTER","infrastructure_clusters","id,name,status,confidence,archived_at,updated_at","name"],
+    ["TIMELINE_EVENT","timeline_events","id,event_name,assessment_status,confidence,updated_at","event_name"],
+    ["CAMPAIGN","campaigns","id,name,updated_at","name"], ["THREAT_ACTOR","threat_actors","id,name,updated_at","name"], ["MALWARE","malware","id,name,family,updated_at","name"],
+    ["CVE","cves","id,cve_id,severity,exploit_status,updated_at","cve_id"], ["MITRE_TECHNIQUE","mitre_techniques","id,technique_id,technique_name,tactic,updated_at","technique_id"],
+    ["ATTRIBUTION_HYPOTHESIS","attribution_hypotheses","id,title,status,confidence,archived_at,updated_at","title"], ["ATTRIBUTION_ASSESSMENT","campaign_attribution_assessments","id,assessment_status,conclusion_type,confidence,updated_at","assessment_status"],
+  ] as const;
+  const candidateResults=await Promise.all(referenceSources.map(([,table])=>supabase.from(table).select("*").eq("project_id",id).limit(200)));
+  if(candidateResults.some(x=>x.error)) notFound();
+  const candidates=Object.fromEntries(referenceSources.map(([type,,,label],i)=>[type,((candidateResults[i].data??[]) as unknown as Row[]).map(x=>({...x,label:type==="MITRE_TECHNIQUE"?`${String((x as Row).technique_id)} — ${String((x as Row).technique_name)}`:type==="ENRICHMENT_RESULT"?`Enrichment ${String((x as Row).category)}`:type==="ATTRIBUTION_ASSESSMENT"?`Attribution assessment · ${String((x as Row).assessment_status)}`:String((x as Row)[label])}))]));
   const { count: relationshipCount, error: relationshipCountError } =
     await supabase
       .from("entity_relationships")
@@ -108,8 +130,9 @@ export default async function ReportPage({
         report={{ ...(report as Row), content: parsed.data }}
         insertables={insertables}
       />
-      <ProductLifecycle projectId={id} report={report as Row} versions={(versions ?? []) as Row[]} />
-      <div className="card mt-6 border-red-900/60">
+      <div className="mt-6"><AnalyticalReferences projectId={id} reportId={reportId} references={(draftReferences??[]) as Row[]} snapshots={(versionReferences??[]) as Row[]} candidates={candidates as Record<string,Row[]>}/></div>
+      <ProductLifecycle projectId={id} report={report as Row} versions={(versions ?? []) as Row[]} authoritativeVersion={authoritativeVersion as Row|null} />
+      {versions?.length?<div className="card mt-6 border-amber-900/60"><h2 className="font-semibold text-amber-200">Historical record preserved</h2><p className="mt-2 text-sm text-slate-400">This Report has permanent versions and cannot be deleted. Archive it instead.</p></div>:<div className="card mt-6 border-red-900/60">
         <h2 className="font-semibold text-red-200">Delete report</h2>
         <p className="mt-2 text-sm text-slate-400">
           Type the current report title to confirm: {String(report.title)}
@@ -120,7 +143,7 @@ export default async function ReportPage({
           title={String(report.title)}
           relationshipCount={relationshipCount ?? 0}
         />
-      </div>
+      </div>}
     </section>
   );
 }
