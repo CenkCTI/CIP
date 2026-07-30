@@ -181,16 +181,14 @@ export async function addEvidence(
   } as const;
   if (!(await owns(c, tables[v.data.reference_type], v.data.reference_id)))
     return { error: "Referenced record not found." };
-  const { error } = await c.supabase
-    .from("attribution_evidence_items")
-    .insert({
-      project_id: p,
-      campaign_id: cid,
-      title: v.data.title,
-      relevance_note: v.data.relevance_note,
-      [`${v.data.reference_type}_id`]: v.data.reference_id,
-      created_by: c.user.id,
-    });
+  const { error } = await c.supabase.from("attribution_evidence_items").insert({
+    project_id: p,
+    campaign_id: cid,
+    title: v.data.title,
+    relevance_note: v.data.relevance_note,
+    [`${v.data.reference_type}_id`]: v.data.reference_id,
+    created_by: c.user.id,
+  });
   if (error)
     return {
       error:
@@ -198,6 +196,30 @@ export async function addEvidence(
     };
   refresh(p, cid);
   return { success: "Evidence added." };
+}
+export async function setEvidenceArchived(
+  p: string,
+  cid: string,
+  evidenceId: string,
+  archive: boolean,
+  _: State,
+): Promise<State> {
+  const c = await context(p, cid);
+  if (!c || !(await owns(c, "attribution_evidence_items", evidenceId, true)))
+    return { error: "Evidence item not found." };
+  const { error } = await c.supabase
+    .from("attribution_evidence_items")
+    .update({ archived_at: archive ? new Date().toISOString() : null })
+    .eq("project_id", p)
+    .eq("campaign_id", cid)
+    .eq("id", evidenceId);
+  if (error) return { error: "Unable to change evidence archive state." };
+  refresh(p, cid);
+  return {
+    success: archive
+      ? "Evidence item archived; historical evaluations were preserved."
+      : "Evidence item restored.",
+  };
 }
 export async function saveEvaluation(
   p: string,
@@ -219,6 +241,17 @@ export async function saveEvaluation(
     ))
   )
     return { error: "Hypothesis or evidence item not found." };
+  const { data: evidenceItem, error: evidenceReadError } = await c.supabase
+    .from("attribution_evidence_items")
+    .select("archived_at")
+    .eq("project_id", p)
+    .eq("campaign_id", cid)
+    .eq("id", v.data.evidence_item_id)
+    .maybeSingle();
+  if (evidenceReadError || !evidenceItem)
+    return { error: "Hypothesis or evidence item not found." };
+  if (evidenceItem.archived_at)
+    return { error: "Restore archived evidence before evaluating it." };
   const { error } = await c.supabase
     .from("attribution_evidence_evaluations")
     .upsert(

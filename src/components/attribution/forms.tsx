@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { ActionForm, SubmitButton } from "@/components/form-status";
 import {
   addEvidence,
@@ -6,6 +7,7 @@ import {
   saveEvaluation,
   saveHypothesis,
   setHypothesisArchived,
+  setEvidenceArchived,
   unlinkEvaluation,
 } from "@/app/projects/[id]/attribution-actions";
 type R = Record<string, unknown>;
@@ -22,6 +24,9 @@ export function AssessmentForm({
   row: R;
   hypotheses: R[];
 }) {
+  const [conclusion, setConclusion] = useState(
+    s(row.conclusion_type) || "UNRESOLVED",
+  );
   return (
     <ActionForm action={saveAssessment.bind(null, projectId, campaignId)}>
       <div className="grid gap-3 md:grid-cols-3">
@@ -42,6 +47,7 @@ export function AssessmentForm({
             className={input}
             name="conclusion_type"
             defaultValue={s(row.conclusion_type) || "UNRESOLVED"}
+            onChange={(event) => setConclusion(event.target.value)}
           >
             {[
               "UNRESOLVED",
@@ -67,21 +73,25 @@ export function AssessmentForm({
           </select>
         </label>
       </div>
-      <label>
-        Preferred hypothesis (only for PREFERRED_HYPOTHESIS)
-        <select
-          className={input}
-          name="preferred_hypothesis_id"
-          defaultValue={s(row.preferred_hypothesis_id)}
-        >
-          <option value="">None</option>
-          {hypotheses.map((h) => (
-            <option key={s(h.id)} value={s(h.id)}>
-              {s(h.title)} — {s(h.subject_label)}
-            </option>
-          ))}
-        </select>
-      </label>
+      {conclusion === "PREFERRED_HYPOTHESIS" ? (
+        <label>
+          Preferred hypothesis
+          <select
+            className={input}
+            name="preferred_hypothesis_id"
+            defaultValue={s(row.preferred_hypothesis_id)}
+          >
+            <option value="">None</option>
+            {hypotheses.map((h) => (
+              <option key={s(h.id)} value={s(h.id)}>
+                {s(h.title)} — {s(h.subject_name)}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <input type="hidden" name="preferred_hypothesis_id" value="" />
+      )}
       {[
         ["current_judgment", "Current judgement"],
         ["alternative_explanations", "Alternative explanations"],
@@ -120,6 +130,9 @@ export function HypothesisForm({
   actors: R[];
   row?: R;
 }) {
+  const [subjectKind, setSubjectKind] = useState(
+    s(row.subject_kind) || "UNKNOWN_ACTOR",
+  );
   return (
     <ActionForm
       action={saveHypothesis.bind(
@@ -144,7 +157,8 @@ export function HypothesisForm({
           <select
             className={input}
             name="subject_kind"
-            defaultValue={s(row.subject_kind) || "UNKNOWN_ACTOR"}
+            value={subjectKind}
+            onChange={(event) => setSubjectKind(event.target.value)}
           >
             {[
               "EXISTING_THREAT_ACTOR",
@@ -156,29 +170,37 @@ export function HypothesisForm({
             ))}
           </select>
         </label>
-        <label>
-          Threat Actor (actor hypotheses only)
-          <select
-            className={input}
-            name="threat_actor_id"
-            defaultValue={s(row.threat_actor_id)}
-          >
-            <option value="">None</option>
-            {actors.map((a) => (
-              <option key={s(a.id)} value={s(a.id)}>
-                {s(a.name)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Subject label
-          <input
-            className={input}
-            name="subject_label"
-            defaultValue={s(row.subject_label)}
-          />
-        </label>
+        {subjectKind === "EXISTING_THREAT_ACTOR" ? (
+          <label>
+            Threat Actor (actor hypotheses only)
+            <select
+              className={input}
+              name="threat_actor_id"
+              defaultValue={s(row.threat_actor_id)}
+            >
+              <option value="">None</option>
+              {actors.map((a) => (
+                <option key={s(a.id)} value={s(a.id)}>
+                  {s(a.name)}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <input type="hidden" name="threat_actor_id" value="" />
+        )}
+        {subjectKind !== "EXISTING_THREAT_ACTOR" ? (
+          <label>
+            Subject label
+            <input
+              className={input}
+              name="subject_label"
+              defaultValue={s(row.subject_label)}
+            />
+          </label>
+        ) : (
+          <input type="hidden" name="subject_label" value="" />
+        )}
         <label>
           Status
           <select
@@ -235,6 +257,9 @@ export function EvidenceForm({
   campaignId: string;
   options: Record<string, R[]>;
 }) {
+  const types = Object.keys(options);
+  const [referenceType, setReferenceType] = useState(types[0] ?? "source");
+  const records = options[referenceType] ?? [];
   return (
     <ActionForm action={addEvidence.bind(null, projectId, campaignId)}>
       <label>
@@ -247,23 +272,33 @@ export function EvidenceForm({
       </label>
       <label>
         Evidence type
-        <select className={input} name="reference_type">
-          {Object.keys(options).map((x) => (
+        <select
+          className={input}
+          name="reference_type"
+          value={referenceType}
+          onChange={(event) => setReferenceType(event.target.value)}
+        >
+          {types.map((x) => (
             <option key={x}>{x}</option>
           ))}
         </select>
       </label>
       <label>
-        Referenced record (grouped, human-readable)
-        <select className={input} name="reference_id" required>
-          {Object.entries(options).map(([type, rows]) => (
-            <optgroup key={type} label={type}>
-              {rows.map((r) => (
-                <option key={s(r.id)} value={s(r.id)}>
-                  {s(r.label)}
-                </option>
-              ))}
-            </optgroup>
+        Referenced {referenceType.replaceAll("_", " ")} record
+        <select
+          className={input}
+          name="reference_id"
+          required
+          key={referenceType}
+          defaultValue=""
+        >
+          <option value="" disabled>
+            Select a {referenceType.replaceAll("_", " ")} record
+          </option>
+          {records.map((r) => (
+            <option key={s(r.id)} value={s(r.id)}>
+              {s(r.label)}
+            </option>
           ))}
         </select>
       </label>
@@ -271,6 +306,33 @@ export function EvidenceForm({
         Choose the matching type and record. Source URLs are never visited.
       </p>
       <SubmitButton>Add to shared inventory</SubmitButton>
+    </ActionForm>
+  );
+}
+export function EvidenceArchiveForm({
+  projectId,
+  campaignId,
+  id,
+  archived,
+}: {
+  projectId: string;
+  campaignId: string;
+  id: string;
+  archived: boolean;
+}) {
+  return (
+    <ActionForm
+      action={setEvidenceArchived.bind(
+        null,
+        projectId,
+        campaignId,
+        id,
+        !archived,
+      )}
+    >
+      <SubmitButton>
+        {archived ? "Restore evidence" : "Archive evidence"}
+      </SubmitButton>
     </ActionForm>
   );
 }

@@ -58,14 +58,17 @@ begin
   begin insert into public.campaign_timeline_events(project_id,campaign_id,timeline_event_id,rationale,created_by) values(p2,campaign,event,'Cross project',u); raise exception 'same-project FK unexpectedly succeeded'; exception when foreign_key_violation then null; end;
 end $$;
 do $$
-declare u uuid:=gen_random_uuid(); p uuid:=gen_random_uuid(); p2 uuid:=gen_random_uuid(); c uuid; c2 uuid; h uuid; e uuid; i uuid; ev uuid;
+declare u uuid:=gen_random_uuid(); p uuid:=gen_random_uuid(); p2 uuid:=gen_random_uuid(); c uuid; c2 uuid; h uuid; e uuid; i uuid; i2 uuid; ev uuid;
 begin
  if (select count(*) from pg_class where relname in ('campaign_attribution_assessments','attribution_hypotheses','attribution_evidence_items','attribution_evidence_evaluations') and relrowsecurity)<>4 then raise exception 'attribution RLS missing'; end if;
  if (select count(*) from pg_trigger where tgname like '%attribution%set_updated_at')<>4 then raise exception 'updated_at triggers missing'; end if;
+ if (select count(*) from pg_policies where tablename in ('campaign_attribution_assessments','attribution_hypotheses','attribution_evidence_items','attribution_evidence_evaluations'))<>14 then raise exception 'attribution policies missing'; end if;
  insert into auth.users(id) values(u); insert into projects(id,owner_id,name,research_type) values(p,u,'Attribution one','CTI'),(p2,u,'Attribution two','CTI');
  insert into campaigns(project_id,name) values(p,'C1') returning id into c; insert into campaigns(project_id,name) values(p,'C2') returning id into c2;
  insert into attribution_hypotheses(project_id,campaign_id,title,subject_kind,subject_label,proposition,status,analytic_rationale,created_by) values(p,c,'Unknown','UNKNOWN_ACTOR','Unknown operator','Operator conducted activity','ACTIVE','Observed fit',u) returning id into h;
  insert into indicators(project_id,value,type) values(p,'203.0.113.7','IP') returning id into i;
+ insert into indicators(project_id,value,type) values(p2,'203.0.113.8','IP') returning id into i2;
+ begin insert into attribution_evidence_items(project_id,campaign_id,title,relevance_note,indicator_id,created_by) values(p,c,'Cross Investigation','Invalid link',i2,u); raise exception 'cross-Investigation evidence accepted'; exception when foreign_key_violation then null; end;
  begin insert into attribution_evidence_items(project_id,campaign_id,title,relevance_note,created_by) values(p,c,'Bad','Bad exact one',u); raise exception 'exact one accepted'; exception when check_violation then null; end;
  insert into attribution_evidence_items(project_id,campaign_id,title,relevance_note,indicator_id,created_by) values(p,c,'IP','Observed infrastructure',i,u) returning id into e;
  begin insert into attribution_evidence_items(project_id,campaign_id,title,relevance_note,indicator_id,created_by) values(p,c,'Duplicate','Duplicate infrastructure',i,u); raise exception 'duplicate accepted'; exception when unique_violation then null; end;
@@ -74,6 +77,10 @@ begin
  insert into campaign_attribution_assessments(project_id,campaign_id,conclusion_type,preferred_hypothesis_id,created_by) values(p,c,'PREFERRED_HYPOTHESIS',h,u);
  begin update attribution_hypotheses set archived_at=now() where id=h; raise exception 'preferred archive accepted'; exception when foreign_key_violation then null; end;
  begin update attribution_hypotheses set status='REJECTED',status_rationale='Rejected' where id=h; raise exception 'preferred rejection accepted'; exception when foreign_key_violation then null; end;
+ update campaign_attribution_assessments set conclusion_type='UNRESOLVED',preferred_hypothesis_id=null where campaign_id=c;
+ update attribution_hypotheses set status='REJECTED',status_rationale='Superseded conclusion',archived_at=now() where id=h;
+ if not exists(select 1 from attribution_hypotheses where id=h and status='REJECTED' and archived_at is not null) then raise exception 'historical transition failed'; end if;
+ if not exists(select 1 from attribution_evidence_evaluations where id=ev) then raise exception 'evaluation history was not preserved'; end if;
 end $$;
 ROLLBACK;
 SQL

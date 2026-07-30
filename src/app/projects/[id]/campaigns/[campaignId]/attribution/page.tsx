@@ -1,10 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
+import { requiredUuidSchema } from "@/lib/workspace/schema";
+import {
+  evidencePresentation,
+  hypothesisSubjectName,
+} from "@/lib/attribution/presentation";
 import {
   AssessmentForm,
   ArchiveForm,
   EvidenceForm,
+  EvidenceArchiveForm,
   EvaluationForm,
   HypothesisForm,
 } from "@/components/attribution/forms";
@@ -19,7 +25,10 @@ export default async function AttributionPage({
 }) {
   const { id, campaignId } = await params;
   const historical = (await searchParams).historical === "1";
-  if (!/^[0-9a-f-]{36}$/i.test(id) || !/^[0-9a-f-]{36}$/i.test(campaignId))
+  if (
+    !requiredUuidSchema.safeParse(id).success ||
+    !requiredUuidSchema.safeParse(campaignId).success
+  )
     notFound();
   const { supabase, user } = await requireUser();
   const [{ data: project }, { data: campaign }] = await Promise.all([
@@ -34,7 +43,7 @@ export default async function AttributionPage({
   if (!project || project.owner_id !== user.id || !campaign) notFound();
   const hq = supabase
     .from("attribution_hypotheses")
-    .select("*")
+    .select("*,threat_actors(name)")
     .eq("project_id", id)
     .eq("campaign_id", campaignId)
     .order("created_at");
@@ -96,7 +105,10 @@ export default async function AttributionPage({
       .select("id,technique_id,technique_name")
       .eq("project_id", id),
   ]);
-  const hs = (hypotheses.data ?? []) as R[],
+  const hs: R[] = ((hypotheses.data ?? []) as R[]).map((h) => ({
+      ...h,
+      subject_name: hypothesisSubjectName(h),
+    })),
     es = (evidence.data ?? []) as R[],
     ev = (evaluations.data ?? []) as R[];
   const label = (rows: R[], fn: (r: R) => string) =>
@@ -126,6 +138,21 @@ export default async function AttributionPage({
       (r) => `${s(r.technique_id)} — ${s(r.technique_name)}`,
     ),
   };
+  const lookups: Record<string, R[]> = {
+    sources: (sources.data ?? []) as R[],
+    evidence: (evidenceRecords.data ?? []) as R[],
+    timeline_event: (events.data ?? []) as R[],
+    infrastructure_cluster: (clusters.data ?? []) as R[],
+    indicator: (indicators.data ?? []) as R[],
+    enrichment_result: (enrichments.data ?? []) as R[],
+    malware: (malware.data ?? []) as R[],
+    mitre_technique: (mitre.data ?? []) as R[],
+  };
+  const presentedEvidence: R[] = es.map((item) => ({
+    ...item,
+    presentation: evidencePresentation(item, id, lookups),
+  }));
+  const activeEvidence = presentedEvidence.filter((item) => !item.archived_at);
   return (
     <main className="space-y-6">
       <header>
@@ -185,7 +212,7 @@ export default async function AttributionPage({
                   {s(h.title)}
                 </Link>
                 <p>
-                  {s(h.subject_kind)} · {s(h.subject_label)} · {s(h.status)} ·{" "}
+                  {s(h.subject_kind)} · {s(h.subject_name)} · {s(h.status)} ·{" "}
                   {s(h.confidence)}{" "}
                   {assessment.data?.preferred_hypothesis_id === h.id
                     ? "· CURRENTLY PREFERRED"
@@ -224,13 +251,34 @@ export default async function AttributionPage({
       <section className="card">
         <h2 className="text-xl font-semibold">3. Shared Evidence Inventory</h2>
         <ul>
-          {es.map((e) => (
-            <li className="border-b border-stone-800 py-2" key={s(e.id)}>
-              <strong>{s(e.title)}</strong> — {s(e.relevance_note)} · evaluated{" "}
-              {ev.filter((x) => x.evidence_item_id === e.id).length}/{hs.length}
-              {e.archived_at ? " · ARCHIVED" : ""}
-            </li>
-          ))}
+          {presentedEvidence.map((e) => {
+            const presentation = e.presentation as {
+              type: string;
+              label: string;
+              href: string;
+            };
+            return (
+              <li className="border-b border-stone-800 py-2" key={s(e.id)}>
+                <strong>{s(e.title)}</strong> · {presentation.type} ·{" "}
+                <Link className="text-cyan-200" href={presentation.href}>
+                  {presentation.label}
+                </Link>
+                <p>{s(e.relevance_note)}</p>
+                <span>
+                  evaluated{" "}
+                  {ev.filter((x) => x.evidence_item_id === e.id).length}/
+                  {hs.length}
+                  {e.archived_at ? " · ARCHIVED" : ""}
+                </span>
+                <EvidenceArchiveForm
+                  projectId={id}
+                  campaignId={campaignId}
+                  id={s(e.id)}
+                  archived={Boolean(e.archived_at)}
+                />
+              </li>
+            );
+          })}
         </ul>
         <details>
           <summary>Add evidence</summary>
@@ -251,7 +299,7 @@ export default async function AttributionPage({
           projectId={id}
           campaignId={campaignId}
           hypotheses={hs}
-          evidence={es}
+          evidence={activeEvidence}
         />
       </section>
       <section className="card overflow-x-auto">
@@ -271,35 +319,50 @@ export default async function AttributionPage({
             </tr>
           </thead>
           <tbody>
-            {es.map((e) => (
-              <tr key={s(e.id)}>
-                <th className="p-2">{s(e.title)}</th>
-                {hs.map((h) => {
-                  const x = ev.find(
-                    (v) =>
-                      v.evidence_item_id === e.id && v.hypothesis_id === h.id,
-                  );
-                  return (
-                    <td
-                      className="p-2"
-                      aria-label={`${s(e.title)} against ${s(h.title)}: ${x ? s(x.impact) : "NOT YET ASSESSED"}`}
-                      key={s(h.id)}
-                    >
-                      {x ? (
-                        <>
-                          <strong>{s(x.impact)}</strong>
-                          <br />
-                          {s(x.diagnostic_value)} ·{" "}
-                          <abbr title={s(x.rationale)}>rationale</abbr>
-                        </>
-                      ) : (
-                        <strong>NOT YET ASSESSED</strong>
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
+            {presentedEvidence.map((e) => {
+              const presentation = e.presentation as {
+                type: string;
+                label: string;
+                href: string;
+              };
+              return (
+                <tr key={s(e.id)}>
+                  <th className="p-2">
+                    <Link className="text-cyan-200" href={presentation.href}>
+                      {presentation.label}
+                    </Link>
+                    <span className="block text-xs">
+                      {presentation.type} · {s(e.title)}
+                      {e.archived_at ? " · ARCHIVED" : ""}
+                    </span>
+                  </th>
+                  {hs.map((h) => {
+                    const x = ev.find(
+                      (v) =>
+                        v.evidence_item_id === e.id && v.hypothesis_id === h.id,
+                    );
+                    return (
+                      <td
+                        className="p-2"
+                        aria-label={`${s(e.title)} against ${s(h.title)}: ${x ? s(x.impact) : "NOT YET ASSESSED"}`}
+                        key={s(h.id)}
+                      >
+                        {x ? (
+                          <>
+                            <strong>{s(x.impact)}</strong>
+                            <br />
+                            {s(x.diagnostic_value)} ·{" "}
+                            <abbr title={s(x.rationale)}>rationale</abbr>
+                          </>
+                        ) : (
+                          <strong>NOT YET ASSESSED</strong>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </section>

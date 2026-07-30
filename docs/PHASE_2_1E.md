@@ -47,3 +47,7 @@ Run `scripts/test-phase2-1e-migration.sh` against PostgreSQL 16+. It uses minimu
 ## Known limitations and exclusions
 
 No automatic suggestions, AI attribution, scoring/weighting/probability, confidence calculation, ranking, winner selection, Graph overlay, semantic actor links, provider ingestion, deception detection, identity/geopolitical assessment, ANLAK handoff, collection/task automation, report versioning, immutable snapshots, or Phase 2.1F work is included. Live Supabase acceptance still requires owner execution.
+
+## Hardening notes
+
+Evidence intake is type-controlled: changing the evidence type replaces the record selector with only same-type, human-readable choices. Inventory and matrix rows resolve the authoritative internal record label and navigate only to safe CİTEM routes. Evidence items use `archived_at`; active views and new evaluation selectors exclude them, while historical views retain the item and all existing evaluations. Existing-Threat-Actor hypotheses resolve the actor record's current name rather than using `subject_label`. Non-preferred conclusions submit a null preference so stale choices cannot remain.
