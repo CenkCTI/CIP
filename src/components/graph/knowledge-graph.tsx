@@ -39,6 +39,7 @@ const colors: Record<GraphEntityType, string> = {
   MITRE: "#38bdf8",
   EVIDENCE: "#94a3b8",
   REPORT: "#ec4899",
+  INFRASTRUCTURE_CLUSTER: "#06b6d4",
 };
 const icons: Record<GraphEntityType, string> = {
   ACTOR: "👤",
@@ -49,6 +50,7 @@ const icons: Record<GraphEntityType, string> = {
   MITRE: "📐",
   EVIDENCE: "📎",
   REPORT: "📄",
+  INFRASTRUCTURE_CLUSTER: "🕸️",
 };
 
 function graphError(payload: unknown, fallback: string) {
@@ -501,6 +503,7 @@ function GraphCanvas({
 }
 
 export function KnowledgeGraph({ projectId }: { projectId: string }) {
+  const [showHistoricalInfrastructure, setShowHistoricalInfrastructure] = useState(false);
   const [data, setData] = useState<GraphResponse | null>(null);
   const [savedPositions, setSavedPositions] = useState(
     new Map<string, { x: number; y: number }>(),
@@ -513,7 +516,7 @@ export function KnowledgeGraph({ projectId }: { projectId: string }) {
     setError("");
     setLayoutWarning("");
     const [response, layoutResponse] = await Promise.all([
-      fetch(`/api/projects/${projectId}/graph`),
+      fetch(`/api/projects/${projectId}/graph?historical=${showHistoricalInfrastructure}`),
       fetch(`/api/projects/${projectId}/graph/layout`),
     ]);
     if (!response.ok) {
@@ -541,7 +544,7 @@ export function KnowledgeGraph({ projectId }: { projectId: string }) {
       }
     }
     setLoading(false);
-  }, [projectId]);
+  }, [projectId, showHistoricalInfrastructure]);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => void load(), [load]);
   if (loading) return <div className="card">Loading knowledge graph…</div>;
@@ -567,6 +570,7 @@ export function KnowledgeGraph({ projectId }: { projectId: string }) {
     setSavedPositions((current) => upsertSavedPosition(current, id, position));
   return (
     <ReactFlowProvider>
+      <label className="mb-3 block text-sm"><input type="checkbox" checked={showHistoricalInfrastructure} onChange={(event) => setShowHistoricalInfrastructure(event.target.checked)} /> Show rejected and removed infrastructure memberships</label>
       <GraphCanvas
         data={data}
         projectId={projectId}

@@ -128,3 +128,13 @@ prevention still requires a stronger trusted-server boundary and is not claimed.
 ### Explicitly deferred from Phase 2.1B
 
 Infrastructure Clusters, Graph Source nodes/edge provenance, Timeline redesign, automatic Timeline events, Attribution Analysis, specialised reports, immutable report versions, feeds, watchlists, alerts, scheduled/background enrichment, SIEM/SOAR integration, active scanning, user-stored enrichment keys, world maps, ANLAK integration, strategic analysis and Phase 2.1C–E remain out of scope.
+
+## CİTEM Product Roadmap Phase 2.1C — Infrastructure Analysis
+
+- [x] Migration 019 authored with three same-Investigation tables, composite foreign keys, constraints, indexes, triggers, historical preservation, and owner-scoped RLS.
+- [x] Infrastructure tab and owned cluster detail workflow added for persistent cluster, membership, assessment, archive/restore, and provenance actions.
+- [x] Graph derives cluster nodes and membership edges from authoritative records, with an explicit historical relationship toggle.
+- [x] Analyst-controlled boundaries documented; no automatic clustering, attribution, Timeline/report mutation, or Phase 2.1D work added.
+- [ ] Migration 019 applied and PostgREST schema reloaded in live Supabase.
+- [ ] Live two-user IDOR and workflow acceptance completed.
+- [x] Phase 2.1C hardening validated migrations 001–019 in one PostgreSQL 16 transaction, removed same-transaction direct enum comparisons, preserved analytical status across archive/restore, and added executable action/route/Graph coverage.
