@@ -34,7 +34,17 @@ select conrelid::regclass,conname,pg_get_constraintdef(oid) from pg_constraint w
 select tablename,indexname from pg_indexes where schemaname='public' and tablename like any(array['campaign_%','timeline_event%']);
 select event_object_table,trigger_name from information_schema.triggers where trigger_schema='public' and event_object_table like any(array['campaign_%','timeline_event%']);
 select relname,relrowsecurity from pg_class where oid in ('public.campaign_reconstructions'::regclass,'public.campaign_timeline_events'::regclass,'public.campaign_infrastructure_clusters'::regclass,'public.timeline_event_entities'::regclass,'public.timeline_event_support'::regclass);
-select tablename,policyname,cmd,roles,qual,with_check from pg_policies where schemaname='public' and tablename in ('campaign_reconstructions','campaign_timeline_events','campaign_infrastructure_clusters','timeline_event_entities','timeline_event_support');
+select tablename, policyname, cmd
+from pg_policies
+where schemaname = 'public'
+  and tablename in (
+    'campaign_reconstructions',
+    'campaign_timeline_events',
+    'campaign_infrastructure_clusters',
+    'timeline_event_entities',
+    'timeline_event_support'
+  )
+order by tablename, cmd;
 ```
 
 Run `scripts/test-phase2-1d-migration.sh` with PostgreSQL 16+ client/server tools. It applies migrations 001–020 in a real temporary PostgreSQL database transaction with minimal auth/storage stubs, verifies legacy Timeline compatibility, exact-one and same-Investigation constraints, restricted deletion, triggers, RLS and policies, rolls back, and removes the database. The hardening pass completed this test with PostgreSQL 16.14. This is not live Supabase validation.
