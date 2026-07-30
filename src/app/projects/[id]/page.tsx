@@ -118,7 +118,7 @@ export default async function Page({
   const mk = (t: string) => `/projects/${id}?tab=${t}`;
   if (tab === "research-feeds") {
     const [{ data: feeds, error: feedError }, { data: runs }, { data: observations }] = await Promise.all([
-      supabase.from("research_feed_sources").select("*,research_feed_item_observations(count)").eq("project_id", id).is("archived_at", null).order("created_at", { ascending: false }).limit(100),
+      supabase.from("research_feed_sources").select("*,research_feed_item_observations(count)").eq("project_id", id).order("created_at", { ascending: false }).limit(100),
       supabase.from("research_feed_fetch_runs").select("*").eq("project_id", id).order("created_at", { ascending: false }).limit(50),
       supabase.from("research_feed_item_observations").select("id,feed_source_id,first_seen_at,last_seen_at,research_items(title,canonical_url,published_at)").eq("project_id", id).order("last_seen_at", { ascending: false }).limit(50),
     ]);
