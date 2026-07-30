@@ -5,6 +5,7 @@ import { ReportEditor } from "@/components/reports/report-editor";
 import { requireUser } from "@/lib/auth";
 import { parseJsonDoc } from "@/lib/reports/schema";
 import { reportInsertSources } from "@/lib/reports/insert-sources";
+import { ProductLifecycle } from "@/components/reports/product-lifecycle";
 
 type Row = Record<string, unknown>;
 
@@ -75,6 +76,8 @@ export default async function ReportPage({
       (results[i].data ?? []) as unknown as Row[],
     ]),
   );
+  const { data: versions, error: versionsError } = await supabase.from("report_versions").select("*,report_version_references(count)").eq("project_id", id).eq("report_id", reportId).order("version_number", { ascending: false });
+  if (versionsError) notFound();
   const { count: relationshipCount, error: relationshipCountError } =
     await supabase
       .from("entity_relationships")
@@ -105,6 +108,7 @@ export default async function ReportPage({
         report={{ ...(report as Row), content: parsed.data }}
         insertables={insertables}
       />
+      <ProductLifecycle projectId={id} report={report as Row} versions={(versions ?? []) as Row[]} />
       <div className="card mt-6 border-red-900/60">
         <h2 className="font-semibold text-red-200">Delete report</h2>
         <p className="mt-2 text-sm text-slate-400">

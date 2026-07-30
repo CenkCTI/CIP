@@ -145,3 +145,10 @@ Attack Timeline and Campaign Reconstruction is implemented through additive migr
 ## Phase 2.1E — Attribution and Competing Assessments
 
 Implemented in migration 021 and Campaign-owned attribution routes: competing hypotheses, shared evidence, diagnostic evaluations, comparison matrix, explicit current judgement, actor backlinks, RLS, composite ownership integrity, and archive-safe history. Live Supabase application remains an owner acceptance step. See `docs/PHASE_2_1E.md`.
+
+## Phase 2.1F — Intelligence Products and Versioned Assessments
+- [x] Migration 022 defines product/lifecycle enums, immutable sequential Report versions, typed reference snapshots, publication authority, deletion guards, owner RLS, and same-Investigation integrity.
+- [x] Existing Report workspace is retained and extended with explicit metadata, version creation/publication, read-only history, change-awareness doctrine, and version exports.
+- [x] PostgreSQL 16 disposable smoke script, executable schema tests, security/AI boundaries, and live checklist are documented.
+- [ ] Migration 022 and PostgREST reload completed in live Supabase.
+- [ ] Two-user and full live acceptance checklist completed.
