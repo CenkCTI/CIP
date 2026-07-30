@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-type Table = "projects" | "research_notes" | "evidence" | "timeline_events" | "project_tasks";
+type Table =
+  | "projects"
+  | "research_notes"
+  | "evidence"
+  | "timeline_events"
+  | "project_tasks";
 type MockOptions = {
   userId?: string;
   projectOwnerId?: string;
@@ -8,8 +13,10 @@ type MockOptions = {
   childMissing?: boolean;
   metadataUpdateError?: string;
   metadataInsertError?: string;
+  metadataInsertCode?: string;
   signedUploadError?: string;
   signedDownloadError?: string;
+  evidenceStoragePath?: string | null;
 };
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
@@ -20,78 +27,257 @@ const EVIDENCE_ID = "55555555-5555-4555-8555-555555555555";
 
 const requireUserMock = vi.fn();
 const revalidatePathMock = vi.fn();
-vi.mock("@/lib/auth", () => ({ requireUser: requireUserMock, getUser: vi.fn() }));
+vi.mock("@/lib/auth", () => ({
+  requireUser: requireUserMock,
+  getUser: vi.fn(),
+}));
 vi.mock("next/cache", () => ({ revalidatePath: revalidatePathMock }));
-vi.mock("next/navigation", () => ({ redirect: vi.fn((path: string) => { throw new Error(`redirect:${path}`); }) }));
+vi.mock("next/navigation", () => ({
+  redirect: vi.fn((path: string) => {
+    throw new Error(`redirect:${path}`);
+  }),
+}));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 
-function fd(values: Record<string, string>) { const form = new FormData(); for (const [key, value] of Object.entries(values)) form.set(key, value); return form; }
-const validNote = () => fd({ title: "Updated note", content: "Body", tags: "ioc" });
-const validEvidence = () => fd({ title: "Updated evidence", type: "ARTICLE", source_url: "https://example.test", collection_date: "2026-07-21T00:00:00.000Z", description: "desc", tags: "tag" });
-const validEvent = () => fd({ event_name: "Updated event", event_date: "2026-07-21T00:00:00.000Z", description: "desc", related_entity_type: "", related_entity_id: "" });
-const validTask = () => fd({ task_name: "Updated task", description: "desc", status: "IN_PROGRESS", priority: "HIGH", assigned_user_id: USER_ID, deadline: "2026-07-22T00:00:00.000Z" });
+function fd(values: Record<string, string>) {
+  const form = new FormData();
+  for (const [key, value] of Object.entries(values)) form.set(key, value);
+  return form;
+}
+const validNote = () =>
+  fd({ title: "Updated note", content: "Body", tags: "ioc" });
+const validEvidence = () =>
+  fd({
+    title: "Updated evidence",
+    type: "ARTICLE",
+    source_url: "https://example.test",
+    collection_date: "2026-07-21T00:00:00.000Z",
+    description: "desc",
+    tags: "tag",
+  });
+const validEvent = () =>
+  fd({
+    event_name: "Updated event",
+    event_date: "2026-07-21T00:00:00.000Z",
+    description: "desc",
+    related_entity_type: "",
+    related_entity_id: "",
+  });
+const validTask = () =>
+  fd({
+    task_name: "Updated task",
+    description: "desc",
+    status: "IN_PROGRESS",
+    priority: "HIGH",
+    assigned_user_id: USER_ID,
+    deadline: "2026-07-22T00:00:00.000Z",
+  });
 
 function makeSupabase(options: MockOptions = {}) {
   const remove = vi.fn(async () => ({ data: null, error: null }));
-  const createSignedUploadUrl = vi.fn(async () => options.signedUploadError ? { data: null, error: { message: options.signedUploadError } } : { data: { token: "short-upload-token" }, error: null });
-  const createSignedUrl = vi.fn(async () => options.signedDownloadError ? { data: null, error: { message: options.signedDownloadError } } : { data: { signedUrl: "https://signed.example/evidence?token=short" }, error: null });
+  const createSignedUploadUrl = vi.fn(async () =>
+    options.signedUploadError
+      ? { data: null, error: { message: options.signedUploadError } }
+      : { data: { token: "short-upload-token" }, error: null },
+  );
+  const createSignedUrl = vi.fn(async () =>
+    options.signedDownloadError
+      ? { data: null, error: { message: options.signedDownloadError } }
+      : {
+          data: { signedUrl: "https://signed.example/evidence?token=short" },
+          error: null,
+        },
+  );
   const inserts: unknown[] = [];
   const updates: unknown[] = [];
   const deletes: Table[] = [];
   const from = vi.fn((table: Table) => {
-    const state: { op?: "select" | "insert" | "update" | "delete"; payload?: unknown; filters: Record<string, string> } = { filters: {} };
+    const state: {
+      op?: "select" | "insert" | "update" | "delete";
+      payload?: unknown;
+      filters: Record<string, string>;
+    } = { filters: {} };
     const chain = {
-      select: vi.fn(() => { state.op = "select"; return chain; }),
-      insert: vi.fn((payload: unknown) => { state.op = "insert"; state.payload = payload; inserts.push(payload); return chain; }),
-      update: vi.fn((payload: unknown) => { state.op = "update"; state.payload = payload; updates.push(payload); return chain; }),
-      delete: vi.fn(() => { state.op = "delete"; deletes.push(table); return chain; }),
-      eq: vi.fn((key: string, value: string) => { state.filters[key] = value; return chain; }),
+      select: vi.fn(() => {
+        state.op = "select";
+        return chain;
+      }),
+      insert: vi.fn((payload: unknown) => {
+        state.op = "insert";
+        state.payload = payload;
+        inserts.push(payload);
+        return chain;
+      }),
+      update: vi.fn((payload: unknown) => {
+        state.op = "update";
+        state.payload = payload;
+        updates.push(payload);
+        return chain;
+      }),
+      delete: vi.fn(() => {
+        state.op = "delete";
+        deletes.push(table);
+        return chain;
+      }),
+      eq: vi.fn((key: string, value: string) => {
+        state.filters[key] = value;
+        return chain;
+      }),
       single: vi.fn(async () => {
         if (table === "projects") {
-          if (options.projectMissing) return { data: null, error: { message: "missing" } };
-          return { data: { id: state.filters.id, owner_id: options.projectOwnerId ?? options.userId ?? USER_ID }, error: null };
+          if (options.projectMissing)
+            return { data: null, error: { message: "missing" } };
+          return {
+            data: {
+              id: state.filters.id,
+              owner_id: options.projectOwnerId ?? options.userId ?? USER_ID,
+            },
+            error: null,
+          };
         }
-        if (state.op === "select" && table === "evidence" && !options.childMissing) return { data: { id: state.filters.id, project_id: state.filters.project_id, storage_path: `${USER_ID}/${PROJECT_ID}/old.pdf`, source_url: null }, error: null };
-        if (state.op === "select" && !options.childMissing) return { data: { id: state.filters.id, project_id: state.filters.project_id }, error: null };
+        if (
+          state.op === "select" &&
+          table === "evidence" &&
+          !options.childMissing
+        )
+          return {
+            data: {
+              id: state.filters.id,
+              project_id: state.filters.project_id,
+              storage_path: `${USER_ID}/${PROJECT_ID}/old.pdf`,
+              source_url: null,
+            },
+            error: null,
+          };
+        if (state.op === "select" && !options.childMissing)
+          return {
+            data: {
+              id: state.filters.id,
+              project_id: state.filters.project_id,
+            },
+            error: null,
+          };
         return { data: null, error: { message: "child missing" } };
       }),
-      then: (resolve: (value: { data: null; error: null | { message: string } }) => void) => {
-        if (state.op === "insert" && options.metadataInsertError) return resolve({ data: null, error: { message: options.metadataInsertError } });
-        if (state.op === "update" && options.metadataUpdateError) return resolve({ data: null, error: { message: options.metadataUpdateError } });
+      maybeSingle: vi.fn(async () => ({
+        data: {
+          storage_path: options.evidenceStoragePath ?? null,
+          source_url: options.evidenceStoragePath
+            ? null
+            : "https://example.test",
+        },
+        error: null,
+      })),
+      then: (
+        resolve: (value: {
+          data: null;
+          error: null | { message: string; code?: string };
+        }) => void,
+      ) => {
+        if (state.op === "insert" && options.metadataInsertError)
+          return resolve({
+            data: null,
+            error: {
+              message: options.metadataInsertError,
+              code: options.metadataInsertCode,
+            },
+          });
+        if (state.op === "update" && options.metadataUpdateError)
+          return resolve({
+            data: null,
+            error: { message: options.metadataUpdateError },
+          });
         return resolve({ data: null, error: null });
       },
     };
     return chain;
   });
-  const supabase = { from, storage: { from: vi.fn(() => ({ createSignedUploadUrl, createSignedUrl, remove })) } };
-  requireUserMock.mockResolvedValue({ user: { id: options.userId ?? USER_ID }, supabase });
-  return { supabase, from, remove, createSignedUploadUrl, createSignedUrl, inserts, updates, deletes };
+  const supabase = {
+    from,
+    storage: {
+      from: vi.fn(() => ({ createSignedUploadUrl, createSignedUrl, remove })),
+    },
+  };
+  requireUserMock.mockResolvedValue({
+    user: { id: options.userId ?? USER_ID },
+    supabase,
+  });
+  return {
+    supabase,
+    from,
+    remove,
+    createSignedUploadUrl,
+    createSignedUrl,
+    inserts,
+    updates,
+    deletes,
+  };
 }
 
-const uploadInput = { title: "Evidence", type: "PDF", description: "desc", source_url: "", collection_date: "2026-07-21T00:00:00.000Z", tags: "tag", file_name: "proof.pdf", mime_type: "application/pdf", file_size: 1234 };
-const finalInput = { title: "Evidence", type: "PDF", description: "desc", source_url: "", collection_date: "2026-07-21T00:00:00.000Z", tags: "tag", storage_path: `${USER_ID}/${PROJECT_ID}/new.pdf`, original_file_name: "proof.pdf", mime_type: "application/pdf", file_size: 1234 };
+const uploadInput = {
+  title: "Evidence",
+  type: "PDF",
+  description: "desc",
+  source_url: "",
+  collection_date: "2026-07-21T00:00:00.000Z",
+  tags: "tag",
+  file_name: "proof.pdf",
+  mime_type: "application/pdf",
+  file_size: 1234,
+};
+const finalInput = {
+  title: "Evidence",
+  type: "PDF",
+  description: "desc",
+  source_url: "",
+  collection_date: "2026-07-21T00:00:00.000Z",
+  tags: "tag",
+  storage_path: `${USER_ID}/${PROJECT_ID}/new.pdf`,
+  original_file_name: "proof.pdf",
+  mime_type: "application/pdf",
+  file_size: 1234,
+};
 
-beforeEach(() => { vi.clearAllMocks(); });
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe("workspace server workflow security", () => {
   it("signed upload authorization rejects unauthenticated users", async () => {
     requireUserMock.mockRejectedValue(new Error("unauthenticated"));
     const { authorizeEvidenceUpload } = await import("@/app/actions");
-    await expect(authorizeEvidenceUpload(PROJECT_ID, uploadInput)).rejects.toThrow("unauthenticated");
+    await expect(
+      authorizeEvidenceUpload(PROJECT_ID, uploadInput),
+    ).rejects.toThrow("unauthenticated");
   });
 
   it("signed upload authorization rejects a project owned by another user", async () => {
     makeSupabase({ userId: USER_ID, projectOwnerId: OTHER_USER_ID });
     const { authorizeEvidenceUpload } = await import("@/app/actions");
-    await expect(authorizeEvidenceUpload(PROJECT_ID, uploadInput)).rejects.toThrow("Project not found");
+    await expect(
+      authorizeEvidenceUpload(PROJECT_ID, uploadInput),
+    ).rejects.toThrow("Project not found");
   });
 
   it("valid PNG evidence creation with optional fields blank does not send empty strings to UUID columns", async () => {
     const { inserts } = makeSupabase();
     const { finalizeEvidenceUpload } = await import("@/app/actions");
-    await expect(finalizeEvidenceUpload(PROJECT_ID, { ...finalInput, type: "SCREENSHOT", source_url: "", original_file_name: "proof.png", mime_type: "image/png", storage_path: `${USER_ID}/${PROJECT_ID}/new.png` })).resolves.toEqual({ success: "Evidence saved." });
+    await expect(
+      finalizeEvidenceUpload(PROJECT_ID, {
+        ...finalInput,
+        type: "SCREENSHOT",
+        source_url: "",
+        original_file_name: "proof.png",
+        mime_type: "image/png",
+        storage_path: `${USER_ID}/${PROJECT_ID}/new.png`,
+      }),
+    ).resolves.toEqual({ success: "Evidence saved." });
     expect(inserts).toHaveLength(1);
-    expect(inserts[0]).toMatchObject({ project_id: PROJECT_ID, collected_by: USER_ID, source_url: null });
+    expect(inserts[0]).toMatchObject({
+      project_id: PROJECT_ID,
+      collected_by: USER_ID,
+      source_url: null,
+    });
     expect(inserts[0]).not.toHaveProperty("id");
     expect(JSON.stringify(inserts[0])).not.toContain('""');
   });
@@ -99,35 +285,152 @@ describe("workspace server workflow security", () => {
   it("missing required project UUID fails before signed upload authorization", async () => {
     makeSupabase();
     const { authorizeEvidenceUpload } = await import("@/app/actions");
-    await expect(authorizeEvidenceUpload("", uploadInput)).resolves.toEqual({ error: "Project is required." });
+    await expect(authorizeEvidenceUpload("", uploadInput)).resolves.toEqual({
+      error: "Project is required.",
+    });
     expect(requireUserMock).not.toHaveBeenCalled();
   });
 
   it("signed upload authorization returns a server-generated path containing the validated project UUID", async () => {
     const { createSignedUploadUrl } = makeSupabase();
     const { authorizeEvidenceUpload } = await import("@/app/actions");
-    await expect(authorizeEvidenceUpload(PROJECT_ID, uploadInput)).resolves.toMatchObject({ path: expect.stringMatching(new RegExp(`^${USER_ID}/${PROJECT_ID}/[0-9a-f-]+-proof\\.pdf$`)) });
-    expect((createSignedUploadUrl.mock.calls as unknown as string[][])[0][0]).toContain(`/${PROJECT_ID}/`);
-    expect((createSignedUploadUrl.mock.calls as unknown as string[][])[0][0]).not.toContain("//");
+    await expect(
+      authorizeEvidenceUpload(PROJECT_ID, uploadInput),
+    ).resolves.toMatchObject({
+      path: expect.stringMatching(
+        new RegExp(`^${USER_ID}/${PROJECT_ID}/[0-9a-f-]+-proof\\.pdf$`),
+      ),
+    });
+    expect(
+      (createSignedUploadUrl.mock.calls as unknown as string[][])[0][0],
+    ).toContain(`/${PROJECT_ID}/`);
+    expect(
+      (createSignedUploadUrl.mock.calls as unknown as string[][])[0][0],
+    ).not.toContain("//");
   });
 
-
   it("labels signed upload authorization errors before any byte upload", async () => {
-    makeSupabase({ signedUploadError: "new row violates row-level security policy" });
+    makeSupabase({
+      signedUploadError: "new row violates row-level security policy",
+    });
     const { authorizeEvidenceUpload } = await import("@/app/actions");
-    await expect(authorizeEvidenceUpload(PROJECT_ID, uploadInput)).resolves.toEqual({ error: "Signed upload authorization failed: new row violates row-level security policy" });
+    await expect(
+      authorizeEvidenceUpload(PROJECT_ID, uploadInput),
+    ).resolves.toEqual({
+      error:
+        "Signed upload authorization failed: new row violates row-level security policy",
+    });
   });
 
   it("URL evidence creation remains unaffected by file upload project validation", async () => {
     const { inserts } = makeSupabase();
     const { createUrlEvidence } = await import("@/app/actions");
-    await expect(createUrlEvidence(PROJECT_ID, {}, validEvidence())).resolves.toEqual({ success: "Evidence saved." });
-    expect(inserts[0]).toMatchObject({ project_id: PROJECT_ID, collected_by: USER_ID, source_url: "https://example.test" });
+    await expect(
+      createUrlEvidence(PROJECT_ID, {}, validEvidence()),
+    ).resolves.toEqual({ success: "Evidence saved." });
+    expect(inserts[0]).toMatchObject({
+      project_id: PROJECT_ID,
+      collected_by: USER_ID,
+      source_url: "https://example.test",
+    });
+  });
+
+  it.each(["ARTICLE", "TWEET"])(
+    "creates %s URL evidence with a valid URL",
+    async (type) => {
+      const { inserts } = makeSupabase();
+      const { createUrlEvidence } = await import("@/app/actions");
+      const form = validEvidence();
+      form.set("type", type);
+      await expect(createUrlEvidence(PROJECT_ID, {}, form)).resolves.toEqual({
+        success: "Evidence saved.",
+      });
+      expect(inserts).toHaveLength(1);
+    },
+  );
+
+  it("rejects URL evidence without a URL before mutation", async () => {
+    const { inserts } = makeSupabase();
+    const form = validEvidence();
+    form.set("source_url", "");
+    const { createUrlEvidence } = await import("@/app/actions");
+    expect((await createUrlEvidence(PROJECT_ID, {}, form)).error).toMatch(
+      /valid HTTP or HTTPS/,
+    );
+    expect(inserts).toHaveLength(0);
+  });
+
+  it.each(["PDF", "SCREENSHOT", "FILE", "LOG", "PCAP"])(
+    "rejects forged %s URL evidence before mutation",
+    async (type) => {
+      const { inserts } = makeSupabase();
+      const form = validEvidence();
+      form.set("type", type);
+      const { createUrlEvidence } = await import("@/app/actions");
+      expect((await createUrlEvidence(PROJECT_ID, {}, form)).error).toBe(
+        "URL evidence must be ARTICLE or TWEET.",
+      );
+      expect(inserts).toHaveLength(0);
+    },
+  );
+
+  it.each(["ARTICLE", "TWEET"])(
+    "rejects %s in signed file authorization",
+    async (type) => {
+      const { createSignedUploadUrl } = makeSupabase();
+      const { authorizeEvidenceUpload } = await import("@/app/actions");
+      expect(
+        (await authorizeEvidenceUpload(PROJECT_ID, { ...uploadInput, type }))
+          .error,
+      ).toMatch(/file-backed/);
+      expect(createSignedUploadUrl).not.toHaveBeenCalled();
+    },
+  );
+
+  it("maps evidence check violations to a controlled compatibility error", async () => {
+    makeSupabase({
+      metadataInsertError: "evidence_check internal detail",
+      metadataInsertCode: "23514",
+    });
+    const { finalizeEvidenceUpload } = await import("@/app/actions");
+    await expect(
+      finalizeEvidenceUpload(PROJECT_ID, finalInput),
+    ).resolves.toEqual({
+      error:
+        "This evidence type requires either a valid source URL or an uploaded file.",
+    });
+  });
+
+  it("prevents metadata edits from converting URL evidence to a file-backed type", async () => {
+    const { updates } = makeSupabase();
+    const form = validEvidence();
+    form.set("type", "PDF");
+    const { updateEvidence } = await import("@/app/actions");
+    expect(
+      (await updateEvidence(PROJECT_ID, EVIDENCE_ID, {}, form)).error,
+    ).toBe("URL evidence must be ARTICLE or TWEET.");
+    expect(updates).toHaveLength(0);
+  });
+
+  it("prevents metadata edits from converting stored evidence to URL-only type", async () => {
+    const { updates } = makeSupabase({
+      evidenceStoragePath: `${USER_ID}/${PROJECT_ID}/old.pdf`,
+    });
+    const { updateEvidence } = await import("@/app/actions");
+    expect(
+      (await updateEvidence(PROJECT_ID, EVIDENCE_ID, {}, validEvidence()))
+        .error,
+    ).toBe("Uploaded evidence must keep a file-backed evidence type.");
+    expect(updates).toHaveLength(0);
   });
 
   it("production code contains no missing-projectId fallback to an empty string", async () => {
     const { readFileSync } = await import("node:fs");
-    const files = ["src/components/workspace-forms.tsx", "src/app/projects/[id]/page.tsx", "src/app/actions.ts"];
+    const files = [
+      "src/components/workspace-forms.tsx",
+      "src/app/projects/[id]/page.tsx",
+      "src/app/actions.ts",
+    ];
     const source = files.map((file) => readFileSync(file, "utf8")).join("\n");
     expect(source).not.toMatch(/projectId\s*=\s*["']{2}/);
     expect(source).not.toMatch(/projectId\s*\|\|\s*["']{2}/);
@@ -136,26 +439,42 @@ describe("workspace server workflow security", () => {
 
   it("fixed storage RLS migration recreates all evidence policies for authenticated users", async () => {
     const { readFileSync } = await import("node:fs");
-    const migration = readFileSync("supabase/migrations/202607210004_fix_evidence_storage_signed_upload_rls.sql", "utf8");
+    const migration = readFileSync(
+      "supabase/migrations/202607210004_fix_evidence_storage_signed_upload_rls.sql",
+      "utf8",
+    );
     for (const action of ["select", "insert", "update", "delete"]) {
-      expect(migration).toMatch(new RegExp(`for ${action} to authenticated`, "i"));
+      expect(migration).toMatch(
+        new RegExp(`for ${action} to authenticated`, "i"),
+      );
     }
     for (const policy of ["read", "insert", "update", "delete"]) {
-      expect(migration).toContain(`drop policy if exists "evidence storage ${policy} own" on storage.objects;`);
+      expect(migration).toContain(
+        `drop policy if exists "evidence storage ${policy} own" on storage.objects;`,
+      );
     }
   });
 
   it("fixed storage RLS migration uses equivalent SELECT and INSERT ownership/path checks", async () => {
     const { readFileSync } = await import("node:fs");
-    const migration = readFileSync("supabase/migrations/202607210004_fix_evidence_storage_signed_upload_rls.sql", "utf8");
-    const read = migration.match(/create policy "evidence storage read own"[\s\S]*?using \(([\s\S]*?)\n\);/)?.[1];
-    const insert = migration.match(/create policy "evidence storage insert own"[\s\S]*?with check \(([\s\S]*?)\n\);/)?.[1];
+    const migration = readFileSync(
+      "supabase/migrations/202607210004_fix_evidence_storage_signed_upload_rls.sql",
+      "utf8",
+    );
+    const read = migration.match(
+      /create policy "evidence storage read own"[\s\S]*?using \(([\s\S]*?)\n\);/,
+    )?.[1];
+    const insert = migration.match(
+      /create policy "evidence storage insert own"[\s\S]*?with check \(([\s\S]*?)\n\);/,
+    )?.[1];
     expect(read).toBeTruthy();
     expect(insert).toBeTruthy();
     const normalize = (sql = "") => sql.replace(/\s+/g, " ").trim();
     expect(normalize(read)).toBe(normalize(insert));
     expect(read).toContain("bucket_id = 'evidence'");
-    expect(read).toContain("(storage.foldername(name))[1] = (select auth.jwt()->>'sub')");
+    expect(read).toContain(
+      "(storage.foldername(name))[1] = (select auth.jwt()->>'sub')",
+    );
     expect(read).toContain("array_length(storage.foldername(name), 1) = 2");
     expect(read).toContain("storage.filename(name) <> ''");
     expect(read).toContain("p.id::text = (storage.foldername(name))[2]");
@@ -164,40 +483,71 @@ describe("workspace server workflow security", () => {
 
   it("fixed storage RLS migration never casts object path segments to UUID", async () => {
     const { readFileSync } = await import("node:fs");
-    const migration = readFileSync("supabase/migrations/202607210004_fix_evidence_storage_signed_upload_rls.sql", "utf8");
+    const migration = readFileSync(
+      "supabase/migrations/202607210004_fix_evidence_storage_signed_upload_rls.sql",
+      "utf8",
+    );
     expect(migration).not.toMatch(/split_part\s*\(\s*name[\s\S]*?::uuid/i);
-    expect(migration).not.toMatch(/storage\.foldername\s*\(\s*name\s*\)[\s\S]*?::uuid/i);
-    expect(migration).not.toMatch(/\(storage\.foldername\(name\)\)\[[^\]]+\]::uuid/i);
+    expect(migration).not.toMatch(
+      /storage\.foldername\s*\(\s*name\s*\)[\s\S]*?::uuid/i,
+    );
+    expect(migration).not.toMatch(
+      /\(storage\.foldername\(name\)\)\[[^\]]+\]::uuid/i,
+    );
   });
-
 
   it("verified storage RLS migration creates a locked-down SECURITY DEFINER ownership helper", async () => {
     const { readFileSync } = await import("node:fs");
-    const migration = readFileSync("supabase/migrations/202607210005_fix_evidence_storage_project_ownership.sql", "utf8");
-    expect(migration).toMatch(/create or replace function public\.evidence_storage_project_is_owned\s*\(\s*project_id_text text\s*\)/i);
-    expect(migration).toMatch(/stable[\s\S]*security definer[\s\S]*set search_path = ''/i);
+    const migration = readFileSync(
+      "supabase/migrations/202607210005_fix_evidence_storage_project_ownership.sql",
+      "utf8",
+    );
+    expect(migration).toMatch(
+      /create or replace function public\.evidence_storage_project_is_owned\s*\(\s*project_id_text text\s*\)/i,
+    );
+    expect(migration).toMatch(
+      /stable[\s\S]*security definer[\s\S]*set search_path = ''/i,
+    );
     expect(migration).toMatch(/p\.id::text\s*=\s*project_id_text/i);
     expect(migration).toMatch(/p\.owner_id\s*=\s*auth\.uid\(\)/i);
-    expect(migration).toMatch(/revoke all[\s\S]*evidence_storage_project_is_owned\(text\)[\s\S]*from public, anon/i);
-    expect(migration).toMatch(/grant execute[\s\S]*evidence_storage_project_is_owned\(text\)[\s\S]*to authenticated/i);
+    expect(migration).toMatch(
+      /revoke all[\s\S]*evidence_storage_project_is_owned\(text\)[\s\S]*from public, anon/i,
+    );
+    expect(migration).toMatch(
+      /grant execute[\s\S]*evidence_storage_project_is_owned\(text\)[\s\S]*to authenticated/i,
+    );
   });
 
   it("verified storage RLS migration recreates all evidence policies for authenticated users", async () => {
     const { readFileSync } = await import("node:fs");
-    const migration = readFileSync("supabase/migrations/202607210005_fix_evidence_storage_project_ownership.sql", "utf8");
+    const migration = readFileSync(
+      "supabase/migrations/202607210005_fix_evidence_storage_project_ownership.sql",
+      "utf8",
+    );
     for (const action of ["select", "insert", "update", "delete"]) {
-      expect(migration).toMatch(new RegExp(`for ${action}\\s+to authenticated`, "i"));
+      expect(migration).toMatch(
+        new RegExp(`for ${action}\\s+to authenticated`, "i"),
+      );
     }
     for (const policy of ["read", "insert", "update", "delete"]) {
-      expect(migration).toContain(`drop policy if exists "evidence storage ${policy} own" on storage.objects;`);
+      expect(migration).toContain(
+        `drop policy if exists "evidence storage ${policy} own" on storage.objects;`,
+      );
     }
   });
 
   it("verified storage RLS migration uses equivalent SELECT and INSERT ownership/path checks", async () => {
     const { readFileSync } = await import("node:fs");
-    const migration = readFileSync("supabase/migrations/202607210005_fix_evidence_storage_project_ownership.sql", "utf8");
-    const read = migration.match(/create policy "evidence storage read own"[\s\S]*?using \(([\s\S]*?)\n\);/)?.[1];
-    const insert = migration.match(/create policy "evidence storage insert own"[\s\S]*?with check \(([\s\S]*?)\n\);/)?.[1];
+    const migration = readFileSync(
+      "supabase/migrations/202607210005_fix_evidence_storage_project_ownership.sql",
+      "utf8",
+    );
+    const read = migration.match(
+      /create policy "evidence storage read own"[\s\S]*?using \(([\s\S]*?)\n\);/,
+    )?.[1];
+    const insert = migration.match(
+      /create policy "evidence storage insert own"[\s\S]*?with check \(([\s\S]*?)\n\);/,
+    )?.[1];
     expect(read).toBeTruthy();
     expect(insert).toBeTruthy();
     const normalize = (sql = "") => sql.replace(/\s+/g, " ").trim();
@@ -211,31 +561,59 @@ describe("workspace server workflow security", () => {
 
   it("verified storage RLS migration never casts object path segments to UUID", async () => {
     const { readFileSync } = await import("node:fs");
-    const migration = readFileSync("supabase/migrations/202607210005_fix_evidence_storage_project_ownership.sql", "utf8");
+    const migration = readFileSync(
+      "supabase/migrations/202607210005_fix_evidence_storage_project_ownership.sql",
+      "utf8",
+    );
     expect(migration).not.toMatch(/split_part\s*\(\s*name[\s\S]*?::uuid/i);
-    expect(migration).not.toMatch(/storage\.foldername\s*\(\s*name\s*\)[\s\S]*?::uuid/i);
-    expect(migration).not.toMatch(/\(storage\.foldername\(name\)\)\[[^\]]+\]::uuid/i);
+    expect(migration).not.toMatch(
+      /storage\.foldername\s*\(\s*name\s*\)[\s\S]*?::uuid/i,
+    );
+    expect(migration).not.toMatch(
+      /\(storage\.foldername\(name\)\)\[[^\]]+\]::uuid/i,
+    );
   });
 
   it("metadata finalization failure deletes the newly uploaded orphan object", async () => {
     const { remove } = makeSupabase({ metadataInsertError: "insert failed" });
     const { finalizeEvidenceUpload } = await import("@/app/actions");
-    await expect(finalizeEvidenceUpload(PROJECT_ID, finalInput)).resolves.toEqual({ error: "insert failed" });
+    await expect(
+      finalizeEvidenceUpload(PROJECT_ID, finalInput),
+    ).resolves.toEqual({
+      error:
+        "Evidence could not be saved. Please verify the evidence details and try again.",
+    });
     expect(remove).toHaveBeenCalledWith([`${USER_ID}/${PROJECT_ID}/new.pdf`]);
   });
 
   it("file replacement keeps the old object if metadata update fails", async () => {
     const { remove } = makeSupabase({ metadataUpdateError: "update failed" });
     const { replaceEvidenceFile } = await import("@/app/actions");
-    await expect(replaceEvidenceFile(PROJECT_ID, EVIDENCE_ID, { storage_path: `${USER_ID}/${PROJECT_ID}/new.pdf`, original_file_name: "new.pdf", mime_type: "application/pdf", file_size: 100 })).resolves.toEqual({ error: "update failed" });
+    await expect(
+      replaceEvidenceFile(PROJECT_ID, EVIDENCE_ID, {
+        storage_path: `${USER_ID}/${PROJECT_ID}/new.pdf`,
+        original_file_name: "new.pdf",
+        mime_type: "application/pdf",
+        file_size: 100,
+      }),
+    ).resolves.toEqual({ error: "update failed" });
     expect(remove).toHaveBeenCalledWith([`${USER_ID}/${PROJECT_ID}/new.pdf`]);
-    expect(remove).not.toHaveBeenCalledWith([`${USER_ID}/${PROJECT_ID}/old.pdf`]);
+    expect(remove).not.toHaveBeenCalledWith([
+      `${USER_ID}/${PROJECT_ID}/old.pdf`,
+    ]);
   });
 
   it("successful file replacement deletes the old object only after metadata succeeds", async () => {
     const { remove, updates } = makeSupabase();
     const { replaceEvidenceFile } = await import("@/app/actions");
-    await expect(replaceEvidenceFile(PROJECT_ID, EVIDENCE_ID, { storage_path: `${USER_ID}/${PROJECT_ID}/new.pdf`, original_file_name: "new.pdf", mime_type: "application/pdf", file_size: 100 })).resolves.toEqual({ success: "Evidence file replaced." });
+    await expect(
+      replaceEvidenceFile(PROJECT_ID, EVIDENCE_ID, {
+        storage_path: `${USER_ID}/${PROJECT_ID}/new.pdf`,
+        original_file_name: "new.pdf",
+        mime_type: "application/pdf",
+        file_size: 100,
+      }),
+    ).resolves.toEqual({ success: "Evidence file replaced." });
     expect(updates).toHaveLength(1);
     expect(remove).toHaveBeenCalledWith([`${USER_ID}/${PROJECT_ID}/old.pdf`]);
   });
@@ -243,14 +621,21 @@ describe("workspace server workflow security", () => {
   it("signed download rejects another user's project/evidence record", async () => {
     makeSupabase({ userId: USER_ID, projectOwnerId: OTHER_USER_ID });
     const { getEvidenceDownloadUrl } = await import("@/app/actions");
-    await expect(getEvidenceDownloadUrl(PROJECT_ID, EVIDENCE_ID)).rejects.toThrow("Project not found");
+    await expect(
+      getEvidenceDownloadUrl(PROJECT_ID, EVIDENCE_ID),
+    ).rejects.toThrow("Project not found");
   });
 
   it("signed download returns only a short-lived URL for an authorized owner", async () => {
     const { createSignedUrl } = makeSupabase();
     const { getEvidenceDownloadUrl } = await import("@/app/actions");
-    await expect(getEvidenceDownloadUrl(PROJECT_ID, EVIDENCE_ID)).resolves.toEqual({ url: "https://signed.example/evidence?token=short" });
-    expect(createSignedUrl).toHaveBeenCalledWith(`${USER_ID}/${PROJECT_ID}/old.pdf`, 60);
+    await expect(
+      getEvidenceDownloadUrl(PROJECT_ID, EVIDENCE_ID),
+    ).resolves.toEqual({ url: "https://signed.example/evidence?token=short" });
+    expect(createSignedUrl).toHaveBeenCalledWith(
+      `${USER_ID}/${PROJECT_ID}/old.pdf`,
+      60,
+    );
   });
 
   it.each([
@@ -258,12 +643,22 @@ describe("workspace server workflow security", () => {
     ["evidence update", "updateEvidence", validEvidence, "evidence"],
     ["timeline update", "updateTimelineEvent", validEvent, "timeline_events"],
     ["task update", "updateTask", validTask, "project_tasks"],
-  ])("%s rejects a valid child ID paired with a foreign project ID", async (_name, actionName, formFactory) => {
-    makeSupabase({ childMissing: true });
-    const actions = await import("@/app/actions");
-    const action = actions[actionName as keyof typeof actions] as (projectId: string, id: string, state: { error?: string }, formData: FormData) => Promise<{ error?: string }>;
-    await expect(action(OTHER_PROJECT_ID, EVIDENCE_ID, {}, formFactory())).rejects.toThrow("Record not found");
-  });
+  ])(
+    "%s rejects a valid child ID paired with a foreign project ID",
+    async (_name, actionName, formFactory) => {
+      makeSupabase({ childMissing: true });
+      const actions = await import("@/app/actions");
+      const action = actions[actionName as keyof typeof actions] as (
+        projectId: string,
+        id: string,
+        state: { error?: string },
+        formData: FormData,
+      ) => Promise<{ error?: string }>;
+      await expect(
+        action(OTHER_PROJECT_ID, EVIDENCE_ID, {}, formFactory()),
+      ).rejects.toThrow("Record not found");
+    },
+  );
 
   it.each([
     ["note delete", "deleteNote"],
@@ -273,7 +668,12 @@ describe("workspace server workflow security", () => {
   ])("%s enforces parent/child ownership checks", async (_name, actionName) => {
     makeSupabase({ childMissing: true });
     const actions = await import("@/app/actions");
-    const action = actions[actionName as keyof typeof actions] as (projectId: string, id: string) => Promise<void>;
-    await expect(action(OTHER_PROJECT_ID, EVIDENCE_ID)).rejects.toThrow("Record not found");
+    const action = actions[actionName as keyof typeof actions] as (
+      projectId: string,
+      id: string,
+    ) => Promise<void>;
+    await expect(action(OTHER_PROJECT_ID, EVIDENCE_ID)).rejects.toThrow(
+      "Record not found",
+    );
   });
 });

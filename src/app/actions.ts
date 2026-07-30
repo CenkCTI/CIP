@@ -14,6 +14,7 @@ import {
 import {
   buildEvidencePath,
   evidenceFinalizeSchema,
+  evidenceFileMetadataSchema,
   evidenceMetadataSchema,
   evidenceReplacementSchema,
   evidenceUrlOnlySchema,
@@ -40,7 +41,11 @@ function safeReturn(path: string | null) {
   return path?.startsWith("/") && !path.startsWith("//") ? path : "/dashboard";
 }
 function authenticationError(
-  operation: "sign in" | "sign up" | "send a password reset link" | "update the password",
+  operation:
+    | "sign in"
+    | "sign up"
+    | "send a password reset link"
+    | "update the password",
   error: { message?: string; status?: number },
 ) {
   const message = (error.message ?? "").toLowerCase();
@@ -50,7 +55,10 @@ function authenticationError(
   if (message.includes("email not confirmed")) {
     return "Confirm your email address before signing in.";
   }
-  if (message.includes("already registered") || message.includes("already exists")) {
+  if (
+    message.includes("already registered") ||
+    message.includes("already exists")
+  ) {
     return "An account with this email already exists.";
   }
   if (error.status === 429 || message.includes("rate limit")) {
@@ -210,6 +218,10 @@ const msg = (p: {
   success: boolean;
   error?: { issues: { message: string }[] };
 }) => p.error?.issues[0]?.message ?? "Invalid input";
+const evidencePersistenceError = (error: { code?: string } | null) =>
+  error?.code === "23514"
+    ? "This evidence type requires either a valid source URL or an uploaded file."
+    : "Evidence could not be saved. Please verify the evidence details and try again.";
 
 export async function createNote(
   projectId: string,
@@ -273,7 +285,7 @@ export async function createUrlEvidence(
   const { error } = await supabase
     .from("evidence")
     .insert({ ...p.data, project_id: pid, collected_by: user.id });
-  if (error) return { error: error.message };
+  if (error) return { error: evidencePersistenceError(error) };
   revalidatePath(`/projects/${pid}`);
   return { success: "Evidence saved." };
 }
@@ -333,7 +345,7 @@ export async function finalizeEvidenceUpload(
     .insert({ ...p.data, project_id: pid, collected_by: user.id });
   if (error) {
     await supabase.storage.from("evidence").remove([p.data.storage_path]);
-    return { error: error.message };
+    return { error: evidencePersistenceError(error) };
   }
   revalidatePath(`/projects/${pid}`);
   return { success: "Evidence saved." };
@@ -349,14 +361,31 @@ export async function updateEvidence(
     projectId: pid,
     id: childId,
   } = await assertChild(projectId, "evidence", id);
-  const p = evidenceMetadataSchema.safeParse(formObject(fd));
-  if (!p.success) return { error: msg(p) };
+  const raw = formObject(fd);
+  const metadata = evidenceMetadataSchema.safeParse(raw);
+  if (!metadata.success) return { error: msg(metadata) };
+  const { data: existing, error: readError } = await supabase
+    .from("evidence")
+    .select("storage_path,source_url")
+    .eq("project_id", pid)
+    .eq("id", childId)
+    .maybeSingle();
+  if (readError || !existing) return { error: "Evidence not found." };
+  const p = existing.storage_path
+    ? evidenceFileMetadataSchema.safeParse(raw)
+    : evidenceUrlOnlySchema.safeParse(raw);
+  if (!p.success)
+    return {
+      error: existing.storage_path
+        ? "Uploaded evidence must keep a file-backed evidence type."
+        : msg(p),
+    };
   const { error } = await supabase
     .from("evidence")
     .update(p.data)
     .eq("project_id", pid)
     .eq("id", childId);
-  if (error) return { error: error.message };
+  if (error) return { error: evidencePersistenceError(error) };
   revalidatePath(`/projects/${pid}`);
   return { success: "Evidence updated." };
 }
@@ -495,7 +524,9 @@ export async function deleteTimelineEvent(
   if (membershipError) {
     return { error: "Unable to verify Campaign memberships." };
   }
-  const deletionBlock = timelineDeletionMessage(memberships?.map((membership) => membership.status) ?? []);
+  const deletionBlock = timelineDeletionMessage(
+    memberships?.map((membership) => membership.status) ?? [],
+  );
   if (deletionBlock) return { error: deletionBlock };
   const { error } = await supabase
     .from("timeline_events")
