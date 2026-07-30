@@ -104,6 +104,16 @@ const defs: {
     meta: ["type", "collection_date", "created_at"],
   },
   {
+    type: "INFRASTRUCTURE_CLUSTER",
+    table: "infrastructure_clusters",
+    select: "id,name,status,confidence,technical_purpose,archived_at,updated_at",
+    order: "name",
+    title: (r) => s(r.name),
+    sub: (r) => `${s(r.status)} · ${s(r.confidence)}`,
+    url: (projectId, id) => `/projects/${projectId}/infrastructure/${id}`,
+    meta: ["status", "confidence", "technical_purpose", "archived_at"],
+  },
+  {
     type: "REPORT",
     table: "reports",
     select: "id,title,type,status,updated_at",
@@ -250,6 +260,7 @@ export function limitGraph(
 
 export async function loadProjectGraph(
   projectId: string,
+  includeHistoricalInfrastructure = false,
 ): Promise<GraphResponse> {
   const { supabase, user } = await requireUser();
   const { data: project, error } = await supabase
@@ -325,6 +336,19 @@ export async function loadProjectGraph(
     }
   });
 
+  const { data: clusterMembers, error: clusterMemberError, count: clusterMemberCount } = await supabase
+    .from("infrastructure_cluster_members")
+    .select("id,cluster_id,indicator_id,status,role,confidence,rationale", { count: "exact" })
+    .eq("project_id", projectId)
+    .in("status", includeHistoricalInfrastructure ? ["POSSIBLE", "CONFIRMED", "REJECTED", "REMOVED"] : ["POSSIBLE", "CONFIRMED"])
+    .order("id", { ascending: true })
+    .limit(EDGE_LIMIT + 1);
+  if (clusterMemberError && clusterMemberError.code !== "42P01") throw new Error("Unable to load infrastructure relationships.");
+  for (const row of (clusterMembers ?? []) as unknown as Row[]) {
+    const source=nodeId("INFRASTRUCTURE_CLUSTER",s(row.cluster_id)), target=nodeId("INDICATOR",s(row.indicator_id));
+    if(finalNodeSet.has(source)&&finalNodeSet.has(target)) addUniqueGraphEdge(edges,seen,{id:`infrastructure:${s(row.id)}`,source,target,relationshipType:`${s(row.status)} · ${s(row.role)} · ${s(row.confidence)}`,sourceKind:"semantic",description:s(row.rationale).slice(0,240),detailUrl:`/projects/${projectId}/infrastructure/${s(row.cluster_id)}`});
+  }
+
   const {
     data: manual,
     error: manualError,
@@ -368,7 +392,7 @@ export async function loadProjectGraph(
     nodes,
     edges,
     totalNodeCount,
-    totalSemanticEdgeCount + totalManualEdgeCount,
+    totalSemanticEdgeCount + totalManualEdgeCount + (clusterMemberCount ?? clusterMembers?.length ?? 0),
   );
 }
 

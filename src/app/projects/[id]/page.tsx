@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { KnowledgeGraph } from "@/components/graph/knowledge-graph";
+import { InfrastructureWorkspace } from "@/components/infrastructure/infrastructure-workspace";
 import { notFound } from "next/navigation";
 import { deleteProject, updateProject } from "@/app/actions";
 import { ProjectForm } from "@/components/project-form";
@@ -67,6 +68,7 @@ const tabs = [
   "cves",
   "mitre",
   "reports",
+  "infrastructure",
   "graph",
   "ai",
 ];
@@ -103,6 +105,17 @@ export default async function Page({
     .single<Project>();
   if (error || !project) notFound();
   const mk = (t: string) => `/projects/${id}?tab=${t}`;
+  if (tab === "infrastructure") {
+    const { data: clusters, error: clusterError } = await supabase
+      .from("infrastructure_clusters")
+      .select("*,infrastructure_cluster_members(count)")
+      .eq("project_id", id)
+      .order("updated_at", { ascending: false });
+    if (clusterError) return <section className="mx-auto max-w-6xl"><div className="card text-red-300">Unable to load Infrastructure Analysis. Apply migration 019 and try again.</div></section>;
+    const rows = (clusters ?? []).map((cluster) => ({ ...cluster, member_count: Array.isArray(cluster.infrastructure_cluster_members) ? Number(cluster.infrastructure_cluster_members[0]?.count ?? 0) : 0 }));
+    return <section className="mx-auto max-w-6xl"><h1 className="text-3xl font-bold text-white">{project.name}</h1><nav className="mt-6 flex flex-wrap gap-2 border-b border-slate-800 pb-2">{tabs.map((t)=><Link key={t} className={`rounded-t px-4 py-2 capitalize ${tab===t?"bg-slate-800 text-cyan-200":"text-slate-400 hover:text-white"}`} href={mk(t)}>{t}</Link>)}</nav><InfrastructureWorkspace projectId={id} clusters={rows} sp={sp}/></section>;
+  }
+
   if (tab === "graph") {
     return (
       <section className="mx-auto max-w-6xl">

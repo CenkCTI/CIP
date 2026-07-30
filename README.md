@@ -154,3 +154,7 @@ identity and terminal history, validates lifecycle/result inserts, and recovers 
 active runs as `FAILED`/`STALE_RUN` without removing previous results. Limited writes
 remain available to the authenticated server flow; complete prevention of same-owner
 direct Supabase writes requires a stronger trusted-server boundary and is not claimed.
+
+## CİTEM Product Roadmap Phase 2.1C — Infrastructure Analysis
+
+Phase 2.1C adds analyst-controlled Infrastructure Clusters, member roles/rationales/confidence, provenance links, assessments, and derived Graph nodes/edges while preserving `projects`, `/projects`, and `?tab=` conventions. A cluster is a technical assessment, not attribution. Apply `supabase/migrations/202607300019_phase2_1c_infrastructure_analysis.sql`, then run `NOTIFY pgrst, 'reload schema';`. See [docs/PHASE_2_1C.md](docs/PHASE_2_1C.md) for security boundaries, verification SQL, limitations, and acceptance steps.
