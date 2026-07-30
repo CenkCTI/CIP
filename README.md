@@ -161,3 +161,7 @@ Phase 2.1C adds analyst-controlled Infrastructure Clusters, member roles/rationa
 # Phase 2.1D
 
 CİTEM now supports analyst-controlled structured attack Timeline events and Campaign Reconstruction, including technical-entity/provenance links and derived Campaign-to-Infrastructure Graph relationships. See [Phase 2.1D](docs/PHASE_2_1D.md) for semantics, migration, security, verification, and acceptance instructions.
+
+### Phase 2.1E — Attribution Analysis
+
+Campaign attribution now supports analyst-defined competing hypotheses, a shared evidence inventory, per-hypothesis diagnostic evaluations, an explicit current judgement, and archive-safe history. A preferred hypothesis remains an assessment and never creates a Campaign-to-Threat Actor relationship. See [Phase 2.1E](docs/PHASE_2_1E.md).

@@ -3,10 +3,20 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const PROJECT_ID = "33333333-3333-4333-8333-333333333333";
-const authorizeEvidenceUploadMock = vi.fn<(...args: unknown[]) => Promise<{ path?: string; token?: string; error?: string }>>(async () => ({ path: `user/${PROJECT_ID}/uuid-proof.pdf`, token: "token" }));
-const finalizeEvidenceUploadMock = vi.fn<(...args: unknown[]) => Promise<{ success?: string; error?: string }>>(async () => ({ success: "Evidence saved." }));
-const createUrlEvidenceMock = vi.fn(async () => ({ success: "Evidence saved." }));
-const uploadToSignedUrlMock = vi.fn<(...args: unknown[]) => Promise<{ error: null | { message: string } }>>(async () => ({ error: null }));
+const authorizeEvidenceUploadMock = vi.fn<
+  (
+    ...args: unknown[]
+  ) => Promise<{ path?: string; token?: string; error?: string }>
+>(async () => ({ path: `user/${PROJECT_ID}/uuid-proof.pdf`, token: "token" }));
+const finalizeEvidenceUploadMock = vi.fn<
+  (...args: unknown[]) => Promise<{ success?: string; error?: string }>
+>(async () => ({ success: "Evidence saved." }));
+const createUrlEvidenceMock = vi.fn(async () => ({
+  success: "Evidence saved.",
+}));
+const uploadToSignedUrlMock = vi.fn<
+  (...args: unknown[]) => Promise<{ error: null | { message: string } }>
+>(async () => ({ error: null }));
 
 vi.mock("@/app/actions", () => ({
   authorizeEvidenceUpload: authorizeEvidenceUploadMock,
@@ -29,7 +39,9 @@ vi.mock("@/app/actions", () => ({
 }));
 
 vi.mock("@/lib/supabase/browser", () => ({
-  createClient: () => ({ storage: { from: () => ({ uploadToSignedUrl: uploadToSignedUrlMock }) } }),
+  createClient: () => ({
+    storage: { from: () => ({ uploadToSignedUrl: uploadToSignedUrlMock }) },
+  }),
 }));
 
 async function fillEvidenceFileForm() {
@@ -47,13 +59,30 @@ async function fillEvidenceFileForm() {
     fd.set("file", file);
     return fd;
   } as unknown as typeof FormData);
-  await user.click(screen.getByRole("button", { name: "Upload file evidence" }));
+  await user.click(
+    screen.getByRole("button", { name: "Upload file evidence" }),
+  );
 }
 
-
-beforeEach(() => { vi.restoreAllMocks(); vi.clearAllMocks(); });
+beforeEach(() => {
+  vi.restoreAllMocks();
+  vi.clearAllMocks();
+});
 
 describe("EvidenceUpload client signed upload flow", () => {
+  it("uses disjoint URL and file-backed evidence selectors", async () => {
+    const { EvidenceUpload, EvidenceUrlCreate } =
+      await import("@/components/workspace-forms");
+    const { unmount } = render(<EvidenceUrlCreate projectId={PROJECT_ID} />);
+    expect(
+      screen.getAllByRole("option").map((option) => option.textContent),
+    ).toEqual(["ARTICLE", "TWEET"]);
+    unmount();
+    render(<EvidenceUpload projectId={PROJECT_ID} />);
+    expect(
+      screen.getAllByRole("option").map((option) => option.textContent),
+    ).toEqual(["SCREENSHOT", "PDF", "FILE", "LOG", "PCAP"]);
+  });
   it("passes the required project UUID to signed upload authorization", async () => {
     const { EvidenceUpload } = await import("@/components/workspace-forms");
     render(<EvidenceUpload projectId={PROJECT_ID} />);
@@ -61,12 +90,24 @@ describe("EvidenceUpload client signed upload flow", () => {
     await fillEvidenceFileForm();
 
     await waitFor(() => expect(authorizeEvidenceUploadMock).toHaveBeenCalled());
-    expect((authorizeEvidenceUploadMock.mock.calls as unknown as unknown[][])[0][0]).toBe(PROJECT_ID);
-    expect(uploadToSignedUrlMock).toHaveBeenCalledWith(`user/${PROJECT_ID}/uuid-proof.pdf`, "token", expect.any(File));
+    expect(
+      (authorizeEvidenceUploadMock.mock.calls as unknown as unknown[][])[0][0],
+    ).toBe(PROJECT_ID);
+    expect(uploadToSignedUrlMock).toHaveBeenCalledWith(
+      `user/${PROJECT_ID}/uuid-proof.pdf`,
+      "token",
+      expect.any(File),
+    );
     const authorized = await authorizeEvidenceUploadMock.mock.results[0].value;
-    expect((uploadToSignedUrlMock.mock.calls as unknown[][])[0][0]).toBe(authorized.path);
-    expect((uploadToSignedUrlMock.mock.calls as unknown[][])[0][1]).toBe(authorized.token);
-    expect((finalizeEvidenceUploadMock.mock.calls as unknown as unknown[][])[0][0]).toBe(PROJECT_ID);
+    expect((uploadToSignedUrlMock.mock.calls as unknown[][])[0][0]).toBe(
+      authorized.path,
+    );
+    expect((uploadToSignedUrlMock.mock.calls as unknown[][])[0][1]).toBe(
+      authorized.token,
+    );
+    expect(
+      (finalizeEvidenceUploadMock.mock.calls as unknown as unknown[][])[0][0],
+    ).toBe(PROJECT_ID);
     expect(await screen.findByText("Evidence saved.")).toBeInTheDocument();
   });
 
@@ -78,43 +119,65 @@ describe("EvidenceUpload client signed upload flow", () => {
 
     await fillEvidenceFileForm();
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Project is required before uploading evidence.");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Project is required before uploading evidence.",
+    );
     expect(authorizeEvidenceUploadMock).not.toHaveBeenCalled();
     expect(uploadToSignedUrlMock).not.toHaveBeenCalled();
   });
 
   it("labels signed upload authorization failures without uploading bytes", async () => {
-    authorizeEvidenceUploadMock.mockResolvedValueOnce({ error: "Signed upload authorization failed: new row violates row-level security policy" });
+    authorizeEvidenceUploadMock.mockResolvedValueOnce({
+      error:
+        "Signed upload authorization failed: new row violates row-level security policy",
+    });
     const { EvidenceUpload } = await import("@/components/workspace-forms");
     render(<EvidenceUpload projectId={PROJECT_ID} />);
 
     await fillEvidenceFileForm();
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Signed upload authorization failed: new row violates row-level security policy");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Signed upload authorization failed: new row violates row-level security policy",
+    );
     expect(uploadToSignedUrlMock).not.toHaveBeenCalled();
   });
 
   it("labels signed byte upload failures separately from authorization", async () => {
-    uploadToSignedUrlMock.mockResolvedValueOnce({ error: { message: "network body upload failed" } });
+    uploadToSignedUrlMock.mockResolvedValueOnce({
+      error: { message: "network body upload failed" },
+    });
     const { EvidenceUpload } = await import("@/components/workspace-forms");
     render(<EvidenceUpload projectId={PROJECT_ID} />);
 
     await fillEvidenceFileForm();
 
-    expect(uploadToSignedUrlMock).toHaveBeenCalledWith(`user/${PROJECT_ID}/uuid-proof.pdf`, "token", expect.any(File));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Signed byte upload failed: network body upload failed");
+    expect(uploadToSignedUrlMock).toHaveBeenCalledWith(
+      `user/${PROJECT_ID}/uuid-proof.pdf`,
+      "token",
+      expect.any(File),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Signed byte upload failed: network body upload failed",
+    );
     expect(finalizeEvidenceUploadMock).not.toHaveBeenCalled();
   });
 
   it("labels metadata finalization failures after a successful byte upload", async () => {
-    finalizeEvidenceUploadMock.mockResolvedValueOnce({ error: "insert failed" });
+    finalizeEvidenceUploadMock.mockResolvedValueOnce({
+      error: "insert failed",
+    });
     const { EvidenceUpload } = await import("@/components/workspace-forms");
     render(<EvidenceUpload projectId={PROJECT_ID} />);
 
     await fillEvidenceFileForm();
 
-    expect(uploadToSignedUrlMock).toHaveBeenCalledWith(`user/${PROJECT_ID}/uuid-proof.pdf`, "token", expect.any(File));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Evidence metadata finalization failed: insert failed");
+    expect(uploadToSignedUrlMock).toHaveBeenCalledWith(
+      `user/${PROJECT_ID}/uuid-proof.pdf`,
+      "token",
+      expect.any(File),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Evidence metadata finalization failed: insert failed",
+    );
   });
-
 });

@@ -2,7 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CtiDelete, CtiForm } from "@/components/cti-forms";
-import { ClusterMembershipForm, ReconstructionForm } from "@/components/reconstruction/forms";
+import {
+  ClusterMembershipForm,
+  ReconstructionForm,
+} from "@/components/reconstruction/forms";
 import { requireUser } from "@/lib/auth";
 import { visibleCampaignActivity } from "@/lib/reconstruction/presentation";
 import {
@@ -43,12 +46,7 @@ const relationConfig = {
     ["campaign_threat_actors", "campaign_id", "threat_actor_id", "actors"],
     ["campaign_malware", "campaign_id", "malware_id", "malware"],
     ["campaign_indicators", "campaign_id", "indicator_id", "indicators"],
-    [
-      "campaign_mitre_techniques",
-      "campaign_id",
-      "mitre_technique_id",
-      "mitre",
-    ],
+    ["campaign_mitre_techniques", "campaign_id", "mitre_technique_id", "mitre"],
   ],
   indicators: [
     ["threat_actor_indicators", "indicator_id", "threat_actor_id", "actors"],
@@ -60,12 +58,7 @@ const relationConfig = {
     ["campaign_malware", "malware_id", "campaign_id", "campaigns"],
     ["malware_indicators", "malware_id", "indicator_id", "indicators"],
     ["cve_malware", "malware_id", "cve_id", "cves"],
-    [
-      "malware_mitre_techniques",
-      "malware_id",
-      "mitre_technique_id",
-      "mitre",
-    ],
+    ["malware_mitre_techniques", "malware_id", "mitre_technique_id", "mitre"],
   ],
   cves: [["cve_malware", "cve_id", "malware_id", "malware"]],
   mitre: [
@@ -81,12 +74,7 @@ const relationConfig = {
       "campaign_id",
       "campaigns",
     ],
-    [
-      "malware_mitre_techniques",
-      "mitre_technique_id",
-      "malware_id",
-      "malware",
-    ],
+    ["malware_mitre_techniques", "mitre_technique_id", "malware_id", "malware"],
   ],
 } as const;
 const optionKeys = {
@@ -123,7 +111,9 @@ function IndicatorSummary({ row }: { row: Row }) {
             {ss(row.status || "UNVERIFIED")}
           </span>
           <span className="citem-badge">{type}</span>
-          {hashAlgorithm ? <span className="citem-badge">{hashAlgorithm}</span> : null}
+          {hashAlgorithm ? (
+            <span className="citem-badge">{hashAlgorithm}</span>
+          ) : null}
         </div>
       </div>
 
@@ -147,7 +137,8 @@ function IndicatorSummary({ row }: { row: Row }) {
         <div>
           <dt className="citem-label">First / last seen</dt>
           <dd className="mt-1 text-sm text-stone-300">
-            {formatOptionalDate(row.first_seen)} · {formatOptionalDate(row.last_seen)}
+            {formatOptionalDate(row.first_seen)} ·{" "}
+            {formatOptionalDate(row.last_seen)}
           </dd>
         </div>
         <div>
@@ -194,8 +185,8 @@ function ObservationHistory({
           Observation history
         </h2>
         <p className="mt-2 text-sm leading-6 text-stone-500">
-          The canonical Indicator remains unique while every accepted observed form
-          is preserved separately.
+          The canonical Indicator remains unique while every accepted observed
+          form is preserved separately.
         </p>
       </div>
 
@@ -259,8 +250,8 @@ function ObservationHistory({
         </ol>
       ) : (
         <p className="mt-4 text-sm text-stone-500">
-          No observation records exist yet. Legacy Indicators remain valid and can
-          receive new observations through bulk intake.
+          No observation records exist yet. Legacy Indicators remain valid and
+          can receive new observations through bulk intake.
         </p>
       )}
     </section>
@@ -350,7 +341,10 @@ export default async function Detail({
         .from(join)
         .select("*")
         .eq("project_id", id)
-        .eq(relationConfig[tab].find((config) => config[0] === join)![1], entityId),
+        .eq(
+          relationConfig[tab].find((config) => config[0] === join)![1],
+          entityId,
+        ),
     ),
   );
   if (relRows.some((result) => result.error)) {
@@ -376,15 +370,91 @@ export default async function Detail({
       ),
     };
   });
-  const moduleLabel = tab === "indicators" ? "IOC Workbench" : ctiModuleLabels[tab];
-  const campaignReconstruction = tab === "campaigns" ? await supabase.from("campaign_reconstructions").select("*").eq("project_id",id).eq("campaign_id",entityId).maybeSingle() : {data:null};
-  const campaignActivityQuery = supabase.from("campaign_timeline_events").select("*,timeline_events(*,timeline_event_entities(id),timeline_event_support(id))").eq("project_id",id).eq("campaign_id",entityId);
-  if (!showHistorical) campaignActivityQuery.in("status", ["POSSIBLE", "CONFIRMED"]);
-  const campaignActivity = tab === "campaigns" ? await campaignActivityQuery : {data:[]};
-  const campaignInfrastructureQuery = supabase.from("campaign_infrastructure_clusters").select("*,infrastructure_clusters(name,status,operational_relevance,infrastructure_cluster_members(count))").eq("project_id",id).eq("campaign_id",entityId);
-  if (!showHistorical) campaignInfrastructureQuery.in("status", ["POSSIBLE", "CONFIRMED"]);
-  const campaignInfrastructure = tab === "campaigns" ? await campaignInfrastructureQuery : {data:[]};
-  const availableClusters = tab === "campaigns" ? await supabase.from("infrastructure_clusters").select("id,name").eq("project_id",id).is("archived_at",null) : {data:[]};
+  const moduleLabel =
+    tab === "indicators" ? "IOC Workbench" : ctiModuleLabels[tab];
+  const campaignReconstruction =
+    tab === "campaigns"
+      ? await supabase
+          .from("campaign_reconstructions")
+          .select("*")
+          .eq("project_id", id)
+          .eq("campaign_id", entityId)
+          .maybeSingle()
+      : { data: null };
+  const campaignActivityQuery = supabase
+    .from("campaign_timeline_events")
+    .select(
+      "*,timeline_events(*,timeline_event_entities(id),timeline_event_support(id))",
+    )
+    .eq("project_id", id)
+    .eq("campaign_id", entityId);
+  if (!showHistorical)
+    campaignActivityQuery.in("status", ["POSSIBLE", "CONFIRMED"]);
+  const campaignActivity =
+    tab === "campaigns" ? await campaignActivityQuery : { data: [] };
+  const campaignInfrastructureQuery = supabase
+    .from("campaign_infrastructure_clusters")
+    .select(
+      "*,infrastructure_clusters(name,status,operational_relevance,infrastructure_cluster_members(count))",
+    )
+    .eq("project_id", id)
+    .eq("campaign_id", entityId);
+  if (!showHistorical)
+    campaignInfrastructureQuery.in("status", ["POSSIBLE", "CONFIRMED"]);
+  const campaignInfrastructure =
+    tab === "campaigns" ? await campaignInfrastructureQuery : { data: [] };
+  const availableClusters =
+    tab === "campaigns"
+      ? await supabase
+          .from("infrastructure_clusters")
+          .select("id,name")
+          .eq("project_id", id)
+          .is("archived_at", null)
+      : { data: [] };
+  const campaignAttribution =
+    tab === "campaigns"
+      ? await supabase
+          .from("campaign_attribution_assessments")
+          .select("*,attribution_hypotheses(title)")
+          .eq("project_id", id)
+          .eq("campaign_id", entityId)
+          .maybeSingle()
+      : { data: null };
+  const campaignHypotheses =
+    tab === "campaigns"
+      ? await supabase
+          .from("attribution_hypotheses")
+          .select("id,status,archived_at")
+          .eq("project_id", id)
+          .eq("campaign_id", entityId)
+      : { data: [] };
+  const campaignEvidence =
+    tab === "campaigns"
+      ? await supabase
+          .from("attribution_evidence_items")
+          .select("id")
+          .eq("project_id", id)
+          .eq("campaign_id", entityId)
+          .is("archived_at", null)
+      : { data: [] };
+  const campaignEvaluations =
+    tab === "campaigns"
+      ? await supabase
+          .from("attribution_evidence_evaluations")
+          .select("id")
+          .eq("project_id", id)
+          .eq("campaign_id", entityId)
+      : { data: [] };
+  const actorHypotheses =
+    tab === "actors"
+      ? await supabase
+          .from("attribution_hypotheses")
+          .select(
+            "id,campaign_id,title,status,confidence,campaigns(name),campaign_attribution_assessments!campaign_attribution_assessments_preferred_hypothesis_id_fkey(id)",
+          )
+          .eq("project_id", id)
+          .eq("threat_actor_id", entityId)
+      : { data: [] };
 
   return (
     <section className="mx-auto max-w-5xl space-y-6">
@@ -430,13 +500,200 @@ export default async function Detail({
           currentUserId={user.id}
         />
       ) : null}
-      {tab === "campaigns" ? <>
-        <div className="flex justify-end"><Link className="rounded border border-stone-700 px-3 py-2 text-sm text-cyan-200" href={`/projects/${id}/campaigns/${entityId}${showHistorical ? "" : "?historical=1"}`}>{showHistorical ? "Hide historical relationships" : "Show historical relationships"}</Link></div>
-        <section className="card"><p className="citem-label">Reconstruction Summary</p><h2 className="text-xl font-semibold">Current Campaign Reconstruction</h2><p className="mt-2 text-sm text-stone-500">Campaign Reconstruction organises observed and inferred Timeline events into an analyst-controlled operational sequence. Reconstruction is not Threat Actor attribution.</p><ReconstructionForm projectId={id} campaignId={entityId} row={(campaignReconstruction.data??{}) as Row}/></section>
-        <section className="card"><h2 className="text-xl font-semibold">Ordered Activity</h2><p className="text-sm text-stone-500">Event assessment status and Campaign membership status are distinct. Chronology uses event time; sequence order only assists ties.</p><ol className="mt-3 grid gap-3">{visibleCampaignActivity((campaignActivity.data??[]) as Row[], showHistorical).map(m=>{const e=m.timeline_events as Row;return <li className="rounded border border-stone-800 p-3" key={ss(m.id)}><Link className="font-semibold text-cyan-200" href={`/projects/${id}/timeline/${ss(m.timeline_event_id)}`}>{ss(e?.event_name)}</Link><dl className="mt-2 grid gap-2 text-sm md:grid-cols-2"><div><dt className="citem-label">Timeline event status</dt><dd>{ss(e?.assessment_status)}</dd></div><div><dt className="citem-label">Campaign membership status</dt><dd>{ss(m.status)}</dd></div></dl><p>{ss(e?.event_date)} · confidence {ss(m.confidence)}</p><p>{ss(m.rationale)}</p><p className="text-xs text-stone-500">{Array.isArray(e?.timeline_event_entities)?e.timeline_event_entities.length:0} entities · {Array.isArray(e?.timeline_event_support)?e.timeline_event_support.length:0} supporting records</p></li>})}</ol></section>
-        <section className="card"><h2 className="text-xl font-semibold">Infrastructure</h2><ul className="mt-3">{((campaignInfrastructure.data??[]) as Row[]).map(m=>{const c=m.infrastructure_clusters as Row;return <li key={ss(m.id)}><Link className="text-cyan-200" href={`/projects/${id}/infrastructure/${ss(m.infrastructure_cluster_id)}`}>{ss(c?.name)}</Link> — cluster {ss(c?.status)}, relationship {ss(m.status)} / {ss(m.confidence)} — {ss(m.rationale)}<p className="text-xs text-stone-500">{ss(c?.operational_relevance)}</p></li>})}</ul><ClusterMembershipForm projectId={id} campaignId={entityId} clusters={(availableClusters.data??[]) as Row[]}/></section>
-        <section className="card"><h2 className="text-xl font-semibold">Supporting Events & Current Assessment</h2><p>Supporting Sources, Evidence, and enrichment results remain authoritative at event level. Assess the coherent sequence, observed versus inferred activity, objective, infrastructure, activity status, disputes, likely next activity, and data still required. AI does not write this assessment.</p></section>
-      </> : null}
+      {tab === "campaigns" ? (
+        <>
+          <section className="card">
+            <p className="citem-label">Attribution Summary</p>
+            <h2 className="text-xl font-semibold">
+              Current Attribution Judgement
+            </h2>
+            <p>
+              {ss(
+                campaignAttribution.data?.assessment_status || "No assessment",
+              )}{" "}
+              · {ss(campaignAttribution.data?.conclusion_type || "UNRESOLVED")}{" "}
+              · {ss(campaignAttribution.data?.confidence || "Not assessed")}
+            </p>
+            <p className="text-sm text-stone-400">
+              {ss(campaignAttribution.data?.current_judgment).slice(0, 240) ||
+                "No current judgement recorded."}
+            </p>
+            <p className="text-xs">
+              {
+                (campaignHypotheses.data ?? []).filter(
+                  (h) => !h.archived_at && h.status !== "REJECTED",
+                ).length
+              }{" "}
+              active hypotheses ·{" "}
+              {Math.max(
+                0,
+                (campaignHypotheses.data ?? []).filter(
+                  (h) => !h.archived_at && h.status !== "REJECTED",
+                ).length *
+                  (campaignEvidence.data ?? []).length -
+                  (campaignEvaluations.data ?? []).length,
+              )}{" "}
+              unassessed combinations
+            </p>
+            <Link
+              className="mt-3 inline-block text-cyan-200"
+              href={`/projects/${id}/campaigns/${entityId}/attribution`}
+            >
+              Open Attribution Analysis →
+            </Link>
+          </section>
+          <div className="flex justify-end">
+            <Link
+              className="rounded border border-stone-700 px-3 py-2 text-sm text-cyan-200"
+              href={`/projects/${id}/campaigns/${entityId}${showHistorical ? "" : "?historical=1"}`}
+            >
+              {showHistorical
+                ? "Hide historical relationships"
+                : "Show historical relationships"}
+            </Link>
+          </div>
+          <section className="card">
+            <p className="citem-label">Reconstruction Summary</p>
+            <h2 className="text-xl font-semibold">
+              Current Campaign Reconstruction
+            </h2>
+            <p className="mt-2 text-sm text-stone-500">
+              Campaign Reconstruction organises observed and inferred Timeline
+              events into an analyst-controlled operational sequence.
+              Reconstruction is not Threat Actor attribution.
+            </p>
+            <ReconstructionForm
+              projectId={id}
+              campaignId={entityId}
+              row={(campaignReconstruction.data ?? {}) as Row}
+            />
+          </section>
+          <section className="card">
+            <h2 className="text-xl font-semibold">Ordered Activity</h2>
+            <p className="text-sm text-stone-500">
+              Event assessment status and Campaign membership status are
+              distinct. Chronology uses event time; sequence order only assists
+              ties.
+            </p>
+            <ol className="mt-3 grid gap-3">
+              {visibleCampaignActivity(
+                (campaignActivity.data ?? []) as Row[],
+                showHistorical,
+              ).map((m) => {
+                const e = m.timeline_events as Row;
+                return (
+                  <li
+                    className="rounded border border-stone-800 p-3"
+                    key={ss(m.id)}
+                  >
+                    <Link
+                      className="font-semibold text-cyan-200"
+                      href={`/projects/${id}/timeline/${ss(m.timeline_event_id)}`}
+                    >
+                      {ss(e?.event_name)}
+                    </Link>
+                    <dl className="mt-2 grid gap-2 text-sm md:grid-cols-2">
+                      <div>
+                        <dt className="citem-label">Timeline event status</dt>
+                        <dd>{ss(e?.assessment_status)}</dd>
+                      </div>
+                      <div>
+                        <dt className="citem-label">
+                          Campaign membership status
+                        </dt>
+                        <dd>{ss(m.status)}</dd>
+                      </div>
+                    </dl>
+                    <p>
+                      {ss(e?.event_date)} · confidence {ss(m.confidence)}
+                    </p>
+                    <p>{ss(m.rationale)}</p>
+                    <p className="text-xs text-stone-500">
+                      {Array.isArray(e?.timeline_event_entities)
+                        ? e.timeline_event_entities.length
+                        : 0}{" "}
+                      entities ·{" "}
+                      {Array.isArray(e?.timeline_event_support)
+                        ? e.timeline_event_support.length
+                        : 0}{" "}
+                      supporting records
+                    </p>
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
+          <section className="card">
+            <h2 className="text-xl font-semibold">Infrastructure</h2>
+            <ul className="mt-3">
+              {((campaignInfrastructure.data ?? []) as Row[]).map((m) => {
+                const c = m.infrastructure_clusters as Row;
+                return (
+                  <li key={ss(m.id)}>
+                    <Link
+                      className="text-cyan-200"
+                      href={`/projects/${id}/infrastructure/${ss(m.infrastructure_cluster_id)}`}
+                    >
+                      {ss(c?.name)}
+                    </Link>{" "}
+                    — cluster {ss(c?.status)}, relationship {ss(m.status)} /{" "}
+                    {ss(m.confidence)} — {ss(m.rationale)}
+                    <p className="text-xs text-stone-500">
+                      {ss(c?.operational_relevance)}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+            <ClusterMembershipForm
+              projectId={id}
+              campaignId={entityId}
+              clusters={(availableClusters.data ?? []) as Row[]}
+            />
+          </section>
+          <section className="card">
+            <h2 className="text-xl font-semibold">
+              Supporting Events & Current Assessment
+            </h2>
+            <p>
+              Supporting Sources, Evidence, and enrichment results remain
+              authoritative at event level. Assess the coherent sequence,
+              observed versus inferred activity, objective, infrastructure,
+              activity status, disputes, likely next activity, and data still
+              required. AI does not write this assessment.
+            </p>
+          </section>
+        </>
+      ) : null}
+
+      {tab === "actors" ? (
+        <section className="card">
+          <h2 className="text-xl font-semibold">Attribution Hypotheses</h2>
+          <p className="text-sm text-amber-200">
+            Analytical hypothesis — not a confirmed Campaign relationship.
+          </p>
+          <ul className="mt-3 grid gap-2">
+            {((actorHypotheses.data ?? []) as Row[]).map((h) => {
+              const c = h.campaigns as Row;
+              const preferred =
+                Array.isArray(h.campaign_attribution_assessments) &&
+                h.campaign_attribution_assessments.length > 0;
+              return (
+                <li key={ss(h.id)}>
+                  <Link
+                    className="text-cyan-200"
+                    href={`/projects/${id}/campaigns/${ss(h.campaign_id)}/attribution/${ss(h.id)}`}
+                  >
+                    {ss(c?.name)} — {ss(h.title)}
+                  </Link>{" "}
+                  · {ss(h.status)} · {ss(h.confidence)}{" "}
+                  {preferred ? "· CURRENTLY PREFERRED" : ""}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="card">
         <h2 className="font-semibold text-white">Related entities</h2>
