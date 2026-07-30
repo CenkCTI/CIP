@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 
 import { requireOwnedProject } from "@/lib/projects/ownership";
 import { ingestStoredResearchFeed } from "@/lib/research-feeds/orchestrator";
-import { feedFormSchema, idsSchema } from "@/lib/research-feeds/schema";
+import { editFeedFormSchema, feedFormSchema, idsSchema } from "@/lib/research-feeds/schema";
 import { archiveFeedWorkflow, createFeedWorkflow, editFeedWorkflow, restoreFeedWorkflow, setFeedEnabledWorkflow } from "@/lib/research-feeds/trusted-workflow-client";
 import { normalizeFeedUrl } from "@/lib/research-feeds/url";
 
@@ -37,10 +37,10 @@ export async function updateResearchFeed(projectId: string, feedId: string, _sta
   try {
     if (!idsSchema.safeParse({ projectId, feedId }).success) return { error: "Feed not found." };
     const context = await requireOwnedProject(projectId);
-    const parsed = feedFormSchema.safeParse({ name: formData.get("name"), description: formData.get("description") ?? "", configured_url: formData.get("configured_url"), enabled: formData.get("enabled") === "on" });
+    const parsed = editFeedFormSchema.safeParse({ name: formData.get("name"), description: formData.get("description") ?? "", configured_url: formData.get("configured_url"), enabled: formData.get("enabled") === "on" });
     if (!parsed.success) return { error: parsed.error.issues[0]?.message };
-    const configuredUrl = normalizeFeedUrl(parsed.data.configured_url).toString();
-    const { error } = await editFeedWorkflow( { p_actor_id: context.user.id, p_project_id: projectId, p_feed_source_id: feedId, p_name: parsed.data.name, p_description: parsed.data.description, p_configured_url: configuredUrl, p_configured_url_hash: hashUrl(configuredUrl), p_enabled: parsed.data.enabled });
+    const configuredUrl = parsed.data.configured_url ? normalizeFeedUrl(parsed.data.configured_url).toString() : null;
+    const { error } = await editFeedWorkflow( { p_actor_id: context.user.id, p_project_id: projectId, p_feed_source_id: feedId, p_name: parsed.data.name, p_description: parsed.data.description, p_configured_url: configuredUrl, p_configured_url_hash: configuredUrl ? hashUrl(configuredUrl) : null, p_enabled: parsed.data.enabled });
     if (error) return { error: safeRpcError(error.message) };
     refresh(projectId);
     return { success: "Feed updated." };

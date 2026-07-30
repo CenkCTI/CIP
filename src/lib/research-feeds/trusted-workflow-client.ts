@@ -16,6 +16,6 @@ export const editFeedWorkflow=(parameters:Parameters)=>feedRpc("edit_research_fe
 export const setFeedEnabledWorkflow=(parameters:Parameters)=>feedRpc("set_research_feed_enabled",parameters);
 export const archiveFeedWorkflow=(parameters:Parameters)=>feedRpc("archive_research_feed",parameters);
 export const restoreFeedWorkflow=(parameters:Parameters)=>feedRpc("restore_research_feed",parameters);
-export const claimFeedWorkflow=(parameters:Parameters)=>feedRpc<Array<{run_id:string;lease_token:string;request_url_hash:string;lease_expires_at:string}>>("claim_research_feed_fetch",parameters);
+export const claimFeedWorkflow=(parameters:Parameters)=>feedRpc<Array<{run_id:string;lease_token:string;request_url_hash:string;lease_expires_at:string;configured_url:string;etag:string|null;last_modified:string|null}>>("claim_research_feed_fetch",parameters);
 export const completeFeedWorkflow=(parameters:Parameters)=>feedRpc("complete_research_feed_fetch",parameters);
 export const failFeedWorkflow=(parameters:Parameters)=>feedRpc("fail_research_feed_fetch",parameters);
