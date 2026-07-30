@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { parseProjectForm } from "@/lib/projects/schema";
 import { requireUser } from "@/lib/auth";
+import { timelineDeletionMessage } from "@/lib/reconstruction/presentation";
 import {
   reportMetaSchema,
   reportSchema,
@@ -38,12 +39,31 @@ type UploadAuthState = State & {
 function safeReturn(path: string | null) {
   return path?.startsWith("/") && !path.startsWith("//") ? path : "/dashboard";
 }
+function authenticationError(
+  operation: "sign in" | "sign up" | "send a password reset link" | "update the password",
+  error: { message?: string; status?: number },
+) {
+  const message = (error.message ?? "").toLowerCase();
+  if (message.includes("invalid login credentials")) {
+    return "The email or password is incorrect.";
+  }
+  if (message.includes("email not confirmed")) {
+    return "Confirm your email address before signing in.";
+  }
+  if (message.includes("already registered") || message.includes("already exists")) {
+    return "An account with this email already exists.";
+  }
+  if (error.status === 429 || message.includes("rate limit")) {
+    return "Too many authentication attempts. Please wait and try again.";
+  }
+  return `Unable to ${operation}. Please try again.`;
+}
 export async function signIn(_: State, formData: FormData): Promise<State> {
   const s = await createClient();
   const email = String(formData.get("email") || "");
   const password = String(formData.get("password") || "");
   const { error } = await s.auth.signInWithPassword({ email, password });
-  if (error) return { error: "Unable to create Timeline event." };
+  if (error) return { error: authenticationError("sign in", error) };
   redirect(safeReturn(String(formData.get("returnTo") || "/dashboard")));
 }
 export async function signUp(_: State, formData: FormData): Promise<State> {
@@ -56,7 +76,7 @@ export async function signUp(_: State, formData: FormData): Promise<State> {
     password,
     options: { data: { display_name } },
   });
-  if (error) return { error: "Unable to update Timeline event." };
+  if (error) return { error: authenticationError("sign up", error) };
   return { success: "Check your email to confirm your account, then sign in." };
 }
 export async function signOut() {
@@ -73,7 +93,8 @@ export async function forgotPassword(
   const { error } = await s.auth.resetPasswordForEmail(email, {
     redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/auth/update-password`,
   });
-  if (error) return { error: "Unable to create Timeline event." };
+  if (error)
+    return { error: authenticationError("send a password reset link", error) };
   return {
     success:
       "If email recovery is enabled in Supabase, a reset link has been sent.",
@@ -88,7 +109,8 @@ export async function updatePassword(
   if (password.length < 8)
     return { error: "Password must be at least 8 characters." };
   const { error } = await s.auth.updateUser({ password });
-  if (error) return { error: "Unable to update Timeline event." };
+  if (error)
+    return { error: authenticationError("update the password", error) };
   return { success: "Password updated. You can continue to the dashboard." };
 }
 export async function createProject(
@@ -454,15 +476,27 @@ export async function updateTimelineEvent(
   revalidatePath(`/projects/${pid}`);
   return { success: "Event updated." };
 }
-export async function deleteTimelineEvent(projectId: string, id: string, state?: State) {
+export async function deleteTimelineEvent(
+  projectId: string,
+  id: string,
+  state?: State,
+) {
   void state;
   const {
     supabase,
     projectId: pid,
     id: childId,
   } = await assertChild(projectId, "timeline_events", id);
-  const { count } = await supabase.from("campaign_timeline_events").select("id", { count: "exact", head: true }).eq("project_id", pid).eq("timeline_event_id", childId);
-  if (count) return { error: "Remove or reject Campaign memberships before deleting this Timeline event." };
+  const { data: memberships, error: membershipError } = await supabase
+    .from("campaign_timeline_events")
+    .select("status")
+    .eq("project_id", pid)
+    .eq("timeline_event_id", childId);
+  if (membershipError) {
+    return { error: "Unable to verify Campaign memberships." };
+  }
+  const deletionBlock = timelineDeletionMessage(memberships?.map((membership) => membership.status) ?? []);
+  if (deletionBlock) return { error: deletionBlock };
   const { error } = await supabase
     .from("timeline_events")
     .delete()

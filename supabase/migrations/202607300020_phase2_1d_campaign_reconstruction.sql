@@ -100,3 +100,19 @@ end loop; end $$;
 -- Assessments and memberships are historical records; only explicit support/entity links can be unlinked.
 create policy timeline_event_entities_delete_owned on public.timeline_event_entities for delete to authenticated using(public.project_is_owned(project_id));
 create policy timeline_event_support_delete_owned on public.timeline_event_support for delete to authenticated using(public.project_is_owned(project_id));
+-- Historical Campaign-event analysis can only be deliberately unlinked after it
+-- has first been assessed REJECTED or REMOVED. Active analysis never cascades.
+create policy campaign_timeline_events_delete_historical_owned
+ on public.campaign_timeline_events for delete to authenticated
+ using(public.project_is_owned(project_id) and status in ('REJECTED','REMOVED'));
+create or replace function public.prevent_active_campaign_timeline_event_delete()
+returns trigger language plpgsql set search_path='' as $$
+begin
+ if old.status in ('POSSIBLE','CONFIRMED') then
+  raise exception using errcode='23503', message='active_campaign_membership';
+ end if;
+ return old;
+end $$;
+create trigger campaign_timeline_events_prevent_active_delete
+ before delete on public.campaign_timeline_events for each row
+ execute function public.prevent_active_campaign_timeline_event_delete();

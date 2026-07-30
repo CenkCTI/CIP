@@ -12,7 +12,9 @@ The Graph derives Campaign-to-Infrastructure Cluster edges from the authoritativ
 
 ## Control, security, and deletion
 
-All creation, classification, membership, and assessment is explicit analyst action. Nothing automatically creates events or Campaigns, infers phases, links records, changes Indicator/cluster assessment, attributes Threat Actors, or mutates Reports, Tasks, AI, or BYOK data. Every new table uses owner-scoped RLS and same-Investigation composite foreign keys. Server actions authenticate, verify ownership, validate strict bounded input, and return controlled errors. A Timeline event referenced by any Campaign membership cannot be deleted; reassess/unlink the membership first. Rejected and removed analysis remains historical.
+All creation, classification, membership, and assessment is explicit analyst action. Nothing automatically creates events or Campaigns, infers phases, links records, changes Indicator/cluster assessment, attributes Threat Actors, or mutates Reports, Tasks, AI, or BYOK data. Every new table uses owner-scoped RLS and same-Investigation composite foreign keys. Server actions authenticate, verify ownership, validate strict bounded input, and return controlled errors.
+
+POSSIBLE and CONFIRMED Campaign memberships block Timeline event deletion. Analysts must first reassess them as REJECTED or REMOVED. Those historical rows remain visible until the analyst uses the dedicated, confirmed **Unlink historical membership** action. Migration 020 permits owner-scoped deletion only for REJECTED or REMOVED memberships and a database trigger rejects deletion of active memberships. The Timeline event remains protected by `ON DELETE RESTRICT`, so no Campaign reconstruction history disappears through a cascade.
 
 ## Apply and verify
 
@@ -35,7 +37,7 @@ select relname,relrowsecurity from pg_class where oid in ('public.campaign_recon
 select tablename,policyname,cmd,roles,qual,with_check from pg_policies where schemaname='public' and tablename in ('campaign_reconstructions','campaign_timeline_events','campaign_infrastructure_clusters','timeline_event_entities','timeline_event_support');
 ```
 
-Run `scripts/test-phase2-1d-migration.sh` with PostgreSQL 16+ client/server tools. It applies migrations 001–020 in a real temporary PostgreSQL database transaction with minimal auth/storage stubs, verifies Phase 2.1D, rolls back, and removes the database. This is not live Supabase validation.
+Run `scripts/test-phase2-1d-migration.sh` with PostgreSQL 16+ client/server tools. It applies migrations 001–020 in a real temporary PostgreSQL database transaction with minimal auth/storage stubs, verifies legacy Timeline compatibility, exact-one and same-Investigation constraints, restricted deletion, triggers, RLS and policies, rolls back, and removes the database. The hardening pass completed this test with PostgreSQL 16.14. This is not live Supabase validation.
 
 ## Live acceptance checklist
 
