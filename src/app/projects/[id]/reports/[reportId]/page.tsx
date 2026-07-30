@@ -86,20 +86,25 @@ export default async function ReportPage({
     baselineVersion?supabase.from("report_version_references").select("*").eq("project_id",id).eq("report_version_id",baselineVersion.id):Promise.resolve({data:[],error:null}),
   ]);
   if(draftReferenceError||versionReferenceError) notFound();
-  const referenceSources=[
-    ["SOURCE","sources","id,title,source_type,reliability,verification_state,archived_at,updated_at","title"],
-    ["EVIDENCE","evidence","id,title,type,updated_at","title"],
-    ["INDICATOR","indicators","id,value,type,confidence,updated_at","value"],
-    ["ENRICHMENT_RESULT","enrichment_results","id,category,confidence,created_at","category"],
-    ["INFRASTRUCTURE_CLUSTER","infrastructure_clusters","id,name,status,confidence,archived_at,updated_at","name"],
-    ["TIMELINE_EVENT","timeline_events","id,event_name,assessment_status,confidence,updated_at","event_name"],
-    ["CAMPAIGN","campaigns","id,name,updated_at","name"], ["THREAT_ACTOR","threat_actors","id,name,updated_at","name"], ["MALWARE","malware","id,name,family,updated_at","name"],
-    ["CVE","cves","id,cve_id,severity,exploit_status,updated_at","cve_id"], ["MITRE_TECHNIQUE","mitre_techniques","id,technique_id,technique_name,tactic,updated_at","technique_id"],
-    ["ATTRIBUTION_HYPOTHESIS","attribution_hypotheses","id,title,status,confidence,archived_at,updated_at","title"], ["ATTRIBUTION_ASSESSMENT","campaign_attribution_assessments","id,assessment_status,conclusion_type,confidence,updated_at","assessment_status"],
-  ] as const;
-  const candidateResults=await Promise.all(referenceSources.map(([,table])=>supabase.from(table).select("*").eq("project_id",id).limit(200)));
+  const candidateResults=await Promise.all([
+    supabase.from("sources").select("id,title,archived_at,updated_at").eq("project_id",id).limit(200),
+    supabase.from("evidence").select("id,title,updated_at").eq("project_id",id).limit(200),
+    supabase.from("indicators").select("id,value,updated_at").eq("project_id",id).limit(200),
+    supabase.from("enrichment_results").select("id,category,indicator_id,created_at").eq("project_id",id).limit(200),
+    supabase.from("infrastructure_clusters").select("id,name,archived_at,updated_at").eq("project_id",id).limit(200),
+    supabase.from("timeline_events").select("id,event_name,updated_at").eq("project_id",id).limit(200),
+    supabase.from("campaigns").select("id,name,updated_at").eq("project_id",id).limit(200),
+    supabase.from("threat_actors").select("id,name,updated_at").eq("project_id",id).limit(200),
+    supabase.from("malware").select("id,name,updated_at").eq("project_id",id).limit(200),
+    supabase.from("cves").select("id,cve_id,updated_at").eq("project_id",id).limit(200),
+    supabase.from("mitre_techniques").select("id,technique_id,technique_name,updated_at").eq("project_id",id).limit(200),
+    supabase.from("attribution_hypotheses").select("id,campaign_id,title,archived_at,updated_at").eq("project_id",id).limit(200),
+    supabase.from("campaign_attribution_assessments").select("id,campaign_id,assessment_status,updated_at").eq("project_id",id).limit(200),
+  ]);
   if(candidateResults.some(x=>x.error)) notFound();
-  const candidates=Object.fromEntries(referenceSources.map(([type,,,label],i)=>[type,((candidateResults[i].data??[]) as unknown as Row[]).map(x=>({...x,label:type==="MITRE_TECHNIQUE"?`${String((x as Row).technique_id)} — ${String((x as Row).technique_name)}`:type==="ENRICHMENT_RESULT"?`Enrichment ${String((x as Row).category)}`:type==="ATTRIBUTION_ASSESSMENT"?`Attribution assessment · ${String((x as Row).assessment_status)}`:String((x as Row)[label])}))]));
+  const candidateTypes=["SOURCE","EVIDENCE","INDICATOR","ENRICHMENT_RESULT","INFRASTRUCTURE_CLUSTER","TIMELINE_EVENT","CAMPAIGN","THREAT_ACTOR","MALWARE","CVE","MITRE_TECHNIQUE","ATTRIBUTION_HYPOTHESIS","ATTRIBUTION_ASSESSMENT"] as const;
+  const labelKeys=["title","title","value","category","name","event_name","name","name","name","cve_id","technique_id","title","assessment_status"] as const;
+  const candidates=Object.fromEntries(candidateTypes.map((type,i)=>[type,((candidateResults[i].data??[]) as unknown as Row[]).map(x=>({id:String(x.id),label:type==="MITRE_TECHNIQUE"?`${String(x.technique_id)} — ${String(x.technique_name)}`:type==="ENRICHMENT_RESULT"?`Enrichment ${String(x.category)}`:type==="ATTRIBUTION_ASSESSMENT"?`Attribution assessment · ${String(x.assessment_status)}`:String(x[labelKeys[i]]),updated_at:x.updated_at??x.created_at,archived_at:x.archived_at??null,routeContext:type==="ENRICHMENT_RESULT"?{indicatorId:String(x.indicator_id)}:type==="ATTRIBUTION_HYPOTHESIS"||type==="ATTRIBUTION_ASSESSMENT"?{campaignId:String(x.campaign_id)}:undefined}))]));
   const { count: relationshipCount, error: relationshipCountError } =
     await supabase
       .from("entity_relationships")

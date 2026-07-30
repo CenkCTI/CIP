@@ -4,7 +4,7 @@ create type public.report_lifecycle_status as enum ('DRAFT','IN_REVIEW','APPROVE
 create type public.report_version_status as enum ('SAVED','PUBLISHED','SUPERSEDED');
 create type public.report_reference_type as enum ('SOURCE','EVIDENCE','INDICATOR','ENRICHMENT_RESULT','INFRASTRUCTURE_CLUSTER','TIMELINE_EVENT','CAMPAIGN','THREAT_ACTOR','MALWARE','CVE','MITRE_TECHNIQUE','ATTRIBUTION_HYPOTHESIS','ATTRIBUTION_ASSESSMENT');
 
-alter table public.reports add column product_type public.intelligence_product_type not null default 'OTHER', add column lifecycle_status public.report_lifecycle_status not null default 'DRAFT', add column current_version_number integer not null default 0 check(current_version_number>=0), add column authoritative_version_id uuid, add column reviewed_at timestamptz, add column approved_at timestamptz, add column published_at timestamptz, add column superseded_at timestamptz, add column archived_at timestamptz;
+alter table public.reports add column product_type public.intelligence_product_type not null default 'OTHER', add column lifecycle_status public.report_lifecycle_status not null default 'DRAFT', add column pre_archive_lifecycle_status public.report_lifecycle_status, add column current_version_number integer not null default 0 check(current_version_number>=0), add column authoritative_version_id uuid, add column reviewed_at timestamptz, add column approved_at timestamptz, add column published_at timestamptz, add column superseded_at timestamptz, add column archived_at timestamptz;
 
 create table public.report_versions(
  id uuid primary key default gen_random_uuid(), project_id uuid not null, report_id uuid not null, version_number integer not null check(version_number>0), version_status public.report_version_status not null default 'SAVED',
@@ -117,11 +117,19 @@ create function public.guard_report_lifecycle() returns trigger language plpgsql
   if new.lifecycle_status not in ('DRAFT','IN_REVIEW','APPROVED','ARCHIVED') then raise exception 'lifecycle_transition_requires_workflow' using errcode='42501'; end if;
   if old.lifecycle_status in ('PUBLISHED','SUPERSEDED') and new.lifecycle_status not in ('ARCHIVED',old.lifecycle_status) then raise exception 'issued_product_transition_requires_workflow' using errcode='42501'; end if;
  end if;
- if new.lifecycle_status='ARCHIVED' then new.archived_at=coalesce(old.archived_at,now()); elsif old.lifecycle_status='ARCHIVED' then new.archived_at=null; end if;
+ if new.lifecycle_status='ARCHIVED' and old.lifecycle_status<>'ARCHIVED' then new.pre_archive_lifecycle_status=old.lifecycle_status;new.archived_at=now();
+ elsif old.lifecycle_status='ARCHIVED' and new.lifecycle_status<>'ARCHIVED' then
+  if old.authoritative_version_id is not null and exists(select 1 from public.report_versions v where v.id=old.authoritative_version_id and v.project_id=old.project_id and v.report_id=old.id and v.version_status='PUBLISHED') then new.lifecycle_status='PUBLISHED';
+  else new.lifecycle_status=case when old.pre_archive_lifecycle_status in ('DRAFT','IN_REVIEW','APPROVED') then old.pre_archive_lifecycle_status else 'DRAFT' end; end if;
+  new.archived_at=null;new.pre_archive_lifecycle_status=null;
+ end if;
  if new.lifecycle_status='IN_REVIEW' and old.lifecycle_status<>'IN_REVIEW' then new.reviewed_at=now(); end if;
  if new.lifecycle_status='APPROVED' and old.lifecycle_status<>'APPROVED' then new.approved_at=now(); end if;
  return new; end $$;
 create trigger reports_lifecycle_guard before update of lifecycle_status on public.reports for each row execute function public.guard_report_lifecycle();
+create function public.guard_report_workflow_fields() returns trigger language plpgsql security definer set search_path='' as $$ begin
+ if row(new.authoritative_version_id,new.published_at,new.superseded_at,new.reviewed_at,new.approved_at,new.current_version_number) is distinct from row(old.authoritative_version_id,old.published_at,old.superseded_at,old.reviewed_at,old.approved_at,old.current_version_number) and current_setting('citem.report_rpc',true) is distinct from 'on' then raise exception 'report_workflow_fields_require_rpc' using errcode='42501';end if;return new;end $$;
+create trigger reports_workflow_fields_guard before update on public.reports for each row execute function public.guard_report_workflow_fields();
 
 create function public.guard_report_version() returns trigger language plpgsql security definer set search_path='' as $$ begin
  if tg_op='DELETE' then raise exception 'report_versions_are_permanent' using errcode='55000'; end if;
@@ -140,7 +148,7 @@ declare r public.reports; v public.report_versions; n integer; ref public.report
  select x.* into r from public.reports x join public.projects p on p.id=x.project_id and p.owner_id=auth.uid() where x.project_id=p_project_id and x.id=p_report_id for update;
  if r.id is null or r.lifecycle_status='ARCHIVED' then raise exception 'report_not_versionable' using errcode='42501'; end if;
  if char_length(trim(p_change_summary)) not between 1 and 2000 or char_length(trim(p_executive_summary)) not between 1 and 20000 or char_length(trim(p_key_judgments)) not between 1 and 20000 or char_length(trim(p_confidence)) not between 1 and 100 or char_length(trim(p_intelligence_gaps)) not between 1 and 20000 or char_length(trim(p_recommendations)) not between 1 and 20000 then raise exception 'invalid_version_metadata' using errcode='22023'; end if;
- n=r.current_version_number+1;
+ perform set_config('citem.report_rpc','on',true);n=r.current_version_number+1;
  insert into public.report_versions(project_id,report_id,version_number,title_snapshot,product_type_snapshot,content_snapshot,executive_summary_snapshot,key_judgments_snapshot,confidence_snapshot,intelligence_gaps_snapshot,recommendations_snapshot,change_summary,created_by) values(p_project_id,p_report_id,n,r.title,r.product_type,r.content,p_executive_summary,p_key_judgments,p_confidence,p_intelligence_gaps,p_recommendations,p_change_summary,auth.uid()) returning * into v;
  for ref in select * from public.report_references where project_id=p_project_id and report_id=p_report_id for share loop
   insert into public.report_version_references(id,project_id,report_id,report_version_id,reference_type,source_id,evidence_id,indicator_id,enrichment_result_id,infrastructure_cluster_id,timeline_event_id,campaign_id,threat_actor_id,malware_id,cve_id,mitre_technique_id,attribution_hypothesis_id,attribution_assessment_id,label_snapshot,state_snapshot,source_updated_at,created_by) values(gen_random_uuid(),ref.project_id,ref.report_id,v.id,ref.reference_type,ref.source_id,ref.evidence_id,ref.indicator_id,ref.enrichment_result_id,ref.infrastructure_cluster_id,ref.timeline_event_id,ref.campaign_id,ref.threat_actor_id,ref.malware_id,ref.cve_id,ref.mitre_technique_id,ref.attribution_hypothesis_id,ref.attribution_assessment_id,ref.label,ref.state_snapshot,ref.source_updated_at,auth.uid());
@@ -149,18 +157,22 @@ declare r public.reports; v public.report_versions; n integer; ref public.report
 end $$;
 create function public.publish_report_version(p_project_id uuid,p_report_id uuid,p_version_id uuid) returns public.report_versions language plpgsql security definer set search_path='' as $$ declare v public.report_versions; ts timestamptz:=clock_timestamp(); begin
  if auth.uid() is null or not exists(select 1 from public.projects where id=p_project_id and owner_id=auth.uid()) then raise exception 'not_authorized' using errcode='42501'; end if;
- perform set_config('citem.version_rpc','on',true); perform set_config('citem.lifecycle_rpc','on',true);
+ perform set_config('citem.version_rpc','on',true); perform set_config('citem.lifecycle_rpc','on',true);perform set_config('citem.report_rpc','on',true);
  select * into v from public.report_versions where project_id=p_project_id and report_id=p_report_id and id=p_version_id for update;
  if v.id is null or v.version_status<>'SAVED' then raise exception 'version_not_publishable' using errcode='22023'; end if;
  update public.report_versions set version_status='SUPERSEDED',superseded_at=ts where project_id=p_project_id and report_id=p_report_id and version_status='PUBLISHED';
  update public.report_versions set version_status='PUBLISHED',published_at=ts where id=p_version_id returning * into v;
  update public.reports set authoritative_version_id=p_version_id,lifecycle_status='PUBLISHED',published_at=ts where project_id=p_project_id and id=p_report_id;
  return v; end $$;
+create function public.update_report_product_metadata(p_project_id uuid,p_report_id uuid,p_product_type public.intelligence_product_type,p_lifecycle_status public.report_lifecycle_status) returns public.reports language plpgsql security definer set search_path='' as $$ declare r public.reports;begin
+ if auth.uid() is null or p_lifecycle_status not in ('DRAFT','IN_REVIEW','APPROVED','ARCHIVED') or not exists(select 1 from public.projects where id=p_project_id and owner_id=auth.uid()) then raise exception 'not_authorized' using errcode='42501';end if;
+ perform set_config('citem.report_rpc','on',true);update public.reports set product_type=p_product_type,lifecycle_status=p_lifecycle_status where project_id=p_project_id and id=p_report_id returning * into r;if r.id is null then raise exception 'not_found' using errcode='P0002';end if;return r;end $$;
 create function public.validate_authoritative_version() returns trigger language plpgsql set search_path='' as $$ begin
  if new.authoritative_version_id is not null and not exists(select 1 from public.report_versions v where v.id=new.authoritative_version_id and v.project_id=new.project_id and v.report_id=new.id and v.version_status='PUBLISHED') then raise exception 'authoritative_version_must_be_published' using errcode='23514'; end if; return new; end $$;
 create constraint trigger reports_authoritative_published after insert or update of authoritative_version_id on public.reports deferrable initially deferred for each row execute function public.validate_authoritative_version();
 revoke all on function public.create_report_version(uuid,uuid,text,text,text,text,text,text) from public,anon; grant execute on function public.create_report_version(uuid,uuid,text,text,text,text,text,text) to authenticated;
 revoke all on function public.publish_report_version(uuid,uuid,uuid) from public,anon; grant execute on function public.publish_report_version(uuid,uuid,uuid) to authenticated;
+revoke all on function public.update_report_product_metadata(uuid,uuid,public.intelligence_product_type,public.report_lifecycle_status) from public,anon;grant execute on function public.update_report_product_metadata(uuid,uuid,public.intelligence_product_type,public.report_lifecycle_status) to authenticated;
 
 alter table public.report_versions enable row level security; alter table public.report_references enable row level security; alter table public.report_version_references enable row level security;
 create policy report_versions_select on public.report_versions for select to authenticated using(public.project_is_owned(project_id));

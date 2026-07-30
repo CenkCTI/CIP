@@ -23,6 +23,10 @@ do $$ declare u1 uuid:=gen_random_uuid();u2 uuid:=gen_random_uuid();p1 uuid:=gen
  insert into auth.users values(u1,'{}'),(u2,'{}');perform set_config('request.jwt.claim.sub',u1::text,true);
  insert into projects(id,owner_id,name,research_type) values(p1,u1,'One','CTI'),(p2,u2,'Two','CTI');
  insert into reports(project_id,title) values(p1,'Assessment') returning id into r;
+ begin update reports set current_version_number=9 where id=r;raise exception 'direct counter update accepted';exception when insufficient_privilege then null;end;
+ begin update reports set published_at=now() where id=r;raise exception 'direct publication timestamp accepted';exception when insufficient_privilege then null;end;
+ perform update_report_product_metadata(p1,r,'OTHER','ARCHIVED');perform update_report_product_metadata(p1,r,'OTHER','APPROVED');
+ if (select lifecycle_status from reports where id=r)<>'DRAFT' then raise exception 'unpublished restore did not preserve pre-archive state';end if;
  insert into indicators(project_id,value,type) values(p1,'198.51.100.1','IP') returning id into i1; insert into indicators(project_id,value,type) values(p2,'198.51.100.2','IP') returning id into i2;
  insert into report_references(project_id,report_id,reference_type,indicator_id,created_by) values(p1,r,'INDICATOR',i1,u1) returning id into ref;
  if (select label from report_references where id=ref)<>'198.51.100.1' then raise exception 'label not server-derived';end if;
@@ -31,9 +35,13 @@ do $$ declare u1 uuid:=gen_random_uuid();u2 uuid:=gen_random_uuid();p1 uuid:=gen
  begin insert into report_references(project_id,report_id,reference_type,indicator_id,created_by) values(p1,r,'INDICATOR',i2,u1);raise exception 'cross Investigation accepted';exception when foreign_key_violation then null;end;
  v1:=create_report_version(p1,r,'Initial','Executive','Judgment','MEDIUM','Gaps','Recommendations');
  if v1.version_number<>1 or (select count(*) from report_version_references where report_version_id=v1.id)<>1 then raise exception 'atomic snapshot failed';end if;
+ perform set_config('citem.report_rpc','off',true);
+ begin update reports set authoritative_version_id=v1.id where id=r;raise exception 'direct authoritative update accepted';exception when insufficient_privilege then null;end;
  begin update report_versions set version_status='PUBLISHED' where id=v1.id;raise exception 'direct publication accepted';exception when insufficient_privilege then null;end;
  begin update report_version_references set label_snapshot='changed' where report_version_id=v1.id;raise exception 'snapshot mutation accepted';exception when object_not_in_prerequisite_state then null;end;
  v1:=publish_report_version(p1,r,v1.id); if v1.version_status<>'PUBLISHED' or (select authoritative_version_id from reports where id=r)<>v1.id then raise exception 'publish failed';end if;
+ perform update_report_product_metadata(p1,r,'OTHER','ARCHIVED');perform update_report_product_metadata(p1,r,'OTHER','DRAFT');
+ if (select lifecycle_status from reports where id=r)<>'PUBLISHED' then raise exception 'published Report restored to editable state';end if;
  begin delete from report_versions where id=v1.id;raise exception 'published delete accepted';exception when object_not_in_prerequisite_state then null;end;
  v2:=create_report_version(p1,r,'Second','Executive 2','Judgment 2','HIGH','Gaps 2','Recommendations 2'); v2:=publish_report_version(p1,r,v2.id);
  if (select version_status from report_versions where id=v1.id)<>'SUPERSEDED' or v2.version_status<>'PUBLISHED' then raise exception 'supersession failed';end if;

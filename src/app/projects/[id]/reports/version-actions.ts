@@ -10,8 +10,7 @@ async function owned(projectId:string,reportId:string){
 }
 export async function updateProductMetadata(projectId:string,reportId:string,_:unknown,fd:FormData){
  const ctx=await owned(projectId,reportId); const input=metadataSchema.safeParse({productType:fd.get("productType"),lifecycleStatus:fd.get("lifecycleStatus")}); if(!ctx||!input.success)return fail();
- const stamp=input.data.lifecycleStatus==="ARCHIVED"?{archived_at:new Date().toISOString()}:input.data.lifecycleStatus===ctx.report.lifecycle_status?{}:{archived_at:null};
- const {error}=await ctx.supabase.from("reports").update({product_type:input.data.productType,lifecycle_status:input.data.lifecycleStatus,...stamp}).eq("project_id",projectId).eq("id",reportId); if(error)return fail();
+ const {error}=await ctx.supabase.rpc("update_report_product_metadata",{p_project_id:projectId,p_report_id:reportId,p_product_type:input.data.productType,p_lifecycle_status:input.data.lifecycleStatus}); if(error)return fail();
  revalidatePath(`/projects/${projectId}/reports/${reportId}`); return {success:"Product metadata saved."};
 }
 export async function createReportVersion(projectId:string,reportId:string,_:unknown,fd:FormData){
