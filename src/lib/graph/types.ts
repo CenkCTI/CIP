@@ -30,6 +30,7 @@ export type GraphEdge = {
   sourceKind: GraphSourceKind;
   description?: string;
   detailUrl?: string;
+  metadata?: Record<string, string | number | boolean | null>;
 };
 export type GraphResponse = {
   nodes: GraphNode[];

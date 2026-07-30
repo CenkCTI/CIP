@@ -138,3 +138,6 @@ Infrastructure Clusters, Graph Source nodes/edge provenance, Timeline redesign, 
 - [ ] Migration 019 applied and PostgREST schema reloaded in live Supabase.
 - [ ] Live two-user IDOR and workflow acceptance completed.
 - [x] Phase 2.1C hardening validated migrations 001–019 in one PostgreSQL 16 transaction, removed same-transaction direct enum comparisons, preserved analytical status across archive/restore, and added executable action/route/Graph coverage.
+# Phase 2.1D — implemented
+
+Attack Timeline and Campaign Reconstruction is implemented through additive migration 020, owned event detail and Campaign reconstruction experiences, analyst-controlled memberships and provenance, and Campaign-to-Infrastructure Graph edges. Live Supabase migration and acceptance remain operator steps documented in `docs/PHASE_2_1D.md`.

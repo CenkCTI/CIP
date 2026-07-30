@@ -285,6 +285,9 @@ export function visibleInfrastructureMembershipStatuses(includeHistorical: boole
     ? ["POSSIBLE", "CONFIRMED", "REJECTED", "REMOVED"]
     : ["POSSIBLE", "CONFIRMED"];
 }
+export function campaignInfrastructureEdges(rows: Row[], projectId: string, visibleNodes: Set<string>): GraphEdge[] {
+  return rows.flatMap((row) => { const source=nodeId("CAMPAIGN",s(row.campaign_id));const target=nodeId("INFRASTRUCTURE_CLUSTER",s(row.infrastructure_cluster_id));if(!visibleNodes.has(source)||!visibleNodes.has(target))return[];return[{id:`campaign-infrastructure:${s(row.id)}`,source,target,relationshipType:`${s(row.status)} · ${s(row.confidence)}`,sourceKind:"semantic" as const,description:s(row.rationale).slice(0,240),detailUrl:`/projects/${projectId}/campaigns/${s(row.campaign_id)}`,metadata:{status:s(row.status),confidence:s(row.confidence),first_observed_at:s(row.first_observed_at),last_observed_at:s(row.last_observed_at)}}];});
+}
 export async function loadProjectGraph(
   projectId: string,
   includeHistoricalInfrastructure = false,
@@ -378,6 +381,9 @@ export async function loadProjectGraph(
   )) {
     addUniqueGraphEdge(edges, seen, edge);
   }
+  const {data:campaignClusters,error:campaignClusterError,count:campaignClusterCount}=await supabase.from("campaign_infrastructure_clusters").select("id,campaign_id,infrastructure_cluster_id,status,confidence,rationale,first_observed_at,last_observed_at",{count:"exact"}).eq("project_id",projectId).in("status",visibleInfrastructureMembershipStatuses(includeHistoricalInfrastructure)).order("id").limit(EDGE_LIMIT+1);
+  if(campaignClusterError&&campaignClusterError.code!=="42P01")throw new Error("Unable to load Campaign infrastructure relationships.");
+  for(const edge of campaignInfrastructureEdges((campaignClusters??[]) as unknown as Row[],projectId,finalNodeSet))addUniqueGraphEdge(edges,seen,edge);
 
   const {
     data: manual,
@@ -422,7 +428,7 @@ export async function loadProjectGraph(
     nodes,
     edges,
     totalNodeCount,
-    totalSemanticEdgeCount + totalManualEdgeCount + (clusterMemberCount ?? clusterMembers?.length ?? 0),
+    totalSemanticEdgeCount + totalManualEdgeCount + (clusterMemberCount ?? clusterMembers?.length ?? 0) + (campaignClusterCount ?? campaignClusters?.length ?? 0),
   );
 }
 

@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CtiDelete, CtiForm } from "@/components/cti-forms";
+import { ClusterMembershipForm, ReconstructionForm } from "@/components/reconstruction/forms";
 import { requireUser } from "@/lib/auth";
+import { visibleCampaignActivity } from "@/lib/reconstruction/presentation";
 import {
   detectHashAlgorithm,
   safeDefangIndicatorValue,
@@ -267,10 +269,13 @@ function ObservationHistory({
 
 export default async function Detail({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string; module: string; entityId: string }>;
+  searchParams: Promise<{ historical?: string }>;
 }) {
   const { id, module, entityId } = await params;
+  const showHistorical = (await searchParams).historical === "1";
   if (!ctiTabs.includes(module as never)) notFound();
   const tab = module as keyof typeof entityTables;
   const { supabase, user } = await requireUser();
@@ -372,6 +377,14 @@ export default async function Detail({
     };
   });
   const moduleLabel = tab === "indicators" ? "IOC Workbench" : ctiModuleLabels[tab];
+  const campaignReconstruction = tab === "campaigns" ? await supabase.from("campaign_reconstructions").select("*").eq("project_id",id).eq("campaign_id",entityId).maybeSingle() : {data:null};
+  const campaignActivityQuery = supabase.from("campaign_timeline_events").select("*,timeline_events(*,timeline_event_entities(id),timeline_event_support(id))").eq("project_id",id).eq("campaign_id",entityId);
+  if (!showHistorical) campaignActivityQuery.in("status", ["POSSIBLE", "CONFIRMED"]);
+  const campaignActivity = tab === "campaigns" ? await campaignActivityQuery : {data:[]};
+  const campaignInfrastructureQuery = supabase.from("campaign_infrastructure_clusters").select("*,infrastructure_clusters(name,status,operational_relevance,infrastructure_cluster_members(count))").eq("project_id",id).eq("campaign_id",entityId);
+  if (!showHistorical) campaignInfrastructureQuery.in("status", ["POSSIBLE", "CONFIRMED"]);
+  const campaignInfrastructure = tab === "campaigns" ? await campaignInfrastructureQuery : {data:[]};
+  const availableClusters = tab === "campaigns" ? await supabase.from("infrastructure_clusters").select("id,name").eq("project_id",id).is("archived_at",null) : {data:[]};
 
   return (
     <section className="mx-auto max-w-5xl space-y-6">
@@ -417,6 +430,13 @@ export default async function Detail({
           currentUserId={user.id}
         />
       ) : null}
+      {tab === "campaigns" ? <>
+        <div className="flex justify-end"><Link className="rounded border border-stone-700 px-3 py-2 text-sm text-cyan-200" href={`/projects/${id}/campaigns/${entityId}${showHistorical ? "" : "?historical=1"}`}>{showHistorical ? "Hide historical relationships" : "Show historical relationships"}</Link></div>
+        <section className="card"><p className="citem-label">Reconstruction Summary</p><h2 className="text-xl font-semibold">Current Campaign Reconstruction</h2><p className="mt-2 text-sm text-stone-500">Campaign Reconstruction organises observed and inferred Timeline events into an analyst-controlled operational sequence. Reconstruction is not Threat Actor attribution.</p><ReconstructionForm projectId={id} campaignId={entityId} row={(campaignReconstruction.data??{}) as Row}/></section>
+        <section className="card"><h2 className="text-xl font-semibold">Ordered Activity</h2><p className="text-sm text-stone-500">Event assessment status and Campaign membership status are distinct. Chronology uses event time; sequence order only assists ties.</p><ol className="mt-3 grid gap-3">{visibleCampaignActivity((campaignActivity.data??[]) as Row[], showHistorical).map(m=>{const e=m.timeline_events as Row;return <li className="rounded border border-stone-800 p-3" key={ss(m.id)}><Link className="font-semibold text-cyan-200" href={`/projects/${id}/timeline/${ss(m.timeline_event_id)}`}>{ss(e?.event_name)}</Link><dl className="mt-2 grid gap-2 text-sm md:grid-cols-2"><div><dt className="citem-label">Timeline event status</dt><dd>{ss(e?.assessment_status)}</dd></div><div><dt className="citem-label">Campaign membership status</dt><dd>{ss(m.status)}</dd></div></dl><p>{ss(e?.event_date)} · confidence {ss(m.confidence)}</p><p>{ss(m.rationale)}</p><p className="text-xs text-stone-500">{Array.isArray(e?.timeline_event_entities)?e.timeline_event_entities.length:0} entities · {Array.isArray(e?.timeline_event_support)?e.timeline_event_support.length:0} supporting records</p></li>})}</ol></section>
+        <section className="card"><h2 className="text-xl font-semibold">Infrastructure</h2><ul className="mt-3">{((campaignInfrastructure.data??[]) as Row[]).map(m=>{const c=m.infrastructure_clusters as Row;return <li key={ss(m.id)}><Link className="text-cyan-200" href={`/projects/${id}/infrastructure/${ss(m.infrastructure_cluster_id)}`}>{ss(c?.name)}</Link> — cluster {ss(c?.status)}, relationship {ss(m.status)} / {ss(m.confidence)} — {ss(m.rationale)}<p className="text-xs text-stone-500">{ss(c?.operational_relevance)}</p></li>})}</ul><ClusterMembershipForm projectId={id} campaignId={entityId} clusters={(availableClusters.data??[]) as Row[]}/></section>
+        <section className="card"><h2 className="text-xl font-semibold">Supporting Events & Current Assessment</h2><p>Supporting Sources, Evidence, and enrichment results remain authoritative at event level. Assess the coherent sequence, observed versus inferred activity, objective, infrastructure, activity status, disputes, likely next activity, and data still required. AI does not write this assessment.</p></section>
+      </> : null}
 
       <section className="card">
         <h2 className="font-semibold text-white">Related entities</h2>

@@ -42,6 +42,7 @@ import {
   taskPriorities,
   taskStatuses,
 } from "@/lib/workspace/schema";
+import { validTimelineDate } from "@/lib/reconstruction/presentation";
 
 type SP = CtiSearchParams & {
   tab?: string;
@@ -50,6 +51,13 @@ type SP = CtiSearchParams & {
   deadline?: string;
   deleted?: string;
   relationships?: string;
+  basis?: string;
+  activity_phase?: string;
+  assessment_status?: string;
+  order?: string;
+  campaign_id?: string;
+  start_date?: string;
+  end_date?: string;
 };
 type Row = Record<string, unknown>;
 const ss = (v: unknown) => String(v ?? "");
@@ -182,7 +190,7 @@ export default async function Page({
   ] = await Promise.all([
     supabase.from("research_notes").select("*").eq("project_id", id),
     supabase.from("evidence").select("*").eq("project_id", id),
-    supabase.from("timeline_events").select("*").eq("project_id", id),
+    supabase.from("timeline_events").select("*,campaign_timeline_events(id,campaign_id,status,campaigns(name)),timeline_event_entities(id,indicator_id,infrastructure_cluster_id),timeline_event_support(id)").eq("project_id", id).order("event_date", { ascending: sp.order !== "desc" }).order("id", { ascending: true }),
     supabase.from("project_tasks").select("*").eq("project_id", id),
     supabase.from("threat_actors").select("*").eq("project_id", id),
     supabase.from("campaigns").select("*").eq("project_id", id),
@@ -317,10 +325,23 @@ export default async function Page({
       {tab === "timeline" && (
         <Timeline
           id={id}
+          campaigns={(campaigns ?? []) as Row[]}
+          filters={sp}
           rows={filtered((events ?? []) as Row[], sp, [
             "event_name",
             "description",
-          ]).sort((a, b) => ss(a.event_date).localeCompare(ss(b.event_date)))}
+          ]).filter((event) => {
+            const start = validTimelineDate(sp.start_date);
+            const end = validTimelineDate(sp.end_date);
+            const memberships = Array.isArray(event.campaign_timeline_events) ? event.campaign_timeline_events as Row[] : [];
+            return (!sp.basis || event.basis === sp.basis)
+              && (!sp.activity_phase || event.activity_phase === sp.activity_phase)
+              && (!sp.assessment_status || event.assessment_status === sp.assessment_status)
+              && (!sp.confidence || event.confidence === sp.confidence)
+              && (!sp.campaign_id || memberships.some((membership) => membership.campaign_id === sp.campaign_id))
+              && (!start || ss(event.event_date).slice(0, 10) >= start)
+              && (!end || ss(event.event_date).slice(0, 10) <= end);
+          }).sort((a, b) => (sp.order === "desc" ? -1 : 1) * ss(a.event_date).localeCompare(ss(b.event_date)))}
         />
       )}{" "}
       {tab === "tasks" && (
@@ -766,22 +787,38 @@ function Evidence({ id, rows }: { id: string; rows: Row[] }) {
     </div>
   );
 }
-function Timeline({ id, rows }: { id: string; rows: Row[] }) {
+function Timeline({ id, rows, campaigns, filters }: { id: string; rows: Row[]; campaigns: Row[]; filters: SP }) {
   return (
     <div className="grid gap-4">
       <div className="card">
         <h2 className="mb-3 font-semibold text-white">New timeline event</h2>
         <TimelineCreate projectId={id} />
       </div>
+      <form className="card grid gap-2 md:grid-cols-4">
+        <input type="hidden" name="tab" value="timeline"/>
+        <select className="field" aria-label="Event basis" name="basis" defaultValue={filters.basis ?? ""}><option value="">All bases</option><option>OBSERVED</option><option>INFERRED</option></select>
+        <select className="field" aria-label="Activity phase" name="activity_phase" defaultValue={filters.activity_phase ?? ""}><option value="">All phases</option>{["UNKNOWN","INFRASTRUCTURE_PREPARATION","TARGETING","DELIVERY","INITIAL_ACCESS","EXECUTION","PERSISTENCE","COMMAND_AND_CONTROL","COLLECTION","EXFILTRATION","IMPACT","INFRASTRUCTURE_CHANGE","OTHER"].map(x=><option key={x}>{x}</option>)}</select>
+        <select className="field" aria-label="Assessment status" name="assessment_status" defaultValue={filters.assessment_status ?? ""}><option value="">All statuses</option>{["RECORDED","ASSESSED","DISPUTED","RETRACTED"].map(x=><option key={x}>{x}</option>)}</select>
+        <select className="field" aria-label="Confidence" name="confidence" defaultValue={filters.confidence ?? ""}><option value="">All confidence</option>{["LOW","MEDIUM","HIGH"].map(x=><option key={x}>{x}</option>)}</select>
+        <select className="field" aria-label="Campaign" name="campaign_id" defaultValue={filters.campaign_id ?? ""}><option value="">All Campaigns</option>{campaigns.map(campaign=><option key={ss(campaign.id)} value={ss(campaign.id)}>{ss(campaign.name)}</option>)}</select>
+        <input className="field" aria-label="Timeline start date" name="start_date" type="date" defaultValue={validTimelineDate(filters.start_date) ?? ""}/>
+        <input className="field" aria-label="Timeline end date" name="end_date" type="date" defaultValue={validTimelineDate(filters.end_date) ?? ""}/>
+        <select className="field" aria-label="Chronological direction" name="order" defaultValue={filters.order ?? "asc"}><option value="asc">Oldest first</option><option value="desc">Newest first</option></select>
+        <button className="rounded bg-stone-800 px-3 py-2">Filter timeline</button>
+      </form>
       <ol className="border-l border-cyan-900 pl-4">
         {rows.length ? (
           rows.map((e) => (
             <li className="card mb-4" key={ss(e.id)}>
               <time className="text-cyan-200">
                 {new Date(ss(e.event_date)).toLocaleString()}
+                {e.occurred_end_at ? ` → ${new Date(ss(e.occurred_end_at)).toLocaleString()}` : ""}
               </time>
-              <h3 className="font-semibold text-white">{ss(e.event_name)}</h3>
+              <h3 className="font-semibold text-white"><Link className="hover:text-cyan-200" href={`/projects/${id}/timeline/${ss(e.id)}`}>{ss(e.event_name)}</Link></h3>
+              <div className="my-2 flex flex-wrap gap-2"><span className="citem-badge">{ss(e.basis||"OBSERVED")}</span><span className="citem-badge">{ss(e.activity_phase||"UNKNOWN")}</span><span className="citem-badge">{ss(e.assessment_status||"RECORDED")}</span><span className="citem-badge">{ss(e.confidence||"MEDIUM")}</span></div>
               <p>{ss(e.description)}</p>
+              {e.analyst_rationale ? <p className="mt-2 text-sm text-stone-400"><strong>Rationale:</strong> {ss(e.analyst_rationale)}</p> : null}
+              <p className="mt-2 text-xs text-stone-500">{Array.isArray(e.timeline_event_entities)?e.timeline_event_entities.length:0} technical entities · {Array.isArray(e.timeline_event_support)?e.timeline_event_support.length:0} supporting records · {Array.isArray(e.campaign_timeline_events)?e.campaign_timeline_events.length:0} Campaign assessments</p>
               <TimelineEdit projectId={id} event={e} />
               <DeleteTimeline projectId={id} id={ss(e.id)} />
             </li>
