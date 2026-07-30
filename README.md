@@ -165,3 +165,6 @@ CİTEM now supports analyst-controlled structured attack Timeline events and Cam
 ### Phase 2.1E — Attribution Analysis
 
 Campaign attribution now supports analyst-defined competing hypotheses, a shared evidence inventory, per-hypothesis diagnostic evaluations, an explicit current judgement, and archive-safe history. A preferred hypothesis remains an assessment and never creates a Campaign-to-Threat Actor relationship. See [Phase 2.1E](docs/PHASE_2_1E.md).
+
+### Phase 2.1F — Intelligence Products
+Reports now distinguish an editable workspace from explicit immutable assessment versions, with product lifecycle metadata, publication/supersession, snapshot provenance, version history and version-specific PDF/Markdown/HTML exports. See [Phase 2.1F](docs/PHASE_2_1F.md).
