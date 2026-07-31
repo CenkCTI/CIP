@@ -28,11 +28,14 @@
     "@tiptap/react": "^3.28.0",
     "@tiptap/starter-kit": "^3.28.0",
     "@xyflow/react": "^12.11.2",
+    "fast-xml-parser": "^5.10.1",
+    "ipaddr.js": "^2.4.0",
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
     "server-only": "^0.0.1",
     "tailwindcss": "latest",
+    "undici": "^7.29.0",
     "zod": "^4.2.1"
   },
   "devDependencies": {

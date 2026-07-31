@@ -1,0 +1,8 @@
+import { describe, expect, it } from "vitest";
+import { FEED_VIEW_PROJECTION, FETCH_RUN_VIEW_PROJECTION, toFeedViewModel, toFetchRunViewModel } from "@/lib/research-feeds/view-model";
+const forbidden=["fetch_lease_token","fetch_lease_token_hash","fetch_lease_run_id","fetch_lease_url_hash","fetch_lease_expires_at","lease_token_hash","request_url_hash","created_by","last_error_code"];
+describe("Research Feed client DTO boundary",()=>{
+ it("uses explicit projections without workflow internals",()=>{expect(FEED_VIEW_PROJECTION).not.toContain("*");expect(FETCH_RUN_VIEW_PROJECTION).not.toContain("*");for(const field of forbidden){expect(FEED_VIEW_PROJECTION).not.toContain(field);expect(FETCH_RUN_VIEW_PROJECTION).not.toContain(field);}});
+ it("drops injected source workflow fields",()=>{const dto=toFeedViewModel({id:"f",name:"Feed",description:"",configured_url:"https://example.com/feed?token=secret",enabled:true,archived_at:null,detected_feed_type:"RSS",health_status:"HEALTHY",consecutive_failures:0,fetch_lease_token:"raw",fetch_lease_token_hash:"hash",fetch_lease_run_id:"run",created_by:"actor"});const value=JSON.stringify(dto);for(const field of forbidden)expect(value).not.toContain(field);expect(value).not.toContain("secret");expect(value).not.toContain("configured_url");});
+ it("drops injected run workflow fields",()=>{const dto=toFetchRunViewModel({id:"r",feed_source_id:"f",status:"SUCCEEDED",started_at:"now",completed_at:"now",created_at:"now",request_url_hash:"hash",lease_token_hash:"hash",created_by:"actor"});const value=JSON.stringify(dto);for(const field of forbidden)expect(value).not.toContain(field);});
+});

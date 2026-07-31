@@ -168,3 +168,6 @@ Campaign attribution now supports analyst-defined competing hypotheses, a shared
 
 ### Phase 2.1F — Intelligence Products
 Reports now distinguish an editable workspace from explicit immutable assessment versions, with product lifecycle metadata, publication/supersession, snapshot provenance, version history and version-specific PDF/Markdown/HTML exports. See [Phase 2.1F](docs/PHASE_2_1F.md).
+
+### Phase 2.2A — Research Feeds
+Investigation **Research Feeds** provide explicit, server-only RSS/Atom collection with DNS-pinned SSRF protection, bounded XML normalization, transactional cross-feed deduplication, fetch history, and owner-scoped RLS. Collected items remain untrusted and separate from Evidence and analytical Sources. See [Phase 2.2A](docs/PHASE_2_2A.md).
