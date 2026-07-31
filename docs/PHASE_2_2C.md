@@ -67,3 +67,10 @@ The shared `src/lib/ioc-connectors` contract normalizes IPv4, IPv6, ports, IPv4/
 
 ## Limitations and exclusions
 There is no ThreatFox, URLhaus, OTX, VirusTotal, Talos, generic JSON API, credential, OAuth, STIX, TAXII, MISP, extraction, AI, watchlist, alert, notification, blocking, export, or automatic entity/relationship support. Future explicit ThreatFox/URLhaus/OTX phases must add adapters to this registry and common Inbox, plus a separate secure credential design where required.
+
+## Executable synchronization workflow
+The environment gate exposes only the fixed `TEST_SYNTHETIC` adapter. An authenticated analyst first uses **Enable test provider**, which invokes a narrow trusted workflow that creates or reuses the fixed owner-local connection without accepting provider configuration from the browser. **Sync test provider now** submits only that owned connection UUID. The server-only orchestrator claims an exact run through the administrative Supabase boundary, resolves the immutable provider key, validates the adapter result, completes normalized persistence, and truthfully finalizes controlled failures. Lease tokens and cursor internals never cross into browser code.
+
+The existing authenticated internal OSINT scheduler also claims due IOC connections after processing Research Feeds. `IOC_SYNC_BATCH_SIZE` defaults to 10 with a hard maximum of 20, while `IOC_SYNC_CONCURRENCY` defaults to 2 with a hard maximum of 4. The workflow reuses `CRON_SECRET`, respects the existing execution deadline, uses `SCHEDULED` runs, excludes future/disabled/archived/actively leased connections, and recovers only an expired connection's exact run.
+
+Inbox filters are server validated and cover provider, status, type, confidence range, port presence, accepted Investigation, and text. Last-observed, first-observed, and confidence sorting each use a deterministic ID tie-breaker and opaque keyset cursor. Candidate details show every bounded provider source observation independently; candidate URLs remain defanged and provider reference URLs remain separately labelled.
