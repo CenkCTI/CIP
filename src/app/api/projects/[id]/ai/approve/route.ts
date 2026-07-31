@@ -21,7 +21,7 @@ const uuid = z.string().uuid();
 const indicatorApprovalSchema = z
   .object({
     value: z.string().max(500),
-    type: z.enum(["IP", "DOMAIN", "URL", "HASH", "EMAIL", "FILE", "REGISTRY"]),
+    type: z.enum(["IP", "CIDR", "DOMAIN", "URL", "HASH", "EMAIL", "FILE", "REGISTRY"]),
     confidence: z.enum(["LOW", "MEDIUM", "HIGH"]),
     source_ref: z.object({ kind: z.string().max(40), id: uuid }).strict().nullable().optional(),
   })

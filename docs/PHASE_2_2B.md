@@ -77,3 +77,6 @@ Apply `202607310025_phase2_2b_osint_intelligence_feed.sql` after immutable migra
 
 ## Limitations and exclusions
 Live Supabase, Preview deployment, and scheduler operation require the checklist. This phase excludes private/authenticated feeds, scraping or article crawling, extraction/AI tagging, alerts, teams, automatic analytical entities/Evidence/Sources/relationships/attribution, Phase 2.2C, ANLAK, and KARARGÂH.
+
+## Phase 2.2C continuity
+The Intelligence Feed and Settings drawer remain the default `/osint?view=feed` experience. Phase 2.2C adds a sibling, common IOC Inbox rather than changing feed trust or linking behavior.
