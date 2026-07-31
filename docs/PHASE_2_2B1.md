@@ -38,3 +38,6 @@ Apply migrations through 026, run `NOTIFY pgrst, 'reload schema';`, and redeploy
 16. Confirm URL query values, bodies, raw JSON, resolved IPs, headers, secrets, and stack traces do not appear in UI or logs.
 
 Preview deployment, schema reload, public-feed scheduling, and multi-user checks remain deployment acceptance work and must not be inferred from local tests.
+
+## Phase 2.2C continuity
+JSON Feed remains an Intelligence Feed transport only. Phase 2.2C does not extract IOCs from RSS, Atom, or JSON Feed items; provider candidates use a separate normalized adapter contract and the same global `/osint` workspace.

@@ -175,3 +175,6 @@ Investigation **Research Feeds** provide explicit, server-only RSS, Atom, and JS
 
 ### Global OSINT (Phase 2.2B)
 The top-level `/osint` workspace provides owner-scoped RSS, Atom, and JSON Feed intelligence collection, a unified feed, triage, scheduled secure ingestion, and explicit Investigation links. Deployment and acceptance details are in [`docs/PHASE_2_2B.md`](docs/PHASE_2_2B.md).
+
+### Phase 2.2C — IOC Connector Foundation
+The global `/osint?view=iocs` IOC Inbox now provides provider-independent, owner-isolated IOC candidates, exact ingestion leases/cursors, bounded provenance, explicit triage and explicit Investigation acceptance. See [Phase 2.2C](docs/PHASE_2_2C.md). No real external CTI provider is included.

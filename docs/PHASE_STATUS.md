@@ -163,3 +163,6 @@ Implementation adds the owner-scoped global OSINT feed, scheduled collection bou
 
 ## Phase 2.2B.1
 Secure JSON Feed 1.1 (with version 1 compatibility) extends the existing global and Investigation-scoped feed workflows through migration 026. Phase 2.2B live acceptance was authoritatively confirmed by the project owner before this phase began. See [Phase 2.2B.1](PHASE_2_2B1.md).
+
+## Phase 2.2C — implemented
+Provider-independent IOC adapter contracts, owner-local canonical candidates and provenance, exact leases/cursors, IOC Inbox triage, explicit Indicator/CVE acceptance, CIDR support, and an environment-gated deterministic synthetic adapter are implemented. Real provider integrations remain future work.

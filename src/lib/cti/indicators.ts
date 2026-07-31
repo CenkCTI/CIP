@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const indicatorTypes = [
   "IP",
+  "CIDR",
   "DOMAIN",
   "URL",
   "HASH",
@@ -149,6 +150,14 @@ export function validateIndicator(value: string, type: IndicatorType | string) {
     return "Use a valid IPv4 or IPv6 address.";
   }
 
+  if (type === "CIDR") {
+    const [address, prefix, ...rest] = candidate.split("/");
+    const parsed = z.union([z.ipv4(), z.ipv6()]).safeParse(address);
+    const max = z.ipv4().safeParse(address).success ? 32 : 128;
+    if (parsed.success && !rest.length && /^\d+$/.test(prefix ?? "") && Number(prefix) <= max) return null;
+    return "Use a valid IPv4 or IPv6 CIDR range.";
+  }
+
   if (type === "URL") {
     try {
       const parsed = new URL(candidate);
@@ -198,7 +207,7 @@ export function safeDefangIndicatorValue(
 
   if (type === "DOMAIN") return candidate.replaceAll(".", "[.]");
 
-  if (type === "IP" && z.ipv4().safeParse(candidate).success) {
+  if ((type === "IP" || type === "CIDR") && z.ipv4().safeParse(candidate.split("/")[0]).success) {
     return candidate.replaceAll(".", "[.]");
   }
 
@@ -258,6 +267,7 @@ export function detectIndicatorType(
   ) {
     return "IP";
   }
+  if (/^[^/]+\/\d+$/.test(candidate) && !validateIndicator(candidate, "CIDR")) return "CIDR";
   if (detectHashAlgorithm(candidate)) return "HASH";
   if (emailPattern.test(candidate)) return "EMAIL";
 

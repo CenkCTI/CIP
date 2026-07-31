@@ -534,7 +534,7 @@ function SearchBar({
             defaultValue={sp.type ?? ""}
           >
             <option value="">All types</option>
-            {["IP", "DOMAIN", "URL", "HASH", "EMAIL", "FILE", "REGISTRY"].map(
+            {["IP", "CIDR", "DOMAIN", "URL", "HASH", "EMAIL", "FILE", "REGISTRY"].map(
               (t) => (
                 <option key={t}>{t}</option>
               ),
