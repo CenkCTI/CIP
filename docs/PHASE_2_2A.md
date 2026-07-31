@@ -51,3 +51,7 @@ Never contact cloud metadata endpoints manually; use fixtures for blocked redire
 
 ## Exclusions
 This phase does not provide a Research Inbox, triage, automatic Source/Evidence creation, IOC/entity/AI extraction, relationship proposals, watchlists, alerts/notifications, sharing, organization/authenticated/cookie feeds, scraping, item-link fetching, crawling, cron scheduling, or Phase 2.2B work.
+
+
+## Live acceptance status
+The project owner confirmed the complete Phase 2.2A live Supabase and deployed-application acceptance before PR #24 was merged. Migration 024 and PostgREST reload were validated; this is authoritative and no longer a release blocker.

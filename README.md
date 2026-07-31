@@ -171,3 +171,7 @@ Reports now distinguish an editable workspace from explicit immutable assessment
 
 ### Phase 2.2A — Research Feeds
 Investigation **Research Feeds** provide explicit, server-only RSS/Atom collection with DNS-pinned SSRF protection, bounded XML normalization, transactional cross-feed deduplication, fetch history, and owner-scoped RLS. Collected items remain untrusted and separate from Evidence and analytical Sources. See [Phase 2.2A](docs/PHASE_2_2A.md).
+
+
+### Global OSINT (Phase 2.2B)
+The top-level `/osint` workspace provides owner-scoped RSS/Atom intelligence collection, a unified feed, triage, scheduled secure ingestion, and explicit Investigation links. Deployment and acceptance details are in [`docs/PHASE_2_2B.md`](docs/PHASE_2_2B.md).

@@ -19,3 +19,5 @@ export const restoreFeedWorkflow=(parameters:Parameters)=>feedRpc("restore_resea
 export const claimFeedWorkflow=(parameters:Parameters)=>feedRpc<Array<{run_id:string;lease_token:string;request_url_hash:string;lease_expires_at:string;configured_url:string;etag:string|null;last_modified:string|null}>>("claim_research_feed_fetch",parameters);
 export const completeFeedWorkflow=(parameters:Parameters)=>feedRpc("complete_research_feed_fetch",parameters);
 export const failFeedWorkflow=(parameters:Parameters)=>feedRpc("fail_research_feed_fetch",parameters);
+
+export const claimDueOsintFeeds=(parameters:Parameters)=>feedRpc<Array<{feed_source_id:string;owner_id:string;project_id:string|null}>>("claim_due_osint_feeds",parameters);
