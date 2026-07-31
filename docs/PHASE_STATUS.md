@@ -155,3 +155,7 @@ Implemented in migration 021 and Campaign-owned attribution routes: competing hy
 
 ## Phase 2.2A — Research Sources and Secure Feed Ingestion
 Implemented on migration 023: Investigation-scoped feed lifecycle UI, explicit server-only fetches, DNS-pinned SSRF/redirect controls, bounded RSS/Atom parsing, canonical normalized items, URL/content fingerprints, cross-feed observations, atomic leases/finalization, safe health/errors, and complete owner-scoped RLS. Live Supabase acceptance remains required; Research Inbox and scheduling are excluded. See `docs/PHASE_2_2A.md`.
+
+
+## Phase 2.2B
+Implementation adds the owner-scoped global OSINT feed, scheduled collection boundary, triage, and explicit Investigation linking. See [Phase 2.2B](PHASE_2_2B.md). Phase 2.2A live acceptance was owner-confirmed before PR #24 merged.
