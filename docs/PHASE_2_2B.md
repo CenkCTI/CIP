@@ -1,7 +1,7 @@
 # Phase 2.2B — Global OSINT Intelligence Feed
 
 ## Product and trust model
-Phase 2.2B moves RSS/Atom collection from Investigation scope to the authenticated owner's global OSINT workspace. Existing `project_id` values remain nullable legacy provenance. Migration 025 backfills canonical project ownership, deterministically merges owner-local duplicate fingerprint components (oldest item, stable UUID tie-break), combines observations and preserves fingerprints. Users never share rows: RLS is based on `auth.uid() = owner_id`.
+Phase 2.2B moves RSS, Atom, and JSON Feed collection from Investigation scope to the authenticated owner's global OSINT workspace. Existing `project_id` values remain nullable legacy provenance. Migration 025 backfills canonical project ownership, deterministically merges owner-local duplicate fingerprint components (oldest item, stable UUID tie-break), combines observations and preserves fingerprints. Users never share rows: RLS is based on `auth.uid() = owner_id`.
 
 The `/osint` stream mixes canonical items by effective time (`published_at`, otherwise `first_seen_at`) and stable ID, with bounded search, state, provenance and pagination data. Read, saved and dismissed timestamps are independent. Linking is explicit, owner checked and never creates Evidence, Sources, indicators, entities, attribution, or graph edges. Settings is an in-page, focus-managed drawer.
 
