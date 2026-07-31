@@ -32,6 +32,35 @@ drop trigger phase2c_unexpected_failure on ioc_candidates;drop function public.p
 do $$begin if not exists(select 1 from pg_enum e join pg_type t on t.oid=e.enumtypid where t.typname='indicator_type'and e.enumlabel='CIDR')then raise exception 'CIDR missing';end if;if has_function_privilege('authenticated','public.complete_ioc_ingestion(uuid,uuid,uuid,uuid,public.ioc_ingestion_run_status,bigint,text,jsonb)','EXECUTE')then raise exception 'completion ACL';end if;if exists(select 1 from pg_class where relname like'ioc_%'and relkind='r'and not relrowsecurity)then raise exception 'RLS missing';end if;end$$;
 SQL
 psql -v ON_ERROR_STOP=1 -d "$DB" <<'SQL' >/dev/null
-do $$declare id uuid:='30000000-0000-4000-8000-000000000001';begin perform configure_threatfox_connection('10000000-0000-4000-8000-000000000001',id,'Y2lwaGVydGV4dA==','MTIzNDU2Nzg5MDEy','MTIzNDU2Nzg5MDEyMzQ1Ng==',1,1,false,60);if not exists(select 1 from ioc_provider_credentials where provider_connection_id=id and provider_key='THREATFOX')then raise exception 'encrypted credential absent';end if;if has_table_privilege('authenticated','public.ioc_provider_credentials','SELECT')then raise exception 'credential ACL';end if;begin perform update_threatfox_settings('10000000-0000-4000-8000-000000000001',id,0,false,60);raise exception 'bad lookback accepted';exception when others then if sqlerrm='bad lookback accepted'then raise;end if;end;perform disconnect_threatfox_credential('10000000-0000-4000-8000-000000000001',id);if exists(select 1 from ioc_provider_credentials where provider_connection_id=id)or exists(select 1 from ioc_provider_connections where id=id and(enabled or scheduler_enabled))then raise exception 'disconnect failed';end if;end$$;
+do $$declare
+ conn_id uuid:='30000000-0000-4000-8000-000000000001';
+ v_run_id uuid:='30000000-0000-4000-8000-000000000002';
+ v_candidate_id uuid:='30000000-0000-4000-8000-000000000003';
+begin
+ if to_regprocedure('public.configure_threatfox_connection(uuid,uuid,text,text,text,smallint,integer,boolean,integer)')is null
+  or to_regprocedure('public.disconnect_threatfox_credential(uuid,uuid)')is null
+  or to_regprocedure('public.update_threatfox_settings(uuid,uuid,integer,boolean,integer)')is null then raise exception 'trusted ThreatFox signature missing';end if;
+ if has_function_privilege('authenticated','public.configure_threatfox_connection(uuid,uuid,text,text,text,smallint,integer,boolean,integer)','EXECUTE')
+  or has_function_privilege('authenticated','public.disconnect_threatfox_credential(uuid,uuid)','EXECUTE')
+  or has_function_privilege('authenticated','public.update_threatfox_settings(uuid,uuid,integer,boolean,integer)','EXECUTE')then raise exception 'authenticated trusted-function ACL';end if;
+ if not has_function_privilege('service_role','public.configure_threatfox_connection(uuid,uuid,text,text,text,smallint,integer,boolean,integer)','EXECUTE')
+  or not has_function_privilege('service_role','public.disconnect_threatfox_credential(uuid,uuid)','EXECUTE')
+  or not has_function_privilege('service_role','public.update_threatfox_settings(uuid,uuid,integer,boolean,integer)','EXECUTE')then raise exception 'service-role trusted-function ACL';end if;
+ if has_table_privilege('authenticated','public.ioc_provider_credentials','SELECT')or has_table_privilege('authenticated','public.ioc_provider_credentials','INSERT')
+  or has_table_privilege('authenticated','public.ioc_provider_credentials','UPDATE')or has_table_privilege('authenticated','public.ioc_provider_credentials','DELETE')then raise exception 'credential table ACL';end if;
+ perform public.configure_threatfox_connection('10000000-0000-4000-8000-000000000001'::uuid,conn_id,'Y2lwaGVydGV4dA=='::text,'MTIzNDU2Nzg5MDEy'::text,'MTIzNDU2Nzg5MDEyMzQ1Ng=='::text,1::smallint,1::integer,true::boolean,60::integer);
+ if not exists(select 1 from public.ioc_provider_credentials where owner_id='10000000-0000-4000-8000-000000000001'::uuid and provider_connection_id=conn_id and provider_key='THREATFOX')then raise exception 'encrypted credential/provider binding absent';end if;
+ if(select lookback_days from public.threatfox_connection_settings where owner_id='10000000-0000-4000-8000-000000000001'::uuid and provider_connection_id=conn_id)<>1 then raise exception 'lookback absent';end if;
+ perform public.update_threatfox_settings('10000000-0000-4000-8000-000000000001'::uuid,conn_id,7::integer,true::boolean,1440::integer);
+ if not exists(select 1 from public.ioc_provider_connections where owner_id='10000000-0000-4000-8000-000000000001'::uuid and id=conn_id and provider_key='THREATFOX'and scheduler_enabled and sync_interval_minutes=1440)then raise exception 'upper settings bound failed';end if;
+ begin perform public.update_threatfox_settings('10000000-0000-4000-8000-000000000001'::uuid,conn_id,0::integer,false::boolean,60::integer);raise exception 'bad lookback accepted';exception when others then if sqlerrm='bad lookback accepted'then raise;end if;end;
+ begin perform public.update_threatfox_settings('10000000-0000-4000-8000-000000000001'::uuid,conn_id,1::integer,false::boolean,29::integer);raise exception 'bad interval accepted';exception when others then if sqlerrm='bad interval accepted'then raise;end if;end;
+ insert into public.ioc_ingestion_runs(id,owner_id,provider_connection_id,provider_key,trigger_type,status,lease_token_hash,lease_expires_at)values(v_run_id,'10000000-0000-4000-8000-000000000001',conn_id,'THREATFOX','MANUAL','SUCCEEDED',repeat('a',64),now()+interval'1 minute');
+ insert into public.ioc_candidates(id,owner_id,candidate_type,normalized_value)values(v_candidate_id,'10000000-0000-4000-8000-000000000001','DOMAIN','preserved.example');
+ insert into public.ioc_candidate_sources(owner_id,candidate_id,provider_connection_id,ingestion_run_id,provider_item_id,source_fingerprint,original_value)values('10000000-0000-4000-8000-000000000001',v_candidate_id,conn_id,v_run_id,'preserved',repeat('b',64),'preserved.example');
+ perform public.disconnect_threatfox_credential('10000000-0000-4000-8000-000000000001'::uuid,conn_id);
+ if exists(select 1 from public.ioc_provider_credentials where provider_connection_id=conn_id)or exists(select 1 from public.ioc_provider_connections where id=conn_id and(enabled or scheduler_enabled))then raise exception 'disconnect failed';end if;
+ if not exists(select 1 from public.ioc_ingestion_runs where id=v_run_id)or not exists(select 1 from public.ioc_candidates where id=v_candidate_id)or not exists(select 1 from public.ioc_candidate_sources where candidate_id=v_candidate_id)then raise exception 'disconnect removed history/provenance';end if;
+end$$;
 SQL
 printf 'PostgreSQL %s; migrations 001-028; CIDR, IOC schema, RLS/ACL, exact lease, deduplication, triage persistence and Indicator acceptance passed.\n' "$(psql -Atqc 'show server_version' -d "$DB")"
