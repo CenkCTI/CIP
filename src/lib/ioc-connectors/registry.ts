@@ -1,8 +1,9 @@
 import "server-only";
 import type { IocProviderAdapter } from "./types";
 import { syntheticProvider } from "./synthetic-provider";
+import { threatFoxAdapter } from "./providers/threatfox/adapter";
 export function providerRegistry(env: NodeJS.ProcessEnv = process.env): ReadonlyMap<string, IocProviderAdapter> {
-  const adapters: IocProviderAdapter[] = [];
+  const adapters: IocProviderAdapter[] = [threatFoxAdapter];
   if (env.IOC_TEST_PROVIDER_ENABLED === "true") adapters.push(syntheticProvider);
   return new Map(adapters.map(adapter => [adapter.key, adapter]));
 }

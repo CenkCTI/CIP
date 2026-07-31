@@ -166,3 +166,6 @@ Secure JSON Feed 1.1 (with version 1 compatibility) extends the existing global 
 
 ## Phase 2.2C — implemented
 Provider-independent IOC adapter contracts, owner-local canonical candidates and provenance, exact leases/cursors, IOC Inbox triage, explicit Indicator/CVE acceptance, CIDR support, and an environment-gated deterministic synthetic adapter are implemented. Real provider integrations remain future work.
+
+## Phase 2.2C.1 — ThreatFox IOC Connector
+Implemented: fixed read-only ThreatFox Community API synchronization, encrypted owner credentials, bounded lookback, provenance, scheduler support, and analyst-controlled acceptance. Migration: `202607310028_phase2_2c1_threatfox_connector.sql`.

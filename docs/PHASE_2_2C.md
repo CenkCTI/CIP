@@ -74,3 +74,6 @@ The environment gate exposes only the fixed `TEST_SYNTHETIC` adapter. An authent
 The existing authenticated internal OSINT scheduler also claims due IOC connections after processing Research Feeds. `IOC_SYNC_BATCH_SIZE` defaults to 10 with a hard maximum of 20, while `IOC_SYNC_CONCURRENCY` defaults to 2 with a hard maximum of 4. The workflow reuses `CRON_SECRET`, respects the existing execution deadline, uses `SCHEDULED` runs, excludes future/disabled/archived/actively leased connections, and recovers only an expired connection's exact run.
 
 Inbox filters are server validated and cover provider, status, type, confidence range, port presence, accepted Investigation, and text. Last-observed, first-observed, and confidence sorting each use a deterministic ID tie-breaker and opaque keyset cursor. Candidate details show every bounded provider source observation independently; candidate URLs remain defanged and provider reference URLs remain separately labelled.
+
+## Phase 2.2C.1 extension
+The provider-independent contract now supports credential-bearing fixed adapters. ThreatFox is the first external adapter; TEST_SYNTHETIC remains credential-free. See `PHASE_2_2C1.md`.

@@ -7,4 +7,5 @@ export type NormalizedCandidate = {
   metadata: Record<string, unknown>; source_fingerprint: string;
 };
 export type AdapterResult = { status: "SUCCEEDED"; items: NormalizedCandidate[]; nextCursor?: string } | { status: "NOT_MODIFIED"; items: [] };
-export interface IocProviderAdapter { readonly key: string; readonly displayName: string; readonly supportedTypes: readonly IocCandidateType[]; readonly supportsScheduling: boolean; sync(cursor: string | null): Promise<AdapterResult> }
+export type AdapterContext = { ownerId: string; connectionId: string; cursor: string | null; settings: Record<string, unknown>; credential?: string; signal?: AbortSignal };
+export interface IocProviderAdapter { readonly key: string; readonly displayName: string; readonly credentialRequired: boolean; readonly supportedTypes: readonly IocCandidateType[]; readonly supportsScheduling: boolean; testConnection?(credential: string, signal?: AbortSignal): Promise<void>; sync(context: AdapterContext): Promise<AdapterResult> }

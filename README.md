@@ -178,3 +178,12 @@ The top-level `/osint` workspace provides owner-scoped RSS, Atom, and JSON Feed 
 
 ### Phase 2.2C — IOC Connector Foundation
 The global `/osint?view=iocs` IOC Inbox now provides provider-independent, owner-isolated IOC candidates, exact ingestion leases/cursors, bounded provenance, explicit triage and explicit Investigation acceptance. See [Phase 2.2C](docs/PHASE_2_2C.md). No real external CTI provider is included.
+
+### Phase 2.2C.1 — ThreatFox IOC connector
+ThreatFox Community API is available in the owner-scoped IOC Inbox through the fixed, read-only official endpoint. Persistent Auth-Keys use AES-256-GCM encryption with a separate server-only key:
+
+```env
+IOC_CREDENTIAL_ENCRYPTION_KEY=<base64-encoded-32-byte-key>
+```
+
+Generate it with `openssl rand -base64 32`. Never expose this value through a `NEXT_PUBLIC_` variable.

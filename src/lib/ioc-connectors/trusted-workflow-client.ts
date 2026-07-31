@@ -39,3 +39,6 @@ export const completeIocIngestion = (parameters: Parameters) =>
   iocRpc("complete_ioc_ingestion", parameters);
 export const failIocIngestion = (parameters: Parameters) =>
   iocRpc("fail_ioc_ingestion", parameters);
+export const configureThreatFoxConnection = (parameters: Parameters) => iocRpc<string>("configure_threatfox_connection", parameters);
+export const disconnectThreatFoxCredential = (ownerId:string,connectionId:string) => iocRpc<boolean>("disconnect_threatfox_credential",{p_owner_id:ownerId,p_connection_id:connectionId});
+export const updateThreatFoxSettings = (ownerId:string,connectionId:string,lookback:number,scheduler:boolean,interval:number) => iocRpc<boolean>("update_threatfox_settings",{p_owner_id:ownerId,p_connection_id:connectionId,p_lookback_days:lookback,p_scheduler_enabled:scheduler,p_sync_interval_minutes:interval});

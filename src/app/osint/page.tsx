@@ -24,7 +24,7 @@ export default async function OsintPage({ searchParams }: { searchParams: Promis
     const [{ data: rows, error }, { data: projects }, { data: connections }, { data: runs }] = await Promise.all([
       supabase.rpc("list_ioc_inbox_v2", { p_status: filters.ioc_status || null, p_type: filters.ioc_type || null, p_provider: filters.ioc_provider || null, p_search: filters.ioc_q || null, p_min_confidence: filters.ioc_min_confidence === "" ? null : filters.ioc_min_confidence, p_max_confidence: filters.ioc_max_confidence === "" ? null : filters.ioc_max_confidence, p_has_port: filters.ioc_port === "" ? null : filters.ioc_port === "present", p_project_id: filters.ioc_project || null, p_sort: filters.ioc_sort, p_cursor_value: cursor ? String(cursor.value) : null, p_cursor_id: cursor?.id ?? null, p_limit: 30 }),
       supabase.from("projects").select("id,name").eq("owner_id", user.id).order("name").limit(100),
-      supabase.from("ioc_provider_connections").select("id,provider_key,display_name,enabled,scheduler_enabled,health_status,last_checked_at,last_success_at,last_error_message,archived_at").order("display_name").limit(100),
+      supabase.from("ioc_provider_connections").select("id,provider_key,display_name,enabled,scheduler_enabled,sync_interval_minutes,next_scheduled_sync_at,health_status,last_checked_at,last_success_at,last_error_message,archived_at").order("display_name").limit(100),
       supabase.from("ioc_ingestion_runs").select("id,provider_connection_id,status,trigger_type,started_at,completed_at,candidate_count,source_observation_count,created_count,updated_count,skipped_count,deduplicated_count,error_message").order("started_at", { ascending: false }).limit(20),
     ]);
     const typedRows = (rows ?? []) as IocCandidateRow[];
