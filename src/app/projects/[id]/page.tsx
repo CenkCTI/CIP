@@ -43,6 +43,7 @@ import {
   taskStatuses,
 } from "@/lib/workspace/schema";
 import { validTimelineDate } from "@/lib/reconstruction/presentation";
+import { LinkedOsint } from "@/components/osint/linked-osint";
 
 type SP = CtiSearchParams & {
   tab?: string;
@@ -703,6 +704,7 @@ function Overview({ project }: { project: Project }) {
           project={project}
         />
       </div>
+      <LinkedOsint projectId={project.id} />
       <div className="card">
         <h2 className="font-semibold text-red-200">Delete project</h2>
         <p className="mt-2 text-sm text-slate-400">

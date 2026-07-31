@@ -1,13 +1,6 @@
-import { requireUser } from "@/lib/auth";
-import { OsintWorkspace } from "@/components/osint/osint-workspace";
+import {requireUser} from "@/lib/auth";
+import {OsintWorkspace} from "@/components/osint/osint-workspace";
+import {decodeCursor,encodeCursor,filterSchema} from "@/lib/osint/schema";
+import {notFound} from "next/navigation";
 
-export default async function OsintPage({searchParams}:{searchParams:Promise<Record<string,string|undefined>>}) {
-  const query=await searchParams;
-  const mode=["all","unread","saved","dismissed"].includes(query.mode??"")?query.mode!:"all";
-  const search=(query.q??"").trim().slice(0,200);
-  const {supabase}=await requireUser();
-  let request=supabase.from("research_items").select("id,title,summary_text,canonical_url,published_at,first_seen_at,categories,osint_item_states(read_at,saved_at,dismissed_at),research_feed_item_observations(feed_source_id,research_feed_sources(name))").order("published_at",{ascending:false,nullsFirst:false}).order("id",{ascending:false}).limit(30);
-  if(search) request=request.textSearch("search_vector",search,{type:"websearch"});
-  const [{data:items},{data:feeds},{data:projects}]=await Promise.all([request,supabase.from("research_feed_sources").select("id,name,description,enabled,scheduler_enabled,fetch_interval_minutes,next_scheduled_fetch_at,detected_feed_type,health_status,last_checked_at,last_success_at,last_error_message,archived_at").order("name").limit(100),supabase.from("projects").select("id,name").order("name").limit(100)]);
-  return <OsintWorkspace initialItems={(items??[]) as never[]} feeds={(feeds??[]) as never[]} projects={(projects??[]) as never[]} mode={mode} search={search}/>;
-}
+export default async function OsintPage({searchParams}:{searchParams:Promise<Record<string,string|undefined>>}){const raw=await searchParams;const parsed=filterSchema.safeParse(raw);if(!parsed.success)notFound();const filters=parsed.data,cursor=decodeCursor(filters.cursor);if(filters.cursor&&!cursor)notFound();const {supabase}=await requireUser();const [{data:items,error},{data:feeds},{data:projects}]=await Promise.all([supabase.rpc("list_osint_feed",{p_mode:filters.mode,p_source_id:filters.source||null,p_from:filters.from||null,p_to:filters.to||null,p_search:filters.q||null,p_cursor_at:cursor?.timestamp??null,p_cursor_id:cursor?.id??null,p_limit:30}),supabase.from("research_feed_sources").select("id,name,description,enabled,scheduler_enabled,fetch_interval_minutes,next_scheduled_fetch_at,detected_feed_type,health_status,last_checked_at,last_success_at,last_error_message,archived_at").order("name").limit(100),supabase.from("projects").select("id,name").order("name").limit(100)]);if(error)throw new Error("Unable to load OSINT feed.");const rows=(items??[]) as Array<Record<string,unknown>>;const last=rows.at(-1);const next=rows.length===30&&last?encodeCursor(String(last.effective_at),String(last.id)):null;return <OsintWorkspace initialItems={rows as never[]} feeds={(feeds??[]) as never[]} projects={(projects??[]) as never[]} filters={filters} nextCursor={next}/>}

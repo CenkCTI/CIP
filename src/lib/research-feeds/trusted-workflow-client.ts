@@ -21,3 +21,13 @@ export const completeFeedWorkflow=(parameters:Parameters)=>feedRpc("complete_res
 export const failFeedWorkflow=(parameters:Parameters)=>feedRpc("fail_research_feed_fetch",parameters);
 
 export const claimDueOsintFeeds=(parameters:Parameters)=>feedRpc<Array<{feed_source_id:string;owner_id:string;project_id:string|null}>>("claim_due_osint_feeds",parameters);
+export type GlobalClaim={feed_source_id:string;owner_id:string;run_id:string;lease_token:string;request_url_hash:string;lease_expires_at:string;configured_url:string;etag:string|null;last_modified:string|null};
+export const createGlobalFeed=(p:Parameters)=>feedRpc("create_global_research_feed",p);
+export const editGlobalFeed=(p:Parameters)=>feedRpc("edit_global_research_feed",p);
+export const setGlobalFeedState=(p:Parameters)=>feedRpc("set_global_research_feed_state",p);
+export const archiveGlobalFeed=(p:Parameters)=>feedRpc("archive_global_research_feed",p);
+export const restoreGlobalFeed=(p:Parameters)=>feedRpc("restore_global_research_feed",p);
+export const claimGlobalFeed=(p:Parameters)=>feedRpc<GlobalClaim[]>("claim_global_research_feed_fetch",p);
+export const claimDueGlobalFeeds=(p:Parameters)=>feedRpc<GlobalClaim[]>("claim_due_global_research_feed_fetches",p);
+export const completeGlobalFeed=(p:Parameters)=>feedRpc("complete_global_research_feed_fetch",p);
+export const failGlobalFeed=(p:Parameters)=>feedRpc("fail_global_research_feed_fetch",p);
