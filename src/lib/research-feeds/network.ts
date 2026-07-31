@@ -153,7 +153,7 @@ function controlledHeaders(
 ) {
   const headers: Record<string, string> = {
     "user-agent": "CITEM-Research-Feed/1.0",
-    accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, text/plain;q=0.2",
+    accept: "application/feed+json, application/rss+xml, application/atom+xml, application/xml, application/json, text/xml, text/plain;q=0.2",
     "accept-encoding": "gzip, deflate, br",
   };
   // Conditional validators belong only to the configured origin. Cross-origin redirects never receive them.
@@ -225,7 +225,7 @@ export async function fetchFeed(
         }
         if (response.status !== 200) throw new FeedError("HTTP_ERROR");
         const contentType = String(response.headers["content-type"] ?? "").split(";")[0]!.trim().toLowerCase();
-        if (!["application/rss+xml", "application/atom+xml", "application/xml", "text/xml", "text/plain"].includes(contentType)) {
+        if (!["application/feed+json", "application/json", "application/rss+xml", "application/atom+xml", "application/xml", "text/xml", "text/plain"].includes(contentType)) {
           throw new FeedError("CONTENT_TYPE_REJECTED");
         }
         const contentLength = Number(response.headers["content-length"] ?? 0);
@@ -234,7 +234,12 @@ export async function fetchFeed(
         const buffer = await readBounded(response);
         const body = buffer.toString("utf8");
         if (!body.trim()) throw new FeedError("EMPTY_RESPONSE");
-        if (contentType === "text/plain" && !body.trimStart().startsWith("<")) throw new FeedError("CONTENT_TYPE_REJECTED");
+        const detected = body.replace(/^\uFEFF/, "").trimStart();
+        const isJson = detected.startsWith("{");
+        const isXml = detected.startsWith("<") && !/^<html\b|^<!doctype\s+html\b/i.test(detected);
+        if ((contentType === "application/feed+json" || contentType === "application/json") && !isJson) throw new FeedError("CONTENT_TYPE_REJECTED");
+        if (["application/rss+xml", "application/atom+xml", "application/xml", "text/xml"].includes(contentType) && !isXml) throw new FeedError("CONTENT_TYPE_REJECTED");
+        if (contentType === "text/plain" && !isJson && !isXml) throw new FeedError("CONTENT_TYPE_REJECTED");
         return { status: 200 as const, finalUrl: current.toString(), bytes: buffer.byteLength, body, headers: response.headers };
       } catch (error) {
         const mapped=mapTransportError(error,controller.signal);if(mapped)throw mapped;

@@ -159,3 +159,7 @@ Implemented on migration 023: Investigation-scoped feed lifecycle UI, explicit s
 
 ## Phase 2.2B
 Implementation adds the owner-scoped global OSINT feed, scheduled collection boundary, triage, and explicit Investigation linking. See [Phase 2.2B](PHASE_2_2B.md). Phase 2.2A live acceptance was owner-confirmed before PR #24 merged.
+
+
+## Phase 2.2B.1
+Secure JSON Feed 1.1 (with version 1 compatibility) extends the existing global and Investigation-scoped feed workflows through migration 026. Phase 2.2B live acceptance was authoritatively confirmed by the project owner before this phase began. See [Phase 2.2B.1](PHASE_2_2B1.md).
