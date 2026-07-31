@@ -32,6 +32,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install PostgreSQL 16
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSLo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo $VERSION_CODENAME)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-16 postgresql-client-16
+          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
+          sudo pg_ctlcluster 16 main start || true
+          sudo -u postgres createuser --superuser runner
+
       - name: Run all validation commands
         id: validation
         shell: bash
@@ -56,6 +67,9 @@ jobs:
           run_check typecheck npm run typecheck
           run_check test npm test
           run_check build npm run build
+          run_check phase2-2a-migration scripts/test-phase2-2a-migration.sh
+          run_check phase2-2b-migration scripts/test-phase2-2b-migration.sh
+          run_check phase2-2b1-migration scripts/test-phase2-2b1-migration.sh
 
           cat validation-logs/summary.txt
           echo "failed=${failed}" >> "$GITHUB_OUTPUT"

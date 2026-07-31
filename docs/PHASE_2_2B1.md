@@ -4,7 +4,7 @@ Phase 2.2B.1 adds JSON Feed 1.1 and exact-version-1 compatibility to the existin
 
 ## Architecture and security
 
-Migration 026 adds `JSON_FEED` to `research_feed_type`; migrations 001–025 are immutable. The shared detector selects the protected XML path or strict `JSON.parse` path. JSON must be an object with an exact supported `version`, bounded non-empty `title`, and `items` array. Depth is limited to 40, traversed nodes to 100,000, items to 500, categories to 50, and authors inspected to 20. Generic JSON, STIX-shaped JSON, unknown versions, dangerous keys, HTML responses, JSONP, and media/body mismatches are rejected with safe errors.
+Migration 026 commits `JSON_FEED` into `research_feed_type`, then replaces both trusted completion RPCs with their existing signatures and security boundaries while extending the successful-type whitelist; migrations 001–025 are immutable. The shared detector selects the protected XML path or strict `JSON.parse` path. JSON must be an object with an exact supported `version`, bounded non-empty `title`, and `items` array. Depth is limited to 40, traversed nodes to 100,000, items to 500, categories to 50, and authors inspected to 20. Generic JSON, STIX-shaped JSON, unknown versions, dangerous keys, HTML responses, JSONP, and media/body mismatches are rejected with safe errors.
 
 Accepted media types are `application/feed+json`, `application/json`, `application/rss+xml`, `application/atom+xml`, `application/xml`, `text/xml`, and controlled `text/plain`. DNS pinning, public-address validation after redirects, downgrade prevention, timeouts, compression and 5 MiB compressed/decompressed limits, header isolation, fixed User-Agent, exact leases, owner binding, and scheduler authentication remain shared and unchanged.
 
@@ -16,7 +16,7 @@ Accepted media types are `application/feed+json`, `application/json`, `applicati
 
 ## Deployment and automated validation
 
-Apply migrations through 026, run `NOTIFY pgrst, 'reload schema';`, and redeploy. Run `npm ci`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, `git diff --check`, and the Phase 2.2A, 2.2B, and 2.2B.1 migration harnesses. Migration harnesses require PostgreSQL 16 or later.
+Apply migrations through 026, run `NOTIFY pgrst, 'reload schema';`, and redeploy. Run `npm ci`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, `git diff --check`, and the Phase 2.2A, 2.2B, and 2.2B.1 migration harnesses. Migration harnesses require PostgreSQL 16 or later and exercise project-scoped, global-manual, and global-scheduled JSON Feed completion with persisted items, provenance, fingerprints, exact leases, owner isolation, RSS/Atom regressions, and 304 behavior. CI provisions PostgreSQL 16 and runs all three Phase 2.2 migration harnesses.
 
 ## Live acceptance checklist
 
