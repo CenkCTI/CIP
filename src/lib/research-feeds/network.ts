@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { LookupFunction } from "node:net";
+import type { LookupOptions } from "node:dns";
 import { lookup as dnsLookup } from "node:dns/promises";
 import { Readable, Transform, Writable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -8,6 +10,7 @@ import ipaddr from "ipaddr.js";
 import { Agent, request } from "undici";
 
 import { FeedError } from "./errors";
+import { logFeedDiagnostic, type FeedDiagnosticStage } from "./diagnostics";
 import { normalizeFeedUrl } from "./url";
 
 export const NETWORK_LIMITS = {
@@ -33,6 +36,13 @@ export type Transport = (
   headers: Record<string, string>,
   signal: AbortSignal,
 ) => Promise<TransportResponse>;
+
+export function createPinnedLookup(pinned: Address): LookupFunction {
+  return ((_hostname:string,options:LookupOptions,callback:(error:NodeJS.ErrnoException|null,address:string|Array<Address>,family?:number)=>void) => {
+    if (options.all) callback(null,[{address:pinned.address,family:pinned.family}]);
+    else callback(null,pinned.address,pinned.family);
+  }) as LookupFunction;
+}
 
 export function isPublicAddress(value: string) {
   try {
@@ -73,7 +83,7 @@ const pinnedTransport: Transport = async (url, address, headers, signal) => {
     connect: {
       timeout: NETWORK_LIMITS.connectMs,
       servername: url.hostname,
-      lookup: (_hostname, _options, callback) => callback(null, address.address, address.family),
+      lookup: createPinnedLookup(address),
     },
   });
   try {
@@ -158,31 +168,46 @@ function controlledHeaders(
   return headers;
 }
 
+function errorCode(error:unknown) { return error && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : null; }
+function mapTransportError(error:unknown,signal:AbortSignal) {
+  if (signal.aborted) return new FeedError("REQUEST_TIMEOUT");
+  const code=errorCode(error)??errorCode(error&&typeof error==="object"&&"cause" in error?error.cause:null);
+  if (code==="ENOTFOUND"||code==="EAI_AGAIN") return new FeedError("DNS_FAILED");
+  if (code==="UND_ERR_CONNECT_TIMEOUT"||code==="ETIMEDOUT") return new FeedError("CONNECTION_TIMEOUT");
+  return null;
+}
+function abortRace<T>(promise:Promise<T>,signal:AbortSignal) {
+  return Promise.race([promise,new Promise<never>((_resolve,reject)=>signal.addEventListener("abort",()=>reject(new FeedError("REQUEST_TIMEOUT")),{once:true}))]);
+}
+
 export async function fetchFeed(
   storedUrl: string,
   conditional: { etag?: string | null; lastModified?: string | null } = {},
-  dependencies: { resolver?: Resolver; transport?: Transport; totalMs?: number } = {},
+  dependencies: { resolver?: Resolver; transport?: Transport; totalMs?: number; diagnostic?:{feedSourceId:string;fetchRunId:string} } = {},
 ) {
   let current = normalizeFeedUrl(storedUrl);
   const configuredOrigin = current.origin;
   const visited = new Set<string>();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), dependencies.totalMs ?? NETWORK_LIMITS.totalMs);
+  let stage:FeedDiagnosticStage="DNS";
   try {
     for (let redirects = 0; ; redirects += 1) {
       if (visited.has(current.href)) throw new FeedError("REDIRECT_BLOCKED");
       visited.add(current.href);
+      stage="DNS";
       const address = await resolvePublic(current.hostname, controller.signal, dependencies.resolver);
       let response: TransportResponse | undefined;
       try {
-        response = await (dependencies.transport ?? pinnedTransport)(
+        stage="REQUEST";
+        response = await abortRace((dependencies.transport ?? pinnedTransport)(
           current,
           address,
           controlledHeaders(current, configuredOrigin, conditional),
           controller.signal,
-        );
+        ),controller.signal);
         if ([301, 302, 303, 307, 308].includes(response.status)) {
-          response.body.destroy?.();
+          stage="REDIRECT";response.body.destroy?.();
           if (redirects >= NETWORK_LIMITS.maxRedirects) throw new FeedError("TOO_MANY_REDIRECTS");
           let next: URL;
           try {
@@ -205,14 +230,18 @@ export async function fetchFeed(
         }
         const contentLength = Number(response.headers["content-length"] ?? 0);
         if (contentLength > NETWORK_LIMITS.maxCompressedBytes) throw new FeedError("RESPONSE_TOO_LARGE");
+        stage=String(response.headers["content-encoding"]??"").trim()&&!(["identity",""] as string[]).includes(String(response.headers["content-encoding"]??"").trim())?"DECOMPRESSION":"BODY";
         const buffer = await readBounded(response);
         const body = buffer.toString("utf8");
         if (!body.trim()) throw new FeedError("EMPTY_RESPONSE");
         if (contentType === "text/plain" && !body.trimStart().startsWith("<")) throw new FeedError("CONTENT_TYPE_REJECTED");
         return { status: 200 as const, finalUrl: current.toString(), bytes: buffer.byteLength, body, headers: response.headers };
       } catch (error) {
-        if (controller.signal.aborted) throw new FeedError("REQUEST_TIMEOUT");
+        const mapped=mapTransportError(error,controller.signal);if(mapped)throw mapped;
         if (error instanceof FeedError) throw error;
+        const rawCode=errorCode(error)??errorCode(error&&typeof error==="object"&&"cause" in error?error.cause:null);
+        if(rawCode?.startsWith("UND_ERR_CONNECT"))stage="CONNECT";
+        if(dependencies.diagnostic)logFeedDiagnostic({stage,error,code:"INTERNAL_ERROR",...dependencies.diagnostic});
         throw new FeedError("INTERNAL_ERROR");
       } finally {
         response?.body.destroy?.();

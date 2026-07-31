@@ -1,7 +1,7 @@
 import { brotliCompressSync, gzipSync } from "node:zlib";
 import { describe, expect, it, vi } from "vitest";
 import { normalizeFeedUrl, normalizeItemUrl, redactUrl } from "@/lib/research-feeds/url";
-import { fetchFeed, isPublicAddress, resolvePublic, type Transport, type TransportResponse } from "@/lib/research-feeds/network";
+import { createPinnedLookup, fetchFeed, isPublicAddress, resolvePublic, type Transport, type TransportResponse } from "@/lib/research-feeds/network";
 import { parseFeed } from "@/lib/research-feeds/parser";
 import { itemFingerprints } from "@/lib/research-feeds/fingerprint";
 
@@ -15,6 +15,15 @@ describe("feed URL validation",()=>{
  it.each(["http://example.com/feed","https://EXAMPLE.com/a/../feed?q=x"])("accepts %s",url=>expect(normalizeFeedUrl(url).hostname).toBe("example.com"));
  it.each(["ftp://example.com/x","https://u:p@example.com/x","https://example.com/x#f","http://localhost/x","http://internal/x","https://example.com:8443/x","not url","https://example.com/%0aevil"])("rejects %s",url=>expect(()=>normalizeFeedUrl(url)).toThrow());
  it("redacts query values",()=>expect(redactUrl("https://example.com/a?token=secret")).not.toContain("secret"));
+});
+
+describe("pinned Node lookup contract and safe transport diagnostics",()=>{
+ it("returns a pinned IPv4 address for all=false without resolving the hostname",async()=>{const lookup=createPinnedLookup({address:"93.184.216.34",family:4});const callback=vi.fn();lookup("must-not-resolve.invalid",{all:false},callback);expect(callback).toHaveBeenCalledWith(null,"93.184.216.34",4);});
+ it("returns a pinned IPv4 array for all=true",async()=>{const lookup=createPinnedLookup({address:"93.184.216.34",family:4});const callback=vi.fn();lookup("must-not-resolve.invalid",{all:true},callback);expect(callback).toHaveBeenCalledWith(null,[{address:"93.184.216.34",family:4}]);});
+ it("preserves a pinned IPv6 address for both lookup overloads",()=>{const lookup=createPinnedLookup({address:"2606:2800:220:1:248:1893:25c8:1946",family:6});const single=vi.fn();const all=vi.fn();lookup("must-not-resolve.invalid",{all:false},single);lookup("must-not-resolve.invalid",{all:true},all);expect(single).toHaveBeenCalledWith(null,"2606:2800:220:1:248:1893:25c8:1946",6);expect(all).toHaveBeenCalledWith(null,[{address:"2606:2800:220:1:248:1893:25c8:1946",family:6}]);});
+ it.each([["ENOTFOUND","DNS_FAILED"],["EAI_AGAIN","DNS_FAILED"],["UND_ERR_CONNECT_TIMEOUT","CONNECTION_TIMEOUT"],["ETIMEDOUT","CONNECTION_TIMEOUT"]])("maps %s without exposing raw messages",async(code,expected)=>{await expect(fetchFeed("https://example.com/feed",{}, {resolver,transport:async()=>{throw Object.assign(new Error("raw secret"),{code});}})).rejects.toMatchObject({code:expected});});
+ it("maps overall deadline aborts to REQUEST_TIMEOUT",async()=>{await expect(fetchFeed("https://example.com/feed",{}, {resolver,totalMs:5,transport:()=>new Promise(()=>{})})).rejects.toMatchObject({code:"REQUEST_TIMEOUT"});});
+ it("logs only structured safe fields for unexpected transport errors",async()=>{const log=vi.spyOn(console,"error").mockImplementation(()=>undefined);try{await expect(fetchFeed("https://example.com/feed?token=URL_SECRET",{}, {resolver,diagnostic:{feedSourceId:"feed-id",fetchRunId:"run-id"},transport:async()=>{throw Object.assign(new Error("BODY_SECRET 10.0.0.1 Authorization Cookie"),{name:"TransportError",headers:{authorization:"SERVICE_KEY"}});}})).rejects.toMatchObject({code:"INTERNAL_ERROR"});const output=log.mock.calls.flat().join(" ");expect(output).toContain('"stage":"REQUEST"');expect(output).toContain('"code":"INTERNAL_ERROR"');expect(output).toContain('"feedSourceId":"feed-id"');expect(output).not.toMatch(/URL_SECRET|BODY_SECRET|10\.0\.0\.1|Authorization|Cookie|SERVICE_KEY|example\.com/);}finally{log.mockRestore();}});
 });
 describe("address classification and deadline",()=>{
  it.each(["127.0.0.1","10.0.0.1","169.254.169.254","192.0.2.1","224.0.0.1","::1","fc00::1","fe80::1","2001:db8::1","::ffff:127.0.0.1"])("blocks %s",address=>expect(isPublicAddress(address)).toBe(false));
