@@ -6,11 +6,20 @@ import { requireUser } from "@/lib/auth";
 import { getProvider } from "@/lib/ioc-connectors/registry";
 import { synchronizeIocConnection } from "@/lib/ioc-connectors/orchestrator";
 import { ensureSyntheticConnection, setIocConnectionEnabled } from "@/lib/ioc-connectors/trusted-workflow-client";
+import { configureThreatFoxConnection, disconnectThreatFoxCredential, updateThreatFoxSettings } from "@/lib/ioc-connectors/trusted-workflow-client";
+import { authKeySchema } from "@/lib/ioc-connectors/credentials/schema";
+import { encryptCredential } from "@/lib/ioc-connectors/credentials/crypto";
+import { randomUUID } from "node:crypto";
 
 export type IocActionResult = { success?: string; error?: string };
 const idSchema = z.string().uuid();
 const safe = { error: "The IOC Inbox action could not be completed safely." };
 const refresh = () => revalidatePath("/osint");
+const threatFoxSettings = z.object({ lookback: z.coerce.number().int().min(1).max(7), interval: z.coerce.number().int().min(30).max(1440), scheduler: z.boolean() });
+
+export async function connectThreatFox(form:FormData):Promise<IocActionResult>{try{const{user,supabase}=await requireUser();const credential=authKeySchema.safeParse(form.get("auth_key"));const settings=threatFoxSettings.safeParse({lookback:form.get("lookback_days"),interval:form.get("sync_interval_minutes"),scheduler:form.get("scheduler_enabled")==="on"});if(!credential.success||!settings.success)return{error:"Enter a valid Auth-Key and bounded ThreatFox settings."};const adapter=getProvider("THREATFOX");if(!adapter?.testConnection)return safe;await adapter.testConnection(credential.data);const{data:existing}=await supabase.from("ioc_provider_connections").select("id").eq("owner_id",user.id).eq("provider_key","THREATFOX").maybeSingle();const connectionId=existing?.id??randomUUID(),encrypted=encryptCredential(credential.data,{ownerId:user.id,connectionId,providerKey:"THREATFOX",keyVersion:1});const{error}=await configureThreatFoxConnection({p_owner_id:user.id,p_connection_id:connectionId,p_ciphertext_b64:encrypted.ciphertext_b64,p_iv_b64:encrypted.iv_b64,p_auth_tag_b64:encrypted.auth_tag_b64,p_key_version:encrypted.key_version,p_lookback_days:settings.data.lookback,p_scheduler_enabled:settings.data.scheduler,p_sync_interval_minutes:settings.data.interval});if(error)return safe;refresh();return{success:"ThreatFox credential tested and configured."};}catch{return{error:"ThreatFox connection test failed; the credential was not saved."};}}
+export async function disconnectThreatFox(connectionId:string):Promise<IocActionResult>{try{const{user}=await requireUser();if(!idSchema.safeParse(connectionId).success)return safe;const{error}=await disconnectThreatFoxCredential(user.id,connectionId);if(error)return safe;refresh();return{success:"ThreatFox credential disconnected; history and provenance were preserved."};}catch{return safe;}}
+export async function saveThreatFoxSettings(connectionId:string,form:FormData):Promise<IocActionResult>{try{const{user}=await requireUser();const parsed=threatFoxSettings.safeParse({lookback:form.get("lookback_days"),interval:form.get("sync_interval_minutes"),scheduler:form.get("scheduler_enabled")==="on"});if(!idSchema.safeParse(connectionId).success||!parsed.success)return safe;const{error}=await updateThreatFoxSettings(user.id,connectionId,parsed.data.lookback,parsed.data.scheduler,parsed.data.interval);if(error)return safe;refresh();return{success:"ThreatFox settings updated."};}catch{return safe;}}
 
 export async function ensureSyntheticIocConnection(): Promise<IocActionResult> {
   try {
@@ -28,9 +37,10 @@ export async function syncIocProviderConnection(connectionId: string): Promise<I
   try {
     const { user, supabase } = await requireUser();
     if (!idSchema.safeParse(connectionId).success) return safe;
-    const { data } = await supabase.from("ioc_provider_connections").select("id,provider_key,enabled,archived_at").eq("id", connectionId).eq("owner_id", user.id).maybeSingle();
+    const { data } = await supabase.from("ioc_provider_connections").select("id,provider_key,enabled,archived_at,last_checked_at").eq("id", connectionId).eq("owner_id", user.id).maybeSingle();
     if (!data) return { error: "The provider connection was not found." };
     if (!data.enabled || data.archived_at) return { error: "The provider connection is disabled." };
+    if (data.provider_key === "THREATFOX") { const { data: recent } = await supabase.from("ioc_ingestion_runs").select("started_at").eq("owner_id",user.id).eq("provider_connection_id",connectionId).eq("trigger_type","MANUAL").order("started_at",{ascending:false}).limit(1).maybeSingle(); if(recent&&Date.now()-new Date(recent.started_at).valueOf()<300_000)return { error: "SYNC_COOLDOWN: wait five minutes before another manual ThreatFox sync." }; }
     if (!getProvider(data.provider_key)) return { error: "The provider is not configured on this server." };
     const result = await synchronizeIocConnection(user.id, connectionId);
     refresh();

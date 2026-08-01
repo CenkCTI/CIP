@@ -7,7 +7,7 @@ const examples: ReadonlyArray<readonly [IocCandidateType, string]> = [
 ];
 const item = (providerItemId: string, type: IocCandidateType, value: string) => normalizeProviderItem({ providerKey: "TEST_SYNTHETIC", providerItemId, type, value, tags: ["TEST", "SYNTHETIC"], confidence_score: 50, threat_type: "Synthetic demonstration" });
 export const syntheticProvider: IocProviderAdapter = {
-  key: "TEST_SYNTHETIC", displayName: "Deterministic Test IOC Provider", supportedTypes: candidateTypes, supportsScheduling: true,
+  key: "TEST_SYNTHETIC", displayName: "Deterministic Test IOC Provider", credentialRequired: false, supportedTypes: candidateTypes, supportsScheduling: true,
   async sync() {
     const items = examples.map(([type, value], index) => item(`synthetic-${index}`, type, value));
     items.push({ ...items[0] }, item("synthetic-ip-port", "IPV4", "192.0.2.44:443"), item("synthetic-second-claim", "DOMAIN", "example.com"));
