@@ -68,12 +68,15 @@ export function mapThreatFoxItem(raw: unknown) {
 
   const confidence = typeof item.confidence_level === "string" ? Number(item.confidence_level) : item.confidence_level;
   if (confidence != null && (!Number.isInteger(confidence) || confidence < 0 || confidence > 100)) throw new ThreatFoxMappingError("INVALID_CONFIDENCE");
+  const firstSeen = parseThreatFoxDate(item.first_seen, true);
+  const lastSeen = parseThreatFoxDate(item.last_seen);
+  if (firstSeen && lastSeen && Date.parse(lastSeen) < Date.parse(firstSeen)) throw new ThreatFoxMappingError("INVALID_DATE_ORDER");
   try {
     return normalizeProviderItem({
       providerKey: "THREATFOX", providerItemId: item.id, type, value,
       provider_reference_url: safeUrl(item.reference), threat_type: item.threat_type ?? null,
       malware_family: item.malware_printable || item.malware || null, confidence_score: confidence ?? null,
-      first_seen_at: parseThreatFoxDate(item.first_seen, true), last_seen_at: parseThreatFoxDate(item.last_seen),
+      first_seen_at: firstSeen, last_seen_at: lastSeen,
       tags: Array.from(new Set(["THREATFOX", ...(item.tags ?? []).slice(0, 49)])),
       metadata: { ioc_type: item.ioc_type, ioc_type_desc: item.ioc_type_desc ?? null, threat_type_desc: item.threat_type_desc ?? null, malware: item.malware ?? null, malware_printable: item.malware_printable ?? null, malware_alias: item.malware_alias ?? null, malware_malpedia: safeUrl(item.malware_malpedia), reporter: item.reporter ?? null },
     });

@@ -17,6 +17,15 @@ describe("ThreatFox strict dates", () => {
 });
 
 describe("ThreatFox mapping", () => {
+  it("classifies the exact temporal-order regression fixture without producing a candidate", () => {
+    const fixture = { id: "temporal-order-test", ioc: "198.51.100.17:5776", ioc_type: "ip:port", first_seen: "2026-08-01 08:50:33 UTC", last_seen: "2026-08-01 08:16:40 UTC", confidence_level: 100 };
+    let error: unknown;
+    try { mapThreatFoxItem(fixture); } catch (caught) { error = caught; }
+    expect(error).toBeInstanceOf(ThreatFoxMappingError);
+    expect((error as ThreatFoxMappingError).reason).toBe("INVALID_DATE_ORDER");
+    expect(JSON.stringify(error)).not.toContain("198.51.100.17");
+    expect(JSON.stringify(error)).not.toContain("2026-08-01");
+  });
   it("maps official dates and bounded provenance", () => expect(mapThreatFoxItem(base)).toMatchObject({ candidate_type: "DOMAIN", normalized_value: "example.com", provider_item_id: "42", malware_family: "Test Malware", tags: ["THREATFOX"], confidence_score: 75, first_seen_at: "2026-08-01T07:35:20.000Z", last_seen_at: null }));
   it("maps IPv4 and bracketed IPv6 ports", () => {
     expect(mapThreatFoxItem({ ...base, ioc_type: "ip:port", ioc: "192.0.2.44:443" })).toMatchObject({ candidate_type: "IPV4", network_port: 443 });

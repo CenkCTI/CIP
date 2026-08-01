@@ -22,6 +22,7 @@ describe("adapter result partial skip diagnostics", () => {
   it("accepts an empty partial reason record", () => expect(adapterResultSchema.parse(succeededWithReasons({})).diagnostics?.skip_reason_counts).toEqual({}));
   it("accepts one known reason", () => expect(adapterResultSchema.parse(succeededWithReasons({ INVALID_IP: 2 })).diagnostics?.skip_reason_counts).toEqual({ INVALID_IP: 2 }));
   it("accepts multiple known reasons", () => expect(adapterResultSchema.safeParse(succeededWithReasons({ INVALID_IP: 2, INVALID_DATE: 1 })).success).toBe(true));
+  it("accepts the bounded temporal-order reason", () => expect(adapterResultSchema.safeParse(succeededWithReasons({ INVALID_DATE_ORDER: 1 })).success).toBe(true));
   it("rejects unknown reason keys", () => expect(adapterResultSchema.safeParse(succeededWithReasons({ UNKNOWN_REASON: 1 })).success).toBe(false));
   it.each([0, -1, 1.5, 1001])("rejects invalid reason count %s", count => expect(adapterResultSchema.safeParse(succeededWithReasons({ INVALID_IP: count })).success).toBe(false));
   it("allows diagnostics to be omitted for backward compatibility", () => expect(adapterResultSchema.safeParse({ status: "SUCCEEDED", items: [normalizedThreatFoxCandidate] }).success).toBe(true));

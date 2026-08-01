@@ -23,6 +23,13 @@ export function mapThreatFoxWindow(data: unknown[], mapper: Mapper = mapThreatFo
   return { mapped, skipped, diagnostics: { received_count: data.length, mapped_count: mapped.length, mapping_skipped_count: skipped.length, skip_reason_counts: skipReasonCounts } };
 }
 
+export function buildThreatFoxResult(data: unknown[], mapper: Mapper = mapThreatFoxItem) {
+  const { mapped, skipped, diagnostics } = mapThreatFoxWindow(data, mapper);
+  const first = mapped.map(item => item.first_seen_at).filter(Boolean).sort().at(-1) ?? null;
+  const ids = mapped.map(item => Number(item.provider_item_id)).filter(Number.isFinite);
+  return { status: "SUCCEEDED" as const, items: [...mapped, ...skipped], diagnostics, nextCursor: JSON.stringify({ schema_version: 1, max_id: ids.length ? Math.max(...ids) : null, max_first_seen: first }) };
+}
+
 export const threatFoxAdapter: IocProviderAdapter = {
   key: "THREATFOX", displayName: "ThreatFox Community API", credentialRequired: true,
   supportedTypes: ["DOMAIN", "IPV4", "IPV6", "URL"], supportsScheduling: true, testConnection: testThreatFoxConnection,
@@ -34,9 +41,6 @@ export const threatFoxAdapter: IocProviderAdapter = {
     if (typeof response.query_status !== "string" || response.query_status.length > 100) throw new ThreatFoxError("THREATFOX_INVALID_RESPONSE");
     if (response.query_status !== "ok") throw new ThreatFoxError("THREATFOX_QUERY_FAILED");
     if (!Array.isArray(response.data)) throw new ThreatFoxError("THREATFOX_INVALID_RESPONSE");
-    const { mapped, skipped, diagnostics } = mapThreatFoxWindow(response.data);
-    const first = mapped.map(item => item.first_seen_at).filter(Boolean).sort().at(-1) ?? null;
-    const ids = mapped.map(item => Number(item.provider_item_id)).filter(Number.isFinite);
-    return { status: "SUCCEEDED", items: [...mapped, ...skipped], diagnostics, nextCursor: JSON.stringify({ schema_version: 1, max_id: ids.length ? Math.max(...ids) : null, max_first_seen: first }) };
+    return buildThreatFoxResult(response.data);
   },
 };
