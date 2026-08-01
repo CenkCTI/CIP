@@ -18,6 +18,8 @@ export type IocSyncResult = { success: string; status: "SUCCEEDED" | "NOT_MODIFI
 function errorCode(error: unknown): IocErrorCode {
   if (error instanceof ThreatFoxError) return error.code;
   if (error instanceof Error && error.message === "IOC_CREDENTIAL_DECRYPTION_FAILED") return "IOC_CREDENTIAL_DECRYPTION_FAILED";
+  if (error instanceof Error && error.message === "ADAPTER_RESULT_CONTRACT_INVALID") return "ADAPTER_RESULT_CONTRACT_INVALID";
+  if (error instanceof Error && error.message === "IOC_COMPLETION_FAILED") return "IOC_COMPLETION_FAILED";
   const text = error instanceof Error ? error.message : String(error ?? "");
   if (text.includes("SYNC_ALREADY_RUNNING")) return "SYNC_ALREADY_RUNNING";
   if (text.includes("PROVIDER_DISABLED")) return "PROVIDER_DISABLED";
@@ -50,7 +52,9 @@ export async function executeClaimedIocSync(claim: IocClaim): Promise<IocSyncRes
       const { data } = await createAdminClient().from("threatfox_connection_settings").select("lookback_days").eq("owner_id",claim.owner_id).eq("provider_connection_id",claim.connection_id).single();
       settings = { lookback_days: data?.lookback_days ?? 1 };
     }
-    const result = adapterResultSchema.parse(await adapter.sync({ ownerId: claim.owner_id, connectionId: claim.connection_id, cursor: claim.cursor_value, settings, credential }));
+    const parsedResult = adapterResultSchema.safeParse(await adapter.sync({ ownerId: claim.owner_id, connectionId: claim.connection_id, cursor: claim.cursor_value, settings, credential }));
+    if (!parsedResult.success) throw new Error("ADAPTER_RESULT_CONTRACT_INVALID");
+    const result = parsedResult.data;
     const { error } = await completeIocIngestion({
       p_owner_id: claim.owner_id,
       p_connection_id: claim.connection_id,
@@ -61,7 +65,7 @@ export async function executeClaimedIocSync(claim: IocClaim): Promise<IocSyncRes
       p_next_cursor: result.status === "SUCCEEDED" ? (result.nextCursor ?? null) : null,
       p_items: result.items,
     });
-    if (error) throw new Error(error.message);
+    if (error) throw new Error("IOC_COMPLETION_FAILED");
     return result.status === "NOT_MODIFIED"
       ? { success: "Provider checked; no candidates were modified.", status: "NOT_MODIFIED" }
       : { success: `Provider synchronized; ${result.diagnostics?.mapped_count ?? result.items.length} normalized observations processed${result.diagnostics ? `; ${result.diagnostics.mapping_skipped_count} provider records skipped safely` : ""}.`, status: "SUCCEEDED" };
