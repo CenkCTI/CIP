@@ -175,3 +175,5 @@ Manual ThreatFox synchronization uses the provider-independent incremental contr
 
 ## Phase 2.2C.3 follow-on
 AlienVault OTX subscribed-Pulse support is implemented as manual incremental ingestion with bounded Pulse provenance; see [PHASE_2_2C3.md](PHASE_2_2C3.md). No automatic OTX scheduler is enabled.
+
+- Phase 2.2C.3 bootstrap recovery: new OTX connections default to 7 days, shorter 1/3/7/14-day windows are available, and Pulse/indicator limit failures remain atomic and manual-only.

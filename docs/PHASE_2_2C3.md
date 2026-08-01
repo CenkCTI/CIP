@@ -4,7 +4,7 @@ CİTEM reads only the authenticated user's **subscribed Pulses** from the fixed 
 
 ## Manual workflow and safety
 
-Connect OTX, select a bounded 30/90/180/365-day bootstrap window, test the credential with a one-Pulse read, then use **Sync now**. Longer windows increase historical coverage but may include obsolete or noisy community indicators and increase false-positive risk. Scheduling, polling, Realtime, browser OTX access, automatic Indicator/Evidence/entity creation, attribution, blocking, and response are excluded.
+Connect OTX, select a bounded 1/3/7/14/30/90/180/365-day bootstrap window (7 days by default), test the credential with a one-Pulse read, then use **Sync now**. Longer windows increase historical coverage but may contain more stale or noisy community indicators and may exceed the safe per-run ingestion limit. Scheduling, polling, Realtime, browser OTX access, automatic Indicator/Evidence/entity creation, attribution, blocking, and response are excluded.
 
 The cursor is `{schema_version:1, provider:"ALIENVAULT_OTX", last_modified:<canonical UTC>, pulse_ids_at_boundary:<sorted unique 24-hex IDs>}`. Bootstrap requests only the selected window. Incremental reads use a one-minute overlap and locally exclude older/seen boundary Pulses. Modified known Pulses are eligible. The cursor advances only with exact-lease trusted completion; failures preserve it. An unchanged run is `NOT_MODIFIED`.
 
@@ -19,3 +19,22 @@ Each source retains bounded Pulse name/description, author, TLP, dates, referenc
 ## Deployment and live acceptance
 
 Set `IOC_CREDENTIAL_ENCRYPTION_KEY` server-side, apply migration 029 only with operator authorization, run `NOTIFY pgrst, 'reload schema';`, redeploy, then follow the operator checklist in the phase request: connect through the UI, verify the key disappears, run two manual syncs, inspect Pulse cards and distinct provenance, preserve triage through a modified Pulse, test idempotent acceptance, rotate, disconnect, verify history survives, confirm second-user isolation, and inspect logs for secrets or raw batches. Live checks require `OTX_LIVE_TEST=true`, an operator-supplied API key, and live-project authorization; they are not part of CI.
+
+## Bootstrap-window recovery
+
+New OTX connections default to a **7-day** bootstrap window. Supported manual bootstrap windows are **1, 3, 7, 14, 30, 90, 180, and 365 days**. Shorter windows are recommended because longer community-intelligence windows may contain more stale or noisy indicators and can exceed the unchanged safe per-run limits of 250 Pulses or 1,000 indicators.
+
+The connector never silently truncates an oversized response. `OTX_PULSE_LIMIT` and `OTX_INDICATOR_LIMIT` fail the complete run, preserve the previous cursor, and persist no partial candidates or sources. After a successful bootstrap, the existing manual incremental cursor processes only eligible new or modified Pulses. Automatic synchronization remains excluded.
+
+### Live recovery checklist
+
+1. Apply migration 030.
+2. Run `NOTIFY pgrst, 'reload schema';`.
+3. Redeploy Preview.
+4. Open OTX settings.
+5. Change bootstrap look-back from 30 days to 7 days.
+6. Run **Sync now**.
+7. If successful, inspect Pulse context and candidate counts.
+8. Run **Sync now** again after the manual cooldown.
+9. Confirm unchanged data becomes `NOT_MODIFIED`.
+10. If 7 days still exceeds the indicator limit, retry with 3 days and record the controlled limit classification.

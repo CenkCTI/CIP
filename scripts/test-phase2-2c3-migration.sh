@@ -56,4 +56,4 @@ set role authenticated;select set_config('request.jwt.claim.sub','10000000-0000-
 do $$begin if exists(select 1 from otx_connection_settings where owner_id='10000000-0000-4000-8000-000000000001')then raise exception 'second-user settings leak';end if;end$$;
 reset role;
 SQL
-printf 'PostgreSQL %s; migrations 001-029; OTX credential constraint/ACL/RLS, connect/rotate/disconnect, settings, scheduler lockout, isolation, exact lease/cursor atomicity, canonical deduplication, two-Pulse provenance, triage and acceptance passed.\n' "$(psql -Atqc 'show server_version' -d "$DB")"
+printf 'PostgreSQL %s; migrations 001-030; OTX credential constraint/ACL/RLS, connect/rotate/disconnect, settings, scheduler lockout, isolation, exact lease/cursor atomicity, canonical deduplication, two-Pulse provenance, triage and acceptance passed.\n' "$(psql -Atqc 'show server_version' -d "$DB")"

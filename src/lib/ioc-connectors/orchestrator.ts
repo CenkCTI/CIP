@@ -54,7 +54,7 @@ export async function executeClaimedIocSync(claim: IocClaim): Promise<IocSyncRes
       const { data } = await createAdminClient().from("threatfox_connection_settings").select("lookback_days").eq("owner_id",claim.owner_id).eq("provider_connection_id",claim.connection_id).single();
       settings = { lookback_days: data?.lookback_days ?? 1 };
     }
-    if(claim.provider_key==="ALIENVAULT_OTX"){const{data}=await createAdminClient().from("otx_connection_settings").select("bootstrap_lookback_days").eq("owner_id",claim.owner_id).eq("provider_connection_id",claim.connection_id).single();settings={bootstrap_lookback_days:data?.bootstrap_lookback_days??30};}
+    if(claim.provider_key==="ALIENVAULT_OTX"){const{data}=await createAdminClient().from("otx_connection_settings").select("bootstrap_lookback_days").eq("owner_id",claim.owner_id).eq("provider_connection_id",claim.connection_id).single();settings={bootstrap_lookback_days:data?.bootstrap_lookback_days??7};}
     const parsedResult = adapterResultSchema.safeParse(await adapter.sync({ ownerId: claim.owner_id, connectionId: claim.connection_id, cursor: claim.cursor_value, settings, credential }));
     if (!parsedResult.success) throw new Error("ADAPTER_RESULT_CONTRACT_INVALID");
     const result = parsedResult.data;
