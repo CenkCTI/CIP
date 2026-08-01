@@ -6,7 +6,7 @@ import { IocInbox, type IocCandidateRow, type IocConnection, type IocSourceRow }
 import { OsintWorkspace } from "@/components/osint/osint-workspace";
 import { decodeIocCursor, encodeIocCursor, inboxQuery, iocInboxSchema } from "@/lib/ioc-connectors/schema";
 import { decodeCursor, encodeCursor, filterSchema } from "@/lib/osint/schema";
-import {hasActiveOtxContinuation} from "@/lib/ioc-connectors/providers/otx/cursor";
+import {hasActiveOtxContinuation,parseOtxCursor} from "@/lib/ioc-connectors/providers/otx/cursor";
 
 type OsintWorkspaceProps = ComponentProps<typeof OsintWorkspace>;
 
@@ -38,8 +38,8 @@ export default async function OsintPage({ searchParams }: { searchParams: Promis
     const last = typedRows.at(-1);
     const nextCursor = typedRows.length === 30 && last ? encodeIocCursor({ sort: filters.ioc_sort, value: Number(last.sort_value), id: last.id }) : null;
     const lookbacks=new Map((otxSettings??[]).map(setting=>[setting.provider_connection_id,setting.bootstrap_lookback_days]));
-    const continuations=new Map((otxCursors??[]).map(cursor=>{let active=false;try{active=hasActiveOtxContinuation(cursor.cursor_value)}catch{}return[cursor.provider_connection_id,active]}));
-    const configuredConnections=(connections??[]).map(connection=>({...connection,bootstrap_lookback_days:lookbacks.get(connection.id),otx_has_continuation:continuations.get(connection.id)??false})) as IocConnection[];
+    const continuations=new Map((otxCursors??[]).map(cursor=>{let active=false,scope:null|"LEGACY_BULK"|"SEARCH_PULSE"=null,pulseId:string|null=null;try{const parsed=parseOtxCursor(cursor.cursor_value);active=hasActiveOtxContinuation(cursor.cursor_value);scope=parsed?.continuation?(parsed.continuation.scope??"LEGACY_BULK"):null;pulseId=parsed?.continuation?.pulse_id??null}catch{}return[cursor.provider_connection_id,{active,scope,pulseId}]}));
+    const configuredConnections=(connections??[]).map(connection=>{const continuation=continuations.get(connection.id);return{...connection,bootstrap_lookback_days:lookbacks.get(connection.id),otx_has_continuation:continuation?.active??false,otx_continuation_scope:continuation?.scope??null,otx_pulse_id:continuation?.pulseId??null}}) as IocConnection[];
     return <>{nav}{error ? <main className="card mx-auto max-w-6xl" role="alert">IOC Inbox could not be loaded.</main> : <main className="mx-auto max-w-6xl"><IocInbox rows={typedRows} projects={projects ?? []} connections={configuredConnections} runs={runs ?? []} sources={Object.fromEntries(detailEntries)} filters={filters} nextHref={nextCursor ? inboxQuery(filters, nextCursor) : null} syntheticEnabled={process.env.IOC_TEST_PROVIDER_ENABLED === "true"} /></main>}</>;
   }
 

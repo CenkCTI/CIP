@@ -5,3 +5,4 @@ export const otxIndicatorSchema=z.object({id:z.union([text(200),z.number().trans
 export const pulseIdentitySchema=z.object({id:z.string().regex(/^[0-9a-f]{24}$/),created:providerDate.nullable().optional(),modified:providerDate,indicators:z.array(z.unknown()).max(100000)});
 export const pulseContextObjectSchema=z.object({id:text(200).optional(),name:text(200).optional(),display_name:text(200).optional(),username:text(200).optional()});
 export const envelopeSchema=z.object({results:z.array(z.unknown()).max(250),next:z.string().max(8192).nullable(),previous:z.string().max(8192).nullable().optional(),count:z.number().int().nonnegative()}).passthrough();
+export const searchEnvelopeSchema=z.object({results:z.array(z.unknown()).max(25),count:z.number().int().nonnegative().optional()}).passthrough();

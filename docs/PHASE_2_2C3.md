@@ -84,3 +84,11 @@ Optional community context varies across Pulse generations. Malware families and
 10. Continue until the final batch.
 11. Confirm the final unchanged check returns `NOT_MODIFIED`.
 12. Inspect logs for API keys, IOC values, raw provider bodies, and raw Zod errors.
+
+## OTX Search & Select
+
+OTX Search & Select is the default analyst workflow. An authenticated owner searches the fixed read-only `GET /api/v1/search/pulses` endpoint with a 2–120 character term; the server fixes `page=1` and `limit=25`, decrypts the owner credential, and returns at most 25 bounded previews without persistence or an ingestion run. Search results never import automatically. Selecting **Import Pulse** causes the server to validate the 24-hex ID and refetch both the fixed Pulse detail and Pulse-indicator endpoints before trusted ingestion.
+
+One analyst action imports one selected Pulse batch. Each exact-lease completion persists at most 1,000 candidate or skip outcomes. A larger Pulse stores a continuation scoped only to `SEARCH_PULSE` and the validated Pulse ID; it stores no query, IOC value, description, credential, or response. **Continue Pulse import** processes exactly one further batch without polling, timers, scheduling, or browser OTX access. Re-import remains idempotent and distinct Pulses retain distinct provenance.
+
+Subscribed-Pulse bulk synchronization remains compatibility code but is hidden and rejected by the normal OTX action. If an older bulk continuation exists, the UI labels it as a legacy snapshot and requires explicit confirmation to discard only its continuation. Discard preserves the committed watermark and all candidates, sources, runs, cursors' committed history, triage, and acceptances; it performs no OTX request and creates no ingestion run.
