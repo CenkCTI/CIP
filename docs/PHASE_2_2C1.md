@@ -69,3 +69,6 @@ ThreatFox synchronization re-reads the complete configured window. Canonical can
 
 ## Exclusions
 No submission, search, bulk download, scraping, MalwareBazaar, automatic analytical record, blocking, export, URLhaus, OTX, VirusTotal, Talos, STIX, TAXII, or MISP integration is included. A later explicitly scoped provider phase may add another fixed adapter.
+
+## Superseded by Phase 2.2C.2
+Phase 2.2C.1's informational v1 cursor and intentional full-window remapping apply only to that historical delivery. Phase 2.2C.2 manual **Sync now** accepts safe v1 input, upgrades it in memory, persists strict provider-bound v2 after successful completion, and filters already-seen records before normalization. Automatic scheduling and automatic Inbox refresh are deferred. See [PHASE_2_2C2.md](PHASE_2_2C2.md).

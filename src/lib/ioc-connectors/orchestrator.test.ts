@@ -17,14 +17,25 @@ describe("executable IOC synchronization", () => {
   it.each([{}, { INVALID_IP: 1 }])("completes ThreatFox results with partial reasons %#", async skip_reason_counts => {
     const candidate = { provider_item_id: "safe-id", candidate_type: "DOMAIN" as const, normalized_value: "safe.example", original_value: "safe.example", network_port: null, provider_reference_url: null, threat_type: null, malware_family: null, confidence_score: 50, first_seen_at: "2026-08-01T07:35:20.000Z", last_seen_at: null, tags: ["THREATFOX"], metadata: {}, source_fingerprint: "a".repeat(64) };
     const skip = Object.keys(skip_reason_counts).length ? [{ provider_skip_reason: "INVALID_IP" as const }] : [];
-    vi.spyOn(threatFoxAdapter, "sync").mockResolvedValueOnce({ status: "SUCCEEDED", items: [candidate, ...skip], diagnostics: { received_count: 1 + skip.length, mapped_count: 1, mapping_skipped_count: skip.length, skip_reason_counts } });
+    vi.spyOn(threatFoxAdapter, "sync").mockResolvedValueOnce({ status: "SUCCEEDED", items: [candidate, ...skip], diagnostics: { received_count: 1 + skip.length, eligible_count: 1 + skip.length, already_seen_count: 0, mapped_count: 1, mapping_skipped_count: skip.length, skip_reason_counts } });
     const result = await executeClaimedIocSync({ ...claim, provider_key: "THREATFOX" });
     expect(result).toMatchObject({ status: "SUCCEEDED" });
     expect(workflow.complete).toHaveBeenCalledWith(expect.objectContaining({ p_items: [candidate, ...skip] }));
     expect(workflow.fail).not.toHaveBeenCalled();
   });
+  it("reports an exact safe manual bootstrap result", async () => {
+    vi.spyOn(threatFoxAdapter, "sync").mockResolvedValueOnce({ status: "SUCCEEDED", items: [], nextCursor: "cursor-v2", diagnostics: { received_count: 600, eligible_count: 600, already_seen_count: 0, mapped_count: 417, mapping_skipped_count: 183, skip_reason_counts: { INVALID_PROVIDER_RECORD: 183 } } } as never);
+    const result = await executeClaimedIocSync({ ...claim, provider_key: "THREATFOX" });
+    expect(result).toEqual({ success: "Provider synchronized; 417 new observations processed; 183 provider records skipped safely.", status: "SUCCEEDED" });
+  });
+  it("finalizes an identical manual window as NOT_MODIFIED without persistence items", async () => {
+    vi.spyOn(threatFoxAdapter, "sync").mockResolvedValueOnce({ status: "NOT_MODIFIED", items: [], nextCursor: "cursor-v2", diagnostics: { received_count: 600, eligible_count: 0, already_seen_count: 600, mapped_count: 0, mapping_skipped_count: 0, skip_reason_counts: {} } });
+    const result = await executeClaimedIocSync({ ...claim, provider_key: "THREATFOX" });
+    expect(result).toEqual({ success: "Provider checked; no new observations were available; 600 provider records were already seen.", status: "NOT_MODIFIED" });
+    expect(workflow.complete).toHaveBeenCalledWith(expect.objectContaining({ p_status: "NOT_MODIFIED", p_next_cursor: "cursor-v2", p_items: [] }));
+  });
   it("classifies a malformed adapter contract at the application boundary", async () => {
-    vi.spyOn(threatFoxAdapter, "sync").mockResolvedValueOnce({ status: "SUCCEEDED", items: [], diagnostics: { received_count: 1, mapped_count: 0, mapping_skipped_count: 1, skip_reason_counts: { UNKNOWN_REASON: 1 } } } as never);
+    vi.spyOn(threatFoxAdapter, "sync").mockResolvedValueOnce({ status: "SUCCEEDED", items: [], diagnostics: { received_count: 1, eligible_count: 1, already_seen_count: 0, mapped_count: 0, mapping_skipped_count: 1, skip_reason_counts: { UNKNOWN_REASON: 1 } } } as never);
     const result = await executeClaimedIocSync({ ...claim, provider_key: "THREATFOX" });
     expect(result).toEqual({ error: "The provider adapter returned an invalid internal result." });
     expect(workflow.fail).toHaveBeenCalledWith(expect.objectContaining({ p_error_code: "ADAPTER_RESULT_CONTRACT_INVALID" }));
@@ -37,5 +48,6 @@ describe("executable IOC synchronization", () => {
     const result = await executeClaimedIocSync(claim);
     expect(result).toEqual({ error: "The provider result could not be persisted safely." });
     expect(workflow.fail).toHaveBeenCalledWith(expect.objectContaining({ p_error_code: "IOC_COMPLETION_FAILED" }));
+    expect(workflow.complete).toHaveBeenCalledTimes(1);
   });
 });
