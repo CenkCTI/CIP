@@ -190,3 +190,6 @@ Generate it with `openssl rand -base64 32`. Never expose this value through a `N
 
 ### Phase 2.2C.2
 ThreatFox IOC ingestion supports manual incremental synchronization: **Sync now** selects only the provider delta with a strict versioned cursor and advances it through trusted atomic completion. Automatic scheduling and Inbox refresh are deferred. See [Phase 2.2C.2](docs/PHASE_2_2C2.md).
+
+### Phase 2.2C.3
+AlienVault OTX subscribed-Pulse ingestion is available as a bounded, encrypted, manual incremental connector. See [the Phase 2.2C.3 guide](docs/PHASE_2_2C3.md). It does not enable automatic scheduling or automatic analytical-record creation.

@@ -12,11 +12,13 @@ import {
 import { loadCredential } from "./credentials/repository";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ThreatFoxError } from "./providers/threatfox/errors";
+import { OtxError } from "./providers/otx/errors";
 
 export type IocSyncResult = { success: string; status: "SUCCEEDED" | "NOT_MODIFIED" } | { error: string };
 
 function errorCode(error: unknown): IocErrorCode {
   if (error instanceof ThreatFoxError) return error.code;
+  if (error instanceof OtxError) return error.code;
   if (error instanceof Error && error.message === "IOC_CREDENTIAL_DECRYPTION_FAILED") return "IOC_CREDENTIAL_DECRYPTION_FAILED";
   if (error instanceof Error && error.message === "ADAPTER_RESULT_CONTRACT_INVALID") return "ADAPTER_RESULT_CONTRACT_INVALID";
   if (error instanceof Error && error.message === "IOC_COMPLETION_FAILED") return "IOC_COMPLETION_FAILED";
@@ -45,13 +47,14 @@ export async function executeClaimedIocSync(claim: IocClaim): Promise<IocSyncRes
     let credential: string | undefined;
     if (adapter.credentialRequired) {
       credential = (await loadCredential(claim.owner_id, claim.connection_id, claim.provider_key)) ?? undefined;
-      if (!credential) throw new ThreatFoxError("THREATFOX_CREDENTIAL_REQUIRED");
+      if (!credential) throw claim.provider_key==="ALIENVAULT_OTX"?new OtxError("OTX_CREDENTIAL_REQUIRED"):new ThreatFoxError("THREATFOX_CREDENTIAL_REQUIRED");
     }
     let settings: Record<string, unknown> = {};
     if (claim.provider_key === "THREATFOX") {
       const { data } = await createAdminClient().from("threatfox_connection_settings").select("lookback_days").eq("owner_id",claim.owner_id).eq("provider_connection_id",claim.connection_id).single();
       settings = { lookback_days: data?.lookback_days ?? 1 };
     }
+    if(claim.provider_key==="ALIENVAULT_OTX"){const{data}=await createAdminClient().from("otx_connection_settings").select("bootstrap_lookback_days").eq("owner_id",claim.owner_id).eq("provider_connection_id",claim.connection_id).single();settings={bootstrap_lookback_days:data?.bootstrap_lookback_days??30};}
     const parsedResult = adapterResultSchema.safeParse(await adapter.sync({ ownerId: claim.owner_id, connectionId: claim.connection_id, cursor: claim.cursor_value, settings, credential }));
     if (!parsedResult.success) throw new Error("ADAPTER_RESULT_CONTRACT_INVALID");
     const result = parsedResult.data;
@@ -67,7 +70,7 @@ export async function executeClaimedIocSync(claim: IocClaim): Promise<IocSyncRes
     });
     if (error) throw new Error("IOC_COMPLETION_FAILED");
     return result.status === "NOT_MODIFIED"
-      ? { success: `Provider checked; no new observations were available; ${result.diagnostics.already_seen_count} provider records were already seen.`, status: "NOT_MODIFIED" }
+      ? { success: claim.provider_key==="ALIENVAULT_OTX"?"OTX checked; no new or modified subscribed Pulses were available.":`Provider checked; no new observations were available; ${result.diagnostics.already_seen_count} provider records were already seen.`, status: "NOT_MODIFIED" }
       : { success: `Provider synchronized; ${result.diagnostics.mapped_count} new observations processed; ${result.diagnostics.mapping_skipped_count} provider records skipped safely${result.diagnostics.already_seen_count ? `; ${result.diagnostics.already_seen_count} already seen` : ""}.`, status: "SUCCEEDED" };
   } catch (error) {
     const code = errorCode(error);

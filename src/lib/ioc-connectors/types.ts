@@ -6,7 +6,7 @@ export type NormalizedCandidate = {
   confidence_score: number | null; first_seen_at: string | null; last_seen_at: string | null; tags: string[];
   metadata: Record<string, unknown>; source_fingerprint: string;
 };
-export const providerSkipReasons = ["UNSUPPORTED_IOC_TYPE", "INVALID_PROVIDER_RECORD", "INVALID_IOC", "INVALID_IP", "INVALID_PORT", "INVALID_DATE", "INVALID_DATE_ORDER", "INVALID_CONFIDENCE"] as const;
+export const providerSkipReasons = ["UNSUPPORTED_IOC_TYPE", "INACTIVE_PROVIDER_RECORD", "INVALID_PROVIDER_RECORD", "INVALID_IOC", "INVALID_IP", "INVALID_PORT", "INVALID_DATE", "INVALID_DATE_ORDER", "INVALID_CONFIDENCE"] as const;
 export type ProviderSkipReason = (typeof providerSkipReasons)[number];
 export type ProviderSkippedItem = { provider_skip_reason: ProviderSkipReason };
 export type AdapterItem = NormalizedCandidate | ProviderSkippedItem;
