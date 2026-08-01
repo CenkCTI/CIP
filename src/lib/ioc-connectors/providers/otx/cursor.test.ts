@@ -1,12 +1,16 @@
-import {describe,expect,it} from "vitest";
-import {OTX_BOUNDARY_MAX,parseOtxCursor,serializeOtxCursor} from "./cursor";
-const ts="2026-08-01T10:00:00.000Z",id="0123456789abcdef01234567";
-const raw=(overrides:Record<string,unknown>={})=>JSON.stringify({schema_version:1,provider:"ALIENVAULT_OTX",last_modified:ts,pulse_ids_at_boundary:[id],...overrides});
+import {describe,expect,it} from "vitest";import {OTX_BOUNDARY_MAX,OTX_CURSOR_MAX_BYTES,parseOtxCursor,serializeOtxCursor,serializeOtxState} from "./cursor";
+const ts="2026-08-01T10:00:00.000Z",start="2026-07-31T10:00:00.000Z",id="0123456789abcdef01234567",key="a".repeat(64);
+const v1=(overrides:Record<string,unknown>={})=>JSON.stringify({schema_version:1,provider:"ALIENVAULT_OTX",last_modified:ts,pulse_ids_at_boundary:[id],...overrides});
+const committed={last_modified:ts,pulse_ids_at_boundary:[id]},continuation={mode:"BOOTSTRAP" as const,window_start:start,window_end:ts,resume_after:{pulse_modified:ts,pulse_id:id,item_key:key},processed_count:1000};
 describe("strict OTX cursor contract",()=>{
- it("accepts a valid cursor",()=>expect(parseOtxCursor(raw())).toEqual({schema_version:1,provider:"ALIENVAULT_OTX",last_modified:ts,pulse_ids_at_boundary:[id]}));
- it("serializes canonical UTC",()=>expect(JSON.parse(serializeOtxCursor(ts,[id])).last_modified).toBe(ts));
- it.each([["wrong provider",{provider:"THREATFOX"}],["unsupported version",{schema_version:2}],["invalid timestamp",{last_modified:"2026-08-01T10:00:00Z"}],["invalid Pulse ID",{pulse_ids_at_boundary:["abc"]}],["duplicate IDs",{pulse_ids_at_boundary:[id,id]}],["unsorted IDs",{pulse_ids_at_boundary:["1123456789abcdef01234567",id]}],["excessive IDs",{pulse_ids_at_boundary:Array.from({length:OTX_BOUNDARY_MAX+1},(_,i)=>i.toString(16).padStart(24,"0"))}]])("rejects %s",(_label,value)=>expect(()=>parseOtxCursor(raw(value))).toThrow("OTX_CURSOR_INVALID"));
- it("rejects malformed JSON",()=>expect(()=>parseOtxCursor("not-json-secret")).toThrow("OTX_CURSOR_INVALID"));
- it("rejects serialized input over 1000 bytes",()=>expect(()=>parseOtxCursor("{"+"x".repeat(1001))).toThrow("OTX_CURSOR_INVALID"));
- it("does not expose cursor content",()=>{try{parseOtxCursor("raw-cursor-secret")}catch(error){expect(String(error)).toBe("OtxError: OTX_CURSOR_INVALID");expect(JSON.stringify(error)).not.toContain("raw-cursor-secret")}});
+ it("upgrades a valid v1 cursor in memory",()=>expect(parseOtxCursor(v1())).toEqual({schema_version:2,provider:"ALIENVAULT_OTX",committed,continuation:null}));
+ it("accepts and serializes v2 committed-only cursor",()=>expect(parseOtxCursor(serializeOtxCursor(ts,[id]))).toMatchObject({schema_version:2,committed}));
+ it("accepts an active continuation",()=>expect(parseOtxCursor(serializeOtxState({committed:null,continuation}))?.continuation).toEqual(continuation));
+ it.each([["wrong provider",{provider:"THREATFOX"}],["unsupported version",{schema_version:3}],["invalid timestamp",{committed:{...committed,last_modified:"2026-08-01T10:00:00Z"}}],["invalid Pulse ID",{committed:{...committed,pulse_ids_at_boundary:["abc"]}}],["duplicate IDs",{committed:{...committed,pulse_ids_at_boundary:[id,id]}}],["unsorted IDs",{committed:{...committed,pulse_ids_at_boundary:["1123456789abcdef01234567",id]}}],["excessive IDs",{committed:{...committed,pulse_ids_at_boundary:Array.from({length:OTX_BOUNDARY_MAX+1},(_,i)=>i.toString(16).padStart(24,"0"))}}]])("rejects %s",(_label,override)=>expect(()=>parseOtxCursor(JSON.stringify({schema_version:2,provider:"ALIENVAULT_OTX",committed,continuation:null,...override}))).toThrow("OTX_CURSOR_INVALID"));
+ it("rejects malformed continuation",()=>expect(()=>parseOtxCursor(JSON.stringify({schema_version:2,provider:"ALIENVAULT_OTX",committed:null,continuation:{...continuation,processed_count:0}}))).toThrow("OTX_CURSOR_INVALID"));
+ it("rejects inverted windows",()=>expect(()=>serializeOtxState({committed:null,continuation:{...continuation,window_start:ts,window_end:start}})).toThrow("OTX_CURSOR_INVALID"));
+ it("rejects invalid item keys",()=>expect(()=>serializeOtxState({committed:null,continuation:{...continuation,resume_after:{...continuation.resume_after,item_key:"raw-ioc"}}})).toThrow("OTX_CURSOR_INVALID"));
+ it("never serializes raw IOC content",()=>{const value=serializeOtxState({committed,continuation});expect(value).not.toContain("example.com");expect(value).not.toContain("192.0.2.1")});
+ it("stays within the existing cursor bound",()=>expect(Buffer.byteLength(serializeOtxState({committed,continuation}))).toBeLessThanOrEqual(OTX_CURSOR_MAX_BYTES));
+ it("rejects malformed JSON without disclosure",()=>{try{parseOtxCursor("raw-cursor-secret")}catch(error){expect(String(error)).toBe("OtxError: OTX_CURSOR_INVALID");expect(JSON.stringify(error)).not.toContain("raw-cursor-secret")}});
 });

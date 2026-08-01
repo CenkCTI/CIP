@@ -12,6 +12,7 @@ import { encryptCredential } from "@/lib/ioc-connectors/credentials/crypto";
 import { randomUUID } from "node:crypto";
 import { configureOtxConnection,disconnectOtxCredential,updateOtxSettings } from "@/lib/ioc-connectors/trusted-workflow-client";
 import {otxBootstrapLookbackSchema} from "@/lib/ioc-connectors/providers/otx/settings";
+import {hasActiveOtxContinuation} from "@/lib/ioc-connectors/providers/otx/cursor";
 
 export type IocActionResult = { success?: string; error?: string };
 const idSchema = z.string().uuid();
@@ -47,7 +48,7 @@ export async function syncIocProviderConnection(connectionId: string): Promise<I
     const { data } = await supabase.from("ioc_provider_connections").select("id,provider_key,enabled,archived_at,last_checked_at").eq("id", connectionId).eq("owner_id", user.id).maybeSingle();
     if (!data) return { error: "The provider connection was not found." };
     if (!data.enabled || data.archived_at) return { error: "The provider connection is disabled." };
-    if (["THREATFOX","ALIENVAULT_OTX"].includes(data.provider_key)) { const { data: recent } = await supabase.from("ioc_ingestion_runs").select("started_at").eq("owner_id",user.id).eq("provider_connection_id",connectionId).eq("trigger_type","MANUAL").order("started_at",{ascending:false}).limit(1).maybeSingle(); if(recent&&Date.now()-new Date(recent.started_at).valueOf()<300_000)return { error: "SYNC_COOLDOWN: wait five minutes before another manual provider sync." }; }
+    if (["THREATFOX","ALIENVAULT_OTX"].includes(data.provider_key)) { const { data: recent } = await supabase.from("ioc_ingestion_runs").select("started_at").eq("owner_id",user.id).eq("provider_connection_id",connectionId).eq("trigger_type","MANUAL").order("started_at",{ascending:false}).limit(1).maybeSingle();let continuation=false;if(data.provider_key==="ALIENVAULT_OTX"){const{data:stored}=await supabase.from("ioc_provider_cursors").select("cursor_value").eq("owner_id",user.id).eq("provider_connection_id",connectionId).maybeSingle();try{continuation=hasActiveOtxContinuation(stored?.cursor_value??null)}catch{continuation=false}}if(recent&&Date.now()-new Date(recent.started_at).valueOf()<300_000&&!continuation)return { error: "SYNC_COOLDOWN: wait five minutes before another manual provider sync." }; }
     if (!getProvider(data.provider_key)) return { error: "The provider is not configured on this server." };
     const result = await synchronizeIocConnection(user.id, connectionId);
     refresh();

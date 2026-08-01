@@ -13,6 +13,7 @@ import { loadCredential } from "./credentials/repository";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ThreatFoxError } from "./providers/threatfox/errors";
 import { OtxError } from "./providers/otx/errors";
+import {hasActiveOtxContinuation} from "./providers/otx/cursor";
 
 export type IocSyncResult = { success: string; status: "SUCCEEDED" | "NOT_MODIFIED" } | { error: string };
 
@@ -44,6 +45,7 @@ export async function executeClaimedIocSync(claim: IocClaim): Promise<IocSyncRes
   }
 
   try {
+    const wasOtxContinuation=claim.provider_key==="ALIENVAULT_OTX"&&hasActiveOtxContinuation(claim.cursor_value);
     let credential: string | undefined;
     if (adapter.credentialRequired) {
       credential = (await loadCredential(claim.owner_id, claim.connection_id, claim.provider_key)) ?? undefined;
@@ -69,9 +71,10 @@ export async function executeClaimedIocSync(claim: IocClaim): Promise<IocSyncRes
       p_items: result.items,
     });
     if (error) throw new Error("IOC_COMPLETION_FAILED");
-    return result.status === "NOT_MODIFIED"
-      ? { success: claim.provider_key==="ALIENVAULT_OTX"?"OTX checked; no new or modified subscribed Pulses were available.":`Provider checked; no new observations were available; ${result.diagnostics.already_seen_count} provider records were already seen.`, status: "NOT_MODIFIED" }
-      : { success: `Provider synchronized; ${result.diagnostics.mapped_count} new observations processed; ${result.diagnostics.mapping_skipped_count} provider records skipped safely${result.diagnostics.already_seen_count ? `; ${result.diagnostics.already_seen_count} already seen` : ""}.`, status: "SUCCEEDED" };
+    if(result.status==="NOT_MODIFIED")return{success:claim.provider_key==="ALIENVAULT_OTX"?"OTX checked; no new or modified subscribed Pulses were available.":`Provider checked; no new observations were available; ${result.diagnostics.already_seen_count} provider records were already seen.`,status:"NOT_MODIFIED"};
+    if(claim.provider_key==="ALIENVAULT_OTX"&&result.diagnostics.has_more)return{success:`OTX batch processed; ${result.diagnostics.eligible_count.toLocaleString("en-US")} provider records completed; ${result.diagnostics.deferred_count.toLocaleString("en-US")} records remain in this snapshot.`,status:"SUCCEEDED"};
+    if(claim.provider_key==="ALIENVAULT_OTX"&&wasOtxContinuation)return{success:`OTX synchronization completed; ${result.diagnostics.eligible_count.toLocaleString("en-US")} provider records processed in the final batch.`,status:"SUCCEEDED"};
+    return{success:`Provider synchronized; ${result.diagnostics.mapped_count} new observations processed; ${result.diagnostics.mapping_skipped_count} provider records skipped safely${result.diagnostics.already_seen_count?`; ${result.diagnostics.already_seen_count} already seen`:""}.`,status:"SUCCEEDED"};
   } catch (error) {
     const code = errorCode(error);
     const safeMessage = error instanceof ThreatFoxError && error.diagnostics?.received_count !== undefined

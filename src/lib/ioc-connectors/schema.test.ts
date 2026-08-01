@@ -26,3 +26,12 @@ describe("adapter result partial skip diagnostics", () => {
   it("accepts a mapped ThreatFox candidate with empty reasons", () => expect(adapterResultSchema.safeParse(succeededWithReasons({})).success).toBe(true));
   it("accepts a candidate plus a provider skip marker", () => expect(adapterResultSchema.safeParse(succeededWithReasons({ INVALID_IP: 1 }, [normalizedThreatFoxCandidate, { provider_skip_reason: "INVALID_IP" }])).success).toBe(true));
 });
+
+describe("deferred adapter diagnostics",()=>{
+  const base={status:"SUCCEEDED" as const,items:[normalizedThreatFoxCandidate],nextCursor:"bounded-continuation",diagnostics:{received_count:3,already_seen_count:0,eligible_count:1,deferred_count:2,has_more:true,mapped_count:1,mapping_skipped_count:0,skip_reason_counts:{}}};
+  it("accepts consistent deferred arithmetic and continuation",()=>expect(adapterResultSchema.safeParse(base).success).toBe(true));
+  it("rejects contradictory deferred arithmetic",()=>expect(adapterResultSchema.safeParse({...base,diagnostics:{...base.diagnostics,received_count:2}}).success).toBe(false));
+  it("rejects has_more without a cursor",()=>{const missing={status:base.status,items:base.items,diagnostics:base.diagnostics};expect(adapterResultSchema.safeParse(missing).success).toBe(false)});
+  it("defaults ThreatFox deferred state to complete",()=>expect(adapterResultSchema.parse(succeededWithReasons({})).diagnostics).toMatchObject({deferred_count:0,has_more:false}));
+  it("requires NOT_MODIFIED deferred_count zero",()=>expect(adapterResultSchema.safeParse({status:"NOT_MODIFIED",items:[],nextCursor:"cursor",diagnostics:{received_count:1,already_seen_count:0,eligible_count:0,deferred_count:1,has_more:true,mapped_count:0,mapping_skipped_count:0,skip_reason_counts:{}}}).success).toBe(false));
+});
