@@ -64,18 +64,21 @@ export async function executeClaimedIocSync(claim: IocClaim): Promise<IocSyncRes
     if (error) throw new Error(error.message);
     return result.status === "NOT_MODIFIED"
       ? { success: "Provider checked; no candidates were modified.", status: "NOT_MODIFIED" }
-      : { success: `Provider synchronized; ${result.items.length} normalized observations processed.`, status: "SUCCEEDED" };
+      : { success: `Provider synchronized; ${result.diagnostics?.mapped_count ?? result.items.length} normalized observations processed${result.diagnostics ? `; ${result.diagnostics.mapping_skipped_count} provider records skipped safely` : ""}.`, status: "SUCCEEDED" };
   } catch (error) {
     const code = errorCode(error);
+    const safeMessage = error instanceof ThreatFoxError && error.diagnostics?.received_count !== undefined
+      ? `${safeIocMessage(code)} Received ${error.diagnostics.received_count} provider records${code === "THREATFOX_ITEM_LIMIT" ? "; choose a smaller lookback window." : "."}`
+      : safeIocMessage(code);
     await failIocIngestion({
       p_owner_id: claim.owner_id,
       p_connection_id: claim.connection_id,
       p_run_id: claim.run_id,
       p_lease_token: claim.lease_token,
       p_error_code: code,
-      p_error_message: safeIocMessage(code),
+      p_error_message: safeMessage,
     });
-    return { error: safeIocMessage(code) };
+    return { error: safeMessage };
   }
 }
 
