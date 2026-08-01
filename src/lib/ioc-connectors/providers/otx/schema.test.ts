@@ -1,0 +1,3 @@
+import {describe,expect,it} from "vitest";import {envelopeSchema,pulseSchema} from "./schema";
+const pulse={id:"0123456789abcdef01234567",name:"Pulse",description:"",created:"2026-08-01T00:00:00.000Z",modified:"2026-08-01T00:00:00.000Z",tags:[],references:[],targeted_countries:[],industries:[],malware_families:[],attack_ids:[],indicators:[]};
+describe("bounded OTX schemas",()=>{it("accepts allowlisted bounded Pulse context",()=>expect(pulseSchema.parse(pulse).id).toBe(pulse.id));it("rejects excessive arrays",()=>expect(()=>pulseSchema.parse({...pulse,tags:Array.from({length:51},()=>"x")})).toThrow());it("rejects invalid envelopes",()=>expect(envelopeSchema.safeParse({results:"x",next:null,count:0}).success).toBe(false))});
