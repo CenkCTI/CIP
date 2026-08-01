@@ -77,3 +77,6 @@ Inbox filters are server validated and cover provider, status, type, confidence 
 
 ## Phase 2.2C.1 extension
 The provider-independent contract now supports credential-bearing fixed adapters. ThreatFox is the first external adapter; TEST_SYNTHETIC remains credential-free. See `PHASE_2_2C1.md`.
+
+## Phase 2.2C.2 supersession
+The informational cursor/full-window behavior is superseded by the strict incremental contract documented in [PHASE_2_2C2.md](PHASE_2_2C2.md). Manual and scheduled claims now share delta selection and atomic cursor completion.

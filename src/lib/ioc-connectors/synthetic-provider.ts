@@ -11,6 +11,6 @@ export const syntheticProvider: IocProviderAdapter = {
   async sync() {
     const items = examples.map(([type, value], index) => item(`synthetic-${index}`, type, value));
     items.push({ ...items[0] }, item("synthetic-ip-port", "IPV4", "192.0.2.44:443"), item("synthetic-second-claim", "DOMAIN", "example.com"));
-    return { status: "SUCCEEDED", items };
+    return { status: "SUCCEEDED", items, diagnostics: { received_count: items.length, eligible_count: items.length, already_seen_count: 0, mapped_count: items.length, mapping_skipped_count: 0, skip_reason_counts: {} } };
   },
 };

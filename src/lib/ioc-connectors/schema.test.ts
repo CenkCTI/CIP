@@ -13,10 +13,7 @@ const normalizedThreatFoxCandidate = {
   malware_family: null, confidence_score: 50, first_seen_at: "2026-08-01T07:35:20.000Z",
   last_seen_at: null, tags: ["THREATFOX"], metadata: { ioc_type: "domain" }, source_fingerprint: "a".repeat(64),
 };
-const succeededWithReasons = (skip_reason_counts: Record<string, number>, items: unknown[] = [normalizedThreatFoxCandidate]) => ({
-  status: "SUCCEEDED" as const, items,
-  diagnostics: { received_count: items.length, mapped_count: 1, mapping_skipped_count: items.length - 1, skip_reason_counts },
-});
+const succeededWithReasons = (skip_reason_counts: Record<string, number>, items?: unknown[]) => { const skips=Object.entries(skip_reason_counts).flatMap(([provider_skip_reason,count])=>Array.from({length:count},()=>({provider_skip_reason}))); const all=items ?? [normalizedThreatFoxCandidate,...skips]; return { status: "SUCCEEDED" as const, items:all, diagnostics: { received_count: all.length, eligible_count: all.length, already_seen_count: 0, mapped_count: all.filter(item=>"candidate_type" in (item as object)).length, mapping_skipped_count: all.filter(item=>"provider_skip_reason" in (item as object)).length, skip_reason_counts } }; };
 
 describe("adapter result partial skip diagnostics", () => {
   it("accepts an empty partial reason record", () => expect(adapterResultSchema.parse(succeededWithReasons({})).diagnostics?.skip_reason_counts).toEqual({}));
@@ -25,7 +22,7 @@ describe("adapter result partial skip diagnostics", () => {
   it("accepts the bounded temporal-order reason", () => expect(adapterResultSchema.safeParse(succeededWithReasons({ INVALID_DATE_ORDER: 1 })).success).toBe(true));
   it("rejects unknown reason keys", () => expect(adapterResultSchema.safeParse(succeededWithReasons({ UNKNOWN_REASON: 1 })).success).toBe(false));
   it.each([0, -1, 1.5, 1001])("rejects invalid reason count %s", count => expect(adapterResultSchema.safeParse(succeededWithReasons({ INVALID_IP: count })).success).toBe(false));
-  it("allows diagnostics to be omitted for backward compatibility", () => expect(adapterResultSchema.safeParse({ status: "SUCCEEDED", items: [normalizedThreatFoxCandidate] }).success).toBe(true));
+  it("requires incremental diagnostics", () => expect(adapterResultSchema.safeParse({ status: "SUCCEEDED", items: [normalizedThreatFoxCandidate] }).success).toBe(false));
   it("accepts a mapped ThreatFox candidate with empty reasons", () => expect(adapterResultSchema.safeParse(succeededWithReasons({})).success).toBe(true));
   it("accepts a candidate plus a provider skip marker", () => expect(adapterResultSchema.safeParse(succeededWithReasons({ INVALID_IP: 1 }, [normalizedThreatFoxCandidate, { provider_skip_reason: "INVALID_IP" }])).success).toBe(true));
 });

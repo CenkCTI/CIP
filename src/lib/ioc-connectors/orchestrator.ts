@@ -62,13 +62,13 @@ export async function executeClaimedIocSync(claim: IocClaim): Promise<IocSyncRes
       p_lease_token: claim.lease_token,
       p_status: result.status,
       p_starting_cursor_version: claim.cursor_version,
-      p_next_cursor: result.status === "SUCCEEDED" ? (result.nextCursor ?? null) : null,
+      p_next_cursor: result.nextCursor ?? null,
       p_items: result.items,
     });
     if (error) throw new Error("IOC_COMPLETION_FAILED");
     return result.status === "NOT_MODIFIED"
-      ? { success: "Provider checked; no candidates were modified.", status: "NOT_MODIFIED" }
-      : { success: `Provider synchronized; ${result.diagnostics?.mapped_count ?? result.items.length} normalized observations processed${result.diagnostics ? `; ${result.diagnostics.mapping_skipped_count} provider records skipped safely` : ""}.`, status: "SUCCEEDED" };
+      ? { success: `Provider checked; no new observations were available; ${result.diagnostics.already_seen_count} provider records were already seen.`, status: "NOT_MODIFIED" }
+      : { success: `Provider synchronized; ${result.diagnostics.mapped_count} new observations processed; ${result.diagnostics.mapping_skipped_count} provider records skipped safely${result.diagnostics.already_seen_count ? `; ${result.diagnostics.already_seen_count} already seen` : ""}.`, status: "SUCCEEDED" };
   } catch (error) {
     const code = errorCode(error);
     const safeMessage = error instanceof ThreatFoxError && error.diagnostics?.received_count !== undefined

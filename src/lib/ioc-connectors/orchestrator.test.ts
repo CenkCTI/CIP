@@ -17,14 +17,14 @@ describe("executable IOC synchronization", () => {
   it.each([{}, { INVALID_IP: 1 }])("completes ThreatFox results with partial reasons %#", async skip_reason_counts => {
     const candidate = { provider_item_id: "safe-id", candidate_type: "DOMAIN" as const, normalized_value: "safe.example", original_value: "safe.example", network_port: null, provider_reference_url: null, threat_type: null, malware_family: null, confidence_score: 50, first_seen_at: "2026-08-01T07:35:20.000Z", last_seen_at: null, tags: ["THREATFOX"], metadata: {}, source_fingerprint: "a".repeat(64) };
     const skip = Object.keys(skip_reason_counts).length ? [{ provider_skip_reason: "INVALID_IP" as const }] : [];
-    vi.spyOn(threatFoxAdapter, "sync").mockResolvedValueOnce({ status: "SUCCEEDED", items: [candidate, ...skip], diagnostics: { received_count: 1 + skip.length, mapped_count: 1, mapping_skipped_count: skip.length, skip_reason_counts } });
+    vi.spyOn(threatFoxAdapter, "sync").mockResolvedValueOnce({ status: "SUCCEEDED", items: [candidate, ...skip], diagnostics: { received_count: 1 + skip.length, eligible_count: 1 + skip.length, already_seen_count: 0, mapped_count: 1, mapping_skipped_count: skip.length, skip_reason_counts } });
     const result = await executeClaimedIocSync({ ...claim, provider_key: "THREATFOX" });
     expect(result).toMatchObject({ status: "SUCCEEDED" });
     expect(workflow.complete).toHaveBeenCalledWith(expect.objectContaining({ p_items: [candidate, ...skip] }));
     expect(workflow.fail).not.toHaveBeenCalled();
   });
   it("classifies a malformed adapter contract at the application boundary", async () => {
-    vi.spyOn(threatFoxAdapter, "sync").mockResolvedValueOnce({ status: "SUCCEEDED", items: [], diagnostics: { received_count: 1, mapped_count: 0, mapping_skipped_count: 1, skip_reason_counts: { UNKNOWN_REASON: 1 } } } as never);
+    vi.spyOn(threatFoxAdapter, "sync").mockResolvedValueOnce({ status: "SUCCEEDED", items: [], diagnostics: { received_count: 1, eligible_count: 1, already_seen_count: 0, mapped_count: 0, mapping_skipped_count: 1, skip_reason_counts: { UNKNOWN_REASON: 1 } } } as never);
     const result = await executeClaimedIocSync({ ...claim, provider_key: "THREATFOX" });
     expect(result).toEqual({ error: "The provider adapter returned an invalid internal result." });
     expect(workflow.fail).toHaveBeenCalledWith(expect.objectContaining({ p_error_code: "ADAPTER_RESULT_CONTRACT_INVALID" }));
