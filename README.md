@@ -189,4 +189,4 @@ IOC_CREDENTIAL_ENCRYPTION_KEY=<base64-encoded-32-byte-key>
 Generate it with `openssl rand -base64 32`. Never expose this value through a `NEXT_PUBLIC_` variable.
 
 ### Phase 2.2C.2
-ThreatFox IOC ingestion is provider-independently incremental: the protected scheduler is primary, strict versioned cursors select only the delta, trusted completion advances the cursor atomically, and the mounted IOC Inbox detects owner-scoped changes without a page reload. See [Phase 2.2C.2](docs/PHASE_2_2C2.md).
+ThreatFox IOC ingestion supports manual incremental synchronization: **Sync now** selects only the provider delta with a strict versioned cursor and advances it through trusted atomic completion. Automatic scheduling and Inbox refresh are deferred. See [Phase 2.2C.2](docs/PHASE_2_2C2.md).

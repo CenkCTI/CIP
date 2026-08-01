@@ -1,4 +1,0 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-export const dynamic="force-dynamic";
-export async function GET(){ const supabase=await createClient(); const {data:{user}}=await supabase.auth.getUser(); if(!user)return NextResponse.json({error:"Unauthorized."},{status:401}); const [{data:run,error},{count,error:countError}]=await Promise.all([supabase.from("ioc_ingestion_runs").select("id,completed_at").eq("owner_id",user.id).in("status",["SUCCEEDED","NOT_MODIFIED"]).order("completed_at",{ascending:false}).limit(1).maybeSingle(),supabase.from("ioc_candidates").select("id",{count:"exact",head:true}).eq("owner_id",user.id).eq("status","NEW")]); if(error||countError)return NextResponse.json({error:"Change token unavailable."},{status:503}); return NextResponse.json({token:run?`${run.completed_at}:${run.id}`:"none",new_count:count??0},{headers:{"Cache-Control":"private, no-store"}}); }

@@ -23,6 +23,17 @@ describe("executable IOC synchronization", () => {
     expect(workflow.complete).toHaveBeenCalledWith(expect.objectContaining({ p_items: [candidate, ...skip] }));
     expect(workflow.fail).not.toHaveBeenCalled();
   });
+  it("reports an exact safe manual bootstrap result", async () => {
+    vi.spyOn(threatFoxAdapter, "sync").mockResolvedValueOnce({ status: "SUCCEEDED", items: [], nextCursor: "cursor-v2", diagnostics: { received_count: 600, eligible_count: 600, already_seen_count: 0, mapped_count: 417, mapping_skipped_count: 183, skip_reason_counts: { INVALID_PROVIDER_RECORD: 183 } } } as never);
+    const result = await executeClaimedIocSync({ ...claim, provider_key: "THREATFOX" });
+    expect(result).toEqual({ success: "Provider synchronized; 417 new observations processed; 183 provider records skipped safely.", status: "SUCCEEDED" });
+  });
+  it("finalizes an identical manual window as NOT_MODIFIED without persistence items", async () => {
+    vi.spyOn(threatFoxAdapter, "sync").mockResolvedValueOnce({ status: "NOT_MODIFIED", items: [], nextCursor: "cursor-v2", diagnostics: { received_count: 600, eligible_count: 0, already_seen_count: 600, mapped_count: 0, mapping_skipped_count: 0, skip_reason_counts: {} } });
+    const result = await executeClaimedIocSync({ ...claim, provider_key: "THREATFOX" });
+    expect(result).toEqual({ success: "Provider checked; no new observations were available; 600 provider records were already seen.", status: "NOT_MODIFIED" });
+    expect(workflow.complete).toHaveBeenCalledWith(expect.objectContaining({ p_status: "NOT_MODIFIED", p_next_cursor: "cursor-v2", p_items: [] }));
+  });
   it("classifies a malformed adapter contract at the application boundary", async () => {
     vi.spyOn(threatFoxAdapter, "sync").mockResolvedValueOnce({ status: "SUCCEEDED", items: [], diagnostics: { received_count: 1, eligible_count: 1, already_seen_count: 0, mapped_count: 0, mapping_skipped_count: 1, skip_reason_counts: { UNKNOWN_REASON: 1 } } } as never);
     const result = await executeClaimedIocSync({ ...claim, provider_key: "THREATFOX" });
@@ -37,5 +48,6 @@ describe("executable IOC synchronization", () => {
     const result = await executeClaimedIocSync(claim);
     expect(result).toEqual({ error: "The provider result could not be persisted safely." });
     expect(workflow.fail).toHaveBeenCalledWith(expect.objectContaining({ p_error_code: "IOC_COMPLETION_FAILED" }));
+    expect(workflow.complete).toHaveBeenCalledTimes(1);
   });
 });

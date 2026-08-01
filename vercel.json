@@ -1,1 +1,0 @@
-{"crons":[{"path":"/api/internal/osint/scheduler","schedule":"*/15 * * * *"}]}

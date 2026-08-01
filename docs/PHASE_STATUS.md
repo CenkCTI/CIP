@@ -170,5 +170,5 @@ Provider-independent IOC adapter contracts, owner-local canonical candidates and
 ## Phase 2.2C.1 — ThreatFox IOC Connector
 Implemented: fixed read-only ThreatFox Community API synchronization, encrypted owner credentials, bounded lookback, provenance, scheduler support, and analyst-controlled acceptance. Migration: `202607310028_phase2_2c1_threatfox_connector.sql`.
 
-## Phase 2.2C.2 — Complete
-Provider-independent incremental IOC synchronization, ThreatFox cursor v2/legacy upgrade, protected deployment scheduling, strict delta diagnostics, and owner-scoped Inbox change polling are implemented without migration 029. URLhaus and OTX remain future work.
+## Phase 2.2C.2 — Manual incremental synchronization implemented
+Manual ThreatFox synchronization uses the provider-independent incremental contract, cursor v2/legacy upgrade, strict delta diagnostics, and atomic completion without migration 029. Automatic scheduling and automatic Inbox refresh are deferred until an operator-controlled deployment is available. URLhaus and OTX remain future work.
