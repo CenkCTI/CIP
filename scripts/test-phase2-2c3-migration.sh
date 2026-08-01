@@ -46,6 +46,10 @@ do $$declare c uuid:='30000000-0000-4000-8000-000000000001';other uuid:='3000000
  perform disconnect_otx_credential(r.owner_id,c);
  if exists(select 1 from ioc_provider_credentials where provider_connection_id=c)or not exists(select 1 from ioc_candidates where id=candidate)or(select count(*)from ioc_candidate_sources where candidate_id=candidate)<>2 or not exists(select 1 from ioc_ingestion_runs where provider_connection_id=c)or not exists(select 1 from ioc_provider_cursors where provider_connection_id=c)or not exists(select 1 from ioc_candidate_acceptances where candidate_id=candidate)then raise exception 'disconnect removed history';end if;
  begin perform claim_ioc_connection(r.owner_id,c,'MANUAL');raise exception 'disconnected sync accepted';exception when others then if sqlerrm='disconnected sync accepted'then raise;end if;end;
+ update ioc_provider_connections set last_error_code='OTX_INDICATOR_LIMIT',last_error_message='Historical controlled failure'where id=c;
+ if configure_otx_connection(r.owner_id,c,'Y2lwaGVyMw==','MTIzNDU2Nzg5MDEy','MTIzNDU2Nzg5MDEyMzQ1Ng==',1::smallint,1)<>c then raise exception 'reconnect replaced connection ID';end if;
+ if not exists(select 1 from ioc_provider_credentials where provider_connection_id=c and owner_id=r.owner_id and provider_key='ALIENVAULT_OTX')or not(select enabled and health_status='HEALTHY'and last_error_code is null and last_error_message is null from ioc_provider_connections where id=c)then raise exception 'reconnect state invalid';end if;
+ if not exists(select 1 from ioc_candidates where id=candidate)or(select count(*)from ioc_candidate_sources where candidate_id=candidate)<>2 or not exists(select 1 from ioc_ingestion_runs where provider_connection_id=c)or not exists(select 1 from ioc_provider_cursors where provider_connection_id=c)or(select status from ioc_candidates where id=candidate)<>'ACCEPTED'then raise exception 'reconnect changed history';end if;
 end$$;
 -- ACL and owner RLS checks.
 do $$begin
