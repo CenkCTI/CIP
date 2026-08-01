@@ -13,6 +13,7 @@ import { loadCredential } from "./credentials/repository";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ThreatFoxError } from "./providers/threatfox/errors";
 import { OtxError } from "./providers/otx/errors";
+import { OtxMappingError } from "./providers/otx/mapping";
 import {hasActiveOtxContinuation} from "./providers/otx/cursor";
 
 export type IocSyncResult = { success: string; status: "SUCCEEDED" | "NOT_MODIFIED" } | { error: string };
@@ -20,6 +21,7 @@ export type IocSyncResult = { success: string; status: "SUCCEEDED" | "NOT_MODIFI
 function errorCode(error: unknown): IocErrorCode {
   if (error instanceof ThreatFoxError) return error.code;
   if (error instanceof OtxError) return error.code;
+  if (error instanceof OtxMappingError) return "OTX_MAPPING_FAILED";
   if (error instanceof Error && error.message === "IOC_CREDENTIAL_DECRYPTION_FAILED") return "IOC_CREDENTIAL_DECRYPTION_FAILED";
   if (error instanceof Error && error.message === "ADAPTER_RESULT_CONTRACT_INVALID") return "ADAPTER_RESULT_CONTRACT_INVALID";
   if (error instanceof Error && error.message === "IOC_COMPLETION_FAILED") return "IOC_COMPLETION_FAILED";

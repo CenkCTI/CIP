@@ -63,3 +63,24 @@ When a batch has deferred outcomes, CİTEM completes and persists at most 1,000 
 12. Run **Sync now** after completion.
 13. Confirm `NOT_MODIFIED`.
 14. Inspect logs and cursors for secrets or raw IOC values.
+
+## Real Pulse context normalization
+
+OTX Pulse synchronization identity remains strict: Pulse IDs must be 24 lowercase hexadecimal characters, modified timestamps must be parseable, optional created timestamps must be bounded and parseable when present, and indicators must remain a bounded array. Invalid synchronization identity fails closed as `OTX_INVALID_RESPONSE`, without cursor advancement or partial persistence.
+
+Optional community context varies across Pulse generations. Malware families and ATT&CK entries may be bounded strings or allowlisted objects containing `id`, `name`, and `display_name`; other context lists may include strings, nulls, or similarly bounded display objects. CİTEM normalizes only those allowlisted fields, deterministically deduplicates display strings, rejects unsafe references, and drops malformed optional items. Malware display priority is `display_name`, then `name`, then `id`; ATT&CK objects render as `id — display_name/name` when both are present. A malformed optional context field does not prevent valid indicators from being reviewed, while malformed indicators remain bounded skip markers. Unknown object keys and complete raw Pulse objects are never persisted.
+
+### Pulse-parsing live acceptance checklist
+
+1. Keep the failed `PROVIDER_INTERNAL_FAILURE` run for audit history.
+2. Redeploy the repaired Preview.
+3. Confirm the OTX connection remains enabled.
+4. Run **Sync now** with the existing one-day setting.
+5. Confirm the run no longer returns `PROVIDER_INTERNAL_FAILURE`.
+6. Confirm at most 1,000 outcomes are persisted.
+7. Confirm **Continue import** appears when required.
+8. Inspect malware-family and ATT&CK context rendering.
+9. Confirm Pulse context contains normalized bounded strings.
+10. Continue until the final batch.
+11. Confirm the final unchanged check returns `NOT_MODIFIED`.
+12. Inspect logs for API keys, IOC values, raw provider bodies, and raw Zod errors.
