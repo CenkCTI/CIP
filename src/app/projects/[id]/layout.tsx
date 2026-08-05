@@ -31,6 +31,12 @@ export default async function InvestigationLayout({
         >
           Sources
         </Link>
+        <Link
+          className="rounded px-3 py-1.5 text-stone-400 hover:bg-stone-900 hover:text-amber-300"
+          href={`/projects/${id}/intel-profile`}
+        >
+          Intel Profile
+        </Link>
       </nav>
       {children}
     </>

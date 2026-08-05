@@ -172,3 +172,14 @@ Implemented: fixed read-only ThreatFox Community API synchronization, encrypted 
 
 ## Phase 2.2C.2 — Manual incremental synchronization implemented
 Manual ThreatFox synchronization uses the provider-independent incremental contract, cursor v2/legacy upgrade, strict delta diagnostics, and atomic completion without migration 029. Automatic scheduling and automatic Inbox refresh are deferred until an operator-controlled deployment is available. URLhaus and OTX remain future work.
+
+## Phase 2.3A — TechINT Shell and Intel Profile Foundation
+
+- [x] TechINT top-level navigation shell added with Global View, Profiles, and InvestINT.
+- [x] Additive migration 031 authored for owner-scoped Intel Profiles, profile items, audit events, RLS, constraints, and append-only audit access.
+- [x] Standalone and Investigation-linked profile UI/actions added with explicit separation.
+- [x] Investigation Intel Profile workspace route added with deterministic local refresh from existing Investigation CTI records.
+- [ ] Technical signal collection, provider ingestion, matching, prioritization, alerts, Global View intelligence, and AI briefs remain intentionally out of scope for later phases.
+- [x] PR #32 repair tightened TechINT mutations behind service-role trusted RPCs, made audit writes transactional, preserved excluded/removed item identities across refresh, and replaced the static migration check with a PostgreSQL execution harness.
+- [x] Final PR #32 hardening enforces strict TechINT profile status transitions and database-authoritative Indicator validation/normalization with URL path/query case preservation.
+- [x] Compatibility repair skips unsupported `FILE`/`REGISTRY` and malformed legacy Investigation Indicators during TechINT seeding without aborting profile creation or refresh.
