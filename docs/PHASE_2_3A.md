@@ -48,3 +48,9 @@ Phase 2.3A intentionally excludes technical-signal ingestion, provider collectio
 ## Live acceptance checklist
 
 The live checklist must be performed only by an authorized operator against the deployed Supabase project: create standalone and Investigation profiles as User A, verify strict list separation, validate deterministic seeding and pending semantics, test duplicate Investigation-profile rejection, pause/resume/archive/restore, inspect audit history, and confirm User B cannot access User A records.
+
+## Trusted mutation repair
+
+The Phase 2.3A mutation path now follows the repository trusted-workflow pattern: authenticated browser clients keep owner-scoped `SELECT` only, while profile, item, refresh, and audit-changing operations execute through narrow `service_role` RPCs. The trusted RPCs derive owner and actor from the authenticated server action input, compute normalized values/profile-local keys inside the database boundary, bind Investigation refreshes to the profile's own project, and write audit events in the same transaction as the mutation. If an audit write fails, the mutation rolls back.
+
+Excluded and removed item identities are preserved by a full owner/profile/profile-local-key uniqueness constraint. Refresh checks every existing lifecycle state and reports preserved exclusions/removals instead of recreating them as active records. Reactivation is an explicit item transition that clears `removed_at` and sets `accepted_by` through the trusted RPC.

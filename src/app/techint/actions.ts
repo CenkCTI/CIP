@@ -1,16 +1,223 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use server";
+
 import { revalidatePath } from "next/cache";
+
 import { requireUser } from "@/lib/auth";
-import { idSchema, itemInputSchema, normalizeTechIntItem, profileDefinitionSchema, profileLocalKey } from "@/lib/techint/schema";
-export type IntelActionResult={success?:string;error?:string}; const safe=(m="The Intel Profile change could not be completed safely."):IntelActionResult=>({error:m});
-function refresh(projectId?:string){revalidatePath("/techint");revalidatePath("/techint/profiles");revalidatePath("/techint/investint"); if(projectId) revalidatePath(`/projects/${projectId}/intel-profile`);}
-async function audit(supabase:any,owner:string,profile:string,action:string,item?:string,details:Record<string,unknown>={}){await supabase.from("intel_profile_audit_events").insert({owner_id:owner,profile_id:profile,item_id:item??null,actor_id:owner,action,details});}
-export async function createStandaloneIntelProfile(form:FormData):Promise<IntelActionResult>{try{const {user,supabase}=await requireUser();const p=profileDefinitionSchema.safeParse(Object.fromEntries(form));if(!p.success)return{error:p.error.issues[0]?.message};const {data,error}=await supabase.from("intel_profiles").insert({...p.data,owner_id:user.id,kind:"STANDALONE",project_id:null,created_by:user.id,updated_by:user.id}).select("id").single();if(error)return safe();await audit(supabase,user.id,data.id,"PROFILE_CREATED");refresh();return{success:"Standalone TechINT profile created."};}catch{return safe();}}
-export async function createInvestigationIntelProfile(projectId:string,form:FormData):Promise<IntelActionResult>{try{const {user,supabase}=await requireUser();if(!idSchema.safeParse(projectId).success)return safe();const owned=await supabase.from("projects").select("id,name").eq("id",projectId).single();if(owned.error)return safe("Investigation not found.");const p=profileDefinitionSchema.safeParse(Object.fromEntries(form));if(!p.success)return{error:p.error.issues[0]?.message};const {data,error}=await supabase.from("intel_profiles").insert({...p.data,owner_id:user.id,kind:"INVESTIGATION",project_id:projectId,created_by:user.id,updated_by:user.id}).select("id").single();if(error)return safe(error.code==="23505"?"This Investigation already has a non-archived Intel Profile.":undefined);await audit(supabase,user.id,data.id,"PROFILE_CREATED",undefined,{project_id:projectId});await seedFromInvestigation(supabase,user.id,data.id,projectId);refresh(projectId);return{success:"Investigation Intel Profile created."};}catch{return safe();}}
-export async function updateIntelProfile(profileId:string,form:FormData):Promise<IntelActionResult>{try{const {user,supabase}=await requireUser();if(!idSchema.safeParse(profileId).success)return safe();const p=profileDefinitionSchema.safeParse(Object.fromEntries(form));if(!p.success)return{error:p.error.issues[0]?.message};const {data,error}=await supabase.from("intel_profiles").update({...p.data,updated_by:user.id}).eq("id",profileId).select("project_id").single();if(error)return safe();await audit(supabase,user.id,profileId,"PROFILE_UPDATED");refresh(data.project_id??undefined);return{success:"Intel Profile saved."};}catch{return safe();}}
-export async function setIntelProfileStatus(profileId:string,status:"ACTIVE"|"PAUSED"|"ARCHIVED",restore=false):Promise<IntelActionResult>{try{const {user,supabase}=await requireUser();if(!idSchema.safeParse(profileId).success)return safe();const patch:any={status:restore?"PAUSED":status,updated_by:user.id}; if(status==="ARCHIVED")patch.archived_at=new Date().toISOString(); if(restore)patch.archived_at=null;const {data,error}=await supabase.from("intel_profiles").update(patch).eq("id",profileId).select("project_id").single();if(error)return safe();const action=restore?"PROFILE_RESTORED":status==="ARCHIVED"?"PROFILE_ARCHIVED":status==="PAUSED"?"PROFILE_PAUSED":"PROFILE_RESUMED";await audit(supabase,user.id,profileId,action);refresh(data.project_id??undefined);return{success:restore?"Intel Profile restored in a paused state.":`Intel Profile ${status.toLowerCase()}.`};}catch{return safe();}}
-export async function addIntelProfileItem(profileId:string,form:FormData):Promise<IntelActionResult>{try{const {user,supabase}=await requireUser();const parsed=itemInputSchema.safeParse({profileId,kind:form.get("kind"),displayValue:form.get("display_value"),semanticRole:form.get("semantic_role")||null});if(!parsed.success)return{error:parsed.error.issues[0]?.message};const normalized=normalizeTechIntItem(parsed.data.kind,parsed.data.displayValue);const semantic=parsed.data.semanticRole??null;if(["COUNTRY","REGION"].includes(parsed.data.kind)&&!semantic)return{error:"Location items require a semantic role before activation."};const {error,data}=await supabase.from("intel_profile_items").insert({owner_id:user.id,profile_id:profileId,kind:parsed.data.kind,display_value:parsed.data.displayValue,normalized_value:normalized,profile_local_key:profileLocalKey(parsed.data.kind,normalized,semantic),origin:"EXPLICIT",state:"ACTIVE",semantic_role:semantic,created_by:user.id}).select("id").single();if(error)return safe(error.code==="23505"?"This active or pending item already exists in the profile.":undefined);await audit(supabase,user.id,profileId,"ITEM_ADDED",data.id,{kind:parsed.data.kind});refresh();return{success:"Profile item added."};}catch{return safe();}}
-export async function setIntelProfileItemState(profileId:string,itemId:string,state:"ACTIVE"|"EXCLUDED"|"REMOVED"):Promise<IntelActionResult>{try{const {user,supabase}=await requireUser();if(!idSchema.safeParse(profileId).success||!idSchema.safeParse(itemId).success)return safe();const patch:any={state}; if(state==="ACTIVE")patch.accepted_by=user.id; else patch.removed_at=new Date().toISOString();const {error}=await supabase.from("intel_profile_items").update(patch).eq("profile_id",profileId).eq("id",itemId);if(error)return safe();await audit(supabase,user.id,profileId,state==="ACTIVE"?"ITEM_ACCEPTED":state==="EXCLUDED"?"ITEM_EXCLUDED":"ITEM_REMOVED",itemId);refresh();return{success:"Item state updated."};}catch{return safe();}}
-export async function refreshInvestigationIntelProfile(profileId:string,projectId:string):Promise<IntelActionResult>{try{const {user,supabase}=await requireUser();if(!idSchema.safeParse(profileId).success||!idSchema.safeParse(projectId).success)return safe();const counts=await seedFromInvestigation(supabase,user.id,profileId,projectId);await audit(supabase,user.id,profileId,"INVESTIGATION_REFRESHED",undefined,counts);refresh(projectId);return{success:`Refresh complete: ${counts.added} added, ${counts.already_present} already present, ${counts.skipped} skipped.`};}catch{return safe();}}
-async function seedFromInvestigation(supabase:any,owner:string,profileId:string,projectId:string){let added=0,already_present=0,skipped=0;const specs=[["threat_actors","THREAT_ACTOR","name"],["campaigns","CAMPAIGN","name"],["malware","MALWARE","name"],["cves","CVE","cve_id"],["indicators","INDICATOR","value"],["mitre_techniques","ATTACK_TECHNIQUE","technique_id"]] as const;for(const [table,kind,col] of specs){const {data}=await supabase.from(table).select(`id,${col}`).eq("project_id",projectId).limit(100);for(const row of data??[]){const display=String(row[col]);const normalized=normalizeTechIntItem(kind,display);const {error}=await supabase.from("intel_profile_items").insert({owner_id:owner,profile_id:profileId,kind,display_value:display,normalized_value:normalized,profile_local_key:profileLocalKey(kind,normalized,null),origin:"DERIVED",state:"ACTIVE",source_project_id:projectId,source_entity_type:table,source_entity_id:row.id,created_by:owner});if(error?.code==="23505")already_present++; else if(error)skipped++; else added++;}}return{added,already_present,pending_suggestions:0,skipped};}
+import { idSchema, itemInputSchema, profileDefinitionSchema } from "@/lib/techint/schema";
+import {
+  addExplicitItemWorkflow,
+  createInvestigationProfileWorkflow,
+  createStandaloneProfileWorkflow,
+  refreshInvestigationProfileWorkflow,
+  setProfileStatusWorkflow,
+  transitionItemWorkflow,
+  updateProfileDefinitionWorkflow,
+} from "@/lib/techint/trusted-workflow-client";
+
+export type IntelActionResult = { success?: string; error?: string };
+
+const safe = (
+  message = "The Intel Profile change could not be completed safely.",
+): IntelActionResult => ({ error: message });
+
+function refresh(projectId?: string | null) {
+  revalidatePath("/techint");
+  revalidatePath("/techint/profiles");
+  revalidatePath("/techint/investint");
+  if (projectId) revalidatePath(`/projects/${projectId}/intel-profile`);
+}
+
+function definitionParameters(actorId: string, form: FormData) {
+  const parsed = profileDefinitionSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message } as const;
+  return {
+    data: {
+      p_actor: actorId,
+      p_name: parsed.data.name,
+      p_description: parsed.data.description,
+      p_intelligence_question: parsed.data.intelligence_question,
+      p_priority: parsed.data.priority,
+      p_time_horizon_days: parsed.data.time_horizon_days,
+      p_minimum_confidence: parsed.data.minimum_confidence,
+      p_relationship_depth: parsed.data.relationship_depth,
+    },
+  } as const;
+}
+
+function isDuplicateInvestigationProfile(code?: string) {
+  return code === "23505";
+}
+
+export async function createStandaloneIntelProfile(
+  form: FormData,
+): Promise<IntelActionResult> {
+  try {
+    const { user } = await requireUser();
+    const parsed = definitionParameters(user.id, form);
+    if ("error" in parsed) return { error: parsed.error };
+    const { error } = await createStandaloneProfileWorkflow(parsed.data);
+    if (error) return safe();
+    refresh();
+    return { success: "Standalone TechINT profile created." };
+  } catch {
+    return safe();
+  }
+}
+
+export async function createInvestigationIntelProfile(
+  projectId: string,
+  form: FormData,
+): Promise<IntelActionResult> {
+  try {
+    const { user } = await requireUser();
+    if (!idSchema.safeParse(projectId).success) return safe();
+    const parsed = definitionParameters(user.id, form);
+    if ("error" in parsed) return { error: parsed.error };
+    const { error } = await createInvestigationProfileWorkflow({
+      ...parsed.data,
+      p_project_id: projectId,
+    });
+    if (error) {
+      return safe(
+        isDuplicateInvestigationProfile(error.code)
+          ? "This Investigation already has a non-archived Intel Profile."
+          : undefined,
+      );
+    }
+    refresh(projectId);
+    return { success: "Investigation Intel Profile created." };
+  } catch {
+    return safe();
+  }
+}
+
+export async function updateIntelProfile(
+  profileId: string,
+  form: FormData,
+): Promise<IntelActionResult> {
+  try {
+    const { user } = await requireUser();
+    if (!idSchema.safeParse(profileId).success) return safe();
+    const parsed = definitionParameters(user.id, form);
+    if ("error" in parsed) return { error: parsed.error };
+    const { data: projectId, error } = await updateProfileDefinitionWorkflow({
+      ...parsed.data,
+      p_profile_id: profileId,
+    });
+    if (error) return safe();
+    refresh(projectId);
+    return { success: "Intel Profile saved." };
+  } catch {
+    return safe();
+  }
+}
+
+export async function setIntelProfileStatus(
+  profileId: string,
+  status: "ACTIVE" | "PAUSED" | "ARCHIVED",
+  restore = false,
+): Promise<IntelActionResult> {
+  try {
+    const { user } = await requireUser();
+    if (!idSchema.safeParse(profileId).success) return safe();
+    const { data: projectId, error } = await setProfileStatusWorkflow({
+      p_actor: user.id,
+      p_profile_id: profileId,
+      p_status: status,
+      p_restore: restore,
+    });
+    if (error) return safe();
+    refresh(projectId);
+    return {
+      success: restore
+        ? "Intel Profile restored in a paused state."
+        : `Intel Profile ${status.toLowerCase()}.`,
+    };
+  } catch {
+    return safe();
+  }
+}
+
+export async function addIntelProfileItem(
+  profileId: string,
+  form: FormData,
+): Promise<IntelActionResult> {
+  try {
+    const { user } = await requireUser();
+    const parsed = itemInputSchema.safeParse({
+      profileId,
+      kind: form.get("kind"),
+      displayValue: form.get("display_value"),
+      semanticRole: form.get("semantic_role") || null,
+    });
+    if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+    const { error } = await addExplicitItemWorkflow({
+      p_actor: user.id,
+      p_profile_id: profileId,
+      p_kind: parsed.data.kind,
+      p_display_value: parsed.data.displayValue,
+      p_semantic_role: parsed.data.semanticRole ?? null,
+    });
+    if (error) {
+      return safe(
+        error.code === "23505"
+          ? "This item identity already exists in the profile. Reactivate excluded or removed items explicitly."
+          : error.message.includes("LOCATION_ROLE_REQUIRED")
+            ? "Location items require a semantic role before activation."
+            : undefined,
+      );
+    }
+    refresh();
+    return { success: "Profile item added." };
+  } catch {
+    return safe();
+  }
+}
+
+export async function setIntelProfileItemState(
+  profileId: string,
+  itemId: string,
+  state: "ACTIVE" | "EXCLUDED" | "REMOVED",
+): Promise<IntelActionResult> {
+  try {
+    const { user } = await requireUser();
+    if (!idSchema.safeParse(profileId).success || !idSchema.safeParse(itemId).success) {
+      return safe();
+    }
+    const { data: projectId, error } = await transitionItemWorkflow({
+      p_actor: user.id,
+      p_profile_id: profileId,
+      p_item_id: itemId,
+      p_target_state: state,
+    });
+    if (error) return safe("That item state transition is not allowed.");
+    refresh(projectId);
+    return { success: "Item state updated." };
+  } catch {
+    return safe();
+  }
+}
+
+export async function refreshInvestigationIntelProfile(
+  profileId: string,
+  projectId: string,
+): Promise<IntelActionResult> {
+  try {
+    const { user } = await requireUser();
+    if (!idSchema.safeParse(profileId).success || !idSchema.safeParse(projectId).success) {
+      return safe();
+    }
+    const { data, error } = await refreshInvestigationProfileWorkflow({
+      p_actor: user.id,
+      p_profile_id: profileId,
+      p_project_id: projectId,
+    });
+    if (error || !data) return safe();
+    refresh(projectId);
+    return {
+      success: `Refresh complete: ${data.added} added, ${data.already_present} already present, ${data.preserved_exclusions} exclusions preserved, ${data.preserved_removals} removals preserved, ${data.skipped} skipped.`,
+    };
+  } catch {
+    return safe();
+  }
+}

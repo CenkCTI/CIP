@@ -180,3 +180,4 @@ Manual ThreatFox synchronization uses the provider-independent incremental contr
 - [x] Standalone and Investigation-linked profile UI/actions added with explicit separation.
 - [x] Investigation Intel Profile workspace route added with deterministic local refresh from existing Investigation CTI records.
 - [ ] Technical signal collection, provider ingestion, matching, prioritization, alerts, Global View intelligence, and AI briefs remain intentionally out of scope for later phases.
+- [x] PR #32 repair tightened TechINT mutations behind service-role trusted RPCs, made audit writes transactional, preserved excluded/removed item identities across refresh, and replaced the static migration check with a PostgreSQL execution harness.
