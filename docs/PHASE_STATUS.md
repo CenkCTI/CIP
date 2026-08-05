@@ -183,3 +183,14 @@ Manual ThreatFox synchronization uses the provider-independent incremental contr
 - [x] PR #32 repair tightened TechINT mutations behind service-role trusted RPCs, made audit writes transactional, preserved excluded/removed item identities across refresh, and replaced the static migration check with a PostgreSQL execution harness.
 - [x] Final PR #32 hardening enforces strict TechINT profile status transitions and database-authoritative Indicator validation/normalization with URL path/query case preservation.
 - [x] Compatibility repair skips unsupported `FILE`/`REGISTRY` and malformed legacy Investigation Indicators during TechINT seeding without aborting profile creation or refresh.
+
+## Phase 2.3B — Canonical Technical Signal Backbone
+
+- [x] Additive migration 032 authored for the owner-scoped canonical Technical Signal schema.
+- [x] Immutable Technical Signal observations added with deterministic source identity and current/supporting/stale/conflicting dispositions.
+- [x] Immutable Technical Signal revisions added with deterministic canonical snapshot fingerprints and monotonic per-signal revision numbers.
+- [x] Entity assertion foundation added for provider-asserted and system-extracted source-backed context without canonical entity resolution.
+- [x] Service-role trusted recording RPC and server-only trusted client added with strict Zod validation.
+- [x] Idempotency and change-history foundation added for later TechINT source adapters.
+- [ ] Source adapters, source ingestion, Global View population, profile matching, priority scoring, alerts, AI briefs, and discovery remain intentionally out of scope.
+- [ ] Migration 032 has not been applied to live Supabase in this environment; live acceptance requires explicit operator authorization.
