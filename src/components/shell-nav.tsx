@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-type IconName = "dashboard" | "projects" | "osint" | "findings";
+type IconName = "dashboard" | "projects" | "osint" | "techint" | "findings";
 
 const navigation: Array<{ href: string; label: string; icon: IconName }> = [
   { href: "/dashboard", label: "Operational picture", icon: "dashboard" },
   { href: "/projects", label: "Investigations", icon: "projects" },
   { href: "/osint", label: "OSINT", icon: "osint" },
+  { href: "/techint", label: "TechINT", icon: "techint" },
 ];
 
 function NavIcon({ name }: { name: IconName }) {
@@ -50,6 +51,7 @@ function NavIcon({ name }: { name: IconName }) {
   }
 
   if (name === "osint") return <svg viewBox="0 0 24 24" width="19" height="19" fill="none" aria-hidden="true"><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" stroke="currentColor" strokeWidth="1.35"/><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.35"/></svg>;
+  if (name === "techint") return <svg viewBox="0 0 24 24" width="19" height="19" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.35"/><circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.35"/><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round"/></svg>;
   return (
     <svg
       viewBox="0 0 24 24"
@@ -76,7 +78,8 @@ export function ShellNav() {
       {navigation.map((item) => {
         const active =
           pathname === item.href ||
-          (item.href === "/projects" && pathname.startsWith("/projects/"));
+          (item.href === "/projects" && pathname.startsWith("/projects/")) ||
+          (item.href === "/techint" && pathname.startsWith("/techint/"));
 
         return (
           <Link
