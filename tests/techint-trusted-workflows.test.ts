@@ -54,6 +54,8 @@ describe("TechINT trusted workflow hardening", () => {
     expect(migration).toContain("set state=p_target_state,removed_at=clock_timestamp(),updated_by=p_actor");
     expect(migration).toContain("ITEM_REACTIVATED");
     expect(migration).toContain("LOCATION_ROLE_REQUIRED");
+    expect(migration).toContain("INVALID_PROFILE_TRANSITION");
+    expect(migration).toContain("p.status='ACTIVE' and p_status='PAUSED'");
   });
 
   it("routes application mutations through trusted workflows without direct table writes", () => {
@@ -62,6 +64,15 @@ describe("TechINT trusted workflow hardening", () => {
     expect(actions).not.toContain('.from("intel_profiles").insert');
     expect(actions).not.toContain('.from("intel_profile_items").update');
     expect(actions).not.toContain('.from("intel_profile_audit_events")');
+  });
+
+  it("validates indicators without corrupting URL path case", () => {
+    expect(migration).toContain("intel_profile_validate_indicator");
+    expect(migration).toContain("p_type='CIDR'");
+    expect(migration).toContain("p_type='URL'");
+    expect(migration).toContain("host like '%@%'");
+    expect(migration).toContain("return lower(substring(v from '^(https?://[^/?#]+)'))||substring(v from '^https?://[^/?#]+(.*)$')");
+    expect(migration).toContain("id,value,type from public.indicators");
   });
 
   it("does not add network, provider, OTX, matching, alert, or AI calls", () => {

@@ -41,7 +41,7 @@ insert into public.threat_actors(id,project_id,name)values('30000000-0000-4000-8
 insert into public.campaigns(id,project_id,name)values('30000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001','Campaign One');
 insert into public.malware(id,project_id,name)values('30000000-0000-4000-8000-000000000003','20000000-0000-4000-8000-000000000001','Malware One');
 insert into public.cves(id,project_id,cve_id,severity)values('30000000-0000-4000-8000-000000000004','20000000-0000-4000-8000-000000000001','CVE-2026-1234','HIGH');
-insert into public.indicators(id,project_id,value,type)values('30000000-0000-4000-8000-000000000005','20000000-0000-4000-8000-000000000001','198.51.100.10','IP');
+insert into public.indicators(id,project_id,value,type)values('30000000-0000-4000-8000-000000000005','20000000-0000-4000-8000-000000000001','198.51.100.10','IP'),('30000000-0000-4000-8000-000000000007','20000000-0000-4000-8000-000000000001','https://Example.com/CasePath?a=UP','URL'),('30000000-0000-4000-8000-000000000008','20000000-0000-4000-8000-000000000001','https://Example.com/casepath?a=UP','URL');
 insert into public.mitre_techniques(id,project_id,technique_id,technique_name,tactic)values('30000000-0000-4000-8000-000000000006','20000000-0000-4000-8000-000000000001','T1059','Command and Scripting Interpreter','Execution');
 
 do $$declare standalone uuid; inv jsonb; inv_id uuid; counts jsonb; item uuid; excluded uuid; removed uuid;begin
@@ -59,14 +59,26 @@ do $$declare standalone uuid; inv jsonb; inv_id uuid; counts jsonb; item uuid; e
  standalone:=public.create_standalone_intel_profile('10000000-0000-4000-8000-000000000001','Standalone','', '', 'MEDIUM',90,null,1);
  if not exists(select 1 from public.intel_profile_audit_events where profile_id=standalone and action='PROFILE_CREATED')then raise exception 'standalone audit missing';end if;
  begin perform public.refresh_investigation_intel_profile('10000000-0000-4000-8000-000000000001',standalone,'20000000-0000-4000-8000-000000000001');raise exception 'standalone refresh accepted';exception when no_data_found then null;end;
- item:=public.add_explicit_intel_profile_item('10000000-0000-4000-8000-000000000001',standalone,'KEYWORD','edge devices',null);
- begin perform public.add_explicit_intel_profile_item('10000000-0000-4000-8000-000000000001',standalone,'COUNTRY','Germany',null);raise exception 'active location without role accepted';exception when invalid_parameter_value then null;end;
+ item:=public.add_explicit_intel_profile_item('10000000-0000-4000-8000-000000000001',standalone,'KEYWORD','edge devices',null,null);
+ begin perform public.add_explicit_intel_profile_item('10000000-0000-4000-8000-000000000001',standalone,'COUNTRY','Germany',null,null);raise exception 'active location without role accepted';exception when invalid_parameter_value then null;end;
+ begin perform public.add_explicit_intel_profile_item('10000000-0000-4000-8000-000000000001',standalone,'INDICATOR','not an indicator',null,'DOMAIN');raise exception 'invalid indicator accepted';exception when invalid_parameter_value then null;end;
+ perform public.add_explicit_intel_profile_item('10000000-0000-4000-8000-000000000001',standalone,'INDICATOR','2001:db8::1',null,'IP');
+ perform public.add_explicit_intel_profile_item('10000000-0000-4000-8000-000000000001',standalone,'INDICATOR','198.51.100.0/24',null,'CIDR');
+ perform public.add_explicit_intel_profile_item('10000000-0000-4000-8000-000000000001',standalone,'INDICATOR','EXAMPLE.COM',null,'DOMAIN');
+ perform public.add_explicit_intel_profile_item('10000000-0000-4000-8000-000000000001',standalone,'INDICATOR','AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',null,'HASH');
+ perform public.add_explicit_intel_profile_item('10000000-0000-4000-8000-000000000001',standalone,'INDICATOR','https://example.com/CasePath?A=B',null,'URL');
+ perform public.add_explicit_intel_profile_item('10000000-0000-4000-8000-000000000001',standalone,'INDICATOR','https://example.com/casepath?A=B',null,'URL');
+ begin perform public.add_explicit_intel_profile_item('10000000-0000-4000-8000-000000000001',standalone,'INDICATOR','https://user:pass@example.com/x',null,'URL');raise exception 'credential url accepted';exception when invalid_parameter_value then null;end;
+ if not exists(select 1 from public.intel_profile_items where profile_id=standalone and normalized_value='example.com' and indicator_type='DOMAIN') then raise exception 'domain normalization failed';end if;
+ if not exists(select 1 from public.intel_profile_items where profile_id=standalone and normalized_value='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' and indicator_type='HASH') then raise exception 'hash normalization failed';end if;
+ if not exists(select 1 from public.intel_profile_items where profile_id=standalone and normalized_value='https://example.com/CasePath?A=B') then raise exception 'URL path case not preserved';end if;
+ if (select count(*) from public.intel_profile_items where profile_id=standalone and normalized_value in('https://example.com/CasePath?A=B','https://example.com/casepath?A=B'))<>2 then raise exception 'case-sensitive URLs collided';end if;
  begin perform public.transition_intel_profile_item('10000000-0000-4000-8000-000000000001',standalone,item,'ACTIVE');raise exception 'invalid active->active accepted';exception when invalid_parameter_value then null;end;
  perform public.transition_intel_profile_item('10000000-0000-4000-8000-000000000001',standalone,item,'REMOVED');
  perform public.transition_intel_profile_item('10000000-0000-4000-8000-000000000001',standalone,item,'ACTIVE');
  if not exists(select 1 from public.intel_profile_items where id=item and state='ACTIVE' and removed_at is null and accepted_by='10000000-0000-4000-8000-000000000001')then raise exception 'reactivation did not clear removed_at/set accepted_by';end if;
  inv:=public.create_investigation_intel_profile('10000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','Investigation profile','', '', 'HIGH',90,null,1);inv_id:=(inv->>'profile_id')::uuid;
- if(select count(*) from public.intel_profile_items where profile_id=inv_id and origin='DERIVED' and state='ACTIVE')<>6 then raise exception 'deterministic seed count failed';end if;
+ if(select count(*) from public.intel_profile_items where profile_id=inv_id and origin='DERIVED' and state='ACTIVE')<>8 then raise exception 'deterministic seed count failed';end if;if not exists(select 1 from public.intel_profile_items where profile_id=inv_id and source_entity_id='30000000-0000-4000-8000-000000000007' and indicator_type='URL' and normalized_value='https://example.com/CasePath?a=UP') then raise exception 'seed did not preserve indicator type/url case';end if;
  begin perform public.create_investigation_intel_profile('10000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','Duplicate','', '', 'LOW',90,null,1);raise exception 'duplicate investigation profile accepted';exception when unique_violation then null;end;
  select id into excluded from public.intel_profile_items where profile_id=inv_id and kind='THREAT_ACTOR';perform public.transition_intel_profile_item('10000000-0000-4000-8000-000000000001',inv_id,excluded,'EXCLUDED');
  select id into removed from public.intel_profile_items where profile_id=inv_id and kind='CVE';perform public.transition_intel_profile_item('10000000-0000-4000-8000-000000000001',inv_id,removed,'REMOVED');
@@ -77,7 +89,19 @@ do $$declare standalone uuid; inv jsonb; inv_id uuid; counts jsonb; item uuid; e
  perform set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',true);set local role authenticated;if not exists(select 1 from public.intel_profiles where id=inv_id)then raise exception 'owner select denied';end if;reset role;
  perform set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000002',true);set local role authenticated;if exists(select 1 from public.intel_profiles where id=inv_id)or exists(select 1 from public.intel_profile_audit_events where profile_id=inv_id)then raise exception 'cross-owner read leaked';end if;reset role;
  -- Archive/restore and FK delete behavior.
- perform public.set_intel_profile_status('10000000-0000-4000-8000-000000000001',inv_id,'ARCHIVED',false);perform public.set_intel_profile_status('10000000-0000-4000-8000-000000000001',inv_id,'PAUSED',true);if not exists(select 1 from public.intel_profiles where id=inv_id and status='PAUSED' and archived_at is null)then raise exception 'restore did not return paused';end if;
+ perform public.set_intel_profile_status('10000000-0000-4000-8000-000000000001',inv_id,'ARCHIVED',false);
+ begin perform public.set_intel_profile_status('10000000-0000-4000-8000-000000000001',inv_id,'ACTIVE',false);raise exception 'archived direct active accepted';exception when invalid_parameter_value then null;end;
+ begin perform public.update_intel_profile_definition('10000000-0000-4000-8000-000000000001',inv_id,'Nope','', '', 'MEDIUM',90,null,1);raise exception 'archived update accepted';exception when invalid_parameter_value then null;end;
+ begin perform public.add_explicit_intel_profile_item('10000000-0000-4000-8000-000000000001',inv_id,'KEYWORD','nope',null,null);raise exception 'archived add item accepted';exception when no_data_found then null;end;
+ begin perform public.transition_intel_profile_item('10000000-0000-4000-8000-000000000001',inv_id,removed,'ACTIVE');raise exception 'archived item transition accepted';exception when invalid_parameter_value then null;end;
+ begin perform public.refresh_investigation_intel_profile('10000000-0000-4000-8000-000000000001',inv_id,'20000000-0000-4000-8000-000000000001');raise exception 'archived refresh accepted';exception when no_data_found then null;end;
+ perform public.set_intel_profile_status('10000000-0000-4000-8000-000000000001',inv_id,'PAUSED',true);if not exists(select 1 from public.intel_profiles where id=inv_id and status='PAUSED' and archived_at is null)then raise exception 'restore did not return paused';end if;
+ begin perform public.set_intel_profile_status('10000000-0000-4000-8000-000000000001',inv_id,'PAUSED',true);raise exception 'restore non archived accepted';exception when invalid_parameter_value then null;end;
+ begin perform public.set_intel_profile_status('10000000-0000-4000-8000-000000000001',inv_id,'PAUSED',false);raise exception 'repeated pause accepted';exception when invalid_parameter_value then null;end;
+ perform public.set_intel_profile_status('10000000-0000-4000-8000-000000000001',inv_id,'ACTIVE',false);
+ begin perform public.set_intel_profile_status('10000000-0000-4000-8000-000000000001',inv_id,'ACTIVE',false);raise exception 'repeated resume accepted';exception when invalid_parameter_value then null;end;
+ perform public.set_intel_profile_status('10000000-0000-4000-8000-000000000001',inv_id,'PAUSED',false);
+ if (select count(*) from public.intel_profile_audit_events where profile_id=inv_id and action in('PROFILE_ARCHIVED','PROFILE_RESTORED','PROFILE_RESUMED','PROFILE_PAUSED'))<>4 then raise exception 'invalid transitions created audit events or valid actions missing';end if;
  delete from public.intel_profile_items where id=excluded;if exists(select 1 from public.intel_profile_audit_events where item_id=excluded)then raise exception 'audit item FK did not set item_id null only';end if;
  delete from public.projects where id='20000000-0000-4000-8000-000000000001';if exists(select 1 from public.intel_profiles where id=inv_id)then raise exception 'project delete did not cascade profile';end if;
  -- Atomic audit rollback: audit trigger failure must roll back profile update.

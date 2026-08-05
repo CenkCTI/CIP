@@ -8,6 +8,7 @@ import {
 import {
   intelProfileItemKinds,
   intelProfileSemanticRoles,
+  techIntIndicatorTypes,
   type IntelProfile,
   type IntelProfileItem,
 } from "@/lib/techint/schema";
@@ -97,6 +98,12 @@ export function IntelProfileDetail({
               <option key={role}>{role}</option>
             ))}
           </select>
+          <select className="field" name="indicator_type">
+            <option value="">Indicator subtype</option>
+            {techIntIndicatorTypes.map((type) => (
+              <option key={type}>{type}</option>
+            ))}
+          </select>
           <button className="citem-button md:col-span-4">Add active explicit item</button>
         </form>
       </div>
@@ -144,6 +151,7 @@ function ItemTable({
                 <th>Origin</th>
                 <th>State</th>
                 <th>Semantic role</th>
+                <th>Indicator type</th>
                 <th>Source</th>
                 <th>Actions</th>
               </tr>
@@ -156,6 +164,7 @@ function ItemTable({
                   <td>{item.origin}</td>
                   <td>{item.state}</td>
                   <td>{item.semantic_role ?? "—"}</td>
+                  <td>{item.indicator_type ?? "—"}</td>
                   <td>{item.source_entity_type ?? "—"}</td>
                   <td className="flex gap-1 py-1">
                     {item.state === "PENDING" && (

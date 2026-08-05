@@ -149,6 +149,7 @@ export async function addIntelProfileItem(
       kind: form.get("kind"),
       displayValue: form.get("display_value"),
       semanticRole: form.get("semantic_role") || null,
+      indicatorType: form.get("indicator_type") || null,
     });
     if (!parsed.success) return { error: parsed.error.issues[0]?.message };
     const { error } = await addExplicitItemWorkflow({
@@ -157,6 +158,7 @@ export async function addIntelProfileItem(
       p_kind: parsed.data.kind,
       p_display_value: parsed.data.displayValue,
       p_semantic_role: parsed.data.semanticRole ?? null,
+      p_indicator_type: parsed.data.indicatorType ?? null,
     });
     if (error) {
       return safe(
