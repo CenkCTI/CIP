@@ -25,3 +25,6 @@ No migration is required, and migrations 001–028 remain unchanged. Auth-Keys r
 
 ## Manual acceptance checklist
 With explicit operator credentials: connect ThreatFox with a one-day lookback; run one bootstrap; record received/mapped/skipped counts; run **Sync now** again after the five-minute cooldown; verify an identical window is `NOT_MODIFIED`; verify prior candidates, skip markers, observation counts, and REVIEWED/DISMISSED states are unchanged; then verify a genuine higher ID appears after a later manual check and remains `NEW`. Confirm cursor advancement only after successful completion, safe logs, owner isolation, and no background browser or deployment requests. Do not execute this checklist without operator authorization.
+
+## Phase 2.2C.3 follow-on
+AlienVault OTX subscribed-Pulse support is implemented as manual incremental ingestion with bounded Pulse provenance; see [PHASE_2_2C3.md](PHASE_2_2C3.md). No automatic OTX scheduler is enabled.

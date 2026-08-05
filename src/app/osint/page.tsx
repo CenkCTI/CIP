@@ -6,6 +6,7 @@ import { IocInbox, type IocCandidateRow, type IocConnection, type IocSourceRow }
 import { OsintWorkspace } from "@/components/osint/osint-workspace";
 import { decodeIocCursor, encodeIocCursor, inboxQuery, iocInboxSchema } from "@/lib/ioc-connectors/schema";
 import { decodeCursor, encodeCursor, filterSchema } from "@/lib/osint/schema";
+import {hasActiveOtxContinuation,parseOtxCursor} from "@/lib/ioc-connectors/providers/otx/cursor";
 
 type OsintWorkspaceProps = ComponentProps<typeof OsintWorkspace>;
 
@@ -21,11 +22,13 @@ export default async function OsintPage({ searchParams }: { searchParams: Promis
     const filters = parsed.data;
     const cursor = decodeIocCursor(filters.ioc_cursor);
     if (filters.ioc_cursor && (!cursor || cursor.sort !== filters.ioc_sort)) notFound();
-    const [{ data: rows, error }, { data: projects }, { data: connections }, { data: runs }] = await Promise.all([
+    const [{ data: rows, error }, { data: projects }, { data: connections }, { data: runs }, {data:otxSettings},{data:otxCursors}] = await Promise.all([
       supabase.rpc("list_ioc_inbox_v2", { p_status: filters.ioc_status || null, p_type: filters.ioc_type || null, p_provider: filters.ioc_provider || null, p_search: filters.ioc_q || null, p_min_confidence: filters.ioc_min_confidence === "" ? null : filters.ioc_min_confidence, p_max_confidence: filters.ioc_max_confidence === "" ? null : filters.ioc_max_confidence, p_has_port: filters.ioc_port === "" ? null : filters.ioc_port === "present", p_project_id: filters.ioc_project || null, p_sort: filters.ioc_sort, p_cursor_value: cursor ? String(cursor.value) : null, p_cursor_id: cursor?.id ?? null, p_limit: 30 }),
       supabase.from("projects").select("id,name").eq("owner_id", user.id).order("name").limit(100),
       supabase.from("ioc_provider_connections").select("id,provider_key,display_name,enabled,scheduler_enabled,sync_interval_minutes,next_scheduled_sync_at,health_status,last_checked_at,last_success_at,last_error_message,archived_at").order("display_name").limit(100),
       supabase.from("ioc_ingestion_runs").select("id,provider_connection_id,status,trigger_type,started_at,completed_at,candidate_count,source_observation_count,created_count,updated_count,skipped_count,deduplicated_count,error_message").order("started_at", { ascending: false }).limit(20),
+      supabase.from("otx_connection_settings").select("provider_connection_id,bootstrap_lookback_days").eq("owner_id",user.id).limit(100),
+      supabase.from("ioc_provider_cursors").select("provider_connection_id,cursor_value").eq("owner_id",user.id).limit(100),
     ]);
     const typedRows = (rows ?? []) as IocCandidateRow[];
     const detailEntries = await Promise.all(typedRows.map(async row => {
@@ -34,7 +37,10 @@ export default async function OsintPage({ searchParams }: { searchParams: Promis
     }));
     const last = typedRows.at(-1);
     const nextCursor = typedRows.length === 30 && last ? encodeIocCursor({ sort: filters.ioc_sort, value: Number(last.sort_value), id: last.id }) : null;
-    return <>{nav}{error ? <main className="card mx-auto max-w-6xl" role="alert">IOC Inbox could not be loaded.</main> : <main className="mx-auto max-w-6xl"><IocInbox rows={typedRows} projects={projects ?? []} connections={(connections ?? []) as IocConnection[]} runs={runs ?? []} sources={Object.fromEntries(detailEntries)} filters={filters} nextHref={nextCursor ? inboxQuery(filters, nextCursor) : null} syntheticEnabled={process.env.IOC_TEST_PROVIDER_ENABLED === "true"} /></main>}</>;
+    const lookbacks=new Map((otxSettings??[]).map(setting=>[setting.provider_connection_id,setting.bootstrap_lookback_days]));
+    const continuations=new Map((otxCursors??[]).map(cursor=>{let active=false,scope:null|"LEGACY_BULK"|"SEARCH_PULSE"=null,pulseId:string|null=null;try{const parsed=parseOtxCursor(cursor.cursor_value);active=hasActiveOtxContinuation(cursor.cursor_value);scope=parsed?.continuation?(parsed.continuation.scope??"LEGACY_BULK"):null;pulseId=parsed?.continuation?.pulse_id??null}catch{}return[cursor.provider_connection_id,{active,scope,pulseId}]}));
+    const configuredConnections=(connections??[]).map(connection=>{const continuation=continuations.get(connection.id);return{...connection,bootstrap_lookback_days:lookbacks.get(connection.id),otx_has_continuation:continuation?.active??false,otx_continuation_scope:continuation?.scope??null,otx_pulse_id:continuation?.pulseId??null}}) as IocConnection[];
+    return <>{nav}{error ? <main className="card mx-auto max-w-6xl" role="alert">IOC Inbox could not be loaded.</main> : <main className="mx-auto max-w-6xl"><IocInbox rows={typedRows} projects={projects ?? []} connections={configuredConnections} runs={runs ?? []} sources={Object.fromEntries(detailEntries)} filters={filters} nextHref={nextCursor ? inboxQuery(filters, nextCursor) : null} syntheticEnabled={process.env.IOC_TEST_PROVIDER_ENABLED === "true"} /></main>}</>;
   }
 
   const parsed = filterSchema.safeParse(raw); if (!parsed.success) notFound();

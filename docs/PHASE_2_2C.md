@@ -80,3 +80,6 @@ The provider-independent contract now supports credential-bearing fixed adapters
 
 ## Phase 2.2C.2 supersession
 The informational cursor/full-window behavior is superseded by the strict manual incremental contract documented in [PHASE_2_2C2.md](PHASE_2_2C2.md). Repeated **Sync now** checks filter already-seen records before mapping and use atomic cursor completion. The contract is reusable by a future optional operator-controlled scheduler, but automatic scheduling and Inbox refresh are deferred.
+
+## Phase 2.2C.3 follow-on
+AlienVault OTX subscribed-Pulse support is implemented as manual incremental ingestion with bounded Pulse provenance; see [PHASE_2_2C3.md](PHASE_2_2C3.md). No automatic OTX scheduler is enabled.

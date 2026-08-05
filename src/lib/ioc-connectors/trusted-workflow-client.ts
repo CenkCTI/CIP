@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import {parseOtxCursor,serializeOtxState} from "./providers/otx/cursor";
 
 export type IocClaim = {
   owner_id: string;
@@ -42,3 +43,11 @@ export const failIocIngestion = (parameters: Parameters) =>
 export const configureThreatFoxConnection = (parameters: Parameters) => iocRpc<string>("configure_threatfox_connection", parameters);
 export const disconnectThreatFoxCredential = (ownerId:string,connectionId:string) => iocRpc<boolean>("disconnect_threatfox_credential",{p_owner_id:ownerId,p_connection_id:connectionId});
 export const updateThreatFoxSettings = (ownerId:string,connectionId:string,lookback:number,scheduler:boolean,interval:number) => iocRpc<boolean>("update_threatfox_settings",{p_owner_id:ownerId,p_connection_id:connectionId,p_lookback_days:lookback,p_scheduler_enabled:scheduler,p_sync_interval_minutes:interval});
+export const configureOtxConnection = (parameters: Parameters) => iocRpc<string>("configure_otx_connection",parameters);
+export async function otxCredentialExists(ownerId:string,connectionId:string){
+  const {data,error}=await createAdminClient().from("ioc_provider_credentials").select("provider_connection_id").eq("owner_id",ownerId).eq("provider_connection_id",connectionId).eq("provider_key","ALIENVAULT_OTX").maybeSingle();
+  return {exists:!!data,error};
+}
+export const disconnectOtxCredential = (ownerId:string,connectionId:string) => iocRpc<boolean>("disconnect_otx_credential",{p_owner_id:ownerId,p_connection_id:connectionId});
+export const updateOtxSettings = (ownerId:string,connectionId:string,lookback:number) => iocRpc<boolean>("update_otx_settings",{p_owner_id:ownerId,p_connection_id:connectionId,p_bootstrap_lookback_days:lookback});
+export async function discardLegacyOtxContinuation(ownerId:string,connectionId:string){const admin=createAdminClient(),{data,error}=await admin.from("ioc_provider_cursors").select("cursor_value,cursor_version").eq("owner_id",ownerId).eq("provider_connection_id",connectionId).maybeSingle();if(error||!data)return{error:error??new Error("cursor unavailable")};const cursor=parseOtxCursor(data.cursor_value);if(!cursor?.continuation||(cursor.continuation.scope??"LEGACY_BULK")!=="LEGACY_BULK")return{error:new Error("legacy continuation unavailable")};return admin.from("ioc_provider_cursors").update({cursor_value:serializeOtxState({committed:cursor.committed,continuation:null}),cursor_version:data.cursor_version+1,updated_at:new Date().toISOString()}).eq("owner_id",ownerId).eq("provider_connection_id",connectionId)}

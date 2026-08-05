@@ -6,11 +6,11 @@ export type NormalizedCandidate = {
   confidence_score: number | null; first_seen_at: string | null; last_seen_at: string | null; tags: string[];
   metadata: Record<string, unknown>; source_fingerprint: string;
 };
-export const providerSkipReasons = ["UNSUPPORTED_IOC_TYPE", "INVALID_PROVIDER_RECORD", "INVALID_IOC", "INVALID_IP", "INVALID_PORT", "INVALID_DATE", "INVALID_DATE_ORDER", "INVALID_CONFIDENCE"] as const;
+export const providerSkipReasons = ["UNSUPPORTED_IOC_TYPE", "INACTIVE_PROVIDER_RECORD", "INVALID_PROVIDER_RECORD", "INVALID_IOC", "INVALID_IP", "INVALID_PORT", "INVALID_DATE", "INVALID_DATE_ORDER", "INVALID_CONFIDENCE"] as const;
 export type ProviderSkipReason = (typeof providerSkipReasons)[number];
 export type ProviderSkippedItem = { provider_skip_reason: ProviderSkipReason };
 export type AdapterItem = NormalizedCandidate | ProviderSkippedItem;
-export type AdapterDiagnostics = { received_count: number; eligible_count: number; already_seen_count: number; mapped_count: number; mapping_skipped_count: number; skip_reason_counts: Partial<Record<ProviderSkipReason, number>> };
+export type AdapterDiagnostics = { received_count: number; eligible_count: number; already_seen_count: number; deferred_count?: number; has_more?: boolean; mapped_count: number; mapping_skipped_count: number; skip_reason_counts: Partial<Record<ProviderSkipReason, number>> };
 export type AdapterResult = { status: "SUCCEEDED"; items: AdapterItem[]; nextCursor?: string; diagnostics?: AdapterDiagnostics } | { status: "NOT_MODIFIED"; items: []; nextCursor?: string; diagnostics?: AdapterDiagnostics };
 export type AdapterContext = { ownerId: string; connectionId: string; cursor: string | null; settings: Record<string, unknown>; credential?: string; signal?: AbortSignal };
 export interface IocProviderAdapter { readonly key: string; readonly displayName: string; readonly credentialRequired: boolean; readonly supportedTypes: readonly IocCandidateType[]; readonly supportsScheduling: boolean; testConnection?(credential: string, signal?: AbortSignal): Promise<void>; sync(context: AdapterContext): Promise<AdapterResult> }

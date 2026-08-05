@@ -72,3 +72,6 @@ No submission, search, bulk download, scraping, MalwareBazaar, automatic analyti
 
 ## Superseded by Phase 2.2C.2
 Phase 2.2C.1's informational v1 cursor and intentional full-window remapping apply only to that historical delivery. Phase 2.2C.2 manual **Sync now** accepts safe v1 input, upgrades it in memory, persists strict provider-bound v2 after successful completion, and filters already-seen records before normalization. Automatic scheduling and automatic Inbox refresh are deferred. See [PHASE_2_2C2.md](PHASE_2_2C2.md).
+
+## Phase 2.2C.3 follow-on
+AlienVault OTX subscribed-Pulse support is implemented as manual incremental ingestion with bounded Pulse provenance; see [PHASE_2_2C3.md](PHASE_2_2C3.md). No automatic OTX scheduler is enabled.

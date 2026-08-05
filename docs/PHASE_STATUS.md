@@ -172,3 +172,10 @@ Implemented: fixed read-only ThreatFox Community API synchronization, encrypted 
 
 ## Phase 2.2C.2 — Manual incremental synchronization implemented
 Manual ThreatFox synchronization uses the provider-independent incremental contract, cursor v2/legacy upgrade, strict delta diagnostics, and atomic completion without migration 029. Automatic scheduling and automatic Inbox refresh are deferred until an operator-controlled deployment is available. URLhaus and OTX remain future work.
+
+## Phase 2.2C.3 follow-on
+AlienVault OTX subscribed-Pulse support is implemented as manual incremental ingestion with bounded Pulse provenance; see [PHASE_2_2C3.md](PHASE_2_2C3.md). No automatic OTX scheduler is enabled.
+
+- Phase 2.2C.3 bootstrap recovery: new OTX connections default to 7 days, shorter 1/3/7/14-day windows are available, and Pulse/indicator limit failures remain atomic and manual-only.
+
+- Phase 2.2C.3 resumable ingestion: byte-bounded OTX snapshots drain in explicit manual batches of at most 1,000 outcomes using a non-sensitive v2 continuation cursor; automatic continuation remains excluded.
