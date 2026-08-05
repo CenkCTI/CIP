@@ -52,7 +52,7 @@ create function public.intel_profile_validate_indicator(p_value text,p_type publ
  if p_type='DOMAIN' then if v~*'^(?!-)([a-z0-9-]{1,63}\.)+[a-z]{2,63}$' then return lower(v);end if;raise exception 'INVALID_INDICATOR' using errcode='22023';end if;
  if p_type='HASH' then if v~*'^(?:[a-f0-9]{32}|[a-f0-9]{40}|[a-f0-9]{64})$' then return lower(v);end if;raise exception 'INVALID_INDICATOR' using errcode='22023';end if;
  if p_type='EMAIL' then if v~*'^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' then return lower(v);end if;raise exception 'INVALID_INDICATOR' using errcode='22023';end if;
- if p_type='URL' then if v!~*'^https?://[^[:space:]]+$' then raise exception 'INVALID_INDICATOR' using errcode='22023';end if;host:=substring(v from '^https?://([^/?#]+)');if host is null or host='' or host like '%@%' then raise exception 'INVALID_INDICATOR' using errcode='22023';end if;return lower(substring(v from '^(https?://[^/?#]+)'))||substring(v from '^https?://[^/?#]+(.*)$');end if;
+ if p_type='URL' then if v!~*'^https?://[^[:space:]]+$' then raise exception 'INVALID_INDICATOR' using errcode='22023';end if;host:=substring(v from '^https?://([^/?#]+)');if host is null or host='' or host like '%@%' or host=':' or host!~*'^[^:]+(:[0-9]{1,5})?$' or (position(':' in host)>0 and split_part(host,':',2)::int not between 1 and 65535) then raise exception 'INVALID_INDICATOR' using errcode='22023';end if;return lower(substring(v from '^(https?://[^/?#]+)'))||substring(v from '^https?://[^/?#]+(.*)$');end if;
  raise exception 'INVALID_INDICATOR' using errcode='22023';
 end$$;
 create function public.intel_profile_detect_indicator_type(p_value text) returns public.indicator_type language plpgsql immutable as $$declare v text:=trim(p_value);begin
@@ -69,7 +69,13 @@ end$$;
 create function public.intel_profile_seed_from_project(p_actor uuid,p_profile uuid,p_project uuid) returns jsonb language plpgsql security definer set search_path='' as $$declare p public.intel_profiles; r record; added int:=0; already int:=0; excl int:=0; rem int:=0; skipped int:=0; norm text; k text; item public.intel_profile_items; begin
  select * into p from public.intel_profiles where id=p_profile and owner_id=p_actor and kind='INVESTIGATION' and project_id=p_project and status<>'ARCHIVED' for update;if p.id is null or not exists(select 1 from public.projects where id=p_project and owner_id=p_actor)then raise exception 'not_found' using errcode='P0002';end if;
  for r in select 'THREAT_ACTOR'::public.intel_profile_item_kind kind,'threat_actors'::text src,id,name::text val,null::public.indicator_type indicator_type from public.threat_actors where project_id=p_project union all select 'CAMPAIGN','campaigns',id,name,null::public.indicator_type from public.campaigns where project_id=p_project union all select 'MALWARE','malware',id,name,null::public.indicator_type from public.malware where project_id=p_project union all select 'CVE','cves',id,cve_id,null::public.indicator_type from public.cves where project_id=p_project union all select 'INDICATOR','indicators',id,value,type from public.indicators where project_id=p_project union all select 'ATTACK_TECHNIQUE','mitre_techniques',id,technique_id,null::public.indicator_type from public.mitre_techniques where project_id=p_project loop
-  norm:=public.intel_profile_normalize_item_value(r.kind,r.val,r.indicator_type);k:=public.intel_profile_local_key(r.kind,norm,null);select * into item from public.intel_profile_items where owner_id=p_actor and profile_id=p_profile and profile_local_key=k for update;
+  if r.kind='INDICATOR' and r.indicator_type not in('IP','CIDR','DOMAIN','URL','HASH','EMAIL') then skipped:=skipped+1;continue;end if;
+  begin
+   norm:=public.intel_profile_normalize_item_value(r.kind,r.val,r.indicator_type);
+  exception when invalid_parameter_value then
+   if r.kind='INDICATOR' then skipped:=skipped+1;continue;end if;raise;
+  end;
+  k:=public.intel_profile_local_key(r.kind,norm,null);select * into item from public.intel_profile_items where owner_id=p_actor and profile_id=p_profile and profile_local_key=k for update;
   if item.id is null then insert into public.intel_profile_items(owner_id,profile_id,kind,display_value,normalized_value,profile_local_key,origin,state,source_project_id,source_entity_type,source_entity_id,indicator_type,created_by,updated_by)values(p_actor,p_profile,r.kind,r.val,norm,k,'DERIVED','ACTIVE',p_project,r.src,r.id,r.indicator_type,p_actor,p_actor);added:=added+1;
   elsif item.state='EXCLUDED' then excl:=excl+1; elsif item.state='REMOVED' then rem:=rem+1; else already:=already+1; end if;
  end loop;

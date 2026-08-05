@@ -182,3 +182,4 @@ Manual ThreatFox synchronization uses the provider-independent incremental contr
 - [ ] Technical signal collection, provider ingestion, matching, prioritization, alerts, Global View intelligence, and AI briefs remain intentionally out of scope for later phases.
 - [x] PR #32 repair tightened TechINT mutations behind service-role trusted RPCs, made audit writes transactional, preserved excluded/removed item identities across refresh, and replaced the static migration check with a PostgreSQL execution harness.
 - [x] Final PR #32 hardening enforces strict TechINT profile status transitions and database-authoritative Indicator validation/normalization with URL path/query case preservation.
+- [x] Compatibility repair skips unsupported `FILE`/`REGISTRY` and malformed legacy Investigation Indicators during TechINT seeding without aborting profile creation or refresh.

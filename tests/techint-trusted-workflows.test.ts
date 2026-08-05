@@ -66,13 +66,17 @@ describe("TechINT trusted workflow hardening", () => {
     expect(actions).not.toContain('.from("intel_profile_audit_events")');
   });
 
-  it("validates indicators without corrupting URL path case", () => {
+  it("validates indicators without corrupting URL path case and skips unsupported seed records", () => {
     expect(migration).toContain("intel_profile_validate_indicator");
     expect(migration).toContain("p_type='CIDR'");
     expect(migration).toContain("p_type='URL'");
     expect(migration).toContain("host like '%@%'");
+    expect(migration).toContain("host=':'");
+    expect(migration).toContain("split_part(host,':',2)::int not between 1 and 65535");
     expect(migration).toContain("return lower(substring(v from '^(https?://[^/?#]+)'))||substring(v from '^https?://[^/?#]+(.*)$')");
     expect(migration).toContain("id,value,type from public.indicators");
+    expect(migration).toContain("r.indicator_type not in('IP','CIDR','DOMAIN','URL','HASH','EMAIL')");
+    expect(migration).toContain("exception when invalid_parameter_value");
   });
 
   it("does not add network, provider, OTX, matching, alert, or AI calls", () => {
