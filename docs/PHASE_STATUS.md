@@ -193,3 +193,16 @@ Manual ThreatFox synchronization uses the provider-independent incremental contr
 - [x] Service-role-only transactional trusted recording RPC and narrow server-only client implemented.
 - [ ] Source adapters/collection, Global View population, profile matching, priority scoring, alerts, AI briefs, and discovery remain later-phase work.
 - [ ] Migration 032 live application and operator-authorized acceptance remain pending.
+
+## Phase 2.3C — Technical Source Pack and Collection Operations
+
+- [x] Additive migration 033 authored for owner-scoped Technical Source connections, collection runs, bounded issues, audit events, exact leases, provider-bound cursors, RLS, ACLs, and controlled lifecycle RPCs.
+- [x] Fixed server-owned source registry added for `TEST_SYNTHETIC`, `CISA_KEV`, and `NVD_CVE`; OTX and ThreatFox-to-TechINT mapping remain excluded.
+- [x] Deterministic environment-gated synthetic collection travels through the real orchestrator and Phase 2.3B trusted Technical Signal recorder.
+- [x] Fixed-host, bounded CISA KEV and NVD CVE adapters added with conservative source-backed mappings, incremental cursors, retry-safe replay, and no analytical entity creation.
+- [x] Strict code-owned RSS, Atom, and JSON Feed parser foundation added without registering an unverified CISA Advisories endpoint or allowing user-supplied URLs.
+- [x] Manual synchronization, bounded scheduler integration, sanitized run history, lifecycle controls, source settings, and secondary `/techint/sources` operations UI added while preserving the three-item TechINT primary navigation.
+- [x] Focused adapter, transport, parser, orchestrator, scheduler, UI-boundary, and PostgreSQL 16 migration coverage added to the existing validation workflow.
+- [ ] Migration 033 applied to Preview/Production and PostgREST schema reloaded.
+- [ ] Operator-authorized synthetic Preview acceptance, live CISA/NVD smoke checks, and two-user browser isolation completed.
+- [ ] Phase 2.3D taxonomy/alias/entity normalization, EPSS prioritization, matching, relevance/global priority, Global View population, alerts, discovery, and AI briefs remain later-phase work.
