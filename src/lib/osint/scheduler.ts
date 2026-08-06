@@ -4,6 +4,7 @@ import { timingSafeEqual } from "node:crypto";
 import { iocSchedulerConfig, runDueIocSyncs, type IocSchedulerConfig } from "@/lib/ioc-connectors/scheduler";
 import { ingestClaimedGlobalFeed } from "@/lib/osint/orchestrator";
 import { claimDueGlobalFeeds } from "@/lib/research-feeds/trusted-workflow-client";
+import { runDueTechnicalCollections, techIntSchedulerConfig, type TechIntSchedulerConfig } from "@/lib/techint/collection/scheduler";
 
 export type SchedulerConfig = {
   enabled: boolean;
@@ -12,6 +13,7 @@ export type SchedulerConfig = {
   budgetMs: number;
   secret: string;
   ioc?: IocSchedulerConfig;
+  techint?: TechIntSchedulerConfig;
 };
 function integer(value: string | undefined, fallback: number, min: number, max: number) {
   if (value === undefined) return fallback;
@@ -32,6 +34,7 @@ export function schedulerConfig(env: NodeJS.ProcessEnv = process.env): Scheduler
     concurrency: integer(env.OSINT_FETCH_CONCURRENCY, 3, 1, 3),
     budgetMs: integer(env.OSINT_SCHEDULER_TIME_BUDGET_MS, 45000, 5000, 45000),
     ioc: iocSchedulerConfig(env),
+    techint: techIntSchedulerConfig(env),
   };
 }
 export function authorizeCron(header: string | null, secret: string) {
@@ -43,7 +46,9 @@ export function authorizeCron(header: string | null, secret: string) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 export async function runScheduler(config: SchedulerConfig) {
-  if (!config.enabled) return { claimed: 0, succeeded: 0, failed: 0, skipped: 0, disabled: true, ioc: { claimed: 0, succeeded: 0, failed: 0 } };
+  const emptyIoc = { claimed: 0, succeeded: 0, failed: 0 };
+  const emptyTechInt = { claimed: 0, succeeded: 0, failed: 0, disabled: true };
+  if (!config.enabled) return { claimed: 0, succeeded: 0, failed: 0, skipped: 0, disabled: true, ioc: emptyIoc, techint: emptyTechInt };
   const started = Date.now();
   let claimed = 0;
   let succeeded = 0;
@@ -62,6 +67,8 @@ export async function runScheduler(config: SchedulerConfig) {
     }
     if (batch.length < count) break;
   }
-  const ioc = config.ioc ? await runDueIocSyncs(config.ioc, started + config.budgetMs) : { claimed: 0, succeeded: 0, failed: 0 };
-  return { claimed, succeeded, failed, skipped: 0, disabled: false, ...(config.ioc ? { ioc } : {}) };
+  const deadline = started + config.budgetMs;
+  const ioc = config.ioc ? await runDueIocSyncs(config.ioc, deadline) : emptyIoc;
+  const techint = config.techint ? await runDueTechnicalCollections(config.techint, deadline) : emptyTechInt;
+  return { claimed, succeeded, failed, skipped: 0, disabled: false, ...(config.ioc ? { ioc } : {}), ...(config.techint ? { techint } : {}) };
 }

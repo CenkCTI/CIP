@@ -1,0 +1,121 @@
+import { z } from "zod";
+import { jsonValueSchema, recordTechnicalSignalSchema, type JsonValue } from "@/lib/techint/signals/schema";
+import { collectionIssueKinds, collectionTriggers, technicalSourceKeys, technicalSourceStatuses } from "./types";
+
+const boundedObject = (bytes: number) =>
+  jsonValueSchema
+    .refine(
+      (value): value is Record<string, JsonValue> => value !== null && typeof value === "object" && !Array.isArray(value),
+      "A JSON object is required.",
+    )
+    .refine((value) => Buffer.byteLength(JSON.stringify(value)) <= bytes, `JSON must be at most ${bytes} bytes.`);
+
+export const sourceKeySchema = z.enum(technicalSourceKeys);
+export const sourceStatusSchema = z.enum(technicalSourceStatuses);
+export const collectionTriggerSchema = z.enum(collectionTriggers);
+export const connectionIdSchema = z.uuid();
+
+export const syntheticCursorSchema = z
+  .object({ version: z.literal(1), sequence: z.number().int().min(0).default(0) })
+  .strict();
+export const cisaKevCursorSchema = z
+  .object({
+    version: z.literal(1),
+    catalogRelease: z.string().max(200).optional(),
+    etag: z.string().max(500).optional(),
+    lastModified: z.string().max(200).optional(),
+  })
+  .strict();
+export const nvdCursorSchema = z
+  .object({ version: z.literal(1), lastModifiedWatermark: z.iso.datetime({ offset: true }).optional() })
+  .strict();
+
+export const sourceSettingsInputSchema = z
+  .object({
+    sourceKey: sourceKeySchema,
+    intervalMinutes: z.coerce.number().int().min(0).max(1440),
+    initialLookbackHours: z.coerce.number().int().min(1).max(168).optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.sourceKey === "TEST_SYNTHETIC" && value.intervalMinutes !== 0) {
+      ctx.addIssue({ code: "custom", path: ["intervalMinutes"], message: "Synthetic collection is manual only." });
+    }
+    if (value.sourceKey === "CISA_KEV" && (value.intervalMinutes < 60 || value.intervalMinutes > 1440)) {
+      ctx.addIssue({ code: "custom", path: ["intervalMinutes"], message: "CISA KEV interval must be 60–1440 minutes." });
+    }
+    if (value.sourceKey === "NVD_CVE" && (value.intervalMinutes < 60 || value.intervalMinutes > 1440)) {
+      ctx.addIssue({ code: "custom", path: ["intervalMinutes"], message: "NVD interval must be 60–1440 minutes." });
+    }
+  });
+
+export const collectionIssueSchema = z
+  .object({
+    kind: z.enum(collectionIssueKinds),
+    code: z.string().trim().min(1).max(100),
+    message: z.string().trim().min(1).max(500),
+    sourceRecordKey: z.string().trim().max(300).nullable().optional(),
+  })
+  .strict();
+
+export const collectionCountersSchema = z
+  .object({
+    recordsSeen: z.number().int().nonnegative(),
+    recordsMapped: z.number().int().nonnegative(),
+    signalsCreated: z.number().int().nonnegative(),
+    observationsCreated: z.number().int().nonnegative(),
+    revisionsCreated: z.number().int().nonnegative(),
+    duplicateObservations: z.number().int().nonnegative(),
+    supportingObservations: z.number().int().nonnegative(),
+    staleObservations: z.number().int().nonnegative(),
+    conflictingObservations: z.number().int().nonnegative(),
+    skippedRecords: z.number().int().nonnegative(),
+    failedRecords: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export const collectionClaimSchema = z
+  .object({
+    run_id: z.uuid(),
+    owner_id: z.uuid(),
+    connection_id: z.uuid(),
+    source_key: sourceKeySchema,
+    settings: boundedObject(16384),
+    cursor: boundedObject(32768),
+    lease_token: z.string().regex(/^[a-f0-9]{64}$/),
+    lease_expires_at: z.iso.datetime({ offset: true }),
+  })
+  .strict();
+
+export const adapterResultSchema = z
+  .object({
+    recordsSeen: z.number().int().nonnegative().max(5000),
+    recordsMapped: z.number().int().nonnegative().max(2500),
+    signals: z.array(recordTechnicalSignalSchema.omit({ actorId: true })).max(2500),
+    issues: z.array(collectionIssueSchema).max(100),
+    nextCursor: boundedObject(32768),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.recordsMapped !== value.signals.length || value.recordsMapped > value.recordsSeen) {
+      ctx.addIssue({ code: "custom", message: "Adapter counters are inconsistent." });
+    }
+  });
+
+export const sourceConnectionRowSchema = z
+  .object({
+    id: z.uuid(),
+    source_key: sourceKeySchema,
+    status: sourceStatusSchema,
+    settings: boundedObject(16384),
+    cursor_version: z.number().int().positive(),
+    interval_minutes: z.number().int().nonnegative(),
+    next_run_at: z.string().nullable(),
+    last_started_at: z.string().nullable(),
+    last_succeeded_at: z.string().nullable(),
+    last_failed_at: z.string().nullable(),
+    consecutive_failures: z.number().int().nonnegative(),
+    created_at: z.string(),
+    updated_at: z.string(),
+  })
+  .passthrough();

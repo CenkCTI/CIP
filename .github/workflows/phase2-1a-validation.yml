@@ -74,6 +74,7 @@ jobs:
           run_check phase2-2c1-migration scripts/test-phase2-2c1-migration.sh
           run_check phase2-3a-migration scripts/test-phase2-3a-migration.sh
           run_check phase2-3b-migration scripts/test-phase2-3b-migration.sh
+          run_check phase2-3c-migration scripts/test-phase2-3c-migration.sh
 
           cat validation-logs/summary.txt
           echo "failed=${failed}" >> "$GITHUB_OUTPUT"
