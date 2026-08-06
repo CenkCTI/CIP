@@ -129,9 +129,9 @@ describe("source settings and scheduler bounds", () => {
 
   it("caps TechINT scheduler configuration", async () => {
     const { techIntSchedulerConfig } = await import("./scheduler");
-    expect(techIntSchedulerConfig({ TECHINT_SCHEDULER_ENABLED: "true" } as NodeJS.ProcessEnv)).toEqual({ enabled: true, batchSize: 5, concurrency: 2 });
-    expect(() => techIntSchedulerConfig({ TECHINT_SYNC_BATCH_SIZE: "11" } as NodeJS.ProcessEnv)).toThrow("INVALID_TECHINT_SCHEDULER_CONFIGURATION");
-    expect(() => techIntSchedulerConfig({ TECHINT_SYNC_CONCURRENCY: "5" } as NodeJS.ProcessEnv)).toThrow("INVALID_TECHINT_SCHEDULER_CONFIGURATION");
+    expect(techIntSchedulerConfig({ TECHINT_SCHEDULER_ENABLED: "true" } as unknown as NodeJS.ProcessEnv)).toEqual({ enabled: true, batchSize: 5, concurrency: 2 });
+    expect(() => techIntSchedulerConfig({ TECHINT_SYNC_BATCH_SIZE: "11" } as unknown as NodeJS.ProcessEnv)).toThrow("INVALID_TECHINT_SCHEDULER_CONFIGURATION");
+    expect(() => techIntSchedulerConfig({ TECHINT_SYNC_CONCURRENCY: "5" } as unknown as NodeJS.ProcessEnv)).toThrow("INVALID_TECHINT_SCHEDULER_CONFIGURATION");
   });
 });
 

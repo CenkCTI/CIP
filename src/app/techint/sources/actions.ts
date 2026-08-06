@@ -44,7 +44,6 @@ export async function enableTechnicalSource(form: FormData): Promise<void> {
 export async function setTechnicalSourceStatus(
   connectionId: string,
   status: "ENABLED" | "PAUSED" | "ARCHIVED",
-  _form?: FormData,
 ): Promise<void> {
   try {
     const { user } = await requireUser();
@@ -84,7 +83,7 @@ export async function updateTechnicalSourceSettings(
   }
 }
 
-export async function syncTechnicalSourceNow(connectionId: string, _form?: FormData): Promise<void> {
+export async function syncTechnicalSourceNow(connectionId: string): Promise<void> {
   try {
     const { user } = await requireUser();
     const id = connectionIdSchema.parse(connectionId);

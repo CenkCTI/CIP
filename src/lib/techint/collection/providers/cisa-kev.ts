@@ -50,10 +50,9 @@ export function mapCisaKevCatalog(payload: unknown, receivedAt: string, headers?
     }
     const item = parsed.data;
     let dateAdded: string;
-    let dueDate: string;
     try {
       dateAdded = dateOnlyInstant(item.dateAdded);
-      dueDate = dateOnlyInstant(item.dueDate);
+      dateOnlyInstant(item.dueDate);
     } catch {
       issues.push(safeIssue("INVALID_KEV_DATE", "A CISA KEV entry with an invalid date was skipped.", item.cveID));
       continue;

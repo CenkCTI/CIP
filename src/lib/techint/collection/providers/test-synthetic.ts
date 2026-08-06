@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { JsonValue } from "@/lib/techint/signals/schema";
 import { syntheticCursorSchema } from "../schema";
 import type { AdapterCollectionResult, MappedTechnicalSignal, TechnicalSourceAdapter } from "../types";
 
@@ -9,7 +10,7 @@ function observation(
   sourceRecordKey: string,
   sourceRevisionKey: string,
   effectiveAt: string,
-  sourceSnapshot: Record<string, unknown>,
+  sourceSnapshot: Record<string, JsonValue>,
 ) {
   return {
     sourceFamily: "MANUAL_TEST" as const,

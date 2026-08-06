@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { jsonValueSchema, recordTechnicalSignalSchema, type JsonValue } from "@/lib/techint/signals/schema";
+import { jsonValueSchema, recordTechnicalSignalSchema, type JsonValue, type RecordTechnicalSignalInput } from "@/lib/techint/signals/schema";
 import { collectionIssueKinds, collectionTriggers, technicalSourceKeys, technicalSourceStatuses } from "./types";
 
 const boundedObject = (bytes: number) =>
@@ -87,11 +87,19 @@ export const collectionClaimSchema = z
   })
   .strict();
 
+const mappedTechnicalSignalSchema = z.custom<Omit<RecordTechnicalSignalInput, "actorId">>((value) => {
+  if (value === null || typeof value !== "object" || Array.isArray(value) || "actorId" in value) return false;
+  return recordTechnicalSignalSchema.safeParse({
+    ...(value as Record<string, unknown>),
+    actorId: "10000000-0000-4000-8000-000000000001",
+  }).success;
+}, "A valid actor-free Technical Signal mapping is required.");
+
 export const adapterResultSchema = z
   .object({
     recordsSeen: z.number().int().nonnegative().max(5000),
     recordsMapped: z.number().int().nonnegative().max(2500),
-    signals: z.array(recordTechnicalSignalSchema.omit({ actorId: true })).max(2500),
+    signals: z.array(mappedTechnicalSignalSchema).max(2500),
     issues: z.array(collectionIssueSchema).max(100),
     nextCursor: boundedObject(32768),
   })
