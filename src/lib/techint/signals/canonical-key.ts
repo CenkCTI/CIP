@@ -1,26 +1,12 @@
 import { normalizeIndicatorValue, validateIndicator, type IndicatorType } from "@/lib/cti/indicators";
-
-const boundedPart = (value: string, label: string) => {
-  const normalized = value.trim().replace(/\s+/g, " ");
-  if (!normalized || normalized.length > 300 || /[\u0000-\u001f]/.test(normalized)) throw new Error(`${label} is invalid.`);
-  return normalized;
-};
-
-export function normalizeCve(value: string) {
-  const normalized = value.trim().toUpperCase().replace(/^CVE(?=\d)/, "CVE-");
-  if (!/^CVE-\d{4}-\d{4,}$/.test(normalized)) throw new Error("Invalid CVE ID.");
-  return normalized;
-}
-export function vulnerabilityCanonicalKey(cve: string) { return `cve:${normalizeCve(cve)}`; }
-export function indicatorCanonicalKey(type: IndicatorType, value: string) {
-  const error = validateIndicator(value, type);
-  if (error || ["FILE", "REGISTRY"].includes(type)) throw new Error(error ?? "Unsupported Indicator subtype.");
-  return `indicator:${type}:${normalizeIndicatorValue(value, type)}`;
-}
-export function attackCanonicalKey(id: string) {
-  const normalized = id.trim().toUpperCase();
-  if (!/^T\d{4}(?:\.\d{3})?$/.test(normalized)) throw new Error("Invalid ATT&CK technique ID.");
-  return `attack:${normalized}`;
-}
-export function reportCanonicalKey(sourceSystem: string, recordKey: string) { return `report:${boundedPart(sourceSystem, "source system").toLowerCase()}:${boundedPart(recordKey, "record key")}`; }
-export function advisoryCanonicalKey(sourceSystem: string, recordKey: string) { return `advisory:${boundedPart(sourceSystem, "source system").toLowerCase()}:${boundedPart(recordKey, "record key")}`; }
+import type { TechnicalSignalType } from "./types";
+const boundedPart=(value:string,label:string)=>{const normalized=value.trim().replace(/\s+/g," ");if(!normalized||normalized.length>300||/[\u0000-\u001f]/.test(normalized))throw new Error(`Invalid ${label}.`);return normalized;};
+export function normalizeCve(value:string){const n=value.trim().toUpperCase().replace(/^CVE(?=\d)/,"CVE-");if(!/^CVE-\d{4}-\d{4,}$/.test(n))throw new Error("Invalid CVE ID.");return n;}
+export function vulnerabilityCanonicalKey(cve:string){return `cve:${normalizeCve(cve)}`;}
+export function indicatorCanonicalKey(type:IndicatorType,value:string){const normalized=normalizeIndicatorValue(value,type);const error=validateIndicator(normalized,type);if(error)throw new Error(error);return `indicator:${type}:${normalized}`;}
+export function attackCanonicalKey(id:string){const normalized=id.trim().toUpperCase();if(!/^T\d{4}(?:\.\d{3})?$/.test(normalized))throw new Error("Invalid ATT&CK technique ID.");return `attack:${normalized}`;}
+export function reportCanonicalKey(sourceSystem:string,recordKey:string){return `report:${boundedPart(sourceSystem,"source system").toLowerCase()}:${boundedPart(recordKey,"record key")}`;}
+export function advisoryCanonicalKey(sourceSystem:string,recordKey:string){return `advisory:${boundedPart(sourceSystem,"source system").toLowerCase()}:${boundedPart(recordKey,"record key")}`;}
+const sourceKeyPattern=/^(?:report|advisory):[a-z0-9][a-z0-9._-]{0,199}[^\u0000-\u001f]*:[^\u0000-\u001f]{1,300}$/;
+export function validateCanonicalKey(type:TechnicalSignalType,key:string){let expected=key;if(type==="VULNERABILITY_CHANGE"){if(!/^cve:CVE-\d{4}-\d{4,}$/.test(key))throw new Error("Invalid canonical CVE key.");}else if(type==="ACTIVE_EXPLOITATION"){if(!/^cve:CVE-\d{4}-\d{4,}$/.test(key)&&!(key.startsWith("report:")&&sourceKeyPattern.test(key)))throw new Error("Invalid exploitation key.");}else if(type==="IOC_OBSERVATION"){const m=/^indicator:(IP|CIDR|DOMAIN|URL|HASH|EMAIL):(.+)$/.exec(key);if(!m)throw new Error("Invalid Indicator key.");expected=indicatorCanonicalKey(m[1] as IndicatorType,m[2]);}else if(type==="TTP_UPDATE"){if(!/^attack:T\d{4}(?:\.\d{3})?$/.test(key))throw new Error("Invalid ATT&CK key.");}else{const prefix=type==="TECHNICAL_ADVISORY"?"advisory:":"report:";if(!key.startsWith(prefix)||!sourceKeyPattern.test(key))throw new Error("Invalid source-defined key.");}if(expected!==key||key.length>700)throw new Error("Canonical key is not normalized.");return key;}
+export function validateSourceDefinedCanonicalKey(key:string,sourceSystem:string,sourceRecordKey:string){const i=key.indexOf(":");if(key!==`${key.slice(0,i)}:${sourceSystem.trim().toLowerCase()}:${sourceRecordKey.trim()}`)throw new Error("Source-defined key does not match observation.");}

@@ -112,7 +112,7 @@ do $$declare standalone uuid; inv jsonb; inv_id uuid; counts jsonb; item uuid; e
  begin perform public.update_intel_profile_definition('10000000-0000-4000-8000-000000000001',standalone,'Changed','', '', 'MEDIUM',90,null,1);raise exception 'audit failure mutation succeeded';exception when others then if sqlerrm='audit failure mutation succeeded'then raise;end if;end;if exists(select 1 from public.intel_profiles where id=standalone and name='Changed')then raise exception 'profile update was not rolled back after audit failure';end if;drop trigger phase2_3a_audit_fail on public.intel_profile_audit_events;drop function public.phase2_3a_audit_fail();
 end$$;
 SQL
-if git -C "$ROOT" diff --name-only -- supabase/migrations | grep -Ev '202608050031_phase2_3a_techint_profiles.sql$' | grep -q .; then
+if git -C "$ROOT" diff --name-only -- supabase/migrations | grep -Ev '20260805003[12]_phase2_3[ab]_' | grep -q .; then
   echo 'Unexpected changes to immutable migrations 001-030' >&2
   exit 1
 fi

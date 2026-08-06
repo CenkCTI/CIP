@@ -1,27 +1,29 @@
 # Phase 2.3B — Canonical Technical Signal Backbone
 
-A **Technical Signal** is an owner-scoped, normalized and source-backed technical development. It is not Evidence, an Investigation Indicator, an assessment, attribution, match, alert, priority decision, or intelligence report.
+A **Technical Signal** is an owner-scoped, normalized, source-backed technical development. It is not Evidence, an Investigation Indicator, an assessment, attribution, match, alert, priority decision, or intelligence report.
 
-## Architecture and semantics
+## Identity, history, and ordering
 
-`technical_signals` is the current provider-independent projection. Its stable identity is `(owner, signal type, canonical key)`. Canonical keys use authoritative immutable identifiers: normalized CVE IDs, validated Indicators, normalized ATT&CK technique IDs, or source-system plus source-record identity for reports/advisories. Mutable titles and summaries are excluded. URL scheme/authority normalization never lowercases path/query components, and no alias/entity-resolution claim is made.
+`technical_signals` is the current provider-independent projection, uniquely identified by `(owner, signal type, canonical key)`. Canonical keys are type-aware: `cve:CVE-YYYY-NNNN…`, `indicator:<IP|CIDR|DOMAIN|URL|HASH|EMAIL>:<canonical-value>`, `attack:TNNNN[.NNN]`, `report:<source>:<record>`, or `advisory:<source>:<record>`. Source-defined components must match the observation source, malformed supplied keys are rejected, and URL path/query case is preserved.
 
-Each immutable **Observation** records one bounded normalized source snapshot and its provenance. Owner-scoped SHA-256 identity includes source system, record key, optional revision key, and source fingerprint. Exact retries return the existing observation without assertions or revisions. A new equal snapshot is `SUPPORTING`; older effective input is `STALE`; equal-time changed content is `CONFLICTING`; newer changed content is `CURRENT`.
+An immutable **Observation** records one bounded normalized source snapshot and provenance. Its version-1 identity vector contains owner, signal type, canonical key, source family, lowercased/trimmed source system, record key, nullable revision key, and source fingerprint. Database uniqueness is `(owner_id, signal_id, observation_key)`, so one source record can produce distinct signals. A transaction advisory lock plus conflict-safe inserts serializes first creation, exact retries, supporting inputs, and revision allocation.
 
-Each immutable **Revision** is a bounded canonical snapshot caused by a current observation. Its SHA-256 content fingerprint omits receipt/provenance timestamps, preventing false revisions. Creation is revision 1; newer content creates a monotonic revision. Newer `RETRACTED` input records retraction, and later `ACTIVE` input records `REACTIVATED`. Stale/conflicting/supporting records do not replace current state. Supersession integrity is modeled but never automatic.
+The two transport fields `signal.effectiveAt` and `observation.effectiveAt` must be byte-for-byte equal. PostgreSQL parses that value once and uses it for observation, projection, revision, and disposition ordering; `receivedAt` is ingestion provenance only. Exact retries return the existing row. Equal canonical content is `SUPPORTING`, older effective time is `STALE`, equal-time changed content is `CONFLICTING`, and newer changed content is `CURRENT`.
 
-**Entity assertions** preserve what a provider asserted or the system deterministically extracted from their exact observation. They retain kind, role, display and conservatively normalized values, confidence and optional source-entity snapshots. Only `PROVIDER_ASSERTED` and `SYSTEM_EXTRACTED` enter through this workflow. Reserved AI/analyst bases cannot. Assertions do not create or resolve CİTEM entities.
+An immutable **Revision** stores each current canonical snapshot. Its version-1 fingerprint vector contains lifecycle, trimmed title, summary, severity, nullable confidence, facts, nullable UTC-millisecond publication time, nullable UTC-millisecond observation time, and nullable superseding signal ID. Receipt and source metadata are excluded. Newer `RETRACTED` input records retraction and later `ACTIVE` records `REACTIVATED`; supersession is explicit and never inferred.
 
-## Trust, ownership, and payload safety
+TypeScript and PostgreSQL use the same canonical JSON contract: lexicographically sorted object keys, preserved array order, JSON null, UTF-8 input, SHA-256, and lowercase hexadecimal output. Fixed fixtures cover parity, reordered objects, nulls, Unicode, and source normalization.
 
-Authenticated users receive owner-scoped RLS `SELECT` only. All direct authenticated mutations are denied. The narrow `record_technical_signal` security-definer RPC is executable only by `service_role`, revalidates all security-sensitive data, and transactionally creates the signal, observation, optional revision, and assertions. Any failure rolls the statement back. Append-only triggers reject observation, revision, and assertion updates/deletes even outside the workflow.
+## Assertions, integrity, and trust
 
-Canonical facts and source snapshots are JSON objects bounded to 64 KiB; assertions are capped at 100 and strings/identifiers/URLs are bounded. Only credential-free HTTP(S) provenance URLs are accepted without resolving or fetching them. Raw bodies, secrets, headers, cookies, prompts, binary samples, and uploaded contents are forbidden.
+Entity assertions are tied to their exact source observation with composite `(owner, signal, observation)` foreign keys. Optional source-entity type and ID are paired non-authoritative provenance snapshots, not entity resolution. Only `PROVIDER_ASSERTED` and `SYSTEM_EXTRACTED` are accepted. Indicators use existing CİTEM validation; CVE and ATT&CK values use conservative canonical forms. Any invalid assertion rolls back the complete recording statement.
 
-## Explicit exclusions and later phases
+Authenticated users receive owner-scoped RLS `SELECT` only. Direct authenticated mutations and RPC execution are denied; anon has no access. The server-only `record_technical_signal` security-definer RPC is executable only by `service_role`, uses a fixed search path, and returns a controlled result that is validated by Zod. Append-only triggers reject privileged update/delete on observations, revisions, and assertions.
 
-No provider adapter, source collection/ingestion, network call, scheduler, Global View population, profile/InvestINT matching, discovery, scoring, priority, alert, Investigation mutation, canonical entity resolution, or AI brief is implemented. Phase 2.3C owns adapters; Phase 2.3D owns taxonomy/aliases/entity normalization; later phases own matching, analysis and presentation.
+Facts and source snapshots are JSON objects bounded to 64 KiB, assertions are capped at 100, and identifiers/strings/URLs are bounded. Only credential-free HTTP(S) provenance URLs are accepted without network access. Raw bodies, credentials, prompts, binary samples, and uploaded contents are forbidden.
 
-## Operator-authorized live acceptance
+## Explicit exclusions
 
-Migration 032 was not applied live. An operator must authorize application and synthetic checks for creation, retry, support, change, stale/conflict, retraction/reactivation, two-user isolation and direct-mutation denial. Confirm that no Indicator, Evidence, Note, Investigation, match or alert is created and Global View still makes no collection claim.
+No provider adapter, source collection, network call, scheduler, Global View population, profile/InvestINT matching, discovery, scoring, alert, Investigation mutation, canonical entity resolution, or AI brief is implemented. Phase 2.3C owns adapters and later phases own taxonomy, matching, analysis, and presentation.
+
+Migration 032 has not been applied live. Live acceptance requires explicit operator authorization and synthetic records only.
