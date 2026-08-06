@@ -23,6 +23,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
+          ref: feat/techint-2-3c-source-pack-collection
           fetch-depth: 0
 
       - name: Finalize Phase 2.3C repair
@@ -33,12 +34,8 @@ jobs:
 
           migration = Path("supabase/migrations/202608060033_phase2_3c_technical_source_collection.sql")
           text = migration.read_text()
-          old = """  perform public.technical_source_audit(p_actor, c.id, c.source_key,
-            case when c.created_at = c.updated_at then 'ENABLED' else 'RESTORED' end,
-            jsonb_build_object('intervalMinutes', c.interval_minutes));"""
-          new = """  perform public.technical_source_audit(p_actor, c.id, c.source_key,
-            (case when c.created_at = c.updated_at then 'ENABLED' else 'RESTORED' end)::public.technical_source_audit_action,
-            jsonb_build_object('intervalMinutes', c.interval_minutes));"""
+          old = "case when c.created_at = c.updated_at then 'ENABLED' else 'RESTORED' end,"
+          new = "(case when c.created_at = c.updated_at then 'ENABLED' else 'RESTORED' end)::public.technical_source_audit_action,"
           if old in text:
               migration.write_text(text.replace(old, new, 1))
           elif new not in text:
@@ -68,7 +65,7 @@ jobs:
           git add .github/workflows/phase2-1a-validation.yml
           git add -u .github/workflows/phase23c-one-shot-migration-repair.yml
           git commit -m "fix(techint): repair collection migration enum"
-          git push
+          git push origin HEAD:feat/techint-2-3c-source-pack-collection
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
