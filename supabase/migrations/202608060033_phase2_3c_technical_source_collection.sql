@@ -263,7 +263,7 @@ begin
         next_run_at = case when excluded.source_key = 'TEST_SYNTHETIC' then null else coalesce(public.technical_source_connections.next_run_at, now()) end
   returning * into c;
   perform public.technical_source_audit(p_actor, c.id, c.source_key,
-    case when c.created_at = c.updated_at then 'ENABLED' else 'RESTORED' end,
+    (case when c.created_at = c.updated_at then 'ENABLED' else 'RESTORED' end)::public.technical_source_audit_action,
     jsonb_build_object('intervalMinutes', c.interval_minutes));
   return c.id;
 end $$;
