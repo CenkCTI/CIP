@@ -2,7 +2,7 @@ import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { recordTechnicalSignalResultSchema, recordTechnicalSignalSchema, type RecordTechnicalSignalInput } from "./schema";
 
-function safeRecorderSqlState(value: unknown): string | null {
+export function safeRecorderSqlState(value: unknown): string | null {
   return typeof value === "string" && /^[0-9A-Z]{5}$/.test(value) ? value : null;
 }
 
