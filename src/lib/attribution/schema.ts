@@ -108,3 +108,28 @@ export const evaluationSchema = z.object({
   diagnostic_value: z.enum(["LOW", "MEDIUM", "HIGH"]),
   rationale: text(10000, true),
 });
+
+export const attributionClueSchema = z.object({
+  title: text(180, true),
+  relevance_note: text(10000, true),
+});
+
+export const attributionClueReferenceSchema = z.object({
+  reference_type: z.enum([
+    "campaign",
+    "source",
+    "evidence",
+    "timeline_event",
+    "infrastructure_cluster",
+    "indicator",
+    "enrichment_result",
+    "malware",
+    "mitre_technique",
+  ]),
+  reference_id: uuid,
+});
+
+export const attributionCellDetailsSchema = z.object({
+  diagnostic_value: z.enum(["LOW", "MEDIUM", "HIGH"]).default("MEDIUM"),
+  rationale: text(10000),
+});
