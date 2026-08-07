@@ -19,30 +19,33 @@ const RESPONSE_LIMIT_BYTES = 8 * 1024 * 1024;
 const OVERLAP_MS = 5 * 60 * 1000;
 const MAX_WINDOW_MS = 120 * 24 * 60 * 60 * 1000;
 
-const descriptionSchema = z.object({ lang: z.string().max(20), value: z.string().max(20000) }).passthrough();
-const referenceSchema = z.object({ url: z.string().max(4000), source: z.string().max(500).optional(), tags: z.array(z.string().max(100)).max(20).optional() }).passthrough();
-const weaknessSchema = z.object({ descriptions: z.array(descriptionSchema).max(50).optional().default([]) }).passthrough();
-const cpeMatchSchema = z.object({ vulnerable: z.boolean().optional(), criteria: z.string().max(2000).optional(), matchCriteriaId: z.string().max(200).optional() }).passthrough();
-const nodeSchema = z.object({ cpeMatch: z.array(cpeMatchSchema).max(200).optional().default([]) }).passthrough();
-const configurationSchema = z.object({ nodes: z.array(nodeSchema).max(100).optional().default([]) }).passthrough();
-const cvssDataSchema = z.object({ version: z.string().max(20).optional(), vectorString: z.string().max(1000).optional(), baseScore: z.number().min(0).max(10).optional(), baseSeverity: z.string().max(50).optional() }).passthrough();
-const cvssMetricSchema = z.object({ source: z.string().max(500).optional(), type: z.string().max(100).optional(), cvssData: cvssDataSchema }).passthrough();
+// These shapes intentionally follow the official NVD CVE API schema rather than
+// imposing small provider-array maxima. The entire response is already bounded
+// to 8 MiB and mapping below slices provider arrays before normalization.
+const descriptionSchema = z.object({ lang: z.string(), value: z.string().max(4096) }).passthrough();
+const referenceSchema = z.object({ url: z.string().min(1).max(2048), source: z.string().optional(), tags: z.array(z.string()).optional() }).passthrough();
+const weaknessSchema = z.object({ description: z.array(descriptionSchema).optional().default([]) }).passthrough();
+const cpeMatchSchema = z.object({ vulnerable: z.boolean().optional(), criteria: z.string().optional(), matchCriteriaId: z.string().optional() }).passthrough();
+const nodeSchema = z.object({ cpeMatch: z.array(cpeMatchSchema).optional().default([]) }).passthrough();
+const configurationSchema = z.object({ nodes: z.array(nodeSchema).optional().default([]) }).passthrough();
+const cvssDataSchema = z.object({ version: z.string().optional(), vectorString: z.string().optional(), baseScore: z.number().min(0).max(10).optional(), baseSeverity: z.string().optional() }).passthrough();
+const cvssMetricSchema = z.object({ source: z.string().optional(), type: z.string().optional(), cvssData: cvssDataSchema }).passthrough();
 const metricsSchema = z.object({
-  cvssMetricV40: z.array(cvssMetricSchema).max(20).optional(),
-  cvssMetricV31: z.array(cvssMetricSchema).max(20).optional(),
-  cvssMetricV30: z.array(cvssMetricSchema).max(20).optional(),
+  cvssMetricV40: z.array(cvssMetricSchema).optional(),
+  cvssMetricV31: z.array(cvssMetricSchema).optional(),
+  cvssMetricV30: z.array(cvssMetricSchema).optional(),
 }).passthrough();
 const cveSchema = z.object({
   id: z.string().regex(/^CVE-\d{4}-\d{4,}$/),
-  sourceIdentifier: z.string().max(500),
+  sourceIdentifier: z.string().optional(),
   published: z.string(),
   lastModified: z.string(),
-  vulnStatus: z.string().max(100),
-  descriptions: z.array(descriptionSchema).max(100).optional().default([]),
+  vulnStatus: z.string().optional(),
+  descriptions: z.array(descriptionSchema).min(1),
   metrics: metricsSchema.optional().default({}),
-  weaknesses: z.array(weaknessSchema).max(100).optional().default([]),
-  configurations: z.array(configurationSchema).max(100).optional().default([]),
-  references: z.array(referenceSchema).max(500).optional().default([]),
+  weaknesses: z.array(weaknessSchema).optional().default([]),
+  configurations: z.array(configurationSchema).optional().default([]),
+  references: z.array(referenceSchema),
 }).passthrough();
 const pageSchema = z.object({
   resultsPerPage: z.number().int().nonnegative().max(2000),
@@ -66,7 +69,7 @@ function selectMetric(metrics: z.infer<typeof metricsSchema>): SelectedMetric | 
       version,
       baseScore: metric.baseScore ?? null,
       baseSeverity: (metric.baseSeverity ?? "UNKNOWN").toUpperCase(),
-      vectorString: metric.vectorString ?? null,
+      vectorString: metric.vectorString ? bounded(metric.vectorString, 1000) : null,
     };
   }
   return null;
@@ -79,12 +82,22 @@ function signalSeverity(value: string | undefined): "UNKNOWN" | "INFO" | "LOW" |
     : "UNKNOWN";
 }
 
-function EnglishDescriptions(cve: z.infer<typeof cveSchema>) {
-  return cve.descriptions.filter((item) => item.lang.toLowerCase() === "en").slice(0, 3).map((item) => bounded(item.value, 4000));
+function englishDescriptions(cve: z.infer<typeof cveSchema>) {
+  return cve.descriptions
+    .filter((item) => item.lang.toLowerCase() === "en")
+    .slice(0, 3)
+    .map((item) => bounded(item.value, 4000));
 }
 
 function weaknessIds(cve: z.infer<typeof cveSchema>) {
-  const values = cve.weaknesses.flatMap((weakness) => weakness.descriptions.map((item) => item.value));
+  const values: string[] = [];
+  for (const weakness of cve.weaknesses.slice(0, 100)) {
+    for (const item of weakness.description.slice(0, 50)) {
+      values.push(item.value);
+      if (values.length >= 5000) break;
+    }
+    if (values.length >= 5000) break;
+  }
   return [...new Set(values.filter((value) => /^(CWE-\d+|NVD-CWE-(?:Other|noinfo))$/.test(value)))].slice(0, 20);
 }
 
@@ -100,9 +113,9 @@ function safeReferenceUrl(value: string): string | null {
 
 function configurationSummaries(cve: z.infer<typeof cveSchema>) {
   const criteria: string[] = [];
-  for (const configuration of cve.configurations) {
-    for (const node of configuration.nodes) {
-      for (const match of node.cpeMatch) {
+  for (const configuration of cve.configurations.slice(0, 100)) {
+    for (const node of configuration.nodes.slice(0, 100)) {
+      for (const match of node.cpeMatch.slice(0, 200)) {
         if (match.criteria) criteria.push(bounded(match.criteria, 1000));
         if (criteria.length >= 50) return criteria;
       }
@@ -112,8 +125,8 @@ function configurationSummaries(cve: z.infer<typeof cveSchema>) {
 }
 
 function fitFacts(input: {
-  vulnStatus: string;
-  sourceIdentifier: string;
+  vulnStatus: string | null;
+  sourceIdentifier: string | null;
   descriptions: string[];
   cvss: SelectedMetric | null;
   cwes: string[];
@@ -128,8 +141,28 @@ function fitFacts(input: {
   return facts;
 }
 
+function safeSchemaIssueCode(error: z.ZodError) {
+  const issue = error.issues[0];
+  const allowedTopLevel = new Set([
+    "id",
+    "sourceIdentifier",
+    "published",
+    "lastModified",
+    "vulnStatus",
+    "descriptions",
+    "metrics",
+    "weaknesses",
+    "configurations",
+    "references",
+  ]);
+  const top = issue?.path.find((part): part is string => typeof part === "string");
+  const field = top && allowedTopLevel.has(top) ? top.replace(/([a-z])([A-Z])/g, "$1_$2").toUpperCase() : "RECORD";
+  const kind = issue?.code === "too_big" ? "TOO_BIG" : issue?.code === "invalid_type" ? "TYPE" : issue?.code === "invalid_format" ? "FORMAT" : "INVALID";
+  return `INVALID_NVD_SCHEMA_${field}_${kind}`.slice(0, 100);
+}
+
 export function nvdMappingIssueCode(error: unknown): string {
-  if (error instanceof z.ZodError) return "INVALID_NVD_SCHEMA";
+  if (error instanceof z.ZodError) return safeSchemaIssueCode(error);
   if (error instanceof Error && error.message === "INVALID_TIMESTAMP") return "INVALID_NVD_TIMESTAMP";
   if (error instanceof Error && error.message === "NVD_NORMALIZED_RECORD_TOO_LARGE") return "NVD_NORMALIZED_RECORD_TOO_LARGE";
   return "INVALID_NVD_RECORD";
@@ -139,22 +172,23 @@ export function mapNvdCve(raw: unknown, receivedAt: string): MappedTechnicalSign
   const cve = cveSchema.parse(raw);
   const publishedAt = canonicalInstant(cve.published);
   const effectiveAt = canonicalInstant(cve.lastModified);
-  const descriptions = EnglishDescriptions(cve);
+  const descriptions = englishDescriptions(cve);
   const summary = descriptions[0] ?? `NVD record for ${cve.id}.`;
   const metric = selectMetric(cve.metrics);
   const cwes = weaknessIds(cve);
   const references = cve.references
+    .slice(0, 100)
     .map((reference) => ({ reference, url: safeReferenceUrl(reference.url) }))
     .filter((item): item is { reference: (typeof cve.references)[number]; url: string } => Boolean(item.url))
     .slice(0, 20)
     .map(({ reference, url }) => ({
       url,
       source: bounded(reference.source, 300),
-      tags: (reference.tags ?? []).slice(0, 10),
+      tags: (reference.tags ?? []).slice(0, 10).map((tag) => bounded(tag, 100)),
     }));
   const facts = fitFacts({
-    vulnStatus: cve.vulnStatus,
-    sourceIdentifier: bounded(cve.sourceIdentifier, 500),
+    vulnStatus: cve.vulnStatus ? bounded(cve.vulnStatus, 100) : null,
+    sourceIdentifier: cve.sourceIdentifier ? bounded(cve.sourceIdentifier, 500) : null,
     descriptions,
     cvss: metric,
     cwes,
