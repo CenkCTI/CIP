@@ -16,9 +16,16 @@ function concurrency(env: NodeJS.ProcessEnv = process.env) {
 }
 
 function recorderDiagnosticCode(error: unknown): string | null {
-  if (!error || typeof error !== "object" || !("safeSqlState" in error)) return null;
-  const value = (error as { safeSqlState?: unknown }).safeSqlState;
-  return typeof value === "string" && /^[0-9A-Z]{5}$/.test(value) ? `RECORDER_SQLSTATE_${value}` : null;
+  if (!error || typeof error !== "object") return null;
+  if ("safeSqlState" in error) {
+    const value = (error as { safeSqlState?: unknown }).safeSqlState;
+    if (typeof value === "string" && /^[0-9A-Z]{5}$/.test(value)) return `RECORDER_SQLSTATE_${value}`;
+  }
+  if ("safeRpcCode" in error) {
+    const value = (error as { safeRpcCode?: unknown }).safeRpcCode;
+    if (typeof value === "string" && /^PGRST[0-9A-Z]{3}$/.test(value)) return `RECORDER_RPC_${value}`;
+  }
+  return null;
 }
 
 async function mapLimit<T>(items: T[], limit: number, worker: (item: T) => Promise<void>) {
