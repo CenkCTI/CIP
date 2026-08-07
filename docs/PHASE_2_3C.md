@@ -13,14 +13,7 @@ Adapters have no database client and never write Technical Signal tables directl
 The implementation reuses hardened design patterns from Phase 2.2C—fixed adapter registries, bounded transport, exact leases, provider-bound cursors, sanitized errors, scheduler deadlines, and server-only credentials—but it does not use IOC candidates, IOC Inbox triage state, candidate acceptance, ThreatFox, or OTX. CISA KEV and NVD records are recorded directly as Technical Signals and are never routed through the IOC Inbox.
 
 ## Database model
-Migration `202608060033_phase2_3c_technical_source_collection.sql` adds:
-
-- `technical_source_connections`: one owner-local persistent connection per fixed source, bounded settings and versioned cursor, lifecycle, schedule, and success/failure watermarks.
-- `technical_collection_runs`: immutable run history with one active run per connection, exact trigger, bounded counters, sanitized errors, claimed/proposed cursor, and a SHA-256 lease-token hash.
-- `technical_collection_run_issues`: capped, append-only safe issue summaries; no source bodies, stacks, credentials, SQL, or full IOC sets.
-- `technical_source_audit_events`: append-only transactional lifecycle and settings history.
-
-Authenticated analysts receive owner-scoped safe-column reads only. Cursor bodies, claimed cursors, proposed cursors, and lease hashes are not browser-readable. All mutations and run lifecycle RPCs are executable only by `service_role`; server actions authenticate the user and supply the actor ID from the session.
+Migration `202608060033_phase2_3c_technical_source_collection.sql` adds owner-scoped source connections, collection runs, bounded issues, source audit history, exact lease semantics, provider-bound cursors, scheduler state, RLS/ACL, and service-role-only lifecycle RPCs.
 
 Migration `202608070034_phase2_3c_advisory_key_repair.sql` is an additive live-acceptance repair. It leaves migration 032 immutable and replaces only `technical_signal_validate_canonical_key` so advisory/report-shaped canonical keys are validated with the intended regex precedence. The migration preserves the helper ACL boundary and includes non-mutating advisory/report regression assertions.
 
@@ -51,15 +44,17 @@ Fixed endpoint:
 
 The adapter uses official `lastModStartDate`, `lastModEndDate`, `startIndex`, and `resultsPerPage` parameters. Initial lookback defaults to 24 hours and is capped at 7 days. Successful cursors use a five-minute overlap and never request more than the official 120-day date range. A run remains capped at 20 successful pages, 20 total HTTP attempts, and 2,000 records. `NVD_API_KEY` is optional, server-only, never stored, never rendered, and never logged.
 
-Live acceptance exposed three practical public-source constraints in sequence: 100-record pages caused too many requests and rate limiting; a 2,000-record response exceeded CİTEM's deliberate 8 MiB untrusted-response bound; a subsequent 500-record request could exceed the generic 15-second transport timeout. The final NVD policy therefore preserves the 8 MiB limit and the generic transport default, but uses a fixed NVD-specific strategy:
+Live acceptance exposed three public-source constraints in sequence: 100-record pages caused too many requests and rate limiting; a 2,000-record response exceeded CİTEM's deliberate 8 MiB untrusted-response bound; a subsequent 500-record request could exceed the generic 15-second transport timeout. The final fixed NVD policy therefore preserves the global transport boundary while specializing only this known source:
 
 - start at `resultsPerPage=250`;
 - use a source-specific 30-second request timeout;
-- if the same page exceeds 8 MiB or times out, retry the same `startIndex` once at 125 records;
+- if the same page exceeds 8 MiB or times out, retry the same `startIndex` at 125 records;
 - pace every HTTP attempt after the first by 6.5 seconds;
+- cap both successful pages and total HTTP attempts at 20;
+- cap the run at 2,000 records;
 - never advance the authoritative cursor unless the complete bounded window succeeds.
 
-NVD officially documents offset pagination, a default/maximum CVE page size of 2,000, a public rate limit of 5 requests per rolling 30-second window, and recommends sleeping about six seconds between requests. CİTEM intentionally uses a smaller page size because live responses demonstrated that the official maximum is incompatible with the local 8 MiB safety bound and the observed public API latency.
+NVD officially documents offset pagination, a default/maximum CVE page size of 2,000, a public rate limit of 5 requests per rolling 30-second window, and recommends sleeping about six seconds between requests. CİTEM intentionally uses a smaller page size because live responses demonstrated that the official maximum is incompatible with the local 8 MiB safety bound and observed public API latency.
 
 Each valid record maps to `VULNERABILITY_CHANGE` with official `lastModified` effective time. CVSS precedence is v4, v3.1, then v3.0; the result is technical severity, not business risk. Descriptions, references, CWEs, and affected-configuration summaries are deterministically bounded. Phase 2.3C creates only a provider-asserted CVE assertion; vendor/product alias extraction remains Phase 2.3D.
 
@@ -96,12 +91,8 @@ No OTX, ThreatFox-to-TechINT mapping, URLhaus, MalwareBazaar, VirusTotal, Talos,
 ## Deployment and Preview acceptance
 Migration 033 has been applied in the operator test environment. Migration 034 is the only additive database repair introduced after live acceptance exposed the advisory-key bug. NVD body-size/rate-limit/timeout repairs are application-code changes and require no additional database migration.
 
-Current validation for head `6d21d8d76f55ed1bfd06b75cdcbe6cfbabdc994c`:
+The NVD timeout repair code head `6d21d8d76f55ed1bfd06b75cdcbe6cfbabdc994c` passed GitHub Actions run #150: lint, typecheck, tests, build, all Phase 2.2 migration harnesses, Phase 2.3A, Phase 2.3B, and the Phase 2.3C PostgreSQL 16 harness. The live-repair tests cover 250→125 body-size fallback and a 30-second timeout→125 retry while preserving request pacing. Vercel deployment for that code head also succeeded.
 
-- GitHub Actions run #150 passed lint, typecheck, tests, build, all Phase 2.2 migration harnesses, Phase 2.3A, Phase 2.3B, and the Phase 2.3C PostgreSQL 16 harness.
-- The live NVD repair tests cover 250→125 body-size fallback and a 30-second timeout→125 retry while preserving request pacing.
-- Vercel deployment for the same head succeeded.
-
-Operator acceptance still requires repeating synthetic acceptance after migration 034, repeating NVD collection against the current Preview head, final two-user browser isolation, and confirmation that no analytical entities or Investigation state are mutated as a side effect.
+Subsequent documentation-only commits do not alter the validated NVD runtime behavior. Operator acceptance still requires repeating synthetic acceptance after migration 034, repeating NVD collection against the current Preview deployment, final two-user browser isolation, and confirmation that no analytical entities or Investigation state are mutated as a side effect.
 
 Rollback is application rollback plus pausing sources. Collection history and source-backed signals are preserved; migrations 033/034 are additive and are not destructively rolled back in a live database.
