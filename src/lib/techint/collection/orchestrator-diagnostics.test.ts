@@ -90,4 +90,24 @@ describe("TechINT collection failure diagnostics", () => {
     }));
     expect(JSON.stringify(mocks.failTechnicalCollection.mock.calls)).not.toContain("sensitive database detail");
   });
+
+  it("stores only an allowlisted recorder SQLSTATE classification, never raw database details", async () => {
+    const error = Object.assign(new Error("violates confidential constraint technical_signal_secret"), { safeSqlState: "23514" });
+    mocks.recordTechnicalSignal.mockRejectedValue(error);
+    mocks.failTechnicalCollection.mockResolvedValue({ run_id: claim.run_id, status: "FAILED" });
+
+    await runClaimedTechnicalCollection(claim, vi.fn() as unknown as typeof fetch);
+
+    expect(mocks.failTechnicalCollection).toHaveBeenCalledWith(expect.objectContaining({
+      errorCode: "SIGNAL_RECORDING_FAILED",
+      errorMessage: "A mapped Technical Signal could not be recorded.",
+      issues: [{
+        kind: "ERROR",
+        code: "RECORDER_SQLSTATE_23514",
+        message: "A mapped Technical Signal could not be recorded.",
+        sourceRecordKey: "CVE-2099-12001",
+      }],
+    }));
+    expect(JSON.stringify(mocks.failTechnicalCollection.mock.calls)).not.toContain("technical_signal_secret");
+  });
 });
