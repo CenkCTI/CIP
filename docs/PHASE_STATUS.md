@@ -10,7 +10,7 @@
 - [x] Unit tests added for validation and authorization-related helpers.
 - [x] Phase 1 SQL migration applied in Supabase, manually verified by the repository owner on the live deployment at https://cip-omega.vercel.app.
 - [x] Real account registration, sign-in, and sign-out manually verified by the repository owner on the live deployment.
-- [x] Project create, read, edit, delete, persistence after refresh/re-sign-in, and real dashboard counts manually verified by the repository owner on the live deployment.
+- [x] Project create, read, edit, delete, persistence after refresh/re-sign-in, and real dashboard counts manually verified by the repository owner against the configured Supabase/Vercel environment.
 - [x] Cross-user project isolation manually verified by the repository owner: a second user cannot see or directly access the first user's project.
 - [x] Production Vercel deployment manually verified by the repository owner.
 
@@ -156,10 +156,8 @@ Implemented in migration 021 and Campaign-owned attribution routes: competing hy
 ## Phase 2.2A — Research Sources and Secure Feed Ingestion
 Implemented on migration 023: Investigation-scoped feed lifecycle UI, explicit server-only fetches, DNS-pinned SSRF/redirect controls, bounded RSS/Atom parsing, canonical normalized items, URL/content fingerprints, cross-feed observations, atomic leases/finalization, safe health/errors, and complete owner-scoped RLS. Live Supabase acceptance remains required; Research Inbox and scheduling are excluded. See `docs/PHASE_2_2A.md`.
 
-
 ## Phase 2.2B
 Implementation adds the owner-scoped global OSINT feed, scheduled collection boundary, triage, and explicit Investigation linking. See [Phase 2.2B](PHASE_2_2B.md). Phase 2.2A live acceptance was owner-confirmed before PR #24 merged.
-
 
 ## Phase 2.2B.1
 Secure JSON Feed 1.1 (with version 1 compatibility) extends the existing global and Investigation-scoped feed workflows through migration 026. Phase 2.2B live acceptance was authoritatively confirmed by the project owner before this phase began. See [Phase 2.2B.1](PHASE_2_2B1.md).
@@ -171,38 +169,39 @@ Provider-independent IOC adapter contracts, owner-local canonical candidates and
 Implemented: fixed read-only ThreatFox Community API synchronization, encrypted owner credentials, bounded lookback, provenance, scheduler support, and analyst-controlled acceptance. Migration: `202607310028_phase2_2c1_threatfox_connector.sql`.
 
 ## Phase 2.2C.2 — Manual incremental synchronization implemented
-Manual ThreatFox synchronization uses the provider-independent incremental contract, cursor v2/legacy upgrade, strict delta diagnostics, and atomic completion without migration 029. Automatic scheduling and automatic Inbox refresh are deferred until an operator-controlled deployment is available. URLhaus and OTX remain future work.
+Manual ThreatFox synchronization uses the provider-independent incremental contract, cursor v2/legacy upgrade, strict delta diagnostics, and atomic completion without migration 029.
 
 ## Phase 2.3A — TechINT Shell and Intel Profile Foundation
-
-- [x] TechINT top-level navigation shell added with Global View, Profiles, and InvestINT.
-- [x] Additive migration 031 authored for owner-scoped Intel Profiles, profile items, audit events, RLS, constraints, and append-only audit access.
-- [x] Standalone and Investigation-linked profile UI/actions added with explicit separation.
-- [x] Investigation Intel Profile workspace route added with deterministic local refresh from existing Investigation CTI records.
-- [ ] Technical signal collection, provider ingestion, matching, prioritization, alerts, Global View intelligence, and AI briefs remain intentionally out of scope for later phases.
-- [x] PR #32 repair tightened TechINT mutations behind service-role trusted RPCs, made audit writes transactional, preserved excluded/removed item identities across refresh, and replaced the static migration check with a PostgreSQL execution harness.
-- [x] Final PR #32 hardening enforces strict TechINT profile status transitions and database-authoritative Indicator validation/normalization with URL path/query case preservation.
-- [x] Compatibility repair skips unsupported `FILE`/`REGISTRY` and malformed legacy Investigation Indicators during TechINT seeding without aborting profile creation or refresh.
+- [x] Top-level TechINT shell and locked navigation implemented: Global View, Profiles, InvestINT.
+- [x] Owner-scoped `intel_profiles`, `intel_profile_items`, and `intel_profile_audit_events` implemented in migration 031.
+- [x] STANDALONE and INVESTIGATION profile separation implemented with deterministic Investigation refresh from existing local CTI.
+- [x] Strict status transitions, trusted RPCs, audit, indicator validation/normalization, and URL case preservation implemented.
+- [ ] Migration 031 live/operator acceptance remains pending unless separately confirmed.
 
 ## Phase 2.3B — Canonical Technical Signal Backbone
-
-- [x] Provider-independent canonical signal schema authored in additive migration 032.
-- [x] Immutable, idempotent source observations and current/supporting/stale/conflicting classification implemented.
-- [x] Immutable canonical revisions and deterministic change-history foundation implemented.
+- [x] Canonical Technical Signal, immutable source observations, immutable revisions, and source-backed entity assertions implemented in migration 032.
+- [x] Provider-independent canonical key and deterministic PostgreSQL fingerprint/identity contracts implemented.
+- [x] Temporal CURRENT/SUPPORTING/STALE/CONFLICTING semantics and supporting-watermark regression implemented.
 - [x] Source-backed entity assertion foundation implemented without canonical entity resolution.
 - [x] Service-role-only transactional trusted recording RPC and narrow server-only client implemented.
 - [ ] Source adapters/collection, Global View population, profile matching, priority scoring, alerts, AI briefs, and discovery remain later-phase work.
-- [ ] Migration 032 live application and operator-authorized acceptance remain pending.
+- [ ] Migration 032 live application and operator-authorized acceptance remain pending unless separately confirmed.
 
 ## Phase 2.3C — Technical Source Pack and Collection Operations
 
 - [x] Additive migration 033 authored for owner-scoped Technical Source connections, collection runs, bounded issues, audit events, exact leases, provider-bound cursors, RLS, ACLs, and controlled lifecycle RPCs.
+- [x] Additive migration 034 repairs the Phase 2.3B advisory/report canonical-key validator without editing migration 032 and preserves the helper ACL boundary.
 - [x] Fixed server-owned source registry added for `TEST_SYNTHETIC`, `CISA_KEV`, and `NVD_CVE`; OTX and ThreatFox-to-TechINT mapping remain excluded.
 - [x] Deterministic environment-gated synthetic collection travels through the real orchestrator and Phase 2.3B trusted Technical Signal recorder.
 - [x] Fixed-host, bounded CISA KEV and NVD CVE adapters added with conservative source-backed mappings, incremental cursors, retry-safe replay, and no analytical entity creation.
 - [x] Strict code-owned RSS, Atom, and JSON Feed parser foundation added without registering an unverified CISA Advisories endpoint or allowing user-supplied URLs.
 - [x] Manual synchronization, bounded scheduler integration, sanitized run history, lifecycle controls, source settings, and secondary `/techint/sources` operations UI added while preserving the three-item TechINT primary navigation.
 - [x] Focused adapter, transport, parser, orchestrator, scheduler, UI-boundary, and PostgreSQL 16 migration coverage added to the existing validation workflow.
-- [ ] Migration 033 applied to Preview/Production and PostgREST schema reloaded.
-- [ ] Operator-authorized synthetic Preview acceptance, live CISA/NVD smoke checks, and two-user browser isolation completed.
+- [x] Live CISA KEV smoke test succeeded with 1,661 initial mapped/created signals and a later zero-change successful run.
+- [x] Live acceptance repairs preserve the 8 MiB NVD response bound, use 250-record pages with 125-record fallback, pace requests at 6.5 seconds, and give NVD a bounded source-specific 30-second timeout after public API latency exceeded the generic 15-second transport default.
+- [x] GitHub Actions run #150 passed lint, typecheck, tests, build, Phase 2.2 migration harnesses, and Phase 2.3A/B/C PostgreSQL 16 harnesses for the NVD timeout repair code head.
+- [ ] Migration 034 application/PostgREST reload confirmed in the operator environment.
+- [ ] Repaired synthetic Preview acceptance confirms all four deterministic mappings and expected replay/revision behavior.
+- [ ] Repaired NVD Preview collection completes successfully on the current code head.
+- [ ] Final two-user browser isolation and no-analytical-side-effect checks completed.
 - [ ] Phase 2.3D taxonomy/alias/entity normalization, EPSS prioritization, matching, relevance/global priority, Global View population, alerts, discovery, and AI briefs remain later-phase work.
