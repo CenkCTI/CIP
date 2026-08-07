@@ -15,9 +15,9 @@ alter table public.attribution_evidence_evaluations
   alter column campaign_id drop not null,
   alter column diagnostic_value set default 'MEDIUM';
 
--- Free-form clues are valid analytical observations even before supporting
--- material is linked. Keep legacy inline references bounded to at most one;
--- additional references live in attribution_evidence_item_links below.
+-- Investigation-scoped clues may be free-form before supporting material is
+-- linked. Legacy Campaign-scoped evidence preserves the Phase 2.1E exact-one
+-- inline reference contract so existing Campaign routes retain their semantics.
 do $$
 declare c record;
 begin
@@ -38,16 +38,33 @@ end $$;
 alter table public.attribution_evidence_items
   add constraint attribution_evidence_items_reference_count_check
   check (
-    num_nonnulls(
-      source_id,
-      evidence_id,
-      timeline_event_id,
-      infrastructure_cluster_id,
-      indicator_id,
-      enrichment_result_id,
-      malware_id,
-      mitre_technique_id
-    ) <= 1
+    (
+      campaign_id is not null
+      and num_nonnulls(
+        source_id,
+        evidence_id,
+        timeline_event_id,
+        infrastructure_cluster_id,
+        indicator_id,
+        enrichment_result_id,
+        malware_id,
+        mitre_technique_id
+      ) = 1
+    )
+    or
+    (
+      campaign_id is null
+      and num_nonnulls(
+        source_id,
+        evidence_id,
+        timeline_event_id,
+        infrastructure_cluster_id,
+        indicator_id,
+        enrichment_result_id,
+        malware_id,
+        mitre_technique_id
+      ) <= 1
+    )
   );
 
 -- Investigation-scoped rows must still be unique per referenced object.
