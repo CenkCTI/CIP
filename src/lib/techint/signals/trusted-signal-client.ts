@@ -2,21 +2,8 @@ import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { recordTechnicalSignalResultSchema, recordTechnicalSignalSchema, type RecordTechnicalSignalInput } from "./schema";
 
-const SAFE_RECORDER_SQLSTATES = new Set([
-  "22007",
-  "22008",
-  "22023",
-  "22P02",
-  "23503",
-  "23505",
-  "23514",
-  "55000",
-  "P0001",
-  "P0002",
-]);
-
 function safeRecorderSqlState(value: unknown): string | null {
-  return typeof value === "string" && SAFE_RECORDER_SQLSTATES.has(value) ? value : null;
+  return typeof value === "string" && /^[0-9A-Z]{5}$/.test(value) ? value : null;
 }
 
 export class TechnicalSignalRecordError extends Error {
