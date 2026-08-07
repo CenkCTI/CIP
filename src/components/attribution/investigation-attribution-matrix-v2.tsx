@@ -760,6 +760,16 @@ export function InvestigationAttributionMatrix({
   const matrixScrollRef = useRef<HTMLDivElement>(null);
   const [openCell, setOpenCell] = useState<string | null>(null);
   const [panel, setPanel] = useState<Panel>(null);
+  const hypothesisOrdinals = new Map(
+    hypotheses.map((hypothesis, index) => [s(hypothesis.id), index + 1]),
+  );
+  const hypothesisAnalysisSections = [
+    ["analytic_rationale", "Analytic rationale"],
+    ["key_assumptions", "Key assumptions"],
+    ["known_weaknesses", "Known weaknesses"],
+    ["information_gaps", "Information gaps"],
+    ["status_rationale", "Status rationale"],
+  ] as const;
 
   const closePanel = () => setPanel(null);
   const scrollMatrix = (direction: -1 | 1) => {
@@ -984,47 +994,28 @@ export function InvestigationAttributionMatrix({
         </details>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-3">
-        <article className="card">
-          <p className="citem-label">Key assumptions</p>
-          <div className="mt-3 grid gap-3 text-sm text-stone-300">
-            {hypotheses
-              .filter((hypothesis) => s(hypothesis.key_assumptions))
-              .map((hypothesis, index) => (
-                <div key={s(hypothesis.id)}>
-                  <strong className="text-xs text-cyan-300">
-                    H{index + 1} · {s(hypothesis.title)}
-                  </strong>
-                  <p className="mt-1 whitespace-pre-wrap">
-                    {s(hypothesis.key_assumptions)}
-                  </p>
-                </div>
-              ))}
-            {!hypotheses.some((hypothesis) => s(hypothesis.key_assumptions)) ? (
-              <p className="text-stone-500">None recorded.</p>
-            ) : null}
-          </div>
-        </article>
-        <article className="card">
-          <p className="citem-label">Information gaps</p>
-          <div className="mt-3 grid gap-3 text-sm text-stone-300">
-            {hypotheses
-              .filter((hypothesis) => s(hypothesis.information_gaps))
-              .map((hypothesis, index) => (
-                <div key={s(hypothesis.id)}>
-                  <strong className="text-xs text-cyan-300">
-                    H{index + 1} · {s(hypothesis.title)}
-                  </strong>
-                  <p className="mt-1 whitespace-pre-wrap">
-                    {s(hypothesis.information_gaps)}
-                  </p>
-                </div>
-              ))}
-            {!hypotheses.some((hypothesis) => s(hypothesis.information_gaps)) ? (
-              <p className="text-stone-500">None recorded.</p>
-            ) : null}
-          </div>
-        </article>
+      <section className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        {hypothesisAnalysisSections.map(([field, label]) => {
+          const rows = hypotheses.filter((hypothesis) => s(hypothesis[field]));
+          return (
+            <article className="card" key={field}>
+              <p className="citem-label">{label}</p>
+              <div className="mt-3 grid gap-3 text-sm text-stone-300">
+                {rows.map((hypothesis) => (
+                  <div key={s(hypothesis.id)}>
+                    <strong className="text-xs text-cyan-300">
+                      H{hypothesisOrdinals.get(s(hypothesis.id)) ?? "?"} · {s(hypothesis.title)}
+                    </strong>
+                    <p className="mt-1 whitespace-pre-wrap">
+                      {s(hypothesis[field])}
+                    </p>
+                  </div>
+                ))}
+                {!rows.length ? <p className="text-stone-500">None recorded.</p> : null}
+              </div>
+            </article>
+          );
+        })}
         <article className="card">
           <p className="citem-label">Alternative explanations</p>
           <p className="mt-3 whitespace-pre-wrap text-sm text-stone-300">
