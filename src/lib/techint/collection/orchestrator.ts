@@ -25,6 +25,12 @@ function recorderDiagnosticCode(error: unknown): string | null {
     const value = (error as { safeRpcCode?: unknown }).safeRpcCode;
     if (typeof value === "string" && /^PGRST[0-9A-Z]{3}$/.test(value)) return `RECORDER_RPC_${value}`;
   }
+  if ("stage" in error) {
+    const value = (error as { stage?: unknown }).stage;
+    if (value === "TRANSPORT") return "RECORDER_TRANSPORT";
+    if (value === "RPC_UNCLASSIFIED") return "RECORDER_RPC_UNCLASSIFIED";
+    if (value === "RESULT_SCHEMA") return "RECORDER_RESULT_SCHEMA";
+  }
   return null;
 }
 
