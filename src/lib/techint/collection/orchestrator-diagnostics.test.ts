@@ -92,7 +92,7 @@ describe("TechINT collection failure diagnostics", () => {
   });
 
   it("stores only a structured recorder SQLSTATE classification, never raw database details", async () => {
-    const error = Object.assign(new Error("violates confidential constraint technical_signal_secret"), { safeSqlState: "23514", safeRpcCode: null });
+    const error = Object.assign(new Error("violates confidential constraint technical_signal_secret"), { safeSqlState: "23514", safeRpcCode: null, stage: null });
     mocks.recordTechnicalSignal.mockRejectedValue(error);
     mocks.failTechnicalCollection.mockResolvedValue({ run_id: claim.run_id, status: "FAILED" });
 
@@ -112,7 +112,7 @@ describe("TechINT collection failure diagnostics", () => {
   });
 
   it("stores only a structured PostgREST code when the recorder fails before a SQLSTATE is available", async () => {
-    const error = Object.assign(new Error("sensitive PostgREST detail"), { safeSqlState: null, safeRpcCode: "PGRST116" });
+    const error = Object.assign(new Error("sensitive PostgREST detail"), { safeSqlState: null, safeRpcCode: "PGRST116", stage: null });
     mocks.recordTechnicalSignal.mockRejectedValue(error);
     mocks.failTechnicalCollection.mockResolvedValue({ run_id: claim.run_id, status: "FAILED" });
 
@@ -128,5 +128,27 @@ describe("TechINT collection failure diagnostics", () => {
       }],
     }));
     expect(JSON.stringify(mocks.failTechnicalCollection.mock.calls)).not.toContain("sensitive PostgREST detail");
+  });
+
+  it.each([
+    ["TRANSPORT", "RECORDER_TRANSPORT"],
+    ["RPC_UNCLASSIFIED", "RECORDER_RPC_UNCLASSIFIED"],
+    ["RESULT_SCHEMA", "RECORDER_RESULT_SCHEMA"],
+  ] as const)("classifies %s failures without retaining raw details", async (stage, expectedCode) => {
+    const error = Object.assign(new Error("sensitive recorder detail"), { safeSqlState: null, safeRpcCode: null, stage });
+    mocks.recordTechnicalSignal.mockRejectedValue(error);
+    mocks.failTechnicalCollection.mockResolvedValue({ run_id: claim.run_id, status: "FAILED" });
+
+    await runClaimedTechnicalCollection(claim, vi.fn() as unknown as typeof fetch);
+
+    expect(mocks.failTechnicalCollection).toHaveBeenCalledWith(expect.objectContaining({
+      issues: [{
+        kind: "ERROR",
+        code: expectedCode,
+        message: "A mapped Technical Signal could not be recorded.",
+        sourceRecordKey: "CVE-2099-12001",
+      }],
+    }));
+    expect(JSON.stringify(mocks.failTechnicalCollection.mock.calls)).not.toContain("sensitive recorder detail");
   });
 });
