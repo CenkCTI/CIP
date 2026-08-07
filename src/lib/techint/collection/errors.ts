@@ -25,6 +25,7 @@ export class CollectionError extends Error {
   constructor(
     readonly code: CollectionErrorCode,
     message: string,
+    readonly sourceRecordKey?: string | null,
   ) {
     super(message.slice(0, 500));
     this.name = "CollectionError";
