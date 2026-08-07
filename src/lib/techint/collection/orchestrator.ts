@@ -15,6 +15,12 @@ function concurrency(env: NodeJS.ProcessEnv = process.env) {
   return value;
 }
 
+function recorderDiagnosticCode(error: unknown): string | null {
+  if (!error || typeof error !== "object" || !("safeSqlState" in error)) return null;
+  const value = (error as { safeSqlState?: unknown }).safeSqlState;
+  return typeof value === "string" && /^[0-9A-Z]{5}$/.test(value) ? `RECORDER_SQLSTATE_${value}` : null;
+}
+
 async function mapLimit<T>(items: T[], limit: number, worker: (item: T) => Promise<void>) {
   for (let index = 0; index < items.length; index += limit) {
     const settled = await Promise.allSettled(items.slice(index, index + limit).map(worker));
@@ -49,11 +55,12 @@ export async function runClaimedTechnicalCollection(rawClaim: unknown, fetchImpl
       let recorded;
       try {
         recorded = await recordTechnicalSignal({ actorId: claim.owner_id, ...mapped });
-      } catch {
+      } catch (error) {
         throw new CollectionError(
           "SIGNAL_RECORDING_FAILED",
           "A mapped Technical Signal could not be recorded.",
           mapped.observation.sourceRecordKey,
+          recorderDiagnosticCode(error),
         );
       }
       if (recorded.signal_created) counters.signalsCreated += 1;
@@ -77,7 +84,7 @@ export async function runClaimedTechnicalCollection(rawClaim: unknown, fetchImpl
     if (controlled.sourceRecordKey) {
       const failureIssue = {
         kind: "ERROR" as const,
-        code: controlled.code,
+        code: controlled.diagnosticCode ?? controlled.code,
         message: controlled.message,
         sourceRecordKey: controlled.sourceRecordKey.slice(0, 300),
       };
