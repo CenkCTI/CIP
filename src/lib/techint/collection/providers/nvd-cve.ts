@@ -128,6 +128,13 @@ function fitFacts(input: {
   return facts;
 }
 
+export function nvdMappingIssueCode(error: unknown): string {
+  if (error instanceof z.ZodError) return "INVALID_NVD_SCHEMA";
+  if (error instanceof Error && error.message === "INVALID_TIMESTAMP") return "INVALID_NVD_TIMESTAMP";
+  if (error instanceof Error && error.message === "NVD_NORMALIZED_RECORD_TOO_LARGE") return "NVD_NORMALIZED_RECORD_TOO_LARGE";
+  return "INVALID_NVD_RECORD";
+}
+
 export function mapNvdCve(raw: unknown, receivedAt: string): MappedTechnicalSignal {
   const cve = cveSchema.parse(raw);
   const publishedAt = canonicalInstant(cve.published);
@@ -298,9 +305,9 @@ export const nvdCveAdapter: TechnicalSourceAdapter = {
     for (const raw of records) {
       try {
         signals.push(mapNvdCve(raw, context.now.toISOString()));
-      } catch {
+      } catch (error) {
         const key = typeof raw === "object" && raw && "id" in raw ? String((raw as { id?: unknown }).id ?? "") : null;
-        issues.push(safeIssue("INVALID_NVD_RECORD", "A malformed NVD CVE record was skipped.", key));
+        issues.push(safeIssue(nvdMappingIssueCode(error), "A malformed NVD CVE record was skipped.", key));
       }
     }
     return {
