@@ -10,7 +10,7 @@
 - [x] Unit tests added for validation and authorization-related helpers.
 - [x] Phase 1 SQL migration applied in Supabase, manually verified by the repository owner on the live deployment at https://cip-omega.vercel.app.
 - [x] Real account registration, sign-in, and sign-out manually verified by the repository owner on the live deployment.
-- [x] Project create, read, edit, delete, persistence after refresh/re-sign-in, and real dashboard counts manually verified by the repository owner against the configured Supabase/Vercel environment.
+- [x] Project create, read, edit, delete, persistence after refresh/re-sign-in, and real dashboard counts manually verified by the repository owner on the live deployment.
 - [x] Cross-user project isolation manually verified by the repository owner: a second user cannot see or directly access the first user's project.
 - [x] Production Vercel deployment manually verified by the repository owner.
 
@@ -156,8 +156,10 @@ Implemented in migration 021 and Campaign-owned attribution routes: competing hy
 ## Phase 2.2A — Research Sources and Secure Feed Ingestion
 Implemented on migration 023: Investigation-scoped feed lifecycle UI, explicit server-only fetches, DNS-pinned SSRF/redirect controls, bounded RSS/Atom parsing, canonical normalized items, URL/content fingerprints, cross-feed observations, atomic leases/finalization, safe health/errors, and complete owner-scoped RLS. Live Supabase acceptance remains required; Research Inbox and scheduling are excluded. See `docs/PHASE_2_2A.md`.
 
+
 ## Phase 2.2B
 Implementation adds the owner-scoped global OSINT feed, scheduled collection boundary, triage, and explicit Investigation linking. See [Phase 2.2B](PHASE_2_2B.md). Phase 2.2A live acceptance was owner-confirmed before PR #24 merged.
+
 
 ## Phase 2.2B.1
 Secure JSON Feed 1.1 (with version 1 compatibility) extends the existing global and Investigation-scoped feed workflows through migration 026. Phase 2.2B live acceptance was authoritatively confirmed by the project owner before this phase began. See [Phase 2.2B.1](PHASE_2_2B1.md).
@@ -169,23 +171,28 @@ Provider-independent IOC adapter contracts, owner-local canonical candidates and
 Implemented: fixed read-only ThreatFox Community API synchronization, encrypted owner credentials, bounded lookback, provenance, scheduler support, and analyst-controlled acceptance. Migration: `202607310028_phase2_2c1_threatfox_connector.sql`.
 
 ## Phase 2.2C.2 — Manual incremental synchronization implemented
-Manual ThreatFox synchronization uses the provider-independent incremental contract, cursor v2/legacy upgrade, strict delta diagnostics, and atomic completion without migration 029.
+Manual ThreatFox synchronization uses the provider-independent incremental contract, cursor v2/legacy upgrade, strict delta diagnostics, and atomic completion without migration 029. Automatic scheduling and automatic Inbox refresh are deferred until an operator-controlled deployment is available. URLhaus and OTX remain future work.
 
 ## Phase 2.3A — TechINT Shell and Intel Profile Foundation
-- [x] Top-level TechINT shell and locked navigation implemented: Global View, Profiles, InvestINT.
-- [x] Owner-scoped `intel_profiles`, `intel_profile_items`, and `intel_profile_audit_events` implemented in migration 031.
-- [x] STANDALONE and INVESTIGATION profile separation implemented with deterministic Investigation refresh from existing local CTI.
-- [x] Strict status transitions, trusted RPCs, audit, indicator validation/normalization, and URL case preservation implemented.
-- [ ] Migration 031 live/operator acceptance remains pending unless separately confirmed.
+
+- [x] TechINT top-level navigation shell added with Global View, Profiles, and InvestINT.
+- [x] Additive migration 031 authored for owner-scoped Intel Profiles, profile items, audit events, RLS, constraints, and append-only audit access.
+- [x] Standalone and Investigation-linked profile UI/actions added with explicit separation.
+- [x] Investigation Intel Profile workspace route added with deterministic local refresh from existing Investigation CTI records.
+- [ ] Technical signal collection, provider ingestion, matching, prioritization, alerts, Global View intelligence, and AI briefs remain intentionally out of scope for later phases.
+- [x] PR #32 repair tightened TechINT mutations behind service-role trusted RPCs, made audit writes transactional, preserved excluded/removed item identities across refresh, and replaced the static migration check with a PostgreSQL execution harness.
+- [x] Final PR #32 hardening enforces strict TechINT profile status transitions and database-authoritative Indicator validation/normalization with URL path/query case preservation.
+- [x] Compatibility repair skips unsupported `FILE`/`REGISTRY` and malformed legacy Investigation Indicators during TechINT seeding without aborting profile creation or refresh.
 
 ## Phase 2.3B — Canonical Technical Signal Backbone
-- [x] Canonical Technical Signal, immutable source observations, immutable revisions, and source-backed entity assertions implemented in migration 032.
-- [x] Provider-independent canonical key and deterministic PostgreSQL fingerprint/identity contracts implemented.
-- [x] Temporal CURRENT/SUPPORTING/STALE/CONFLICTING semantics and supporting-watermark regression implemented.
+
+- [x] Provider-independent canonical signal schema authored in additive migration 032.
+- [x] Immutable, idempotent source observations and current/supporting/stale/conflicting classification implemented.
+- [x] Immutable canonical revisions and deterministic change-history foundation implemented.
 - [x] Source-backed entity assertion foundation implemented without canonical entity resolution.
 - [x] Service-role-only transactional trusted recording RPC and narrow server-only client implemented.
 - [ ] Source adapters/collection, Global View population, profile matching, priority scoring, alerts, AI briefs, and discovery remain later-phase work.
-- [ ] Migration 032 live application and operator-authorized acceptance remain pending unless separately confirmed.
+- [ ] Migration 032 live application and operator-authorized acceptance remain pending.
 
 ## Phase 2.3C — Technical Source Pack and Collection Operations
 
