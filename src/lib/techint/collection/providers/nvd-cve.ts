@@ -8,12 +8,13 @@ import { fetchBoundedJson } from "../transport";
 import type { AdapterCollectionResult, MappedTechnicalSignal, TechnicalSourceAdapter } from "../types";
 
 export const NVD_CVE_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0";
-const INITIAL_PAGE_SIZE = 500;
+const INITIAL_PAGE_SIZE = 250;
 const MIN_PAGE_SIZE = 125;
 const PAGE_LIMIT = 20;
 const REQUEST_LIMIT = 20;
 const RECORD_LIMIT = 2000;
 const REQUEST_DELAY_MS = 6500;
+const REQUEST_TIMEOUT_MS = 30000;
 const RESPONSE_LIMIT_BYTES = 8 * 1024 * 1024;
 const OVERLAP_MS = 5 * 60 * 1000;
 const MAX_WINDOW_MS = 120 * 24 * 60 * 60 * 1000;
@@ -238,12 +239,17 @@ async function fetchNvdPages(context: Parameters<TechnicalSourceAdapter["collect
           allowedHost: "services.nvd.nist.gov",
           allowedPath: "/rest/json/cves/2.0",
           maxBytes: RESPONSE_LIMIT_BYTES,
+          timeoutMs: REQUEST_TIMEOUT_MS,
           headers: apiKey ? { apiKey } : undefined,
           fetchImpl: context.fetchImpl,
         });
         break;
       } catch (error) {
-        if (error instanceof CollectionError && error.code === "HTTP_BODY_TOO_LARGE" && pageSize > MIN_PAGE_SIZE) {
+        if (
+          error instanceof CollectionError &&
+          (error.code === "HTTP_BODY_TOO_LARGE" || error.code === "HTTP_TIMEOUT") &&
+          pageSize > MIN_PAGE_SIZE
+        ) {
           pageSize = Math.max(MIN_PAGE_SIZE, Math.floor(pageSize / 2));
           continue;
         }
