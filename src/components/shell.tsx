@@ -44,11 +44,11 @@ export function AppShell({
 
       <div className="citem-main">
         <header className="citem-topbar">
-          <p className="font-mono text-[0.78rem] font-semibold tracking-[0.48em] text-[#b9822f] sm:text-[0.86rem]">
+          <p className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[0.98rem] font-semibold tracking-[0.62em] text-[#b9822f] sm:text-[1.08rem] md:text-[1.18rem] lg:text-[1.28rem] max-[460px]:relative max-[460px]:left-auto max-[460px]:mx-auto max-[460px]:translate-x-0 max-[460px]:text-[0.86rem] max-[460px]:tracking-[0.4em]">
             B A Y K U S H
           </p>
 
-          <div className="citem-topbar-actions">
+          <div className="citem-topbar-actions ml-auto max-[460px]:ml-0">
             <span className="citem-user" title={email}>{email}</span>
             <form action={signOut}>
               <button className="citem-button-ghost" type="submit">Sign out</button>
