@@ -8,9 +8,10 @@ import { fetchBoundedJson } from "../transport";
 import type { AdapterCollectionResult, MappedTechnicalSignal, TechnicalSourceAdapter } from "../types";
 
 export const NVD_CVE_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0";
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 2000;
 const PAGE_LIMIT = 20;
 const RECORD_LIMIT = 2000;
+const REQUEST_DELAY_MS = 6000;
 const OVERLAP_MS = 5 * 60 * 1000;
 const MAX_WINDOW_MS = 120 * 24 * 60 * 60 * 1000;
 
@@ -194,6 +195,10 @@ export function nvdWindow(now: Date, cursor: unknown, initialLookbackHours: numb
   return { start: start.toISOString(), end: boundedEnd.toISOString() };
 }
 
+async function sleep(ms: number) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function fetchNvdPages(context: Parameters<TechnicalSourceAdapter["collect"]>[0]) {
   const settings = z.object({ initialLookbackHours: z.number().int().min(1).max(168).optional().default(24) }).strict().parse(context.settings);
   const window = nvdWindow(context.now, context.cursor, settings.initialLookbackHours);
@@ -203,6 +208,8 @@ async function fetchNvdPages(context: Parameters<TechnicalSourceAdapter["collect
   let totalResults = Number.POSITIVE_INFINITY;
   while (startIndex < totalResults) {
     if (page >= PAGE_LIMIT) throw new CollectionError("PAGE_LIMIT_EXCEEDED", "The NVD page limit was exceeded.");
+    if (page > 0) await sleep(REQUEST_DELAY_MS);
+
     const url = new URL(NVD_CVE_URL);
     url.searchParams.set("lastModStartDate", window.start);
     url.searchParams.set("lastModEndDate", window.end);
@@ -220,6 +227,9 @@ async function fetchNvdPages(context: Parameters<TechnicalSourceAdapter["collect
     const parsed = pageSchema.parse(response.json);
     if (parsed.startIndex !== startIndex) throw new CollectionError("INVALID_SOURCE_RESPONSE", "NVD pagination was inconsistent.");
     totalResults = parsed.totalResults;
+    if (totalResults > RECORD_LIMIT) {
+      throw new CollectionError("ITEM_LIMIT_EXCEEDED", "The NVD result window exceeded the 2,000-record run limit.");
+    }
     for (const wrapper of parsed.vulnerabilities) {
       records.push(wrapper.cve);
       if (records.length > RECORD_LIMIT) throw new CollectionError("ITEM_LIMIT_EXCEEDED", "The NVD record limit was exceeded.");
