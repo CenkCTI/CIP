@@ -68,3 +68,33 @@ revoke all on function public.technical_signal_validate_canonical_key(
   text,
   text
 ) from public, anon, authenticated, service_role;
+
+-- Non-mutating executable regression assertions for the exact live failure class.
+do $$
+begin
+  perform public.technical_signal_validate_canonical_key(
+    'TECHNICAL_ADVISORY',
+    'advisory:test-synthetic:advisory-001',
+    'test-synthetic',
+    'advisory-001'
+  );
+  perform public.technical_signal_validate_canonical_key(
+    'TECHNICAL_REPORT',
+    'report:test-synthetic:report-001',
+    'test-synthetic',
+    'report-001'
+  );
+
+  begin
+    perform public.technical_signal_validate_canonical_key(
+      'TECHNICAL_ADVISORY',
+      'advisory:test-synthetic:advisory-001',
+      'different-source',
+      'advisory-001'
+    );
+    raise exception 'SOURCE_DEFINED_KEY_MISMATCH_ACCEPTED';
+  exception
+    when invalid_parameter_value then null;
+  end;
+end
+$$;
