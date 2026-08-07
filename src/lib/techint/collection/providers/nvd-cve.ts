@@ -8,10 +8,13 @@ import { fetchBoundedJson } from "../transport";
 import type { AdapterCollectionResult, MappedTechnicalSignal, TechnicalSourceAdapter } from "../types";
 
 export const NVD_CVE_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0";
-const PAGE_SIZE = 2000;
+const INITIAL_PAGE_SIZE = 500;
+const MIN_PAGE_SIZE = 125;
 const PAGE_LIMIT = 20;
+const REQUEST_LIMIT = 20;
 const RECORD_LIMIT = 2000;
-const REQUEST_DELAY_MS = 6000;
+const REQUEST_DELAY_MS = 6500;
+const RESPONSE_LIMIT_BYTES = 8 * 1024 * 1024;
 const OVERLAP_MS = 5 * 60 * 1000;
 const MAX_WINDOW_MS = 120 * 24 * 60 * 60 * 1000;
 
@@ -203,29 +206,55 @@ async function fetchNvdPages(context: Parameters<TechnicalSourceAdapter["collect
   const settings = z.object({ initialLookbackHours: z.number().int().min(1).max(168).optional().default(24) }).strict().parse(context.settings);
   const window = nvdWindow(context.now, context.cursor, settings.initialLookbackHours);
   const records: unknown[] = [];
-  let page = 0;
+  let successfulPages = 0;
+  let requestCount = 0;
   let startIndex = 0;
   let totalResults = Number.POSITIVE_INFINITY;
-  while (startIndex < totalResults) {
-    if (page >= PAGE_LIMIT) throw new CollectionError("PAGE_LIMIT_EXCEEDED", "The NVD page limit was exceeded.");
-    if (page > 0) await sleep(REQUEST_DELAY_MS);
+  let pageSize = INITIAL_PAGE_SIZE;
 
-    const url = new URL(NVD_CVE_URL);
-    url.searchParams.set("lastModStartDate", window.start);
-    url.searchParams.set("lastModEndDate", window.end);
-    url.searchParams.set("startIndex", String(startIndex));
-    url.searchParams.set("resultsPerPage", String(PAGE_SIZE));
-    const apiKey = process.env.NVD_API_KEY;
-    const response = await fetchBoundedJson({
-      url,
-      allowedHost: "services.nvd.nist.gov",
-      allowedPath: "/rest/json/cves/2.0",
-      maxBytes: 8 * 1024 * 1024,
-      headers: apiKey ? { apiKey } : undefined,
-      fetchImpl: context.fetchImpl,
-    });
+  while (startIndex < totalResults) {
+    if (successfulPages >= PAGE_LIMIT || requestCount >= REQUEST_LIMIT) {
+      throw new CollectionError("PAGE_LIMIT_EXCEEDED", "The NVD request/page limit was exceeded.");
+    }
+
+    let response: Awaited<ReturnType<typeof fetchBoundedJson>>;
+    while (true) {
+      if (requestCount >= REQUEST_LIMIT) {
+        throw new CollectionError("PAGE_LIMIT_EXCEEDED", "The NVD request/page limit was exceeded.");
+      }
+      if (requestCount > 0) await sleep(REQUEST_DELAY_MS);
+
+      const url = new URL(NVD_CVE_URL);
+      url.searchParams.set("lastModStartDate", window.start);
+      url.searchParams.set("lastModEndDate", window.end);
+      url.searchParams.set("startIndex", String(startIndex));
+      url.searchParams.set("resultsPerPage", String(pageSize));
+      const apiKey = process.env.NVD_API_KEY;
+
+      requestCount += 1;
+      try {
+        response = await fetchBoundedJson({
+          url,
+          allowedHost: "services.nvd.nist.gov",
+          allowedPath: "/rest/json/cves/2.0",
+          maxBytes: RESPONSE_LIMIT_BYTES,
+          headers: apiKey ? { apiKey } : undefined,
+          fetchImpl: context.fetchImpl,
+        });
+        break;
+      } catch (error) {
+        if (error instanceof CollectionError && error.code === "HTTP_BODY_TOO_LARGE" && pageSize > MIN_PAGE_SIZE) {
+          pageSize = Math.max(MIN_PAGE_SIZE, Math.floor(pageSize / 2));
+          continue;
+        }
+        throw error;
+      }
+    }
+
     const parsed = pageSchema.parse(response.json);
-    if (parsed.startIndex !== startIndex) throw new CollectionError("INVALID_SOURCE_RESPONSE", "NVD pagination was inconsistent.");
+    if (parsed.startIndex !== startIndex || parsed.resultsPerPage > pageSize || parsed.vulnerabilities.length > pageSize) {
+      throw new CollectionError("INVALID_SOURCE_RESPONSE", "NVD pagination was inconsistent.");
+    }
     totalResults = parsed.totalResults;
     if (totalResults > RECORD_LIMIT) {
       throw new CollectionError("ITEM_LIMIT_EXCEEDED", "The NVD result window exceeded the 2,000-record run limit.");
@@ -237,7 +266,7 @@ async function fetchNvdPages(context: Parameters<TechnicalSourceAdapter["collect
     const advanced = parsed.vulnerabilities.length;
     if (advanced === 0) break;
     startIndex += advanced;
-    page += 1;
+    successfulPages += 1;
   }
   return { records, window };
 }
