@@ -50,7 +50,11 @@ export async function runClaimedTechnicalCollection(rawClaim: unknown, fetchImpl
       try {
         recorded = await recordTechnicalSignal({ actorId: claim.owner_id, ...mapped });
       } catch {
-        throw new CollectionError("SIGNAL_RECORDING_FAILED", "A mapped Technical Signal could not be recorded.");
+        throw new CollectionError(
+          "SIGNAL_RECORDING_FAILED",
+          "A mapped Technical Signal could not be recorded.",
+          mapped.observation.sourceRecordKey,
+        );
       }
       if (recorded.signal_created) counters.signalsCreated += 1;
       if (recorded.observation_created) counters.observationsCreated += 1;
@@ -70,6 +74,15 @@ export async function runClaimedTechnicalCollection(rawClaim: unknown, fetchImpl
   } catch (error) {
     const controlled = controlledCollectionError(error);
     counters.failedRecords = Math.max(1, counters.failedRecords);
+    if (controlled.sourceRecordKey) {
+      const failureIssue = {
+        kind: "ERROR" as const,
+        code: controlled.code,
+        message: controlled.message,
+        sourceRecordKey: controlled.sourceRecordKey.slice(0, 300),
+      };
+      issues = [...issues.slice(0, 99), failureIssue];
+    }
     try {
       await failTechnicalCollection({
         runId: claim.run_id,
