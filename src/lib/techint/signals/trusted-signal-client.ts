@@ -6,8 +6,15 @@ export function safeRecorderSqlState(value: unknown): string | null {
   return typeof value === "string" && /^[0-9A-Z]{5}$/.test(value) ? value : null;
 }
 
+export function safeRecorderRpcCode(value: unknown): string | null {
+  return typeof value === "string" && /^PGRST[0-9A-Z]{3}$/.test(value) ? value : null;
+}
+
 export class TechnicalSignalRecordError extends Error {
-  constructor(readonly safeSqlState: string | null) {
+  constructor(
+    readonly safeSqlState: string | null,
+    readonly safeRpcCode: string | null,
+  ) {
     super("Technical Signal could not be recorded.");
     this.name = "TechnicalSignalRecordError";
   }
@@ -20,7 +27,7 @@ export async function recordTechnicalSignal(input: RecordTechnicalSignalInput) {
   if (!url || !key) throw new Error("Technical Signal trusted workflow is not configured.");
   const client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
   const { data, error } = await client.rpc("record_technical_signal", { p_actor: parsed.actorId, p_signal: parsed.signal, p_observation: parsed.observation, p_entity_assertions: parsed.entityAssertions });
-  if (error) throw new TechnicalSignalRecordError(safeRecorderSqlState(error.code));
+  if (error) throw new TechnicalSignalRecordError(safeRecorderSqlState(error.code), safeRecorderRpcCode(error.code));
   const result = recordTechnicalSignalResultSchema.safeParse(data);
   if (!result.success) throw new Error("Technical Signal returned an invalid result.");
   return result.data;
