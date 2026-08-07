@@ -26,6 +26,7 @@ export class CollectionError extends Error {
     readonly code: CollectionErrorCode,
     message: string,
     readonly sourceRecordKey?: string | null,
+    readonly diagnosticCode?: string | null,
   ) {
     super(message.slice(0, 500));
     this.name = "CollectionError";
