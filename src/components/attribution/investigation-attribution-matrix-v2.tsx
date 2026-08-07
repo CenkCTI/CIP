@@ -514,16 +514,10 @@ function MatrixCell({
   const clueId = s(clue.id);
 
   useEffect(() => {
-    setCurrentImpact(s(evaluation?.impact));
-    setDiagnosticValue(s(evaluation?.diagnostic_value) || "MEDIUM");
-    setRationale(s(evaluation?.rationale));
-  }, [evaluation?.impact, evaluation?.diagnostic_value, evaluation?.rationale]);
-
-  useEffect(() => {
     if (!open || !buttonRef.current) return;
     const rect = buttonRef.current.getBoundingClientRect();
     const width = 272;
-    const estimatedHeight = evaluation ? 390 : 205;
+    const estimatedHeight = currentImpact ? 390 : 205;
     const left = Math.max(
       12,
       Math.min(rect.left, window.innerWidth - width - 12),
@@ -542,7 +536,7 @@ function MatrixCell({
       window.removeEventListener("resize", closeOnViewportMove);
       window.removeEventListener("scroll", closeOnViewportMove, true);
     };
-  }, [open, evaluation, onClose]);
+  }, [open, currentImpact, onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -590,10 +584,14 @@ function MatrixCell({
 
   async function clearImpact() {
     if (pending) return;
-    const previous = currentImpact;
+    const previousImpact = currentImpact;
+    const previousDiagnostic = diagnosticValue;
+    const previousRationale = rationale;
     setError(null);
     setPending(true);
     setCurrentImpact("");
+    setDiagnosticValue("MEDIUM");
+    setRationale("");
     onClose();
     const result = await clearAttributionCell(
       projectId,
@@ -603,7 +601,9 @@ function MatrixCell({
       new FormData(),
     );
     if (result.error) {
-      setCurrentImpact(previous);
+      setCurrentImpact(previousImpact);
+      setDiagnosticValue(previousDiagnostic);
+      setRationale(previousRationale);
       setError(result.error);
     }
     setPending(false);
