@@ -91,8 +91,8 @@ describe("TechINT collection failure diagnostics", () => {
     expect(JSON.stringify(mocks.failTechnicalCollection.mock.calls)).not.toContain("sensitive database detail");
   });
 
-  it("stores only an allowlisted recorder SQLSTATE classification, never raw database details", async () => {
-    const error = Object.assign(new Error("violates confidential constraint technical_signal_secret"), { safeSqlState: "23514" });
+  it("stores only a structured recorder SQLSTATE classification, never raw database details", async () => {
+    const error = Object.assign(new Error("violates confidential constraint technical_signal_secret"), { safeSqlState: "23514", safeRpcCode: null });
     mocks.recordTechnicalSignal.mockRejectedValue(error);
     mocks.failTechnicalCollection.mockResolvedValue({ run_id: claim.run_id, status: "FAILED" });
 
@@ -109,5 +109,24 @@ describe("TechINT collection failure diagnostics", () => {
       }],
     }));
     expect(JSON.stringify(mocks.failTechnicalCollection.mock.calls)).not.toContain("technical_signal_secret");
+  });
+
+  it("stores only a structured PostgREST code when the recorder fails before a SQLSTATE is available", async () => {
+    const error = Object.assign(new Error("sensitive PostgREST detail"), { safeSqlState: null, safeRpcCode: "PGRST116" });
+    mocks.recordTechnicalSignal.mockRejectedValue(error);
+    mocks.failTechnicalCollection.mockResolvedValue({ run_id: claim.run_id, status: "FAILED" });
+
+    await runClaimedTechnicalCollection(claim, vi.fn() as unknown as typeof fetch);
+
+    expect(mocks.failTechnicalCollection).toHaveBeenCalledWith(expect.objectContaining({
+      errorCode: "SIGNAL_RECORDING_FAILED",
+      issues: [{
+        kind: "ERROR",
+        code: "RECORDER_RPC_PGRST116",
+        message: "A mapped Technical Signal could not be recorded.",
+        sourceRecordKey: "CVE-2099-12001",
+      }],
+    }));
+    expect(JSON.stringify(mocks.failTechnicalCollection.mock.calls)).not.toContain("sensitive PostgREST detail");
   });
 });
