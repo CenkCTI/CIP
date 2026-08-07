@@ -87,7 +87,7 @@ export default async function InvestigationAttributionPage({
     supabase.from("indicators").select("id,value,type").eq("project_id", id),
     supabase
       .from("enrichment_results")
-      .select("id,provider_key,category,queried_at,indicator_id")
+      .select("id,category,queried_at,indicator_id")
       .eq("project_id", id),
     supabase.from("malware").select("id,name").eq("project_id", id),
     supabase
@@ -96,25 +96,28 @@ export default async function InvestigationAttributionPage({
       .eq("project_id", id),
   ]);
 
-  if (
-    [
-      hypotheses,
-      clues,
-      evaluations,
-      assessment,
-      clueLinks,
-      actors,
-      campaigns,
-      sources,
-      evidenceRecords,
-      events,
-      clusters,
-      indicators,
-      enrichments,
-      malware,
-      mitre,
-    ].some((result) => result.error)
-  ) {
+  const queryResults = [
+    ["hypotheses", hypotheses],
+    ["clues", clues],
+    ["evaluations", evaluations],
+    ["assessment", assessment],
+    ["clue links", clueLinks],
+    ["actors", actors],
+    ["campaigns", campaigns],
+    ["sources", sources],
+    ["evidence", evidenceRecords],
+    ["timeline", events],
+    ["infrastructure", clusters],
+    ["indicators", indicators],
+    ["enrichments", enrichments],
+    ["malware", malware],
+    ["MITRE", mitre],
+  ] as const;
+  const failedQueries = queryResults
+    .filter(([, result]) => result.error)
+    .map(([label]) => label);
+
+  if (failedQueries.length) {
     return (
       <main className="mx-auto max-w-7xl space-y-6">
         <header>
@@ -122,8 +125,8 @@ export default async function InvestigationAttributionPage({
           <h1 className="mt-2 text-3xl font-semibold text-stone-100">Attribution</h1>
         </header>
         <section className="card text-red-300">
-          Unable to load the Investigation attribution matrix. Apply migration 035
-          for the Investigation-scoped attribution model, then refresh.
+          Unable to load the Investigation attribution matrix. Failed data group(s):{" "}
+          {failedQueries.join(", ")}. Refresh after verifying the current database schema and access policies.
         </section>
       </main>
     );
@@ -211,7 +214,7 @@ export default async function InvestigationAttributionPage({
     ),
     enrichment_result: label(
       (enrichments.data ?? []) as R[],
-      (row) => `${s(row.provider_key) || s(row.category)} · ${s(row.queried_at).slice(0, 10)}`,
+      (row) => `${s(row.category)} · ${s(row.queried_at).slice(0, 10)}`,
     ),
   };
 
