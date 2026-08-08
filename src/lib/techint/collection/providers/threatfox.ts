@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { indicatorCanonicalKey } from "@/lib/techint/signals/canonical-key";
+import type { JsonValue } from "@/lib/techint/signals/schema";
 import { fetchThreatFoxIocs } from "@/lib/ioc-connectors/providers/threatfox/client";
 import { decimalProviderId } from "@/lib/ioc-connectors/providers/threatfox/cursor";
 import { mapThreatFoxItem, ThreatFoxMappingError } from "@/lib/ioc-connectors/providers/threatfox/mapping";
@@ -21,7 +22,14 @@ function indicatorType(candidate: NormalizedCandidate): "IP" | "DOMAIN" | "URL" 
 }
 
 function safeProviderUrl(value: string | null, id: string) {
-  if (value) return value;
+  if (value) {
+    try {
+      const url = new URL(value);
+      if (["http:", "https:"].includes(url.protocol) && !url.username && !url.password && value.length <= 2048) return url.toString();
+    } catch {
+      // Fall through to the fixed public ThreatFox item page.
+    }
+  }
   return `https://threatfox.abuse.ch/ioc/${encodeURIComponent(id)}/`;
 }
 
@@ -44,7 +52,7 @@ export function mapThreatFoxCandidate(candidate: NormalizedCandidate, receivedAt
     firstSeen,
     lastSeen,
     tags: candidate.tags.slice(0, 50).map((tag) => bounded(tag, 100)),
-    metadata: candidate.metadata,
+    metadata: candidate.metadata as Record<string, JsonValue>,
   };
   const assertions: MappedTechnicalSignal["entityAssertions"] = [
     {
@@ -130,7 +138,8 @@ export const threatFoxTechnicalAdapter: TechnicalSourceAdapter = {
     }
     if (response.data.length > MAX_ITEMS) throw new CollectionError("ITEM_LIMIT_EXCEEDED", "ThreatFox exceeded the bounded item limit.");
 
-    const currentMax = cursor.maxProviderId ? BigInt(cursor.maxProviderId) : 0n;
+    const zero = BigInt(0);
+    const currentMax = cursor.maxProviderId ? BigInt(cursor.maxProviderId) : zero;
     let nextMax = currentMax;
     const eligible: unknown[] = [];
     for (const item of response.data) {
@@ -159,7 +168,7 @@ export const threatFoxTechnicalAdapter: TechnicalSourceAdapter = {
       recordsMapped: signals.length,
       signals,
       issues: issues.slice(0, 100),
-      nextCursor: { version: 1, ...(nextMax > 0n ? { maxProviderId: nextMax.toString() } : {}) },
+      nextCursor: { version: 1, ...(nextMax > zero ? { maxProviderId: nextMax.toString() } : {}) },
     };
   },
 };
