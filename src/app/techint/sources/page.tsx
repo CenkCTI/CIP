@@ -14,16 +14,6 @@ function time(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString() : "—";
 }
 
-const nvdSettings: readonly SourceSettingField[] = [
-  { name: "initialLookbackHours", label: "Initial lookback hours", type: "integer", minimum: 1, maximum: 168, defaultValue: 24 },
-];
-
-function sourceSettingFields(key: string, configured: readonly SourceSettingField[] | undefined) {
-  if (configured?.length) return configured;
-  if (key === "NVD_CVE") return nvdSettings;
-  return [];
-}
-
 function SettingsFields({ fields, settings }: { fields: readonly SourceSettingField[]; settings: Record<string, unknown> }) {
   return fields.map((field) => (
     <div className="space-y-1" key={field.name}>
@@ -82,7 +72,7 @@ export default async function Page() {
           const status = connection ? String(connection.status) : "NOT_ENABLED";
           const settings = (connection?.settings ?? {}) as Record<string, unknown>;
           const latestRun = latestRunByKey.get(adapter.metadata.key);
-          const fields = sourceSettingFields(adapter.metadata.key, adapter.metadata.settingsFields);
+          const fields = adapter.metadata.settingsFields ?? [];
           return (
             <article className="card space-y-4" key={adapter.metadata.key}>
               <div>
