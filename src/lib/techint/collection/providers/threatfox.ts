@@ -139,7 +139,8 @@ export const threatFoxTechnicalAdapter: TechnicalSourceAdapter = {
     if (response.data.length > MAX_ITEMS) throw new CollectionError("ITEM_LIMIT_EXCEEDED", "ThreatFox exceeded the bounded item limit.");
 
     const zero = BigInt(0);
-    const currentMax = cursor.maxProviderId ? BigInt(cursor.maxProviderId) : zero;
+    const sameWindow = cursor.lookbackDays === settings.lookbackDays;
+    const currentMax = sameWindow && cursor.maxProviderId ? BigInt(cursor.maxProviderId) : zero;
     let nextMax = currentMax;
     const eligible: unknown[] = [];
     for (const item of response.data) {
@@ -168,7 +169,11 @@ export const threatFoxTechnicalAdapter: TechnicalSourceAdapter = {
       recordsMapped: signals.length,
       signals,
       issues: issues.slice(0, 100),
-      nextCursor: { version: 1, ...(nextMax > zero ? { maxProviderId: nextMax.toString() } : {}) },
+      nextCursor: {
+        version: 1,
+        lookbackDays: settings.lookbackDays,
+        ...(nextMax > zero ? { maxProviderId: nextMax.toString() } : {}),
+      },
     };
   },
 };
