@@ -62,9 +62,13 @@ begin
   begin perform public.technical_source_validate_settings('MALWAREBAZAAR','{"download":true}',120);raise exception 'MalwareBazaar arbitrary setting accepted';exception when invalid_parameter_value then null;end;
   begin perform public.technical_source_validate_cursor('THREATFOX','{"version":1,"maxProviderId":"1e6"}');raise exception 'invalid ThreatFox cursor accepted';exception when invalid_parameter_value then null;end;
 
-  epss_connection:=public.enable_technical_source('10000000-0000-4000-8000-000000000001','FIRST_EPSS','{"minimumEpss":0.1}',360);
-  threatfox_connection:=public.enable_technical_source('10000000-0000-4000-8000-000000000001','THREATFOX','{"lookbackDays":1}',120);
-  bazaar_connection:=public.enable_technical_source('10000000-0000-4000-8000-000000000001','MALWAREBAZAAR','{}',120);
+  -- Exercise the source-specific database defaults, not only UI-supplied intervals.
+  epss_connection:=public.enable_technical_source('10000000-0000-4000-8000-000000000001','FIRST_EPSS','{"minimumEpss":0.1}');
+  threatfox_connection:=public.enable_technical_source('10000000-0000-4000-8000-000000000001','THREATFOX','{"lookbackDays":1}');
+  bazaar_connection:=public.enable_technical_source('10000000-0000-4000-8000-000000000001','MALWAREBAZAAR','{}');
+  if (select interval_minutes from public.technical_source_connections where id=epss_connection)<>360 then raise exception 'FIRST_EPSS default interval mismatch';end if;
+  if (select interval_minutes from public.technical_source_connections where id=threatfox_connection)<>120 then raise exception 'THREATFOX default interval mismatch';end if;
+  if (select interval_minutes from public.technical_source_connections where id=bazaar_connection)<>120 then raise exception 'MALWAREBAZAAR default interval mismatch';end if;
   if (select count(*) from public.technical_source_connections where owner_id='10000000-0000-4000-8000-000000000001' and id in(epss_connection,threatfox_connection,bazaar_connection))<>3 then raise exception 'new source enable failed';end if;
 
   update public.technical_source_connections set last_started_at=now()-interval '1 minute' where id=epss_connection;
@@ -88,6 +92,7 @@ do $$begin
   if (select count(*) from public.technical_source_connections where source_key in('FIRST_EPSS','THREATFOX','MALWAREBAZAAR'))<>3 then raise exception 'owner read failed';end if;
   begin insert into public.technical_source_connections(owner_id,source_key,interval_minutes) values('10000000-0000-4000-8000-000000000001','FIRST_EPSS',360);raise exception 'authenticated insert accepted';exception when insufficient_privilege then null;end;
   if has_column_privilege('authenticated','public.technical_collection_runs','lease_token_hash','SELECT') then raise exception 'lease hash disclosure';end if;
+  if has_function_privilege('authenticated','public.enable_technical_source(uuid,public.technical_source_key,jsonb,integer)','EXECUTE') then raise exception 'authenticated source RPC execution accepted';end if;
 end$$;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000002',false);
 do $$begin
