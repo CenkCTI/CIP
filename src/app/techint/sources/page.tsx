@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { listTechnicalSources } from "@/lib/techint/collection/registry";
 import { listRecentTechnicalCollectionRuns, listRecentTechnicalSourceAuditEvents, listTechnicalSourceConnections } from "@/lib/techint/collection/queries";
+import type { SourceSettingField } from "@/lib/techint/collection/types";
 import {
   enableTechnicalSource,
   setTechnicalSourceStatus,
@@ -11,6 +12,24 @@ import {
 
 function time(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString() : "—";
+}
+
+function SettingsFields({ fields, settings }: { fields: readonly SourceSettingField[]; settings: Record<string, unknown> }) {
+  return fields.map((field) => (
+    <div className="space-y-1" key={field.name}>
+      <label className="block text-xs text-stone-400" htmlFor={field.name}>{field.label}</label>
+      <input
+        className="field"
+        id={field.name}
+        name={field.name}
+        type="number"
+        min={field.minimum}
+        max={field.maximum}
+        step={field.step ?? (field.type === "integer" ? 1 : "any")}
+        defaultValue={Number(settings[field.name] ?? field.defaultValue)}
+      />
+    </div>
+  ));
 }
 
 export default async function Page() {
@@ -44,7 +63,7 @@ export default async function Page() {
         <Link className="citem-button-ghost" href="/techint">Back to Global View</Link>
       </header>
 
-      {connectionError ? <div className="card text-red-300">Unable to load Technical Sources. Apply migration 033.</div> : null}
+      {connectionError ? <div className="card text-red-300">Unable to load Technical Sources. Verify the latest TechINT source migration.</div> : null}
 
       <div className="grid gap-4 xl:grid-cols-3">
         {registry.map((adapter) => {
@@ -53,6 +72,7 @@ export default async function Page() {
           const status = connection ? String(connection.status) : "NOT_ENABLED";
           const settings = (connection?.settings ?? {}) as Record<string, unknown>;
           const latestRun = latestRunByKey.get(adapter.metadata.key);
+          const fields = adapter.metadata.settingsFields ?? [];
           return (
             <article className="card space-y-4" key={adapter.metadata.key}>
               <div>
@@ -64,6 +84,7 @@ export default async function Page() {
               </div>
               <dl className="grid grid-cols-2 gap-2 text-xs text-stone-400">
                 <div><dt>Status</dt><dd className="text-stone-200">{status}</dd></div>
+                <div><dt>Family</dt><dd className="text-stone-200">{adapter.metadata.sourceFamily}</dd></div>
                 <div><dt>Credential</dt><dd className="text-stone-200">{adapter.metadata.credentialRequirement}</dd></div>
                 <div><dt>Interval</dt><dd className="text-stone-200">{connection ? `${String(connection.interval_minutes)} min` : `${adapter.metadata.defaultIntervalMinutes} min`}</dd></div>
                 <div><dt>Scheduling</dt><dd className="text-stone-200">{adapter.metadata.scheduled ? (status === "ENABLED" ? "Enabled" : "Inactive") : "Manual only"}</dd></div>
@@ -81,7 +102,7 @@ export default async function Page() {
                   <input type="hidden" name="sourceKey" value={adapter.metadata.key} />
                   <label className="block text-xs text-stone-400">Interval minutes</label>
                   <input className="field" name="intervalMinutes" type="number" min={adapter.metadata.minimumIntervalMinutes} max={adapter.metadata.maximumIntervalMinutes} defaultValue={adapter.metadata.defaultIntervalMinutes} />
-                  {adapter.metadata.key === "NVD_CVE" ? <><label className="block text-xs text-stone-400">Initial lookback hours</label><input className="field" name="initialLookbackHours" type="number" min="1" max="168" defaultValue="24" /></> : null}
+                  <SettingsFields fields={fields} settings={{}} />
                   <button className="citem-button" type="submit">Enable source</button>
                 </form>
               ) : (
@@ -90,7 +111,7 @@ export default async function Page() {
                     <form action={updateTechnicalSourceSettings.bind(null, id!, adapter.metadata.key)} className="space-y-2">
                       <label className="block text-xs text-stone-400">Interval minutes</label>
                       <input className="field" name="intervalMinutes" type="number" min={adapter.metadata.minimumIntervalMinutes} max={adapter.metadata.maximumIntervalMinutes} defaultValue={Number(connection.interval_minutes)} />
-                      {adapter.metadata.key === "NVD_CVE" ? <><label className="block text-xs text-stone-400">Initial lookback hours</label><input className="field" name="initialLookbackHours" type="number" min="1" max="168" defaultValue={Number(settings.initialLookbackHours ?? 24)} /></> : null}
+                      <SettingsFields fields={fields} settings={settings} />
                       <button className="citem-button-ghost" type="submit">Save settings</button>
                     </form>
                   ) : null}

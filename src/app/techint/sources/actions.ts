@@ -2,7 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
-import { connectionIdSchema, sourceKeySchema, sourceSettingsInputSchema, sourceStatusSchema } from "@/lib/techint/collection/schema";
+import {
+  connectionIdSchema,
+  sourceKeySchema,
+  sourceSettingsInputSchema,
+  sourceStatusSchema,
+  technicalSourceSettingsObject,
+} from "@/lib/techint/collection/schema";
 import { getTechnicalSourceAdapter } from "@/lib/techint/collection/registry";
 import {
   claimManualTechnicalCollection,
@@ -17,22 +23,29 @@ function refresh() {
   revalidatePath("/techint/sources");
 }
 
+function settingsInput(sourceKey: string, intervalMinutes: FormDataEntryValue | null, form: FormData) {
+  return {
+    sourceKey,
+    intervalMinutes,
+    initialLookbackHours: form.get("initialLookbackHours") || undefined,
+    minimumEpss: form.get("minimumEpss") || undefined,
+    lookbackDays: form.get("lookbackDays") || undefined,
+  };
+}
+
 export async function enableTechnicalSource(form: FormData): Promise<void> {
   try {
     const { user } = await requireUser();
     const sourceKey = sourceKeySchema.parse(form.get("sourceKey"));
     const adapter = getTechnicalSourceAdapter(sourceKey);
-    const parsed = sourceSettingsInputSchema.safeParse({
-      sourceKey,
-      intervalMinutes: form.get("intervalMinutes") ?? adapter.metadata.defaultIntervalMinutes,
-      initialLookbackHours: form.get("initialLookbackHours") || undefined,
-    });
+    const parsed = sourceSettingsInputSchema.safeParse(
+      settingsInput(sourceKey, form.get("intervalMinutes") ?? String(adapter.metadata.defaultIntervalMinutes), form),
+    );
     if (!parsed.success) return;
-    const settings = sourceKey === "NVD_CVE" ? { initialLookbackHours: parsed.data.initialLookbackHours ?? 24 } : {};
     await enableTechnicalSourceWorkflow({
       actorId: user.id,
       sourceKey,
-      settings,
+      settings: technicalSourceSettingsObject(parsed.data),
       intervalMinutes: parsed.data.intervalMinutes,
     });
     refresh();
@@ -65,17 +78,13 @@ export async function updateTechnicalSourceSettings(
     const { user } = await requireUser();
     const id = connectionIdSchema.parse(connectionId);
     const key = sourceKeySchema.parse(sourceKey);
-    const parsed = sourceSettingsInputSchema.safeParse({
-      sourceKey: key,
-      intervalMinutes: form.get("intervalMinutes"),
-      initialLookbackHours: form.get("initialLookbackHours") || undefined,
-    });
+    const parsed = sourceSettingsInputSchema.safeParse(settingsInput(key, form.get("intervalMinutes"), form));
     if (!parsed.success) return;
     await updateTechnicalSourceSettingsWorkflow({
       actorId: user.id,
       connectionId: id,
       intervalMinutes: parsed.data.intervalMinutes,
-      settings: key === "NVD_CVE" ? { initialLookbackHours: parsed.data.initialLookbackHours ?? 24 } : {},
+      settings: technicalSourceSettingsObject(parsed.data),
     });
     refresh();
   } catch {

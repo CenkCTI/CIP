@@ -196,19 +196,36 @@ Manual ThreatFox synchronization uses the provider-independent incremental contr
 
 ## Phase 2.3C — Technical Source Pack and Collection Operations
 
+### Foundation (merged PR #35)
 - [x] Additive migration 033 authored for owner-scoped Technical Source connections, collection runs, bounded issues, audit events, exact leases, provider-bound cursors, RLS, ACLs, and controlled lifecycle RPCs.
 - [x] Additive migration 034 repairs the Phase 2.3B advisory/report canonical-key validator without editing migration 032 and preserves the helper ACL boundary.
-- [x] Fixed server-owned source registry added for `TEST_SYNTHETIC`, `CISA_KEV`, and `NVD_CVE`; OTX and ThreatFox-to-TechINT mapping remain excluded.
+- [x] Initial fixed server-owned source registry delivered `TEST_SYNTHETIC`, `CISA_KEV`, and `NVD_CVE`.
 - [x] Deterministic environment-gated synthetic collection travels through the real orchestrator and Phase 2.3B trusted Technical Signal recorder.
 - [x] Fixed-host, bounded CISA KEV and NVD CVE adapters added with conservative source-backed mappings, incremental cursors, retry-safe replay, and no analytical entity creation.
-- [x] Strict code-owned RSS, Atom, and JSON Feed parser foundation added without registering an unverified CISA Advisories endpoint or allowing user-supplied URLs.
+- [x] Strict code-owned RSS, Atom, and JSON Feed parser foundation added without registering an unverified advisory endpoint or allowing user-supplied TechINT URLs.
 - [x] Manual synchronization, bounded scheduler integration, sanitized run history, lifecycle controls, source settings, and secondary `/techint/sources` operations UI added while preserving the three-item TechINT primary navigation.
-- [x] Focused adapter, transport, parser, orchestrator, scheduler, UI-boundary, and PostgreSQL 16 migration coverage added to the existing validation workflow.
 - [x] Live CISA KEV smoke test succeeded with 1,661 initial mapped/created signals and a later zero-change successful run.
-- [x] Live acceptance repairs preserve the 8 MiB NVD response bound, use 250-record pages with 125-record fallback, pace requests at 6.5 seconds, and give NVD a bounded source-specific 30-second timeout after public API latency exceeded the generic 15-second transport default.
-- [x] GitHub Actions run #150 passed lint, typecheck, tests, build, Phase 2.2 migration harnesses, and Phase 2.3A/B/C PostgreSQL 16 harnesses for the NVD timeout repair code head.
-- [ ] Migration 034 application/PostgREST reload confirmed in the operator environment.
-- [ ] Repaired synthetic Preview acceptance confirms all four deterministic mappings and expected replay/revision behavior.
-- [ ] Repaired NVD Preview collection completes successfully on the current code head.
-- [ ] Final two-user browser isolation and no-analytical-side-effect checks completed.
-- [ ] Phase 2.3D taxonomy/alias/entity normalization, EPSS prioritization, matching, relevance/global priority, Global View population, alerts, discovery, and AI briefs remain later-phase work.
+- [x] Live NVD acceptance succeeded after bounded rate-limit/body-size/timeout repairs; the final policy keeps the 8 MiB response bound, 250-record pages with 125-record fallback, 6.5-second request pacing, and a source-specific 30-second timeout.
+
+### Source-pack completion (Draft PR #37)
+- [x] Technical Source metadata generalized to use the full Technical Signal source-family vocabulary and source-owned setting descriptors.
+- [x] Additive migration 036 authored for the source keys actually implemented by the completion: `FIRST_EPSS`, `THREATFOX`, and `MALWAREBAZAAR`, plus strict source settings/cursor validation. Migrations 033–035 remain unchanged.
+- [x] FIRST EPSS adapter added using the fixed public FIRST API with bounded threshold/response/cursor semantics. EPSS and percentile remain provider scoring facts; they are not CİTEM confidence, severity, CVSS, business risk, or Global Priority.
+- [x] EPSS is modeled as source-defined `PROVIDER_ALERT` (`report:first-epss:<CVE>`) with a CVE assertion so provider-specific EPSS facts do not collide with NVD's canonical `VULNERABILITY_CHANGE` projection for the same CVE.
+- [x] ThreatFox → TechINT bridge added by reusing the existing encrypted owner credential and hardened ThreatFox provider client/mapping; no second credential store, IOC Inbox triage mutation, or automatic Indicator creation is introduced.
+- [x] ThreatFox IOC canonical facts remain provider-independent while port, malware family, provider confidence, tags, timestamps, and metadata remain immutable source context/assertions.
+- [x] MalwareBazaar metadata-only adapter added with a server-only `MALWAREBAZAAR_AUTH_KEY`, hard-coded `get_recent` POST query, bounded JSON response, and no sample-download/file-execution path.
+- [x] `/techint/sources` settings rendering refactored toward registry metadata instead of accumulating source-name-specific UI branches; credential requirements are displayed without credential values.
+- [x] Focused tests added for EPSS scoring semantics, ThreatFox credential reuse/canonical IOC mapping, MalwareBazaar Auth-Key isolation/metadata-only behavior, trusted-recorder persistence, and absence of direct analytical-table mutations.
+- [x] PostgreSQL 16 source-pack harness added for migration 036 enum/settings/cursor contracts, success/failure cursor semantics, direct-mutation denial, sensitive-column denial, and owner isolation; CI workflow includes the new harness without removing existing validation.
+- [ ] GitHub Actions and Vercel Preview validation completed on the final PR #37 head.
+- [ ] Migration 036 applied to the intended Preview/test Supabase and PostgREST schema reloaded — requires explicit operator authorization; not performed by the implementation agent.
+- [ ] FIRST EPSS, ThreatFox TechINT, and MalwareBazaar live/Preview provider acceptance completed — requires explicit operator authorization; not performed by the implementation agent.
+- [ ] Final two-user browser isolation and no-analytical-side-effect live checks completed for the new source pack.
+
+### Intentionally deferred from Phase 2.3C completion
+- [ ] URLhaus remains unregistered: current verified Community API material requires Auth-Key and documented exports expose credential-bearing URLs; CİTEM will not weaken secret-handling or invent an unverified bulk-query contract.
+- [ ] MITRE ATT&CK STIX/TAXII remains unregistered until a bounded initial-baseline plus incremental contract is implemented without raising global body limits or exceeding the 2,500-signal run ceiling.
+- [ ] Additional vendor advisory feeds remain unregistered unless an official, stable, machine-readable, fixed-host/path feed with stable record identity is verified; no HTML scraping or guessed endpoint is allowed.
+- [ ] Analyst-owned CİTEM CVE records are not reverse-ingested as external Technical Signals; Phase 2.3E may match external CVE assertions to existing owned CVE analytical entities.
+- [ ] Phase 2.3D taxonomy/alias/entity normalization and Phase 2.3E matching/relevance/global priority/Global View population remain later-phase work.
