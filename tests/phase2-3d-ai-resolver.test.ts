@@ -32,7 +32,7 @@ describe("Phase 2.3D grouped review", () => {
     expect(groups[0].assertionIds).toEqual(["c"]);
   });
 
-  it("uses fuzzy-looking forms only to shortlist candidates, never as an automatic resolution", () => {
+  it("uses fuzzy-looking forms only to shortlist positive candidates, never as an automatic resolution", () => {
     const group = groupUnresolvedAssertions([
       { id: "a", entity_kind: "MALWARE", display_value: "LummaStealer", normalized_value: "LummaStealer" },
     ], [])[0];
@@ -40,8 +40,9 @@ describe("Phase 2.3D grouped review", () => {
       { id: "00000000-0000-4000-8000-000000000001", entity_kind: "MALWARE", canonical_name: "Lumma Stealer", canonical_normalized: "lumma stealer", status: "ACTIVE" },
       { id: "00000000-0000-4000-8000-000000000002", entity_kind: "MALWARE", canonical_name: "Agent Tesla", canonical_normalized: "agent tesla", status: "ACTIVE" },
     ]);
+    expect(candidates).toHaveLength(1);
     expect(candidates[0].canonicalName).toBe("Lumma Stealer");
-    expect(candidates[0].score).toBeGreaterThan(candidates[1].score);
+    expect(candidates[0].score).toBeGreaterThan(0);
   });
 });
 
@@ -104,6 +105,12 @@ describe("Phase 2.3D BYOK implementation boundary", () => {
   it("does not let the AI suggestion endpoint call entity mutation workflows", () => {
     expect(suggestRoute).not.toMatch(/createTechnicalEntity|linkTechnicalEntity|addTechnicalEntityAlias|reconcileTechnicalEntitiesWorkflow/);
     expect(suggestRoute).toContain("AI suggestions are non-authoritative");
+  });
+
+  it("server-checks create suggestions against existing canonical names before presenting a new-entity action", () => {
+    expect(suggestRoute).toContain("exactExisting.length === 1");
+    expect(suggestRoute).toContain('decision: "MATCH_EXISTING"');
+    expect(suggestRoute).toContain("multiple existing entities");
   });
 
   it("requires an explicit separate confirmation request before grouped writes", () => {
