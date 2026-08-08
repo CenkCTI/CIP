@@ -4,11 +4,30 @@ import { useCallback, useEffect, useId, useState, useTransition } from "react";
 type Scope = "guest" | "user";
 type ByokProviderOption = { id: string; displayName: string; modelAllowlist?: string[] };
 type ByokStatus = { enabled?: boolean; connected?: boolean; state?: string; provider?: string; providerId?: string; model?: string; expiresAt?: string; providers?: ByokProviderOption[]; error?: string };
-const providers: ByokProviderOption[] = [{ id: "openai", displayName: "OpenAI" }, { id: "openrouter", displayName: "OpenRouter" }, { id: "groq", displayName: "Groq" }, { id: "nvidia_nim", displayName: "NVIDIA NIM", modelAllowlist: ["nvidia/nemotron-3-super-120b-a12b", "nvidia/nemotron-3-nano-30b-a3b", "nvidia/nemotron-3-ultra-550b-a55b", "nvidia/llama-3.1-nemotron-nano-8b-v1", "nvidia/llama-3.3-nemotron-super-49b-v1.5"] }];
+const providers: ByokProviderOption[] = [
+  { id: "openai", displayName: "OpenAI" },
+  { id: "openrouter", displayName: "OpenRouter" },
+  { id: "groq", displayName: "Groq" },
+  {
+    id: "nvidia_nim",
+    displayName: "NVIDIA NIM",
+    modelAllowlist: [
+      "nvidia/nemotron-3-super-120b-a12b",
+      "nvidia/nemotron-3-nano-30b-a3b",
+      "nvidia/nemotron-3-ultra-550b-a55b",
+      "nvidia/llama-3.1-nemotron-nano-8b-v1",
+      "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+      "openai/gpt-oss-120b",
+      "qwen/qwen3-coder-480b-a35b-instruct",
+      "qwen/qwen3-next-80b-a3b-instruct",
+      "moonshotai/kimi-k2-instruct",
+    ],
+  },
+];
 const errorText: Record<string, string> = { key_rejected: "Provider rejected the API key.", provider_rate_limited: "Provider rate limit reached.", timeout: "Provider timed out.", provider_unreachable: "Provider is unreachable.", unsupported_model: "The selected model is unsupported.", byok_unavailable: "BYOK is not enabled on this server.", auth_required: "Sign in to connect BYOK for project workflows.", guest_session_required: "Start an AI demo session before connecting BYOK.", nvidia_output_exhausted: "NVIDIA returned reasoning without final content. Thinking is disabled for supported Nemotron models; choose an allowlisted model or try again." };
-export function ByokConnectionPanel({ scope, onStatusChange, initialStatus, autoLoad = process.env.NODE_ENV !== "test" }: { scope: Scope; onStatusChange?: (status: ByokStatus) => void; initialStatus?: ByokStatus; autoLoad?: boolean }) {
+export function ByokConnectionPanel({ scope, onStatusChange, initialStatus, autoLoad = process.env.NODE_ENV !== "test", defaultProviderId = "openai" }: { scope: Scope; onStatusChange?: (status: ByokStatus) => void; initialStatus?: ByokStatus; autoLoad?: boolean; defaultProviderId?: string }) {
   const [status, setStatus] = useState<ByokStatus>(initialStatus ?? { connected: false, state: "disconnected", providers });
-  const [providerId, setProviderId] = useState("openai");
+  const [providerId, setProviderId] = useState(providers.some((provider) => provider.id === defaultProviderId) ? defaultProviderId : "openai");
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
   const selectedProvider = providers.find((p) => p.id === providerId);
@@ -23,7 +42,7 @@ export function ByokConnectionPanel({ scope, onStatusChange, initialStatus, auto
   const state = status.connected ? "connected" : status.state ?? "disconnected";
   return <section aria-labelledby={`${id}-heading`} className="card space-y-3" data-testid="byok-connection-panel">
     <h2 id={`${id}-heading`} className="font-semibold text-white">BYOK Provider Connection</h2>
-    <p className="text-sm text-amber-200">Your API provider may charge your account. Cyber Research OS does not provide or pay for API usage.</p>
+    <p className="text-sm text-amber-200">Your API provider may charge your account. CİTEM does not provide or pay for API usage.</p>
     <p className="text-sm text-slate-300">Selected content will be sent to the chosen provider. The server receives the key once over HTTPS for Test and Connect, then stores it only in an encrypted temporary HttpOnly cookie. Never use a production key with broader permissions than necessary.</p>
     <p className="text-sm text-slate-300">Status: <strong>{state}</strong>{status.provider ? ` — ${status.provider}` : ""}{status.model ? ` / ${status.model}` : ""}{status.expiresAt ? `; expires ${new Date(status.expiresAt).toLocaleString()}` : ""}</p>
     <div className="grid gap-2 md:grid-cols-3">
