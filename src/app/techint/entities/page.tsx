@@ -6,7 +6,7 @@ import {
   listTechnicalEntityAliases,
   listTechnicalEntityAssertions,
   listTechnicalEntityAuditEvents,
-  listTechnicalEntityResolutions,
+  listTechnicalEntityResolutionsForAssertions,
   listTechnicalObservationLabels,
   listTechnicalSignalLabels,
 } from "@/lib/techint/entities/queries";
@@ -34,18 +34,19 @@ function text(value: unknown) {
 
 export default async function Page() {
   const { supabase } = await requireUser();
-  const [entityResult, aliasResult, assertionResult, resolutionResult, auditResult] = await Promise.all([
+  const [entityResult, aliasResult, assertionResult, auditResult] = await Promise.all([
     listTechnicalEntities(supabase, 300),
     listTechnicalEntityAliases(supabase),
     listTechnicalEntityAssertions(supabase, 500),
-    listTechnicalEntityResolutions(supabase, 500),
     listTechnicalEntityAuditEvents(supabase),
   ]);
+  const assertions = (assertionResult.data ?? []) as Array<Record<string, unknown>>;
+  const assertionIds = assertions.map((row) => String(row.id));
+  const resolutionResult = await listTechnicalEntityResolutionsForAssertions(supabase, assertionIds);
 
   const migrationMissing = Boolean(entityResult.error || aliasResult.error || resolutionResult.error || auditResult.error);
   const entities = (entityResult.data ?? []) as Array<Record<string, unknown>>;
   const aliases = (aliasResult.data ?? []) as Array<Record<string, unknown>>;
-  const assertions = (assertionResult.data ?? []) as Array<Record<string, unknown>>;
   const resolutions = (resolutionResult.data ?? []) as Array<Record<string, unknown>>;
   const audits = (auditResult.data ?? []) as Array<Record<string, unknown>>;
   const typedAssertions = assertions.map((row) => ({
