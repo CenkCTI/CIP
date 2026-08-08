@@ -136,17 +136,25 @@ export const firstEpssAdapter: TechnicalSourceAdapter = {
     url.searchParams.set("sort", "-epss");
     url.searchParams.set("limit", String(RECORD_LIMIT));
     url.searchParams.set("offset", "0");
+    const sameQuery = cursor.minimumEpss === settings.minimumEpss;
     const response = await fetchBoundedJson({
       url,
       allowedHost: "api.first.org",
       allowedPath: "/data/v1/epss",
       maxBytes: RESPONSE_LIMIT_BYTES,
-      headers: cursor.lastModified ? { "if-modified-since": cursor.lastModified } : undefined,
+      headers: sameQuery && cursor.lastModified ? { "if-modified-since": cursor.lastModified } : undefined,
       fetchImpl: context.fetchImpl,
     });
     if (response.status === 304) {
-      return { recordsSeen: 0, recordsMapped: 0, signals: [], issues: [], nextCursor: cursor };
+      return {
+        recordsSeen: 0,
+        recordsMapped: 0,
+        signals: [],
+        issues: [],
+        nextCursor: { ...cursor, minimumEpss: settings.minimumEpss },
+      };
     }
-    return mapFirstEpssResponse(response.json, context.now.toISOString(), response.lastModified);
+    const result = mapFirstEpssResponse(response.json, context.now.toISOString(), response.lastModified);
+    return { ...result, nextCursor: { ...result.nextCursor, minimumEpss: settings.minimumEpss } };
   },
 };
