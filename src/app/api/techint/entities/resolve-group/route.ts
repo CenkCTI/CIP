@@ -39,23 +39,30 @@ export async function POST(request: Request) {
     }
     const { supabase, user } = await requireUser();
     const normalizedValue = normalizeEntityLookup(input.normalizedValue);
-    const [{ data: assertions, error: assertionError }, { data: resolutions, error: resolutionError }] = await Promise.all([
-      supabase
-        .from("technical_signal_entity_assertions")
-        .select("id,entity_kind,normalized_value,display_value,created_at")
-        .eq("entity_kind", input.entityKind)
-        .order("created_at", { ascending: true })
-        .limit(500),
-      supabase
-        .from("technical_entity_assertion_resolutions")
-        .select("assertion_id,status")
-        .limit(500),
-    ]);
-    if (assertionError || resolutionError) return NextResponse.json({ error: "Unable to load the entity review group." }, { status: 400 });
-    const statusByAssertion = new Map(((resolutions ?? []) as Array<{ assertion_id: string; status: string }>).map((row) => [row.assertion_id, row.status]));
-    const group = ((assertions ?? []) as Array<{ id: string; entity_kind: TechnicalEntityKind; normalized_value: string; display_value: string }>).filter((assertion) => {
+    const { data: assertionRows, error: assertionError } = await supabase
+      .from("technical_signal_entity_assertions")
+      .select("id,entity_kind,normalized_value,display_value,created_at")
+      .eq("entity_kind", input.entityKind)
+      .order("created_at", { ascending: true })
+      .limit(500);
+    if (assertionError) return NextResponse.json({ error: "Unable to load the entity review group." }, { status: 400 });
+
+    const exactAssertions = ((assertionRows ?? []) as Array<{ id: string; entity_kind: TechnicalEntityKind; normalized_value: string; display_value: string }>).filter(
+      (assertion) => normalizeEntityLookup(assertion.normalized_value || assertion.display_value) === normalizedValue,
+    );
+    if (!exactAssertions.length) return NextResponse.json({ error: "No assertions exist in this exact group." }, { status: 404 });
+
+    const assertionIds = exactAssertions.map((assertion) => assertion.id);
+    const { data: resolutionRows, error: resolutionError } = await supabase
+      .from("technical_entity_assertion_resolutions")
+      .select("assertion_id,status")
+      .in("assertion_id", assertionIds)
+      .limit(500);
+    if (resolutionError) return NextResponse.json({ error: "Unable to load current entity resolutions." }, { status: 400 });
+    const statusByAssertion = new Map(((resolutionRows ?? []) as Array<{ assertion_id: string; status: string }>).map((row) => [row.assertion_id, row.status]));
+    const group = exactAssertions.filter((assertion) => {
       const status = statusByAssertion.get(assertion.id);
-      return normalizeEntityLookup(assertion.normalized_value || assertion.display_value) === normalizedValue && (!status || status === "NEEDS_REVIEW");
+      return !status || status === "NEEDS_REVIEW";
     }).slice(0, 250);
     if (!group.length) return NextResponse.json({ error: "No unresolved assertions remain in this exact group." }, { status: 404 });
 
@@ -107,7 +114,7 @@ export async function POST(request: Request) {
       matched: group.length,
       linked,
       failed,
-      truncated: group.length === 250,
+      truncated: exactAssertions.length > 250,
       aliasRemembered: input.rememberAlias,
     });
   } catch {
