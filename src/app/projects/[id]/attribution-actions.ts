@@ -1,8 +1,12 @@
 "use server";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import {
   assessmentSchema,
+  attributionCellDetailsSchema,
+  attributionClueReferenceSchema,
+  attributionClueSchema,
   evaluationSchema,
   evidenceSchema,
   hypothesisSchema,
@@ -34,6 +38,16 @@ async function context(projectId: string, campaignId: string) {
     ? { ...a, projectId, campaignId }
     : null;
 }
+async function projectContext(projectId: string) {
+  if (!requiredUuidSchema.safeParse(projectId).success) return null;
+  const a = await requireUser();
+  const { data: p } = await a.supabase
+    .from("projects")
+    .select("id,owner_id")
+    .eq("id", projectId)
+    .maybeSingle();
+  return p?.owner_id === a.user.id ? { ...a, projectId } : null;
+}
 async function owns(
   c: NonNullable<Awaited<ReturnType<typeof context>>>,
   table: string,
@@ -50,10 +64,248 @@ async function owns(
   const { data, error } = await q.maybeSingle();
   return !error && !!data;
 }
+async function projectOwns(
+  c: NonNullable<Awaited<ReturnType<typeof projectContext>>>,
+  table: string,
+  id: string,
+) {
+  if (!requiredUuidSchema.safeParse(id).success) return false;
+  const { data, error } = await c.supabase
+    .from(table)
+    .select("id")
+    .eq("project_id", c.projectId)
+    .eq("id", id)
+    .maybeSingle();
+  return !error && !!data;
+}
 const refresh = (p: string, c: string) => {
   revalidatePath(`/projects/${p}/campaigns/${c}`);
   revalidatePath(`/projects/${p}/campaigns/${c}/attribution`);
+  revalidatePath(`/projects/${p}/attribution`);
 };
+const refreshInvestigationAttribution = (p: string) => {
+  revalidatePath(`/projects/${p}/attribution`);
+};
+
+export async function saveInvestigationHypothesis(
+  p: string,
+  hid: string | undefined,
+  _: State,
+  f: FormData,
+): Promise<State> {
+  const c = await projectContext(p);
+  if (!c) return { error: "Investigation not found." };
+  const v = hypothesisSchema.safeParse(entries(f));
+  if (!v.success) return { error: v.error.issues[0].message };
+  if (hid && !(await projectOwns(c, "attribution_hypotheses", hid)))
+    return { error: "Hypothesis not found." };
+  if (
+    v.data.subject_kind === "EXISTING_THREAT_ACTOR" &&
+    !(await projectOwns(c, "threat_actors", v.data.threat_actor_id!))
+  )
+    return { error: "Threat Actor not found." };
+  const values = {
+    ...v.data,
+    threat_actor_id:
+      v.data.subject_kind === "EXISTING_THREAT_ACTOR"
+        ? v.data.threat_actor_id
+        : null,
+  };
+  const q = hid
+    ? c.supabase
+        .from("attribution_hypotheses")
+        .update(values)
+        .eq("project_id", p)
+        .eq("id", hid)
+    : c.supabase.from("attribution_hypotheses").insert({
+        ...values,
+        project_id: p,
+        campaign_id: null,
+        created_by: c.user.id,
+      });
+  const { error } = await q;
+  if (error)
+    return {
+      error:
+        "Unable to save hypothesis. Change the current judgement before rejecting a preferred hypothesis.",
+    };
+  refreshInvestigationAttribution(p);
+  return { success: "Hypothesis saved." };
+}
+
+export async function addAttributionClue(
+  p: string,
+  _: State,
+  f: FormData,
+): Promise<State> {
+  const c = await projectContext(p);
+  if (!c) return { error: "Investigation not found." };
+  const v = attributionClueSchema.safeParse(entries(f));
+  if (!v.success) return { error: v.error.issues[0].message };
+  const { error } = await c.supabase.from("attribution_evidence_items").insert({
+    project_id: p,
+    campaign_id: null,
+    title: v.data.title,
+    relevance_note: v.data.relevance_note,
+    created_by: c.user.id,
+  });
+  if (error) return { error: "Unable to add clue." };
+  refreshInvestigationAttribution(p);
+  return { success: "Clue added to the matrix." };
+}
+
+export async function addAttributionClueReference(
+  p: string,
+  clueId: string,
+  _: State,
+  f: FormData,
+): Promise<State> {
+  const c = await projectContext(p);
+  if (!c || !(await projectOwns(c, "attribution_evidence_items", clueId)))
+    return { error: "Clue not found." };
+  const v = attributionClueReferenceSchema.safeParse(entries(f));
+  if (!v.success) return { error: v.error.issues[0].message };
+  const tables = {
+    campaign: "campaigns",
+    source: "sources",
+    evidence: "evidence",
+    timeline_event: "timeline_events",
+    infrastructure_cluster: "infrastructure_clusters",
+    indicator: "indicators",
+    enrichment_result: "enrichment_results",
+    malware: "malware",
+    mitre_technique: "mitre_techniques",
+  } as const;
+  if (!(await projectOwns(c, tables[v.data.reference_type], v.data.reference_id)))
+    return { error: "Referenced record not found." };
+  const { error } = await c.supabase
+    .from("attribution_evidence_item_links")
+    .insert({
+      project_id: p,
+      evidence_item_id: clueId,
+      [`${v.data.reference_type}_id`]: v.data.reference_id,
+      created_by: c.user.id,
+    });
+  if (error)
+    return { error: "Unable to link supporting material; it may already be linked." };
+  refreshInvestigationAttribution(p);
+  return { success: "Supporting material linked." };
+}
+
+export async function saveAttributionCellImpact(
+  p: string,
+  hypothesisId: string,
+  clueId: string,
+  impact: string,
+  _: State,
+  f: FormData,
+): Promise<State> {
+  const c = await projectContext(p);
+  if (!c) return { error: "Investigation not found." };
+  const impactResult = z
+    .enum(["SUPPORTS", "CONTRADICTS", "NEUTRAL"])
+    .safeParse(impact);
+  if (!impactResult.success) return { error: "Invalid matrix impact." };
+  const details = attributionCellDetailsSchema.safeParse(entries(f));
+  if (!details.success) return { error: details.error.issues[0].message };
+  const [{ data: hypothesis }, { data: clue }] = await Promise.all([
+    c.supabase
+      .from("attribution_hypotheses")
+      .select("id,campaign_id,archived_at,status")
+      .eq("project_id", p)
+      .eq("id", hypothesisId)
+      .maybeSingle(),
+    c.supabase
+      .from("attribution_evidence_items")
+      .select("id,campaign_id,archived_at")
+      .eq("project_id", p)
+      .eq("id", clueId)
+      .maybeSingle(),
+  ]);
+  if (!hypothesis || !clue) return { error: "Hypothesis or clue not found." };
+  if (hypothesis.archived_at || hypothesis.status === "REJECTED")
+    return { error: "Restore the hypothesis before evaluating it." };
+  if (clue.archived_at) return { error: "Restore the clue before evaluating it." };
+  const campaignId =
+    hypothesis.campaign_id && hypothesis.campaign_id === clue.campaign_id
+      ? hypothesis.campaign_id
+      : null;
+  const { error } = await c.supabase
+    .from("attribution_evidence_evaluations")
+    .upsert(
+      {
+        project_id: p,
+        campaign_id: campaignId,
+        hypothesis_id: hypothesisId,
+        evidence_item_id: clueId,
+        impact: impactResult.data,
+        diagnostic_value: details.data.diagnostic_value,
+        rationale: details.data.rationale,
+        created_by: c.user.id,
+      },
+      { onConflict: "hypothesis_id,evidence_item_id" },
+    );
+  if (error) return { error: "Unable to update matrix cell." };
+  refreshInvestigationAttribution(p);
+  return { success: "Matrix cell updated." };
+}
+
+export async function clearAttributionCell(
+  p: string,
+  hypothesisId: string,
+  clueId: string,
+  _: State,
+  _f: FormData,
+): Promise<State> {
+  const c = await projectContext(p);
+  if (!c) return { error: "Investigation not found." };
+  if (
+    !(await projectOwns(c, "attribution_hypotheses", hypothesisId)) ||
+    !(await projectOwns(c, "attribution_evidence_items", clueId))
+  )
+    return { error: "Hypothesis or clue not found." };
+  const { error } = await c.supabase
+    .from("attribution_evidence_evaluations")
+    .delete()
+    .eq("project_id", p)
+    .eq("hypothesis_id", hypothesisId)
+    .eq("evidence_item_id", clueId);
+  if (error) return { error: "Unable to clear matrix cell." };
+  refreshInvestigationAttribution(p);
+  return { success: "Matrix cell cleared." };
+}
+
+export async function saveInvestigationAssessment(
+  p: string,
+  _: State,
+  f: FormData,
+): Promise<State> {
+  const c = await projectContext(p);
+  if (!c) return { error: "Investigation not found." };
+  const v = assessmentSchema.safeParse(entries(f));
+  if (!v.success) return { error: v.error.issues[0].message };
+  const preferred = v.data.preferred_hypothesis_id?.trim() || null;
+  if (preferred && !(await projectOwns(c, "attribution_hypotheses", preferred)))
+    return { error: "Preferred hypothesis not found." };
+  const { error } = await c.supabase
+    .from("investigation_attribution_assessments")
+    .upsert(
+      {
+        ...v.data,
+        project_id: p,
+        preferred_hypothesis_id: preferred,
+        assessed_at: v.data.assessed_at
+          ? new Date(v.data.assessed_at).toISOString()
+          : null,
+        created_by: c.user.id,
+      },
+      { onConflict: "project_id" },
+    );
+  if (error) return { error: "Unable to save attribution judgement." };
+  refreshInvestigationAttribution(p);
+  return { success: "Investigation attribution judgement saved." };
+}
+
 export async function saveHypothesis(
   p: string,
   cid: string,

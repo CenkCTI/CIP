@@ -411,40 +411,6 @@ export default async function Detail({
           .eq("project_id", id)
           .is("archived_at", null)
       : { data: [] };
-  const campaignAttribution =
-    tab === "campaigns"
-      ? await supabase
-          .from("campaign_attribution_assessments")
-          .select("*,attribution_hypotheses(title)")
-          .eq("project_id", id)
-          .eq("campaign_id", entityId)
-          .maybeSingle()
-      : { data: null };
-  const campaignHypotheses =
-    tab === "campaigns"
-      ? await supabase
-          .from("attribution_hypotheses")
-          .select("id,status,archived_at")
-          .eq("project_id", id)
-          .eq("campaign_id", entityId)
-      : { data: [] };
-  const campaignEvidence =
-    tab === "campaigns"
-      ? await supabase
-          .from("attribution_evidence_items")
-          .select("id")
-          .eq("project_id", id)
-          .eq("campaign_id", entityId)
-          .is("archived_at", null)
-      : { data: [] };
-  const campaignEvaluations =
-    tab === "campaigns"
-      ? await supabase
-          .from("attribution_evidence_evaluations")
-          .select("id")
-          .eq("project_id", id)
-          .eq("campaign_id", entityId)
-      : { data: [] };
   const actorHypotheses =
     tab === "actors"
       ? await supabase
@@ -502,46 +468,6 @@ export default async function Detail({
       ) : null}
       {tab === "campaigns" ? (
         <>
-          <section className="card">
-            <p className="citem-label">Attribution Summary</p>
-            <h2 className="text-xl font-semibold">
-              Current Attribution Judgement
-            </h2>
-            <p>
-              {ss(
-                campaignAttribution.data?.assessment_status || "No assessment",
-              )}{" "}
-              · {ss(campaignAttribution.data?.conclusion_type || "UNRESOLVED")}{" "}
-              · {ss(campaignAttribution.data?.confidence || "Not assessed")}
-            </p>
-            <p className="text-sm text-stone-400">
-              {ss(campaignAttribution.data?.current_judgment).slice(0, 240) ||
-                "No current judgement recorded."}
-            </p>
-            <p className="text-xs">
-              {
-                (campaignHypotheses.data ?? []).filter(
-                  (h) => !h.archived_at && h.status !== "REJECTED",
-                ).length
-              }{" "}
-              active hypotheses ·{" "}
-              {Math.max(
-                0,
-                (campaignHypotheses.data ?? []).filter(
-                  (h) => !h.archived_at && h.status !== "REJECTED",
-                ).length *
-                  (campaignEvidence.data ?? []).length -
-                  (campaignEvaluations.data ?? []).length,
-              )}{" "}
-              unassessed combinations
-            </p>
-            <Link
-              className="mt-3 inline-block text-cyan-200"
-              href={`/projects/${id}/campaigns/${entityId}/attribution`}
-            >
-              Open Attribution Analysis →
-            </Link>
-          </section>
           <div className="flex justify-end">
             <Link
               className="rounded border border-stone-700 px-3 py-2 text-sm text-cyan-200"

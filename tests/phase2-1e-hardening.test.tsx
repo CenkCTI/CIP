@@ -73,7 +73,7 @@ describe("Phase 2.1E hardened UI", () => {
       document.querySelector('input[name="preferred_hypothesis_id"]'),
     ).toHaveValue("");
   });
-  it("hides archived evidence from an active evaluation selector", () => {
+  it("renders only the active evidence relationships supplied for evaluation", () => {
     render(
       <EvaluationForm
         projectId={PROJECT}
@@ -82,8 +82,13 @@ describe("Phase 2.1E hardened UI", () => {
         evidence={[{ id: "active", title: "Active" }]}
       />,
     );
-    expect(screen.getByRole("option", { name: "Active" })).toBeInTheDocument();
+    expect(
+      document.querySelector('input[name="evidence_item_id"][value="active"]'),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Archived")).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/multiple evidence items/i),
+    ).toBeInTheDocument();
   });
   it("derives authoritative labels and internal links", () => {
     const item = { source_id: "s" };
