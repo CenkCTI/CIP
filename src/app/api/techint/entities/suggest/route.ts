@@ -5,13 +5,13 @@ import { requireUser } from "@/lib/auth";
 import { AiError } from "@/lib/ai/client";
 import { byokChat } from "@/lib/ai/byok/client";
 import { safeAiErrorMessage } from "@/lib/ai/byok/errors";
-import { BYOK_COOKIE, decryptCredential } from "@/lib/ai/byok/vault";
+import { BYOK_COOKIE, decryptCredential, type ByokCredential } from "@/lib/ai/byok/vault";
 import { buildEntityAiMessages, entityAiGroupSchema, parseEntityAiResponse } from "@/lib/techint/entities/ai-resolver";
 import { groupUnresolvedAssertions, shortlistEntityCandidates } from "@/lib/techint/entities/grouping";
 import {
   listTechnicalEntities,
   listTechnicalEntityAssertions,
-  listTechnicalEntityResolutions,
+  listTechnicalEntityResolutionsForAssertions,
   listTechnicalObservationLabels,
   listTechnicalSignalLabels,
 } from "@/lib/techint/entities/queries";
@@ -43,12 +43,11 @@ export async function POST(request: Request) {
   try {
     const parsed = bodySchema.parse(await request.json().catch(() => ({})));
     const { supabase, user } = await requireUser();
-    const [{ data: assertionRows, error: assertionError }, { data: resolutionRows, error: resolutionError }, { data: entityRows, error: entityError }] = await Promise.all([
+    const [{ data: assertionRows, error: assertionError }, { data: entityRows, error: entityError }] = await Promise.all([
       listTechnicalEntityAssertions(supabase, 500),
-      listTechnicalEntityResolutions(supabase, 500),
       listTechnicalEntities(supabase, 300),
     ]);
-    if (assertionError || resolutionError || entityError) throw new Error("entity_ai_context_unavailable");
+    if (assertionError || entityError) throw new Error("entity_ai_context_unavailable");
 
     const assertions = (assertionRows ?? []) as Array<{
       id: string;
@@ -59,7 +58,9 @@ export async function POST(request: Request) {
       source_observation_id?: string | null;
       signal_id?: string | null;
     }>;
-    const resolutions = (resolutionRows ?? []) as Array<{ assertion_id: string; status: string }>;
+    const resolutionResult = await listTechnicalEntityResolutionsForAssertions(supabase, assertions.map((assertion) => assertion.id));
+    if (resolutionResult.error) throw new Error("entity_ai_context_unavailable");
+    const resolutions = (resolutionResult.data ?? []) as Array<{ assertion_id: string; status: string }>;
     const entities = (entityRows ?? []) as Array<{
       id: string;
       entity_kind: TechnicalEntityKind;
@@ -94,7 +95,7 @@ export async function POST(request: Request) {
 
     const cookie = (await cookies()).get(BYOK_COOKIE)?.value;
     if (!cookie) throw new AiError("byok_required");
-    let credential;
+    let credential: ByokCredential;
     try {
       credential = decryptCredential(cookie, { kind: "user", id: user.id });
     } catch (error) {
