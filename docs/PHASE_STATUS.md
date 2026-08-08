@@ -207,7 +207,7 @@ Manual ThreatFox synchronization uses the provider-independent incremental contr
 - [x] Live CISA KEV smoke test succeeded with 1,661 initial mapped/created signals and a later zero-change successful run.
 - [x] Live NVD acceptance succeeded after bounded rate-limit/body-size/timeout repairs; the final policy keeps the 8 MiB response bound, 250-record pages with 125-record fallback, 6.5-second request pacing, and a source-specific 30-second timeout.
 
-### Source-pack completion (Draft PR #37)
+### Source-pack completion (merged PR #37)
 - [x] Technical Source metadata generalized to use the full Technical Signal source-family vocabulary and source-owned setting descriptors.
 - [x] Additive migration 036 authored for the source keys actually implemented by the completion: `FIRST_EPSS`, `THREATFOX`, and `MALWAREBAZAAR`, plus strict source settings/cursor validation. Migrations 033–035 remain unchanged.
 - [x] FIRST EPSS adapter added using the fixed public FIRST API with bounded threshold/response/cursor semantics. EPSS and percentile remain provider scoring facts; they are not CİTEM confidence, severity, CVSS, business risk, or Global Priority.
@@ -218,9 +218,9 @@ Manual ThreatFox synchronization uses the provider-independent incremental contr
 - [x] `/techint/sources` settings rendering refactored toward registry metadata instead of accumulating source-name-specific UI branches; credential requirements are displayed without credential values.
 - [x] Focused tests added for EPSS scoring semantics, ThreatFox credential reuse/canonical IOC mapping, MalwareBazaar Auth-Key isolation/metadata-only behavior, trusted-recorder persistence, and absence of direct analytical-table mutations.
 - [x] PostgreSQL 16 source-pack harness added for migration 036 enum/settings/cursor contracts, success/failure cursor semantics, direct-mutation denial, sensitive-column denial, and owner isolation; CI workflow includes the new harness without removing existing validation.
-- [ ] GitHub Actions and Vercel Preview validation completed on the final PR #37 head.
-- [ ] Migration 036 applied to the intended Preview/test Supabase and PostgREST schema reloaded — requires explicit operator authorization; not performed by the implementation agent.
-- [ ] FIRST EPSS, ThreatFox TechINT, and MalwareBazaar live/Preview provider acceptance completed — requires explicit operator authorization; not performed by the implementation agent.
+- [x] GitHub Actions and Vercel Preview validation completed on the final PR #37 head before merge.
+- [x] Operator live acceptance confirmed FIRST EPSS initial collection and idempotent replay, ThreatFox initial collection, and MalwareBazaar metadata collection plus replay behavior.
+- [ ] ThreatFox transient/replay error classification remains a non-blocking follow-up; the initial live collection succeeded and no source data integrity failure was established.
 - [ ] Final two-user browser isolation and no-analytical-side-effect live checks completed for the new source pack.
 
 ### Intentionally deferred from Phase 2.3C completion
@@ -228,4 +228,21 @@ Manual ThreatFox synchronization uses the provider-independent incremental contr
 - [ ] MITRE ATT&CK STIX/TAXII remains unregistered until a bounded initial-baseline plus incremental contract is implemented without raising global body limits or exceeding the 2,500-signal run ceiling.
 - [ ] Additional vendor advisory feeds remain unregistered unless an official, stable, machine-readable, fixed-host/path feed with stable record identity is verified; no HTML scraping or guessed endpoint is allowed.
 - [ ] Analyst-owned CİTEM CVE records are not reverse-ingested as external Technical Signals; Phase 2.3E may match external CVE assertions to existing owned CVE analytical entities.
-- [ ] Phase 2.3D taxonomy/alias/entity normalization and Phase 2.3E matching/relevance/global priority/Global View population remain later-phase work.
+
+## Phase 2.3D — Taxonomy, Alias and Canonical Entity Normalization
+
+- [x] Additive migration 037 authored for owner-global `technical_entities`, confirmed aliases, current assertion resolutions, bounded append-only audit history, indexes, owner-scoped RLS, and service-role-only mutation RPCs.
+- [x] Immutable Phase 2.3B source assertions remain untouched; normalization decisions are stored only in the new Phase 2.3D tables.
+- [x] Deterministic CVE, ATT&CK technique/sub-technique, and Indicator identities reuse existing Phase 2.3B/CİTEM canonical rules and are owner-idempotent.
+- [x] Ambiguous Threat Actor, Malware, Campaign, Vendor, Product, Sector, Country, Region, Infrastructure, and Tag names are not auto-created from source strings.
+- [x] Conservative alias lookup folds only case and whitespace while preserving punctuation, digits, hyphens, underscores, and word boundaries; no fuzzy matching, stemming, substring matching, transliteration guessing, or AI inference is introduced.
+- [x] Analyst workflows distinguish per-assertion links from reusable `ANALYST_CONFIRMED` aliases; remembering an alias is explicit and defaults off.
+- [x] `AUTHORITATIVE_SOURCE` alias basis is modeled for future verified taxonomy ingestion but cannot be forged through the normal analyst/browser workflow; no MITRE alias catalog or ATT&CK ingestion is added here.
+- [x] Alias revocation returns dependent automatic alias resolutions to `NEEDS_REVIEW` while preserving analyst-linked/created decisions and immutable source assertions.
+- [x] Bounded, deterministic, retry-safe reconciliation is separate from `record_technical_signal` and performs no provider/network or AI call, keeping source collection and normalization as separate failure domains.
+- [x] Secondary `/techint/entities` workspace added without changing the locked primary TechINT navigation of Global View, Profiles, and InvestINT.
+- [x] Project-scoped Threat Actor aliases, Malware family strings, and other Investigation analytical values are not automatically globalized into the TechINT taxonomy.
+- [x] Focused normalization/boundary tests and a PostgreSQL 16 Phase 2.3D migration harness are included; CI is extended without removing prior harnesses.
+- [ ] Migration 037 applied to Preview/test Supabase and PostgREST schema reloaded — operator step requiring explicit authorization.
+- [ ] Preview/browser acceptance checklist completed, including deterministic resolution, explicit alias teaching/revocation, source-assertion immutability, and second-user isolation.
+- [ ] Phase 2.3E profile matching, relevance scoring, Global Priority, Global View population, alerts/discovery, and AI briefs remain intentionally unimplemented.
