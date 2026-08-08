@@ -8,6 +8,7 @@ import { safeAiErrorMessage } from "@/lib/ai/byok/errors";
 import { BYOK_COOKIE, decryptCredential, type ByokCredential } from "@/lib/ai/byok/vault";
 import { buildEntityAiMessages, entityAiGroupSchema, parseEntityAiResponse } from "@/lib/techint/entities/ai-resolver";
 import { groupUnresolvedAssertions, shortlistEntityCandidates } from "@/lib/techint/entities/grouping";
+import { normalizeEntityLookup } from "@/lib/techint/entities/normalization";
 import {
   listTechnicalEntities,
   listTechnicalEntityAssertions,
@@ -105,15 +106,53 @@ export async function POST(request: Request) {
 
     const content = await byokChat(credential.providerId, credential.model, credential.apiKey, buildEntityAiMessages(aiGroups), "generation");
     const decisions = parseEntityAiResponse(content, aiGroups);
-    const suggestions = groups.map((group, index) => ({
-      groupKey: group.key,
-      entityKind: group.entityKind,
-      displayValue: group.displayValue,
-      normalizedValue: group.normalizedValue,
-      occurrenceCount: group.occurrenceCount,
-      candidates: aiGroups[index].candidates,
-      ...decisions[index],
-    }));
+    const suggestions = groups.map((group, index) => {
+      const decision = decisions[index];
+      if (decision.decision === "CREATE_NEW" && decision.proposedCanonicalName) {
+        const proposedNormalized = normalizeEntityLookup(decision.proposedCanonicalName);
+        const exactExisting = entities.filter((entity) =>
+          entity.entity_kind === group.entityKind
+          && entity.status !== "ARCHIVED"
+          && normalizeEntityLookup(entity.canonical_name) === proposedNormalized,
+        );
+        if (exactExisting.length === 1) {
+          return {
+            groupKey: group.key,
+            entityKind: group.entityKind,
+            displayValue: group.displayValue,
+            normalizedValue: group.normalizedValue,
+            occurrenceCount: group.occurrenceCount,
+            decision: "MATCH_EXISTING" as const,
+            candidateEntityId: exactExisting[0].id,
+            proposedCanonicalName: null,
+            confidence: decision.confidence,
+            rationale: `${decision.rationale} Server-side exact canonical-name validation found an existing entity with the proposed name.`,
+          };
+        }
+        if (exactExisting.length > 1) {
+          return {
+            groupKey: group.key,
+            entityKind: group.entityKind,
+            displayValue: group.displayValue,
+            normalizedValue: group.normalizedValue,
+            occurrenceCount: group.occurrenceCount,
+            decision: "UNSURE" as const,
+            candidateEntityId: null,
+            proposedCanonicalName: null,
+            confidence: "LOW" as const,
+            rationale: "The proposed canonical name matches multiple existing entities, so CİTEM requires analyst disambiguation.",
+          };
+        }
+      }
+      return {
+        groupKey: group.key,
+        entityKind: group.entityKind,
+        displayValue: group.displayValue,
+        normalizedValue: group.normalizedValue,
+        occurrenceCount: group.occurrenceCount,
+        ...decision,
+      };
+    });
 
     return NextResponse.json({
       provider: credential.providerId,
