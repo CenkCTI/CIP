@@ -87,7 +87,7 @@ describe("Phase 2.3D BYOK suggestion contract", () => {
     const messages = buildEntityAiMessages(groups);
     expect(messages[0].content).toContain("cannot write data");
     expect(messages[0].content).toContain("untrusted quoted data");
-    expect(messages[1].content).toContain("Never invent a candidate ID").not;
+    expect(messages[0].content).toContain("Never invent a candidate ID");
     expect(messages[1].content).toContain("MATCH_EXISTING may use only an ID present");
   });
 });
