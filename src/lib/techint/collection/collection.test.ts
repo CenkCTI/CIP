@@ -13,11 +13,24 @@ afterEach(() => {
 });
 
 describe("TechINT source registry", () => {
-  it("contains only the fixed Phase 2.3C source pack", () => {
+  it("contains the fixed Phase 2.3C production source pack", () => {
     delete process.env.TECHINT_TEST_SOURCE_ENABLED;
-    expect(listTechnicalSources().map((source) => source.metadata.key)).toEqual(["CISA_KEV", "NVD_CVE"]);
+    expect(listTechnicalSources().map((source) => source.metadata.key)).toEqual([
+      "CISA_KEV",
+      "NVD_CVE",
+      "FIRST_EPSS",
+      "THREATFOX",
+      "MALWAREBAZAAR",
+    ]);
     process.env.TECHINT_TEST_SOURCE_ENABLED = "true";
-    expect(listTechnicalSources().map((source) => source.metadata.key)).toEqual(["TEST_SYNTHETIC", "CISA_KEV", "NVD_CVE"]);
+    expect(listTechnicalSources().map((source) => source.metadata.key)).toEqual([
+      "TEST_SYNTHETIC",
+      "CISA_KEV",
+      "NVD_CVE",
+      "FIRST_EPSS",
+      "THREATFOX",
+      "MALWAREBAZAAR",
+    ]);
     expect(listTechnicalSources().some((source) => source.metadata.key.includes("OTX"))).toBe(false);
   });
 });
@@ -120,11 +133,14 @@ describe("fixed-host transport", () => {
 });
 
 describe("source settings and scheduler bounds", () => {
-  it("rejects out-of-contract source intervals", async () => {
+  it("rejects out-of-contract source intervals and settings", async () => {
     const { sourceSettingsInputSchema } = await import("./schema");
     expect(sourceSettingsInputSchema.safeParse({ sourceKey: "TEST_SYNTHETIC", intervalMinutes: 1 }).success).toBe(false);
     expect(sourceSettingsInputSchema.safeParse({ sourceKey: "CISA_KEV", intervalMinutes: 59 }).success).toBe(false);
     expect(sourceSettingsInputSchema.safeParse({ sourceKey: "NVD_CVE", intervalMinutes: 120, initialLookbackHours: 169 }).success).toBe(false);
+    expect(sourceSettingsInputSchema.safeParse({ sourceKey: "FIRST_EPSS", intervalMinutes: 360, minimumEpss: 1.01 }).success).toBe(false);
+    expect(sourceSettingsInputSchema.safeParse({ sourceKey: "THREATFOX", intervalMinutes: 120, lookbackDays: 8 }).success).toBe(false);
+    expect(sourceSettingsInputSchema.safeParse({ sourceKey: "MALWAREBAZAAR", intervalMinutes: 120, lookbackDays: 1 }).success).toBe(false);
   });
 
   it("caps TechINT scheduler configuration", async () => {
