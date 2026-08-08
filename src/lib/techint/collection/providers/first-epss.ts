@@ -5,10 +5,10 @@ import { CollectionError } from "../errors";
 import { bounded, canonicalInstant, dateOnlyInstant, safeIssue } from "../mapping";
 import { firstEpssCursorSchema } from "../schema";
 import { fetchBoundedJson } from "../transport";
-import type { AdapterCollectionResult, MappedTechnicalSignal, TechnicalSourceAdapter } from "../types";
+import type { AdapterCollectionResult, CollectionIssue, MappedTechnicalSignal, TechnicalSourceAdapter } from "../types";
 
 export const FIRST_EPSS_URL = "https://api.first.org/data/v1/epss";
-const RECORD_LIMIT = 2000;
+const RECORD_LIMIT = 2500;
 const RESPONSE_LIMIT_BYTES = 4 * 1024 * 1024;
 
 const epssRecordSchema = z.object({
@@ -88,7 +88,15 @@ export function mapFirstEpssResponse(payload: unknown, receivedAt: string, lastM
     throw new CollectionError("INVALID_SOURCE_RESPONSE", "FIRST EPSS returned an unexpected bounded result page.");
   }
   const signals: MappedTechnicalSignal[] = [];
-  const issues = [];
+  const issues: CollectionIssue[] = [];
+  if (page.total > page.data.length) {
+    issues.push({
+      kind: "WARNING",
+      code: "EPSS_TOP_RESULTS_BOUNDED",
+      message: `FIRST EPSS returned more than the ${RECORD_LIMIT}-record TechINT run bound; only the highest-scoring bounded page is collected.`,
+      sourceRecordKey: null,
+    });
+  }
   for (const raw of page.data) {
     try { signals.push(mapFirstEpssRecord(raw, receivedAt, lastModified)); }
     catch {
