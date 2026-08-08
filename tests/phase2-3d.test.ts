@@ -6,7 +6,7 @@ const migration = readFileSync("supabase/migrations/202608080037_phase2_3d_taxon
 const trustedClient = readFileSync("src/lib/techint/entities/trusted-client.ts", "utf8");
 const actions = readFileSync("src/app/techint/entities/actions.ts", "utf8");
 
- describe("Phase 2.3D deterministic normalization", () => {
+describe("Phase 2.3D deterministic normalization", () => {
   it("normalizes CVE and ATT&CK identity deterministically", () => {
     expect(deterministicEntityIdentity("CVE", "cve-2026-12345")?.key).toBe("cve:CVE-2026-12345");
     expect(deterministicEntityIdentity("ATTACK_TECHNIQUE", "t1059.001")?.key).toBe("attack:T1059.001");
@@ -61,7 +61,8 @@ describe("Phase 2.3D trust boundaries", () => {
   });
 
   it("requires explicit remember-alias choice", () => {
-    expect(actions).toContain('form.get("rememberAlias")');
+    expect(actions).toContain('checked(form, "rememberAlias")');
+    expect(actions).toContain('form.get(name) === "on"');
     expect(actions).toContain("p_remember_alias");
   });
 
