@@ -8,4 +8,5 @@ export const recordingAssertionBases = ["PROVIDER_ASSERTED", "SYSTEM_EXTRACTED"]
 export const observationDispositions = ["CURRENT", "SUPPORTING", "STALE", "CONFLICTING"] as const;
 
 export type TechnicalSignalType = (typeof signalTypes)[number];
+export type TechnicalSignalSourceFamily = (typeof sourceFamilies)[number];
 export type ObservationDisposition = (typeof observationDispositions)[number];
