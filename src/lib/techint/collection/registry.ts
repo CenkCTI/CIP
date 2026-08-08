@@ -9,10 +9,27 @@ import { threatFoxTechnicalAdapter } from "./providers/threatfox";
 import { CollectionError } from "./errors";
 import type { TechnicalSourceAdapter, TechnicalSourceKey } from "./types";
 
+const nvdAdapter: TechnicalSourceAdapter = {
+  ...nvdCveAdapter,
+  metadata: {
+    ...nvdCveAdapter.metadata,
+    settingsFields: [
+      {
+        name: "initialLookbackHours",
+        label: "Initial lookback hours",
+        type: "integer",
+        minimum: 1,
+        maximum: 168,
+        defaultValue: 24,
+      },
+    ],
+  },
+};
+
 const adapters: Record<TechnicalSourceKey, TechnicalSourceAdapter> = {
   TEST_SYNTHETIC: testSyntheticAdapter,
   CISA_KEV: cisaKevAdapter,
-  NVD_CVE: nvdCveAdapter,
+  NVD_CVE: nvdAdapter,
   FIRST_EPSS: firstEpssAdapter,
   THREATFOX: threatFoxTechnicalAdapter,
   MALWAREBAZAAR: malwareBazaarAdapter,
