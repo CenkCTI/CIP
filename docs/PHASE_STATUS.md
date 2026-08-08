@@ -235,14 +235,19 @@ Manual ThreatFox synchronization uses the provider-independent incremental contr
 - [x] Immutable Phase 2.3B source assertions remain untouched; normalization decisions are stored only in the new Phase 2.3D tables.
 - [x] Deterministic CVE, ATT&CK technique/sub-technique, and Indicator identities reuse existing Phase 2.3B/CİTEM canonical rules and are owner-idempotent.
 - [x] Ambiguous Threat Actor, Malware, Campaign, Vendor, Product, Sector, Country, Region, Infrastructure, and Tag names are not auto-created from source strings.
-- [x] Conservative alias lookup folds only case and whitespace while preserving punctuation, digits, hyphens, underscores, and word boundaries; no fuzzy matching, stemming, substring matching, transliteration guessing, or AI inference is introduced.
-- [x] Analyst workflows distinguish per-assertion links from reusable `ANALYST_CONFIRMED` aliases; remembering an alias is explicit and defaults off.
-- [x] `AUTHORITATIVE_SOURCE` alias basis is modeled for future verified taxonomy ingestion but cannot be forged through the normal analyst/browser workflow; no MITRE alias catalog or ATT&CK ingestion is added here.
+- [x] Conservative automatic alias equality still folds only case/whitespace and preserves punctuation/word boundaries; lexical similarity is used only to shortlist non-authoritative review candidates and never performs an automatic identity write.
+- [x] Unresolved ambiguous assertions are deduplicated into exact owner/kind/value review groups so analysts review repeated labels once rather than one source assertion at a time.
+- [x] Existing authenticated BYOK is reused for optional AI-assisted candidate review; the TechINT workflow defaults the UI to NVIDIA NIM while preserving OpenAI, OpenRouter, and Groq.
+- [x] BYOK AI suggestions are bounded, strict-schema, prompt-injection-hardened, and non-authoritative: the suggestion route cannot mutate canonical entities, aliases, source assertions, Investigation records, profile matches, attribution, Graph, or priority state.
+- [x] Hallucinated candidate IDs fail closed to `UNSURE`; model `CREATE_NEW` proposals are checked server-side against existing exact canonical names before being shown as a new-entity action.
+- [x] Grouped writes require a separate explicit analyst confirmation; analysts can resolve only the current group or explicitly teach the exact value as an `ANALYST_CONFIRMED` alias for future automatic reconciliation.
+- [x] `AUTHORITATIVE_SOURCE` alias basis remains reserved for future verified taxonomy ingestion and cannot be forged through the normal analyst/browser or BYOK suggestion workflow; no MITRE alias catalog or ATT&CK ingestion is added here.
 - [x] Alias revocation returns dependent automatic alias resolutions to `NEEDS_REVIEW` while preserving analyst-linked/created decisions and immutable source assertions.
-- [x] Bounded, deterministic, retry-safe reconciliation is separate from `record_technical_signal` and performs no provider/network or AI call, keeping source collection and normalization as separate failure domains.
-- [x] Secondary `/techint/entities` workspace added without changing the locked primary TechINT navigation of Global View, Profiles, and InvestINT.
+- [x] Bounded deterministic reconciliation remains separate from `record_technical_signal` and performs no network/AI call, keeping collection and normalization as separate failure domains.
+- [x] Secondary `/techint/entities` remains outside the locked primary TechINT navigation and now presents automatic resolution, grouped exception review, optional BYOK suggestions, manual grouped fallback, canonical entity/alias management, and audit history.
 - [x] Project-scoped Threat Actor aliases, Malware family strings, and other Investigation analytical values are not automatically globalized into the TechINT taxonomy.
-- [x] Focused normalization/boundary tests and a PostgreSQL 16 Phase 2.3D migration harness are included; CI is extended without removing prior harnesses.
+- [x] Focused normalization/grouping/BYOK boundary tests and the PostgreSQL 16 Phase 2.3D migration harness are included; CI remains additive and preserves all prior harnesses.
+- [x] Final implementation head passed lint, typecheck, full tests, production build, all required PostgreSQL harnesses, and Vercel Preview validation before operator acceptance.
 - [ ] Migration 037 applied to Preview/test Supabase and PostgREST schema reloaded — operator step requiring explicit authorization.
-- [ ] Preview/browser acceptance checklist completed, including deterministic resolution, explicit alias teaching/revocation, source-assertion immutability, and second-user isolation.
-- [ ] Phase 2.3E profile matching, relevance scoring, Global Priority, Global View population, alerts/discovery, and AI briefs remain intentionally unimplemented.
+- [ ] Preview/browser acceptance completed for deterministic resolution, grouping, BYOK/NVIDIA NIM suggestions, explicit grouped confirmation, alias teaching/revocation, source immutability, and second-user isolation.
+- [ ] Phase 2.3E profile matching, relevance scoring, Global Priority, Global View population, alerts/discovery, and AI intelligence briefs remain intentionally unimplemented.
