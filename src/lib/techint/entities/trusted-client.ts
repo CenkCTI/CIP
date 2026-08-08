@@ -9,8 +9,6 @@ import {
   reconcileEntitiesResultSchema,
 } from "./schema";
 
-const nullableIdSchema = entityIdSchema.nullable();
-
 type Parameters = Record<string, unknown>;
 
 function trustedClient() {
@@ -58,4 +56,4 @@ export const renameTechnicalEntityWorkflow = (parameters: Parameters) =>
   rpc("rename_technical_entity", parameters, entityIdSchema);
 
 export const setTechnicalEntityStatusWorkflow = (parameters: Parameters) =>
-  rpc("set_technical_entity_status", parameters, entityIdSchema.or(nullableIdSchema));
+  rpc("set_technical_entity_status", parameters, entityIdSchema);
