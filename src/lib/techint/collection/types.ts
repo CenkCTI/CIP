@@ -1,6 +1,14 @@
 import type { RecordTechnicalSignalInput } from "@/lib/techint/signals/schema";
+import type { TechnicalSignalSourceFamily } from "@/lib/techint/signals/types";
 
-export const technicalSourceKeys = ["TEST_SYNTHETIC", "CISA_KEV", "NVD_CVE"] as const;
+export const technicalSourceKeys = [
+  "TEST_SYNTHETIC",
+  "CISA_KEV",
+  "NVD_CVE",
+  "FIRST_EPSS",
+  "THREATFOX",
+  "MALWAREBAZAAR",
+] as const;
 export const technicalSourceStatuses = ["ENABLED", "PAUSED", "ARCHIVED"] as const;
 export const collectionTriggers = ["MANUAL", "SCHEDULED", "TEST"] as const;
 export const collectionIssueKinds = ["SKIPPED", "WARNING", "ERROR"] as const;
@@ -10,18 +18,29 @@ export type TechnicalSourceStatus = (typeof technicalSourceStatuses)[number];
 export type CollectionTrigger = (typeof collectionTriggers)[number];
 export type CollectionIssueKind = (typeof collectionIssueKinds)[number];
 
+export type SourceSettingField = {
+  name: "initialLookbackHours" | "minimumEpss" | "lookbackDays";
+  label: string;
+  type: "integer" | "number";
+  minimum: number;
+  maximum: number;
+  step?: number;
+  defaultValue: number;
+};
+
 export type SourceMetadata = {
   key: TechnicalSourceKey;
   displayName: string;
   description: string;
-  sourceFamily: "MANUAL_TEST" | "VULNERABILITY";
+  sourceFamily: TechnicalSignalSourceFamily;
   defaultIntervalMinutes: number;
   minimumIntervalMinutes: number;
   maximumIntervalMinutes: number;
   manual: boolean;
   scheduled: boolean;
-  credentialRequirement: "NONE" | "OPTIONAL_SERVER_ENV";
+  credentialRequirement: "NONE" | "OPTIONAL_SERVER_ENV" | "REQUIRED_SERVER_ENV" | "EXISTING_IOC_CREDENTIAL";
   fixedHosts: readonly string[];
+  settingsFields?: readonly SourceSettingField[];
   testSynthetic?: boolean;
 };
 
@@ -47,6 +66,7 @@ export type AdapterContext = {
   cursor: Record<string, unknown>;
   settings: Record<string, unknown>;
   fetchImpl: typeof fetch;
+  credential?: string | null;
 };
 
 export type TechnicalSourceAdapter = {
