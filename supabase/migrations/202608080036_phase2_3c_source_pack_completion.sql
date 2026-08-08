@@ -76,7 +76,10 @@ create or replace function public.technical_source_validate_cursor(
   p_source public.technical_source_key,
   p_cursor jsonb
 ) returns void language plpgsql immutable set search_path = '' as $$
-declare version integer;
+declare
+  version integer;
+  cursor_epss numeric;
+  cursor_lookback integer;
 begin
   if p_cursor is null or jsonb_typeof(p_cursor) <> 'object' or pg_column_size(p_cursor) > 32768 then
     raise exception 'INVALID_CURSOR' using errcode = '22023';
@@ -104,14 +107,24 @@ begin
     end if;
     if p_cursor->>'lastModifiedWatermark' is not null then perform (p_cursor->>'lastModifiedWatermark')::timestamptz; end if;
   elsif p_source = 'FIRST_EPSS' then
-    if p_cursor - array['version','lastModified'] <> '{}'::jsonb
-       or (p_cursor ? 'lastModified' and (jsonb_typeof(p_cursor->'lastModified') <> 'string' or char_length(p_cursor->>'lastModified') > 200)) then
+    if p_cursor - array['version','lastModified','minimumEpss'] <> '{}'::jsonb
+       or (p_cursor ? 'lastModified' and (jsonb_typeof(p_cursor->'lastModified') <> 'string' or char_length(p_cursor->>'lastModified') > 200))
+       or (p_cursor ? 'minimumEpss' and jsonb_typeof(p_cursor->'minimumEpss') <> 'number') then
       raise exception 'INVALID_CURSOR' using errcode = '22023';
     end if;
+    if p_cursor ? 'minimumEpss' then
+      cursor_epss := (p_cursor->>'minimumEpss')::numeric;
+      if cursor_epss < 0 or cursor_epss > 1 then raise exception 'INVALID_CURSOR' using errcode = '22023'; end if;
+    end if;
   elsif p_source = 'THREATFOX' then
-    if p_cursor - array['version','maxProviderId'] <> '{}'::jsonb
-       or (p_cursor ? 'maxProviderId' and (jsonb_typeof(p_cursor->'maxProviderId') <> 'string' or (p_cursor->>'maxProviderId') !~ '^(0|[1-9][0-9]{0,39})$')) then
+    if p_cursor - array['version','maxProviderId','lookbackDays'] <> '{}'::jsonb
+       or (p_cursor ? 'maxProviderId' and (jsonb_typeof(p_cursor->'maxProviderId') <> 'string' or (p_cursor->>'maxProviderId') !~ '^(0|[1-9][0-9]{0,39})$'))
+       or (p_cursor ? 'lookbackDays' and jsonb_typeof(p_cursor->'lookbackDays') <> 'number') then
       raise exception 'INVALID_CURSOR' using errcode = '22023';
+    end if;
+    if p_cursor ? 'lookbackDays' then
+      cursor_lookback := (p_cursor->>'lookbackDays')::integer;
+      if cursor_lookback not between 1 and 7 then raise exception 'INVALID_CURSOR' using errcode = '22023'; end if;
     end if;
   elsif p_source = 'MALWAREBAZAAR' then
     if p_cursor - array['version','lastFirstSeen'] <> '{}'::jsonb
@@ -123,7 +136,7 @@ begin
     raise exception 'INVALID_CURSOR' using errcode = '22023';
   end if;
 exception
-  when invalid_text_representation or datetime_field_overflow then
+  when invalid_text_representation or datetime_field_overflow or numeric_value_out_of_range then
     raise exception 'INVALID_CURSOR' using errcode = '22023';
 end $$;
 
@@ -189,8 +202,8 @@ begin
   perform public.technical_source_validate_settings('FIRST_EPSS', '{"minimumEpss":0.1}'::jsonb, 360);
   perform public.technical_source_validate_settings('THREATFOX', '{"lookbackDays":1}'::jsonb, 120);
   perform public.technical_source_validate_settings('MALWAREBAZAAR', '{}'::jsonb, 120);
-  perform public.technical_source_validate_cursor('FIRST_EPSS', '{"version":1}'::jsonb);
-  perform public.technical_source_validate_cursor('THREATFOX', '{"version":1,"maxProviderId":"123"}'::jsonb);
+  perform public.technical_source_validate_cursor('FIRST_EPSS', '{"version":1,"minimumEpss":0.1}'::jsonb);
+  perform public.technical_source_validate_cursor('THREATFOX', '{"version":1,"maxProviderId":"123","lookbackDays":1}'::jsonb);
   perform public.technical_source_validate_cursor('MALWAREBAZAAR', '{"version":1,"lastFirstSeen":"2099-01-01T00:00:00Z"}'::jsonb);
 
   begin
@@ -204,8 +217,18 @@ begin
   exception when invalid_parameter_value then null;
   end;
   begin
-    perform public.technical_source_validate_cursor('THREATFOX', '{"version":1,"maxProviderId":"-1"}'::jsonb);
+    perform public.technical_source_validate_cursor('FIRST_EPSS', '{"version":1,"minimumEpss":1.1}'::jsonb);
+    raise exception 'invalid FIRST_EPSS cursor accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.technical_source_validate_cursor('THREATFOX', '{"version":1,"maxProviderId":"-1","lookbackDays":1}'::jsonb);
     raise exception 'invalid THREATFOX cursor accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.technical_source_validate_cursor('THREATFOX', '{"version":1,"maxProviderId":"123","lookbackDays":8}'::jsonb);
+    raise exception 'invalid THREATFOX lookback cursor accepted';
   exception when invalid_parameter_value then null;
   end;
 end $$;
