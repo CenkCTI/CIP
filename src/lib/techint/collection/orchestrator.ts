@@ -3,6 +3,7 @@ import "server-only";
 import { recordTechnicalSignal } from "@/lib/techint/signals/trusted-signal-client";
 import { adapterResultSchema, collectionClaimSchema } from "./schema";
 import { controlledCollectionError, CollectionError } from "./errors";
+import { resolveTechnicalSourceCredential } from "./credentials";
 import { getTechnicalSourceAdapter } from "./registry";
 import { completeTechnicalCollection, failTechnicalCollection } from "./trusted-collection-client";
 import { emptyCollectionCounters, type CollectionCounters } from "./types";
@@ -54,7 +55,14 @@ export async function runClaimedTechnicalCollection(rawClaim: unknown, fetchImpl
   let issues: Array<{ kind: "SKIPPED" | "WARNING" | "ERROR"; code: string; message: string; sourceRecordKey?: string | null }> = [];
   try {
     const adapter = getTechnicalSourceAdapter(claim.source_key);
-    const rawResult = await adapter.collect({ now: new Date(), cursor: claim.cursor, settings: claim.settings, fetchImpl });
+    const credential = await resolveTechnicalSourceCredential(claim.source_key, claim.owner_id);
+    const rawResult = await adapter.collect({
+      now: new Date(),
+      cursor: claim.cursor,
+      settings: claim.settings,
+      fetchImpl,
+      credential,
+    });
     if (rawResult.signals.length > 2500) {
       throw new CollectionError("SIGNAL_LIMIT_EXCEEDED", "The collection signal limit was exceeded.");
     }
