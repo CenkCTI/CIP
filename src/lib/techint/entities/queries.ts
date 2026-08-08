@@ -24,6 +24,14 @@ export function listTechnicalEntityResolutions(client: SupabaseClient, limit = 5
     .limit(Math.min(Math.max(limit, 1), 500));
 }
 
+export function listTechnicalEntityResolutionsForAssertions(client: SupabaseClient, assertionIds: string[]) {
+  if (!assertionIds.length) return Promise.resolve({ data: [], error: null });
+  return client
+    .from("technical_entity_assertion_resolutions")
+    .select("id,assertion_id,entity_kind,entity_id,alias_id,status,basis,created_at,updated_at,resolved_at")
+    .in("assertion_id", assertionIds.slice(0, 500));
+}
+
 export function listTechnicalEntityAssertions(client: SupabaseClient, limit = 500) {
   return client
     .from("technical_signal_entity_assertions")
