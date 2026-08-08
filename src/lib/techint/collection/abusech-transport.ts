@@ -47,7 +47,7 @@ export async function fetchMalwareBazaarMetadata(input: {
     if (response.status === 401 || response.status === 403) throw new CollectionError("SOURCE_NOT_AVAILABLE", "The MalwareBazaar server credential was rejected.");
     if (!response.ok) throw new CollectionError("HTTP_STATUS", `The source returned HTTP ${response.status}.`);
     const contentType = response.headers.get("content-type") ?? "";
-    if (contentType && !contentTypeIsJson(contentType)) throw new CollectionError("HTTP_CONTENT_TYPE", "The source did not return JSON.");
+    if (!contentTypeIsJson(contentType)) throw new CollectionError("HTTP_CONTENT_TYPE", "The source did not return JSON.");
     const declared = response.headers.get("content-length");
     const maxBytes = 8 * 1024 * 1024;
     if (declared && (!/^\d+$/.test(declared) || Number(declared) > maxBytes)) {
