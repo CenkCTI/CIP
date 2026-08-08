@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mapFirstEpssRecord, mapFirstEpssResponse, firstEpssAdapter } from "./providers/first-epss";
 import { mapThreatFoxCandidate } from "./providers/threatfox";
@@ -129,5 +130,49 @@ describe("MalwareBazaar metadata-only source", () => {
 
   it("requires a server credential before collection", async () => {
     await expect(malwareBazaarAdapter.collect({ now: new Date(), cursor: { version: 1 }, settings: {}, fetchImpl: fetch })).rejects.toMatchObject({ code: "SOURCE_NOT_AVAILABLE" });
+  });
+});
+
+describe("source-pack trust boundary", () => {
+  it("reuses the existing ThreatFox credential repository instead of adding a second store", () => {
+    const credentials = readFileSync("src/lib/techint/collection/credentials.ts", "utf8");
+    expect(credentials).toContain('loadCredential } from "@/lib/ioc-connectors/credentials/repository"');
+    expect(credentials).toContain('eq("provider_key", "THREATFOX")');
+    expect(credentials).not.toContain('from("ioc_provider_credentials")');
+    expect(credentials).not.toContain("create table");
+  });
+
+  it("keeps new adapters free of direct analytical-table mutations and sample downloads", () => {
+    const paths = [
+      "src/lib/techint/collection/providers/first-epss.ts",
+      "src/lib/techint/collection/providers/threatfox.ts",
+      "src/lib/techint/collection/providers/malwarebazaar.ts",
+      "src/lib/techint/collection/abusech-transport.ts",
+    ];
+    const source = paths.map((path) => readFileSync(path, "utf8")).join("\n");
+    for (const table of [
+      "indicators",
+      "evidence",
+      "sources",
+      "projects",
+      "timeline_events",
+      "campaigns",
+      "threat_actors",
+      "infrastructure_clusters",
+      "attribution_hypotheses",
+      "entity_relationships",
+    ]) {
+      expect(source).not.toContain(`.from(\"${table}\")`);
+    }
+    expect(source).not.toContain('query: "get_file"');
+    expect(source).not.toContain("download_sample");
+    expect(source).not.toContain("sample_download");
+  });
+
+  it("persists mapped developments only through the existing trusted Technical Signal recorder", () => {
+    const orchestrator = readFileSync("src/lib/techint/collection/orchestrator.ts", "utf8");
+    expect(orchestrator).toContain('recordTechnicalSignal({ actorId: claim.owner_id, ...mapped })');
+    expect(orchestrator).not.toContain('.from("technical_signals")');
+    expect(orchestrator).not.toContain('.from("technical_signal_observations")');
   });
 });
