@@ -30,10 +30,18 @@ export const nvdCursorSchema = z
   .object({ version: z.literal(1), lastModifiedWatermark: z.iso.datetime({ offset: true }).optional() })
   .strict();
 export const firstEpssCursorSchema = z
-  .object({ version: z.literal(1), lastModified: z.string().trim().min(1).max(200).optional() })
+  .object({
+    version: z.literal(1),
+    lastModified: z.string().trim().min(1).max(200).optional(),
+    minimumEpss: z.number().min(0).max(1).optional(),
+  })
   .strict();
 export const threatFoxTechIntCursorSchema = z
-  .object({ version: z.literal(1), maxProviderId: z.string().regex(/^(?:0|[1-9]\d{0,39})$/).optional() })
+  .object({
+    version: z.literal(1),
+    maxProviderId: z.string().regex(/^(?:0|[1-9]\d{0,39})$/).optional(),
+    lookbackDays: z.number().int().min(1).max(7).optional(),
+  })
   .strict();
 export const malwareBazaarCursorSchema = z
   .object({ version: z.literal(1), lastFirstSeen: z.iso.datetime({ offset: true }).optional() })
