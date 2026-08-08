@@ -33,6 +33,12 @@ function safeProviderUrl(value: string | null, id: string) {
   return `https://threatfox.abuse.ch/ioc/${encodeURIComponent(id)}/`;
 }
 
+export function threatFoxHighWaterForWindow(rawCursor: unknown, lookbackDays: number) {
+  const cursor = threatFoxTechIntCursorSchema.parse(rawCursor);
+  if (cursor.lookbackDays !== lookbackDays || !cursor.maxProviderId) return BigInt(0);
+  return BigInt(cursor.maxProviderId);
+}
+
 export function mapThreatFoxCandidate(candidate: NormalizedCandidate, receivedAt: string): MappedTechnicalSignal {
   const type = indicatorType(candidate);
   if (candidate.normalized_value.length > 500) throw new Error("THREATFOX_INDICATOR_TOO_LONG");
@@ -139,8 +145,7 @@ export const threatFoxTechnicalAdapter: TechnicalSourceAdapter = {
     if (response.data.length > MAX_ITEMS) throw new CollectionError("ITEM_LIMIT_EXCEEDED", "ThreatFox exceeded the bounded item limit.");
 
     const zero = BigInt(0);
-    const sameWindow = cursor.lookbackDays === settings.lookbackDays;
-    const currentMax = sameWindow && cursor.maxProviderId ? BigInt(cursor.maxProviderId) : zero;
+    const currentMax = threatFoxHighWaterForWindow(cursor, settings.lookbackDays);
     let nextMax = currentMax;
     const eligible: unknown[] = [];
     for (const item of response.data) {
