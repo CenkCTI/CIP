@@ -115,6 +115,7 @@ export function shortlistEntityCandidates(group: EntityAssertionGroup, entities:
       canonicalNormalized: entity.canonical_normalized,
       score: candidateScore(group.displayValue, entity.canonical_name),
     }))
+    .filter((candidate) => candidate.score > 0)
     .sort((a, b) => b.score - a.score || a.canonicalName.localeCompare(b.canonicalName))
     .slice(0, Math.min(Math.max(limit, 1), 20));
 }
