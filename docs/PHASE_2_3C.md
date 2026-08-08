@@ -19,7 +19,7 @@ Migration `202608060033_phase2_3c_technical_source_collection.sql` adds owner-sc
 
 Migration `202608070034_phase2_3c_advisory_key_repair.sql` is an additive live-acceptance repair. It leaves migration 032 immutable and replaces only `technical_signal_validate_canonical_key` so advisory/report-shaped canonical keys are validated with the intended regex precedence. The migration preserves the helper ACL boundary and includes non-mutating advisory/report regression assertions.
 
-Migration `202608080036_phase2_3c_source_pack_completion.sql` is additive and extends only the Technical Source enum plus source-specific settings/cursor validation for the sources actually delivered by the completion work: `FIRST_EPSS`, `THREATFOX`, and `MALWAREBAZAAR`. Migrations 033–035 are not rewritten.
+Migration `202608080036_phase2_3c_source_pack_completion.sql` is additive and extends only the Technical Source enum plus source-specific defaults, settings/cursor validation, and ACL regression assertions for the sources actually delivered by the completion work: `FIRST_EPSS`, `THREATFOX`, and `MALWAREBAZAAR`. Migrations 033–035 are not rewritten.
 
 ## Exact run and lease semantics
 A claim generates a random 32-byte token. The database stores only its SHA-256 hash and returns plaintext only to the narrow server-only orchestrator. Completion and failure require the exact run and token. One `RUNNING` row is allowed per connection. Wrong, stale, expired, or cross-owner operations fail closed.
@@ -68,7 +68,9 @@ Official fixed endpoint:
 
 `https://api.first.org/data/v1/epss`
 
-The adapter uses the public FIRST API with fixed-host HTTPS GET, `limit=2000`, `offset=0`, descending EPSS sort, a configurable bounded minimum EPSS threshold (default `0.1`), a 4 MiB response cap, and conditional `If-Modified-Since` replay using the provider's `Last-Modified` header. The cursor contains only version and bounded `lastModified` metadata.
+The adapter uses the public FIRST API with fixed-host HTTPS GET, `limit=2500`, `offset=0`, descending EPSS sort, a configurable bounded minimum EPSS threshold (default `0.1`), a 4 MiB response cap, and conditional `If-Modified-Since` replay using the provider's `Last-Modified` header. The 2,500-record page is the deliberate Phase 2.3C run ceiling; when FIRST reports more matching rows, the run retains the highest-scoring bounded page and emits an explicit `EPSS_TOP_RESULTS_BOUNDED` warning instead of silently pretending to ingest the entire result set.
+
+The cursor stores version, bounded `lastModified`, and the `minimumEpss` value that produced that conditional state. `If-Modified-Since` is used only when the current threshold matches the cursor-bound threshold. Changing the threshold therefore forces a fresh bounded query instead of allowing an old validator to return an incorrect 304 for a different query.
 
 EPSS and percentile are source-backed probability/ranking metrics. They are **not** CİTEM analyst confidence, CVSS, severity, business risk, or Global Priority. The signal therefore keeps `confidence=null` and `severity=UNKNOWN`.
 
@@ -77,7 +79,7 @@ The implementation intentionally maps EPSS as a source-defined `PROVIDER_ALERT` 
 ### ThreatFox → TechINT
 ThreatFox collection reuses the existing hardened provider implementation under `src/lib/ioc-connectors/providers/threatfox/` and the existing encrypted credential repository. The TechINT orchestrator resolves the existing owner-local ThreatFox credential only on the server. No duplicate credential table, plaintext persistence, browser credential, or cursor credential is introduced.
 
-The bridge uses the existing ThreatFox `get_iocs` read-only request and provider normalization. A strict TechINT cursor stores only a bounded decimal `maxProviderId`; records at or below that high-water mark are not remapped. Valid DOMAIN/IP/URL observations map to `IOC_OBSERVATION` with canonical Indicator identity. Provider-specific port, threat type, malware family, confidence, tags, timestamps, and metadata remain in the immutable source observation snapshot and provider assertions. The canonical signal facts contain only provider-independent Indicator identity so another provider can support the same IOC without overwriting canonical facts with provider-specific context.
+The bridge uses the existing ThreatFox `get_iocs` read-only request and provider normalization. A strict TechINT cursor stores a bounded decimal `maxProviderId` together with the `lookbackDays` window that produced it. Records at or below that high-water mark are not remapped while the lookback setting is unchanged. If the analyst changes the lookback window, the old high-water mark is not reused, so widening the window cannot silently skip the newly requested historical provider records. Valid DOMAIN/IP/URL observations map to `IOC_OBSERVATION` with canonical Indicator identity. Provider-specific port, threat type, malware family, confidence, tags, timestamps, and metadata remain in the immutable source observation snapshot and provider assertions. The canonical signal facts contain only provider-independent Indicator identity so another provider can support the same IOC without overwriting canonical facts with provider-specific context.
 
 ThreatFox provider confidence is not promoted to CİTEM signal/analyst confidence. The IOC Inbox remains unchanged.
 
@@ -88,7 +90,7 @@ Official fixed endpoint:
 
 The source uses only the documented read-only `get_recent` metadata query with selector `100`. `MALWAREBAZAAR_AUTH_KEY` is a required server-only environment variable and is sent only in the `Auth-Key` header. The request body is a fixed bounded `application/x-www-form-urlencoded` body containing only `query=get_recent&selector=100`. Redirects are disabled, timeout is 15 seconds, JSON content type is required, and the response is capped at 8 MiB.
 
-The adapter has no `get_file`, sample-download, archive-download, execution, unpacking, sandboxing, or YARA-on-downloaded-sample path. It maps bounded recent metadata to `MALWARE_ACTIVITY` using source-defined `report:malwarebazaar:<sha256>` identity, hash Indicator assertions, and source-backed malware-family/tag assertions. Malware family/signature strings remain provider assertions; Phase 2.3D owns alias reconciliation.
+The adapter has no `get_file`, sample-download, archive-download, execution, unpacking, sandboxing, or YARA-on-downloaded-sample path. It maps bounded recent metadata to `MALWARE_ACTIVITY` using source-defined `report:malwarebazaar:<sha256>` identity, hash Indicator assertions, and source-backed malware-family/tag assertions. Malware family/signature strings remain provider assertions; Phase 2.3D owns alias reconciliation. Provider `YYYY-MM-DD HH:mm:ss` timestamps are normalized deterministically as UTC rather than relying on process-local timezone parsing.
 
 The cursor stores only the latest provider `first_seen` timestamp. The boundary row is replayed (`>=` watermark) so same-timestamp records are not missed; Phase 2.3B observation idempotency makes that replay safe.
 
@@ -139,7 +141,7 @@ No OTX merge, URLhaus implementation, ATT&CK ingestion, arbitrary feed URL, taxo
 ## Validation and acceptance status
 Historical PR #35 acceptance is preserved: CISA KEV demonstrated successful initial/no-change collection; NVD live testing drove bounded page/rate-limit/timeout repairs; synthetic live acceptance exposed and drove migration 034.
 
-The Phase 2.3C completion adds focused unit tests for FIRST EPSS semantics, ThreatFox canonical IOC mapping/port/provenance, MalwareBazaar fixed POST/Auth-Key isolation and metadata-only mapping, registry bounds, and new source settings. It adds a PostgreSQL 16 source-pack harness that applies migrations in sorted order and checks migration 036 enum/settings/cursor contracts, success/failure cursor semantics, authenticated mutation denial, owner isolation, and sensitive lease-column denial. The existing Phase 2.3C harness continues to apply all migrations, so migration 036 is also exercised by the historical collection harness.
+The Phase 2.3C completion adds focused unit tests for FIRST EPSS semantics, ThreatFox canonical IOC mapping/port/provenance, MalwareBazaar fixed POST/Auth-Key isolation and metadata-only mapping, registry bounds, setting-bound cursor behavior, and new source settings. It adds a PostgreSQL 16 source-pack harness that applies migrations in sorted order and checks migration 036 enum/settings/cursor/default/ACL contracts, success/failure cursor semantics, authenticated mutation denial, owner isolation, and sensitive lease-column denial. The existing Phase 2.3C harness continues to apply all migrations, so migration 036 is also exercised by the historical collection harness.
 
 No migration 036 application to live/Preview Supabase is claimed by this document. No live FIRST EPSS, ThreatFox TechINT, or MalwareBazaar collection is claimed until the operator explicitly authorizes and performs it.
 
@@ -148,8 +150,8 @@ No migration 036 application to live/Preview Supabase is claimed by this documen
 2. Apply migration 036 to the intended test/Preview Supabase only with explicit operator authorization.
 3. Reload PostgREST schema cache.
 4. Redeploy Preview.
-5. FIRST EPSS: enable with a bounded threshold, run manual sync, verify provider score/percentile remain source facts with null signal confidence and `UNKNOWN` severity; repeat and verify conditional/idempotent behavior.
-6. ThreatFox: confirm the IOC Inbox ThreatFox connection already has an encrypted credential; enable the TechINT bridge; run sync; verify no second credential is created and IOC Inbox triage/acceptance rows are unchanged.
+5. FIRST EPSS: enable with a bounded threshold, run manual sync, verify provider score/percentile remain source facts with null signal confidence and `UNKNOWN` severity; repeat and verify conditional/idempotent behavior; change the threshold and verify a fresh bounded query rather than an old-query 304.
+6. ThreatFox: confirm the IOC Inbox ThreatFox connection already has an encrypted credential; enable the TechINT bridge; run sync; verify no second credential is created and IOC Inbox triage/acceptance rows are unchanged; change lookback and verify the previous high-water mark is not reused for the different window.
 7. MalwareBazaar: configure `MALWAREBAZAAR_AUTH_KEY` server-side; enable source; run sync; verify only metadata/hashes are recorded and no sample/file download occurs.
 8. For all three sources, verify a failed run does not advance the authoritative cursor.
 9. Verify second-user source/run/signal isolation.
