@@ -1,5 +1,5 @@
 -- Phase 2.3C completion: extend the fixed Technical Source registry without
--- rewriting the already-applied 033/034 collection migrations.
+-- rewriting the already-applied 033/034/035 migrations.
 
 begin;
 alter type public.technical_source_key add value if not exists 'FIRST_EPSS';
@@ -125,6 +125,62 @@ begin
 exception
   when invalid_text_representation or datetime_field_overflow then
     raise exception 'INVALID_CURSOR' using errcode = '22023';
+end $$;
+
+-- Keep source-specific defaults authoritative in the trusted database workflow.
+create or replace function public.enable_technical_source(
+  p_actor uuid,
+  p_source public.technical_source_key,
+  p_settings jsonb default '{}'::jsonb,
+  p_interval_minutes integer default null
+) returns uuid language plpgsql security definer set search_path = '' as $$
+declare c public.technical_source_connections; interval_value integer; initial_cursor jsonb;
+begin
+  if p_actor is null or not exists(select 1 from auth.users where id = p_actor) then
+    raise exception 'INVALID_ACTOR' using errcode = '22023';
+  end if;
+  interval_value := coalesce(p_interval_minutes, case p_source
+    when 'TEST_SYNTHETIC' then 0
+    when 'CISA_KEV' then 360
+    when 'NVD_CVE' then 120
+    when 'FIRST_EPSS' then 360
+    when 'THREATFOX' then 120
+    when 'MALWAREBAZAAR' then 120
+    else 120 end);
+  perform public.technical_source_validate_settings(p_source, coalesce(p_settings,'{}'::jsonb), interval_value);
+  initial_cursor := case p_source
+    when 'TEST_SYNTHETIC' then '{"version":1,"sequence":0}'::jsonb
+    when 'CISA_KEV' then '{"version":1}'::jsonb
+    when 'NVD_CVE' then '{"version":1}'::jsonb
+    when 'FIRST_EPSS' then '{"version":1}'::jsonb
+    when 'THREATFOX' then '{"version":1}'::jsonb
+    when 'MALWAREBAZAAR' then '{"version":1}'::jsonb
+    else '{"version":1}'::jsonb end;
+  insert into public.technical_source_connections(owner_id, source_key, status, settings, cursor, cursor_version, interval_minutes, next_run_at)
+  values (p_actor, p_source, 'ENABLED', coalesce(p_settings,'{}'::jsonb), initial_cursor, 1, interval_value,
+    case when p_source = 'TEST_SYNTHETIC' then null else now() end)
+  on conflict (owner_id, source_key) do update
+    set status = 'ENABLED', settings = excluded.settings, interval_minutes = excluded.interval_minutes,
+        next_run_at = case when excluded.source_key = 'TEST_SYNTHETIC' then null else coalesce(public.technical_source_connections.next_run_at, now()) end
+  returning * into c;
+  perform public.technical_source_audit(p_actor, c.id, c.source_key,
+    (case when c.created_at = c.updated_at then 'ENABLED' else 'RESTORED' end)::public.technical_source_audit_action,
+    jsonb_build_object('intervalMinutes', c.interval_minutes));
+  return c.id;
+end $$;
+
+-- CREATE OR REPLACE preserves the ACL established by migration 033; assert that
+-- the trusted workflow did not accidentally become callable by browser roles.
+do $$
+begin
+  if has_function_privilege('authenticated','public.enable_technical_source(uuid,public.technical_source_key,jsonb,integer)','EXECUTE')
+     or has_function_privilege('authenticated','public.technical_source_validate_settings(public.technical_source_key,jsonb,integer)','EXECUTE')
+     or has_function_privilege('authenticated','public.technical_source_validate_cursor(public.technical_source_key,jsonb)','EXECUTE') then
+    raise exception 'TECHNICAL_SOURCE_ACL_REGRESSION';
+  end if;
+  if not has_function_privilege('service_role','public.enable_technical_source(uuid,public.technical_source_key,jsonb,integer)','EXECUTE') then
+    raise exception 'TECHNICAL_SOURCE_SERVICE_ROLE_ACL_REGRESSION';
+  end if;
 end $$;
 
 -- Non-mutating regression assertions for the newly registered source contracts.
