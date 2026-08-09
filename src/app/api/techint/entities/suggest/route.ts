@@ -6,7 +6,8 @@ import { AiError } from "@/lib/ai/client";
 import { byokChat } from "@/lib/ai/byok/client";
 import { safeAiErrorMessage } from "@/lib/ai/byok/errors";
 import { BYOK_COOKIE, decryptCredential, type ByokCredential } from "@/lib/ai/byok/vault";
-import { buildEntityAiMessages, entityAiGroupSchema, parseEntityAiResponse } from "@/lib/techint/entities/ai-resolver";
+import { buildEntityAiMessages, entityAiGroupSchema, parseEntityAiResponse, type EntityAiSuggestion } from "@/lib/techint/entities/ai-resolver";
+import { chunkEntityAiItems, ENTITY_AI_MAX_RUN_GROUPS } from "@/lib/techint/entities/ai-batch";
 import { groupUnresolvedAssertions, shortlistEntityCandidates } from "@/lib/techint/entities/grouping";
 import { normalizeEntityLookup } from "@/lib/techint/entities/normalization";
 import {
@@ -21,7 +22,7 @@ import type { TechnicalEntityKind } from "@/lib/techint/entities/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const bodySchema = z.object({ limit: z.coerce.number().int().min(1).max(8).default(6) }).strict();
+const bodySchema = z.object({ limit: z.coerce.number().int().min(0).max(ENTITY_AI_MAX_RUN_GROUPS).default(8) }).strict();
 const deterministicKinds = new Set<TechnicalEntityKind>(["CVE", "INDICATOR", "ATTACK_TECHNIQUE"]);
 
 function safeError(error: unknown) {
@@ -43,6 +44,10 @@ function safeError(error: unknown) {
 export async function POST(request: Request) {
   try {
     const parsed = bodySchema.parse(await request.json().catch(() => ({})));
+    if (parsed.limit === 0) {
+      return NextResponse.json({ suggestions: [], provider: null, model: null, groups_analyzed: 0, model_batches: 0 });
+    }
+
     const { supabase, user } = await requireUser();
     const { data: assertionRows, error: assertionError } = await listTechnicalEntityAssertions(supabase, 500);
     if (assertionError) throw new Error("entity_ai_context_unavailable");
@@ -62,7 +67,9 @@ export async function POST(request: Request) {
     const groups = groupUnresolvedAssertions(assertions, resolutions)
       .filter((group) => !deterministicKinds.has(group.entityKind))
       .slice(0, parsed.limit);
-    if (!groups.length) return NextResponse.json({ suggestions: [], provider: null, model: null });
+    if (!groups.length) {
+      return NextResponse.json({ suggestions: [], provider: null, model: null, groups_analyzed: 0, model_batches: 0 });
+    }
 
     const entityResult = await listTechnicalEntitiesForKinds(supabase, groups.map((group) => group.entityKind), 500);
     if (entityResult.error) throw new Error("entity_ai_context_unavailable");
@@ -104,8 +111,13 @@ export async function POST(request: Request) {
       throw new AiError(code);
     }
 
-    const content = await byokChat(credential.providerId, credential.model, credential.apiKey, buildEntityAiMessages(aiGroups), "generation");
-    const decisions = parseEntityAiResponse(content, aiGroups);
+    const decisions: EntityAiSuggestion[] = [];
+    const batches = chunkEntityAiItems(aiGroups);
+    for (const batch of batches) {
+      const content = await byokChat(credential.providerId, credential.model, credential.apiKey, buildEntityAiMessages(batch), "generation");
+      decisions.push(...parseEntityAiResponse(content, batch));
+    }
+
     const suggestions = groups.map((group, index) => {
       const decision = decisions[index];
       if (decision.decision === "CREATE_NEW" && decision.proposedCanonicalName) {
@@ -157,6 +169,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       provider: credential.providerId,
       model: credential.model,
+      groups_analyzed: groups.length,
+      model_batches: batches.length,
       suggestions,
       disclaimer: "AI suggestions are non-authoritative. No canonical entity, alias, resolution, Investigation record, match, or score was changed.",
     });
