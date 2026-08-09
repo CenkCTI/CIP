@@ -31,6 +31,9 @@ async function rpc<T>(name: string, parameters: Parameters, schema: z.ZodType<T>
 export const reconcileTechnicalEntitiesWorkflow = (parameters: Parameters) =>
   rpc("reconcile_technical_entity_assertions", parameters, reconcileEntitiesResultSchema);
 
+export const reconcileNewTechnicalEntitiesWorkflow = (parameters: Parameters) =>
+  rpc("reconcile_new_technical_entity_assertions", parameters, reconcileEntitiesResultSchema);
+
 export const createTechnicalEntityWorkflow = (parameters: Parameters) =>
   rpc("create_technical_entity", parameters, createEntityResultSchema);
 
