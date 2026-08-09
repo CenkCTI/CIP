@@ -38,6 +38,7 @@ type AutoOutcome = {
   displayValue: string;
   status: "AUTO_RESOLVED" | "REVIEW";
   reason: string;
+  created?: boolean;
 };
 
 type AutoReport = {
@@ -45,6 +46,7 @@ type AutoReport = {
   model: string | null;
   groups_analyzed: number;
   auto_resolved: number;
+  auto_created: number;
   assertions_linked: number;
   review_remaining: number;
   rejected_by_safety_gate: number;
@@ -60,9 +62,12 @@ type ByokStatus = { connected?: boolean; provider?: string; providerId?: string;
 const reasonLabels: Record<string, string> = {
   GENERIC_LABEL: "generic provider label",
   COMPETING_CANDIDATES: "multiple strong candidates",
+  EXISTING_CANDIDATE_AVAILABLE: "an existing strong candidate must be reviewed instead of creating a duplicate",
+  CONTEXT_INSUFFICIENT: "product context is not strong enough",
   CONTEXT_CONFLICT: "conflicting product context",
+  CREATE_NAME_MISMATCH: "proposed canonical name changes the observed identity too much",
   NOT_HIGH_CONFIDENCE: "AI confidence below HIGH",
-  NOT_MATCH_EXISTING: "no existing identity match",
+  UNSAFE_AI_DECISION: "AI did not return a safe automatic decision",
   CANDIDATE_NOT_ALLOWED: "candidate failed server validation",
   CANDIDATE_INACTIVE: "candidate is inactive",
   KIND_MISMATCH: "entity kind mismatch",
@@ -118,7 +123,7 @@ export function EntityResolutionWorkspace({
         const next: Record<string, Suggestion> = {};
         for (const suggestion of (body.suggestions ?? []) as Suggestion[]) next[suggestion.groupKey] = suggestion;
         setSuggestions(next);
-        setMessage(`Generated ${Object.keys(next).length} non-authoritative suggestion(s) with ${body.provider ?? "BYOK"}${body.model ? ` / ${body.model}` : ""}. Review before confirming.`);
+        setMessage(`Generated ${Object.keys(next).length} non-authoritative suggestion(s) with ${body.provider ?? "BYOK"}${body.model ? ` / ${body.model}` : ""}.`);
       } catch {
         setMessage("AI entity suggestions could not be generated.");
       }
@@ -126,7 +131,7 @@ export function EntityResolutionWorkspace({
   }
 
   async function autoResolveSafe() {
-    setMessage("AI is assessing a bounded batch. Only HIGH-confidence existing-entity matches that pass every server-side safety gate may be linked.");
+    setMessage("AI is assessing a bounded batch. HIGH-confidence decisions must pass every server-side safety gate before CİTEM links or bootstraps a canonical identity.");
     startTransition(async () => {
       try {
         const response = await fetch("/api/techint/entities/auto-resolve-ai", {
@@ -140,7 +145,7 @@ export function EntityResolutionWorkspace({
           return;
         }
         setAutoReport(body as AutoReport);
-        setMessage(`AI assessed ${body.groups_analyzed ?? 0} group(s): ${body.auto_resolved ?? 0} auto-resolved, ${body.review_remaining ?? 0} left for analyst review. No alias or canonical entity was created.`);
+        setMessage(`AI assessed ${body.groups_analyzed ?? 0} group(s): ${body.auto_resolved ?? 0} auto-resolved, ${body.auto_created ?? 0} canonical identity(s) safely bootstrapped, ${body.review_remaining ?? 0} left for analyst review. No alias was taught automatically.`);
       } catch {
         setMessage("AI safe auto-resolution failed without changing unresolved groups.");
       }
@@ -184,9 +189,9 @@ export function EntityResolutionWorkspace({
         <div className="grid gap-4 xl:grid-cols-[1fr_auto] xl:items-center">
           <div>
             <p className="citem-eyebrow">Analyst decision queue</p>
-            <h2 className="citem-section-title mt-1">Resolve only what the system cannot prove safely</h2>
+            <h2 className="citem-section-title mt-1">Exception review, not data cleaning</h2>
             <p className="mt-2 max-w-3xl text-sm text-stone-400">
-              Each card represents one repeated identity label, not one source record. Deterministic rules, confirmed aliases and guarded AI automation reduce this queue before you make manual identity decisions.
+              Repeated labels are collapsed into compact cases. Safe deterministic, alias and AI-verified decisions are removed before analyst review.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs">
@@ -195,15 +200,15 @@ export function EntityResolutionWorkspace({
               <p className="mt-1 text-lg font-semibold text-stone-200">{remainingGroupCount}</p>
             </div>
             <div className="rounded border border-stone-800 bg-stone-950/20 px-3 py-2">
-              <p className="uppercase tracking-[0.13em] text-stone-500">Source occurrences</p>
+              <p className="uppercase tracking-[0.13em] text-stone-500">Occurrences</p>
               <p className="mt-1 text-lg font-semibold text-stone-200">{totalOccurrenceCount}</p>
             </div>
           </div>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-stone-800 pt-3 text-xs text-stone-500">
           <span className="rounded border border-stone-800 px-2 py-1">Showing {reviewGroups.length} of {remainingGroupCount} groups</span>
-          <span className="rounded border border-stone-800 px-2 py-1">{visibleOccurrenceCount} occurrences in this visible queue</span>
-          <span>Highest-repeat groups are shown first by the current bounded view.</span>
+          <span className="rounded border border-stone-800 px-2 py-1">{visibleOccurrenceCount} visible occurrences</span>
+          <span>Use the triangle on a case only when you need evidence or manual controls.</span>
         </div>
       </div>
 
@@ -215,7 +220,7 @@ export function EntityResolutionWorkspace({
               <div>
                 <p className="citem-eyebrow">AI analyst aid · optional</p>
                 <h3 className="mt-1 text-base font-medium text-stone-200">{byok.connected ? `${byok.provider ?? byok.providerId ?? "BYOK"}${byok.model ? ` / ${byok.model}` : ""}` : "Connect NVIDIA NIM or another BYOK provider"}</h3>
-                <p className="mt-1 text-xs text-stone-500">AI can suggest matches, or safely auto-link only a narrow subset that passes every structural gate.</p>
+                <p className="mt-1 text-xs text-stone-500">AI may propose candidates and CİTEM may automatically execute only narrowly gated HIGH-confidence decisions.</p>
               </div>
             </div>
             <span className={`rounded border px-2.5 py-1.5 text-xs uppercase tracking-[0.13em] ${byok.connected ? "border-cyan-900 text-cyan-200" : "border-stone-800 text-stone-500"}`}>
@@ -226,7 +231,7 @@ export function EntityResolutionWorkspace({
 
         <div className="mt-4 space-y-4 border-t border-stone-800 pt-4">
           <div className="rounded border border-amber-900/60 bg-amber-950/10 p-3 text-xs text-stone-400">
-            <b className="text-amber-200">Safety boundary:</b> AI confidence alone never authorizes a write. Automatic linking requires HIGH confidence, one strong ACTIVE same-kind candidate, no competing identity, no generic label and no conflicting product context. AI never creates an entity or teaches an alias automatically.
+            <b className="text-amber-200">Safety boundary:</b> AI confidence alone never authorizes a write. Existing matches require one strong ACTIVE same-kind candidate. CREATE_NEW is limited to a HIGH-confidence identity-equivalent name with no strong existing candidate, no generic label, and safe context. AI never teaches an alias automatically.
           </div>
           <ByokConnectionPanel scope="user" defaultProviderId="nvidia_nim" onStatusChange={setByok} />
           <div className="grid gap-3 lg:grid-cols-2">
@@ -240,8 +245,8 @@ export function EntityResolutionWorkspace({
             </div>
             <div className="rounded border border-cyan-950 bg-cyan-950/10 p-3">
               <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-700">AI auto resolution</p>
-              <p className="mt-2 text-sm text-stone-300">Assess and auto-link only groups that pass every server-side safety gate.</p>
-              <p className="mt-1 text-xs text-stone-500">Current-group links only. No automatic entity creation or alias teaching.</p>
+              <p className="mt-2 text-sm text-stone-300">Link safe existing identities or bootstrap a safe new canonical identity when no match exists.</p>
+              <p className="mt-1 text-xs text-stone-500">No automatic alias teaching. Ambiguity always returns to review.</p>
               <button className="citem-button mt-3" type="button" disabled={pending || !byok.connected || !reviewGroups.length} onClick={autoResolveSafe}>
                 {pending ? "Working…" : "Analyze & auto-resolve safe groups"}
               </button>
@@ -256,14 +261,15 @@ export function EntityResolutionWorkspace({
             <div>
               <p className="citem-eyebrow">AI resolution report</p>
               <h3 className="citem-section-title mt-1">Guarded automation completed</h3>
-              <p className="mt-1 text-xs text-stone-500">{autoReport.provider ?? "BYOK"}{autoReport.model ? ` / ${autoReport.model}` : ""} · no alias or canonical entity was created automatically.</p>
+              <p className="mt-1 text-xs text-stone-500">{autoReport.provider ?? "BYOK"}{autoReport.model ? ` / ${autoReport.model}` : ""} · aliases were never taught automatically.</p>
             </div>
             {autoReport.auto_resolved > 0 ? <button className="citem-button-ghost" type="button" onClick={() => window.location.reload()}>Refresh queue</button> : null}
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-6">
+          <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-7">
             {[
               ["Analyzed", autoReport.groups_analyzed],
               ["Auto resolved", autoReport.auto_resolved],
+              ["Auto created", autoReport.auto_created],
               ["Needs review", autoReport.review_remaining],
               ["Generic", autoReport.generic_labels],
               ["Conflicts", autoReport.conflicts],
@@ -275,7 +281,7 @@ export function EntityResolutionWorkspace({
               </div>
             ))}
           </div>
-          {autoReport.failed_writes ? <p className="mt-3 text-xs text-amber-200">{autoReport.failed_writes} trusted write(s) failed safely. Check that additive migration 038 is applied to the intended environment before acceptance.</p> : null}
+          {autoReport.failed_writes ? <p className="mt-3 text-xs text-amber-200">{autoReport.failed_writes} trusted write(s) failed safely. Confirm additive migrations 038 and 039 are applied to the intended Preview/test environment before acceptance.</p> : null}
         </section>
       ) : null}
 
@@ -289,10 +295,10 @@ export function EntityResolutionWorkspace({
       {!reviewGroups.length ? (
         <div className="card border-l-2 border-l-stone-700">
           <p className="text-sm font-medium text-stone-300">No analyst decision is required in the bounded view.</p>
-          <p className="mt-1 text-xs text-stone-500">Deterministic identities, confirmed aliases and safe AI-verified links have handled this visible queue.</p>
+          <p className="mt-1 text-xs text-stone-500">Deterministic identities, confirmed aliases and guarded AI decisions have handled this visible queue.</p>
         </div>
       ) : (
-        <div className="grid gap-3 xl:grid-cols-2">
+        <div className="space-y-2">
           {reviewGroups.map((group, index) => (
             <GroupCard
               key={group.key}
@@ -335,125 +341,144 @@ function GroupCard({
     rememberAlias: boolean,
   ) => Promise<void>;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const [selectedEntityId, setSelectedEntityId] = useState("");
   const [canonicalName, setCanonicalName] = useState(group.displayValue);
   const suggestedEntity = suggestion?.candidateEntityId ? entityById.get(suggestion.candidateEntityId) : null;
+  const sourceCount = group.sourceSystems.length;
 
   return (
-    <article className="card panel-corners flex h-full flex-col border-t border-t-stone-800">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
+    <article className="card panel-corners border-l-2 border-l-stone-800 py-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          aria-expanded={expanded}
+          aria-label={`${expanded ? "Hide" : "Show"} case details for ${group.displayValue}`}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-stone-800 bg-stone-950/20 text-xs text-stone-500 hover:border-amber-900 hover:text-amber-200"
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+        >
+          <span className={`transition-transform ${expanded ? "rotate-90" : ""}`}>▶</span>
+        </button>
+
+        <div className="min-w-[190px] flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-[10px] tracking-[0.18em] text-stone-600">CASE {String(index).padStart(2, "0")}</span>
             <span className="rounded border border-amber-900/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.13em] text-amber-200">{group.entityKind}</span>
-            <span className="text-[10px] uppercase tracking-[0.13em] text-stone-600">Decision required</span>
+            {autoOutcome?.status === "REVIEW" ? <span className="text-[10px] uppercase tracking-[0.13em] text-stone-600">Review required</span> : null}
           </div>
-          <h3 className="mt-2 truncate text-lg font-medium text-stone-100">{group.displayValue}</h3>
-          <p className="mt-1 text-xs text-stone-500">What should CİTEM treat this source label as?</p>
+          <h3 className="mt-1 truncate text-base font-medium text-stone-100">{group.displayValue}</h3>
         </div>
-        <div className="shrink-0 text-right">
-          <p className="text-2xl font-semibold text-stone-200">{group.occurrenceCount}</p>
-          <p className="text-[10px] uppercase tracking-[0.13em] text-stone-600">occurrences</p>
-        </div>
-      </div>
 
-      {autoOutcome?.status === "REVIEW" ? (
-        <div className={`mt-3 rounded border p-2.5 text-xs ${autoOutcome.reason === "GENERIC_LABEL" ? "border-amber-900/70 bg-amber-950/10 text-amber-200" : "border-stone-800 bg-stone-950/20 text-stone-400"}`}>
-          <span className="font-semibold uppercase tracking-[0.12em]">{autoOutcome.reason === "GENERIC_LABEL" ? "Generic label" : "Review required"}</span>
-          <span className="text-stone-600"> · </span>
-          <span>{reasonLabels[autoOutcome.reason] ?? autoOutcome.reason.toLowerCase().replaceAll("_", " ")}</span>
-        </div>
-      ) : null}
-
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <div className="rounded border border-stone-800 bg-stone-950/20 p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">Source</p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {group.sourceSystems.length
-              ? group.sourceSystems.map((source) => <span className="rounded border border-stone-800 px-2 py-1 text-[11px] text-stone-400" key={source}>{source}</span>)
-              : <span className="text-xs text-stone-600">Source unavailable</span>}
+        <div className="flex shrink-0 items-center gap-4 text-right">
+          <div>
+            <p className="text-sm font-semibold text-stone-200">{group.occurrenceCount}</p>
+            <p className="text-[9px] uppercase tracking-[0.13em] text-stone-600">occurrences</p>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-stone-300">{sourceCount || "—"}</p>
+            <p className="text-[9px] uppercase tracking-[0.13em] text-stone-600">source{sourceCount === 1 ? "" : "s"}</p>
           </div>
         </div>
-        <div className="rounded border border-stone-800 bg-stone-950/20 p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">Observed role</p>
-          <p className="mt-2 text-xs text-stone-400">{group.semanticRoles.join(" / ") || "ENTITY"}</p>
-        </div>
-      </div>
 
-      {group.sampleSignalTitles.length ? (
-        <div className="mt-3 rounded border border-stone-800 bg-stone-950/20 p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">Context snapshot</p>
-          <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-stone-400">
-            {group.sampleSignalTitles.map((title) => <li key={title}><span className="mr-2 text-stone-700">—</span>{title}</li>)}
-          </ul>
-        </div>
-      ) : null}
-
-      <div className="mt-3 flex-1">
         {suggestion ? (
-          <div className="rounded border border-cyan-950 bg-cyan-950/10 p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className={`shrink-0 rounded border px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.13em] ${suggestion.confidence === "HIGH" ? "border-cyan-900 text-cyan-200" : "border-stone-800 text-stone-500"}`}>
+            AI {suggestion.confidence}
+          </div>
+        ) : (
+          <div className="shrink-0 rounded border border-stone-800 px-2.5 py-1.5 text-[10px] uppercase tracking-[0.13em] text-stone-600">AI —</div>
+        )}
+
+        {suggestion?.decision === "MATCH_EXISTING" && suggestedEntity ? (
+          <div className="flex flex-wrap gap-2">
+            <button className="citem-button-ghost" disabled={pending} type="button" onClick={() => void onResolve(group, { action: "LINK_EXISTING", entityId: suggestedEntity.id }, false)}>Resolve group</button>
+            <button className="citem-button" disabled={pending} type="button" onClick={() => void onResolve(group, { action: "LINK_EXISTING", entityId: suggestedEntity.id }, true)}>Resolve + teach alias</button>
+          </div>
+        ) : null}
+
+        {suggestion?.decision === "CREATE_NEW" && suggestion.proposedCanonicalName ? (
+          <div className="flex flex-wrap gap-2">
+            <button className="citem-button-ghost" disabled={pending} type="button" onClick={() => void onResolve(group, { action: "CREATE_NEW", canonicalName: suggestion.proposedCanonicalName! }, false)}>Create &amp; resolve</button>
+            <button className="citem-button" disabled={pending} type="button" onClick={() => void onResolve(group, { action: "CREATE_NEW", canonicalName: suggestion.proposedCanonicalName! }, true)}>Create &amp; teach exact alias</button>
+          </div>
+        ) : null}
+      </div>
+
+      {expanded ? (
+        <div className="mt-3 space-y-3 border-t border-stone-800 pt-3">
+          {autoOutcome?.status === "REVIEW" ? (
+            <div className={`rounded border p-2.5 text-xs ${autoOutcome.reason === "GENERIC_LABEL" ? "border-amber-900/70 bg-amber-950/10 text-amber-200" : "border-stone-800 bg-stone-950/20 text-stone-400"}`}>
+              <span className="font-semibold uppercase tracking-[0.12em]">{autoOutcome.reason === "GENERIC_LABEL" ? "Generic label" : "Review required"}</span>
+              <span className="text-stone-600"> · </span>
+              <span>{reasonLabels[autoOutcome.reason] ?? autoOutcome.reason.toLowerCase().replaceAll("_", " ")}</span>
+            </div>
+          ) : null}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded border border-stone-800 bg-stone-950/20 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">Source</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {group.sourceSystems.length
+                  ? group.sourceSystems.map((source) => <span className="rounded border border-stone-800 px-2 py-1 text-[11px] text-stone-400" key={source}>{source}</span>)
+                  : <span className="text-xs text-stone-600">Source unavailable</span>}
+              </div>
+            </div>
+            <div className="rounded border border-stone-800 bg-stone-950/20 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">Observed role</p>
+              <p className="mt-2 text-xs text-stone-400">{group.semanticRoles.join(" / ") || "ENTITY"}</p>
+            </div>
+          </div>
+
+          {group.sampleSignalTitles.length ? (
+            <div className="rounded border border-stone-800 bg-stone-950/20 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">Context snapshot</p>
+              <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-stone-400">
+                {group.sampleSignalTitles.map((title) => <li key={title}><span className="mr-2 text-stone-700">—</span>{title}</li>)}
+              </ul>
+            </div>
+          ) : null}
+
+          {suggestion ? (
+            <div className="rounded border border-cyan-950 bg-cyan-950/10 p-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded border border-cyan-900 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-200">AI candidate</span>
                 <span className="text-[10px] uppercase tracking-[0.12em] text-stone-500">{suggestion.confidence} confidence</span>
+                <span className="font-mono text-[10px] text-stone-600">{suggestion.decision}</span>
               </div>
-              <span className="font-mono text-[10px] text-stone-600">{suggestion.decision}</span>
+              <p className="mt-2 text-sm font-medium text-stone-200">
+                {suggestion.decision === "MATCH_EXISTING"
+                  ? suggestedEntity?.canonicalName ?? "Invalid candidate"
+                  : suggestion.decision === "CREATE_NEW"
+                    ? suggestion.proposedCanonicalName ?? "—"
+                    : "No safe match proposed"}
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-stone-500">{suggestion.rationale}</p>
             </div>
-            <p className="mt-3 text-sm font-medium text-stone-200">
-              {suggestion.decision === "MATCH_EXISTING"
-                ? suggestedEntity?.canonicalName ?? "Invalid candidate"
-                : suggestion.decision === "CREATE_NEW"
-                  ? suggestion.proposedCanonicalName ?? "—"
-                  : "No safe match proposed"}
-            </p>
-            <p className="mt-1 text-xs leading-relaxed text-stone-500">{suggestion.rationale}</p>
-            {suggestion.decision === "MATCH_EXISTING" && suggestedEntity ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button className="citem-button-ghost" disabled={pending} type="button" onClick={() => void onResolve(group, { action: "LINK_EXISTING", entityId: suggestedEntity.id }, false)}>Confirm current group</button>
-                <button className="citem-button" disabled={pending} type="button" onClick={() => void onResolve(group, { action: "LINK_EXISTING", entityId: suggestedEntity.id }, true)}>Confirm &amp; teach exact alias</button>
-              </div>
-            ) : null}
-            {suggestion.decision === "CREATE_NEW" && suggestion.proposedCanonicalName ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button className="citem-button-ghost" disabled={pending} type="button" onClick={() => void onResolve(group, { action: "CREATE_NEW", canonicalName: suggestion.proposedCanonicalName! }, false)}>Create &amp; resolve current group</button>
-                <button className="citem-button" disabled={pending} type="button" onClick={() => void onResolve(group, { action: "CREATE_NEW", canonicalName: suggestion.proposedCanonicalName! }, true)}>Create &amp; teach exact alias</button>
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <div className="rounded border border-dashed border-stone-800 p-3">
-            <p className="text-xs text-stone-500">No suggestion-only AI result loaded for this case.</p>
-            <p className="mt-1 text-[11px] text-stone-600">Use guarded AI automation above or resolve manually below.</p>
-          </div>
-        )}
-      </div>
+          ) : (
+            <div className="rounded border border-dashed border-stone-800 p-3 text-xs text-stone-500">No suggestion-only AI result loaded for this case.</div>
+          )}
 
-      <details className="mt-3 rounded border border-stone-800 bg-stone-950/20 p-3">
-        <summary className="cursor-pointer list-none text-sm font-medium text-stone-300">
-          <div className="flex items-center justify-between gap-3">
-            <span>Resolve manually</span>
-            <span className="text-[10px] uppercase tracking-[0.13em] text-stone-600">Open decision controls</span>
-          </div>
-        </summary>
-        <div className="mt-3 space-y-4 border-t border-stone-800 pt-3">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">Option A · Link to an existing identity</p>
-            <select className="field mt-2 w-full" value={selectedEntityId} onChange={(event) => setSelectedEntityId(event.target.value)}>
-              <option value="">Select an existing {group.entityKind}</option>
-              {entities.map((entity) => <option key={entity.id} value={entity.id}>{entity.canonicalName}</option>)}
-            </select>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button className="citem-button-ghost" type="button" disabled={pending || !selectedEntityId} onClick={() => void onResolve(group, { action: "LINK_EXISTING", entityId: selectedEntityId }, false)}>Link this group</button>
-              <button className="citem-button" type="button" disabled={pending || !selectedEntityId} onClick={() => void onResolve(group, { action: "LINK_EXISTING", entityId: selectedEntityId }, true)}>Link &amp; remember exact alias</button>
-            </div>
-          </div>
-
-          <div className="border-t border-stone-800 pt-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">Option B · Create a new canonical identity</p>
-            <input className="field mt-2 w-full" value={canonicalName} onChange={(event) => setCanonicalName(event.target.value)} maxLength={500} />
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button className="citem-button-ghost" type="button" disabled={pending || !canonicalName.trim()} onClick={() => void onResolve(group, { action: "CREATE_NEW", canonicalName: canonicalName.trim() }, false)}>Create for this group</button>
-              <button className="citem-button" type="button" disabled={pending || !canonicalName.trim()} onClick={() => void onResolve(group, { action: "CREATE_NEW", canonicalName: canonicalName.trim() }, true)}>Create &amp; remember exact alias</button>
+          <div className="rounded border border-stone-800 bg-stone-950/20 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">Manual decision controls</p>
+            <div className="mt-3 grid gap-4 lg:grid-cols-2">
+              <div>
+                <p className="text-xs text-stone-400">Link to an existing {group.entityKind}</p>
+                <select className="field mt-2 w-full" value={selectedEntityId} onChange={(event) => setSelectedEntityId(event.target.value)}>
+                  <option value="">Select existing identity</option>
+                  {entities.map((entity) => <option key={entity.id} value={entity.id}>{entity.canonicalName}</option>)}
+                </select>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button className="citem-button-ghost" type="button" disabled={pending || !selectedEntityId} onClick={() => void onResolve(group, { action: "LINK_EXISTING", entityId: selectedEntityId }, false)}>Link group</button>
+                  <button className="citem-button" type="button" disabled={pending || !selectedEntityId} onClick={() => void onResolve(group, { action: "LINK_EXISTING", entityId: selectedEntityId }, true)}>Link + teach alias</button>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-stone-400">Create a new canonical identity</p>
+                <input className="field mt-2 w-full" value={canonicalName} onChange={(event) => setCanonicalName(event.target.value)} maxLength={500} />
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button className="citem-button-ghost" type="button" disabled={pending || !canonicalName.trim()} onClick={() => void onResolve(group, { action: "CREATE_NEW", canonicalName: canonicalName.trim() }, false)}>Create for group</button>
+                  <button className="citem-button" type="button" disabled={pending || !canonicalName.trim()} onClick={() => void onResolve(group, { action: "CREATE_NEW", canonicalName: canonicalName.trim() }, true)}>Create + teach alias</button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -465,7 +490,7 @@ function GroupCard({
             </div>
           </details>
         </div>
-      </details>
+      ) : null}
     </article>
   );
 }
