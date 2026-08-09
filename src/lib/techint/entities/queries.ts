@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const entityProjection = "id,entity_kind,canonical_name,canonical_normalized,deterministic_key,indicator_type,origin,status,created_at,updated_at,archived_at";
+const assertionProjection = "id,signal_id,source_observation_id,entity_kind,display_value,normalized_value,semantic_role,assertion_basis,confidence,indicator_type,created_at";
 
 export function listTechnicalEntities(client: SupabaseClient, limit = 150) {
   return client
@@ -48,9 +49,17 @@ export function listTechnicalEntityResolutionsForAssertions(client: SupabaseClie
 export function listTechnicalEntityAssertions(client: SupabaseClient, limit = 500) {
   return client
     .from("technical_signal_entity_assertions")
-    .select("id,signal_id,source_observation_id,entity_kind,display_value,normalized_value,semantic_role,assertion_basis,confidence,indicator_type,created_at")
+    .select(assertionProjection)
     .order("created_at", { ascending: true })
     .limit(Math.min(Math.max(limit, 1), 500));
+}
+
+export function listTechnicalEntityAssertionsByIds(client: SupabaseClient, assertionIds: string[]) {
+  if (!assertionIds.length) return Promise.resolve({ data: [], error: null });
+  return client
+    .from("technical_signal_entity_assertions")
+    .select(assertionProjection)
+    .in("id", assertionIds.slice(0, 500));
 }
 
 export function listTechnicalEntityAuditEvents(client: SupabaseClient, limit = 100) {
