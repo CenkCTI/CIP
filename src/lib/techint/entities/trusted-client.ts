@@ -40,6 +40,9 @@ export const createTechnicalEntityFromAssertionWorkflow = (parameters: Parameter
 export const linkTechnicalEntityAssertionWorkflow = (parameters: Parameters) =>
   rpc("link_technical_entity_assertion", parameters, entityIdSchema);
 
+export const aiResolveTechnicalEntityAssertionWorkflow = (parameters: Parameters) =>
+  rpc("ai_resolve_technical_entity_assertion", parameters, entityIdSchema);
+
 export const addTechnicalEntityAliasWorkflow = (parameters: Parameters) =>
   rpc("add_technical_entity_alias", parameters, entityIdSchema);
 
