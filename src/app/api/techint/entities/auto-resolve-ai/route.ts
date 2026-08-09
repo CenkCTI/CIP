@@ -7,7 +7,8 @@ import { byokChat } from "@/lib/ai/byok/client";
 import { safeAiErrorMessage } from "@/lib/ai/byok/errors";
 import { BYOK_COOKIE, decryptCredential, type ByokCredential } from "@/lib/ai/byok/vault";
 import { requireUser } from "@/lib/auth";
-import { buildEntityAiMessages, entityAiGroupSchema, parseEntityAiResponse } from "@/lib/techint/entities/ai-resolver";
+import { buildEntityAiMessages, entityAiGroupSchema, parseEntityAiResponse, type EntityAiSuggestion } from "@/lib/techint/entities/ai-resolver";
+import { chunkEntityAiItems, ENTITY_AI_MAX_RUN_GROUPS } from "@/lib/techint/entities/ai-batch";
 import { evaluateAiAutoResolution, productContextParents } from "@/lib/techint/entities/auto-resolution";
 import { groupUnresolvedAssertions, shortlistEntityCandidates } from "@/lib/techint/entities/grouping";
 import {
@@ -26,8 +27,26 @@ import type { TechnicalEntityKind } from "@/lib/techint/entities/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const bodySchema = z.object({ limit: z.coerce.number().int().min(1).max(8).default(8) }).strict();
+const bodySchema = z.object({ limit: z.coerce.number().int().min(0).max(ENTITY_AI_MAX_RUN_GROUPS).default(8) }).strict();
 const deterministicKinds = new Set<TechnicalEntityKind>(["CVE", "INDICATOR", "ATTACK_TECHNIQUE"]);
+
+type AutoOutcome = {
+  groupKey: string;
+  entityKind: TechnicalEntityKind;
+  displayValue: string;
+  status: "AUTO_RESOLVED" | "REVIEW";
+  reason: string;
+  action: "LINK_EXISTING" | "CREATE_NEW" | "REVIEW_REQUIRED";
+  decision: EntityAiSuggestion["decision"];
+  confidence: EntityAiSuggestion["confidence"];
+  candidateEntityId: string | null;
+  proposedCanonicalName: string | null;
+  canonicalName: string | null;
+  entityId: string | null;
+  assertionsLinked: number;
+  created: boolean;
+  rationale: string;
+};
 
 function safeError(error: unknown) {
   const code = error instanceof AiError ? error.code : error instanceof Error ? error.message : "entity_ai_auto_resolution_failed";
@@ -48,6 +67,25 @@ function safeError(error: unknown) {
 export async function POST(request: Request) {
   try {
     const input = bodySchema.parse(await request.json().catch(() => ({})));
+    if (input.limit === 0) {
+      return NextResponse.json({
+        provider: null,
+        model: null,
+        groups_analyzed: 0,
+        model_batches: 0,
+        auto_resolved: 0,
+        auto_created: 0,
+        assertions_linked: 0,
+        review_remaining: 0,
+        rejected_by_safety_gate: 0,
+        unsure: 0,
+        generic_labels: 0,
+        conflicts: 0,
+        failed_writes: 0,
+        outcomes: [],
+      });
+    }
+
     const { supabase, user } = await requireUser();
     const { data: assertionRows, error: assertionError } = await listTechnicalEntityAssertions(supabase, 500);
     if (assertionError) throw new Error("entity_ai_context_unavailable");
@@ -73,6 +111,7 @@ export async function POST(request: Request) {
         provider: null,
         model: null,
         groups_analyzed: 0,
+        model_batches: 0,
         auto_resolved: 0,
         auto_created: 0,
         assertions_linked: 0,
@@ -82,6 +121,7 @@ export async function POST(request: Request) {
         generic_labels: 0,
         conflicts: 0,
         failed_writes: 0,
+        outcomes: [],
       });
     }
 
@@ -130,14 +170,18 @@ export async function POST(request: Request) {
       throw new AiError(error instanceof Error ? error.message : "byok_required");
     }
 
-    const content = await byokChat(
-      credential.providerId,
-      credential.model,
-      credential.apiKey,
-      buildEntityAiMessages(aiGroups),
-      "generation",
-    );
-    const decisions = parseEntityAiResponse(content, aiGroups);
+    const decisions: EntityAiSuggestion[] = [];
+    const batches = chunkEntityAiItems(aiGroups);
+    for (const batch of batches) {
+      const content = await byokChat(
+        credential.providerId,
+        credential.model,
+        credential.apiKey,
+        buildEntityAiMessages(batch),
+        "generation",
+      );
+      decisions.push(...parseEntityAiResponse(content, batch));
+    }
 
     let autoResolved = 0;
     let autoCreated = 0;
@@ -147,13 +191,7 @@ export async function POST(request: Request) {
     let unsure = 0;
     let rejected = 0;
     let failedWrites = 0;
-    const outcomes: Array<{
-      groupKey: string;
-      displayValue: string;
-      status: "AUTO_RESOLVED" | "REVIEW";
-      reason: string;
-      created?: boolean;
-    }> = [];
+    const outcomes: AutoOutcome[] = [];
 
     for (let index = 0; index < contextGroups.length; index += 1) {
       const group = contextGroups[index];
@@ -162,6 +200,16 @@ export async function POST(request: Request) {
       const candidateEntity = decision.candidateEntityId
         ? entities.find((entity) => entity.id === decision.candidateEntityId) ?? null
         : null;
+      const outcomeBase = {
+        groupKey: group.key,
+        entityKind: group.entityKind,
+        displayValue: group.displayValue,
+        decision: decision.decision,
+        confidence: decision.confidence,
+        candidateEntityId: decision.candidateEntityId,
+        proposedCanonicalName: decision.proposedCanonicalName,
+        rationale: decision.rationale,
+      };
       const gate = evaluateAiAutoResolution({
         group,
         suggestion: decision,
@@ -180,12 +228,22 @@ export async function POST(request: Request) {
         ) conflicts += 1;
         else if (decision.decision === "UNSURE" || decision.confidence !== "HIGH") unsure += 1;
         else rejected += 1;
-        outcomes.push({ groupKey: group.key, displayValue: group.displayValue, status: "REVIEW", reason: gate.reason });
+        outcomes.push({
+          ...outcomeBase,
+          status: "REVIEW",
+          reason: gate.reason,
+          action: "REVIEW_REQUIRED",
+          canonicalName: candidateEntity?.canonical_name ?? decision.proposedCanonicalName,
+          entityId: candidateEntity?.id ?? null,
+          assertionsLinked: 0,
+          created: false,
+        });
         continue;
       }
 
       let linkedInGroup = 0;
       let entityId: string | null = gate.action === "LINK_EXISTING" ? gate.entityId : null;
+      let canonicalName: string | null = gate.action === "LINK_EXISTING" ? candidateEntity?.canonical_name ?? null : gate.canonicalName;
       let created = false;
       const contextParents = productContextParents(group);
       const safetyChecks = {
@@ -204,7 +262,16 @@ export async function POST(request: Request) {
         const firstAssertionId = group.assertionIds[0];
         if (!firstAssertionId) {
           rejected += 1;
-          outcomes.push({ groupKey: group.key, displayValue: group.displayValue, status: "REVIEW", reason: "WRITE_FAILED_SAFE" });
+          outcomes.push({
+            ...outcomeBase,
+            status: "REVIEW",
+            reason: "WRITE_FAILED_SAFE",
+            action: "REVIEW_REQUIRED",
+            canonicalName,
+            entityId: null,
+            assertionsLinked: 0,
+            created: false,
+          });
           continue;
         }
         try {
@@ -217,6 +284,7 @@ export async function POST(request: Request) {
             p_safety_checks: safetyChecks,
           });
           entityId = createdResult.entity_id;
+          canonicalName = gate.canonicalName;
           linkedInGroup = 1;
           assertionsLinked += 1;
           created = true;
@@ -224,19 +292,37 @@ export async function POST(request: Request) {
         } catch {
           failedWrites += 1;
           rejected += 1;
-          outcomes.push({ groupKey: group.key, displayValue: group.displayValue, status: "REVIEW", reason: "WRITE_FAILED_SAFE" });
+          outcomes.push({
+            ...outcomeBase,
+            status: "REVIEW",
+            reason: "WRITE_FAILED_SAFE",
+            action: "REVIEW_REQUIRED",
+            canonicalName,
+            entityId: null,
+            assertionsLinked: 0,
+            created: false,
+          });
           continue;
         }
       }
 
       if (!entityId) {
         rejected += 1;
-        outcomes.push({ groupKey: group.key, displayValue: group.displayValue, status: "REVIEW", reason: "WRITE_FAILED_SAFE" });
+        outcomes.push({
+          ...outcomeBase,
+          status: "REVIEW",
+          reason: "WRITE_FAILED_SAFE",
+          action: "REVIEW_REQUIRED",
+          canonicalName,
+          entityId: null,
+          assertionsLinked: 0,
+          created,
+        });
         continue;
       }
 
       const startIndex = created ? 1 : 0;
-      for (const assertionId of group.assertionIds.slice(startIndex, 250)) {
+      for (const assertionId of group.assertionIds.slice(startIndex)) {
         try {
           await aiResolveTechnicalEntityAssertionWorkflow({
             p_actor: user.id,
@@ -253,18 +339,30 @@ export async function POST(request: Request) {
         }
       }
 
-      if (linkedInGroup > 0) {
+      if (linkedInGroup === group.assertionIds.length) {
         autoResolved += 1;
         outcomes.push({
-          groupKey: group.key,
-          displayValue: group.displayValue,
+          ...outcomeBase,
           status: "AUTO_RESOLVED",
           reason: created ? "SAFE_HIGH_CREATE" : "SAFE_HIGH_MATCH",
+          action: created ? "CREATE_NEW" : "LINK_EXISTING",
+          canonicalName,
+          entityId,
+          assertionsLinked: linkedInGroup,
           created,
         });
       } else {
         rejected += 1;
-        outcomes.push({ groupKey: group.key, displayValue: group.displayValue, status: "REVIEW", reason: "WRITE_FAILED_SAFE" });
+        outcomes.push({
+          ...outcomeBase,
+          status: "REVIEW",
+          reason: linkedInGroup > 0 ? "WRITE_PARTIAL_SAFE" : "WRITE_FAILED_SAFE",
+          action: created ? "CREATE_NEW" : "LINK_EXISTING",
+          canonicalName,
+          entityId,
+          assertionsLinked: linkedInGroup,
+          created,
+        });
       }
     }
 
@@ -273,6 +371,7 @@ export async function POST(request: Request) {
       provider: credential.providerId,
       model: credential.model,
       groups_analyzed: contextGroups.length,
+      model_batches: batches.length,
       auto_resolved: autoResolved,
       auto_created: autoCreated,
       assertions_linked: assertionsLinked,
