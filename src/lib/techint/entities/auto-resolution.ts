@@ -16,8 +16,8 @@ const genericLabels = new Set([
 ]);
 
 export type AutoResolutionRejection =
-  | "NOT_MATCH_EXISTING"
   | "NOT_HIGH_CONFIDENCE"
+  | "UNSAFE_AI_DECISION"
   | "DETERMINISTIC_KIND"
   | "KIND_NOT_ENABLED"
   | "GENERIC_LABEL"
@@ -26,11 +26,14 @@ export type AutoResolutionRejection =
   | "KIND_MISMATCH"
   | "CANDIDATE_NOT_STRONG"
   | "COMPETING_CANDIDATES"
+  | "EXISTING_CANDIDATE_AVAILABLE"
+  | "CREATE_NAME_MISMATCH"
   | "CONTEXT_INSUFFICIENT"
   | "CONTEXT_CONFLICT";
 
 export type AutoResolutionGateResult =
-  | { eligible: true; entityId: string; reason: "SAFE_HIGH_MATCH" }
+  | { eligible: true; action: "LINK_EXISTING"; entityId: string; reason: "SAFE_HIGH_MATCH" }
+  | { eligible: true; action: "CREATE_NEW"; canonicalName: string; reason: "SAFE_HIGH_CREATE" }
   | { eligible: false; reason: AutoResolutionRejection };
 
 export type AutoResolutionEntity = {
@@ -41,6 +44,19 @@ export type AutoResolutionEntity = {
 
 export function isGenericEntityLabel(value: string) {
   return genericLabels.has(normalizeEntityLookup(value));
+}
+
+function compactIdentity(value: string) {
+  return normalizeEntityLookup(value).replace(/[^a-z0-9]+/g, "");
+}
+
+export function isSafeCanonicalBootstrapName(observed: string, proposed: string) {
+  const observedNormalized = normalizeEntityLookup(observed);
+  const proposedNormalized = normalizeEntityLookup(proposed);
+  if (observedNormalized === proposedNormalized) return true;
+  const observedCompact = compactIdentity(observedNormalized);
+  const proposedCompact = compactIdentity(proposedNormalized);
+  return observedCompact.length >= 3 && observedCompact === proposedCompact;
 }
 
 function contextParent(title: string, observed: string) {
@@ -77,21 +93,7 @@ export function evaluateAiAutoResolution(input: {
   if (deterministicKinds.has(group.entityKind)) return { eligible: false, reason: "DETERMINISTIC_KIND" };
   if (!aiAutoKinds.has(group.entityKind)) return { eligible: false, reason: "KIND_NOT_ENABLED" };
   if (isGenericEntityLabel(group.normalizedValue || group.displayValue)) return { eligible: false, reason: "GENERIC_LABEL" };
-  if (suggestion.decision !== "MATCH_EXISTING" || !suggestion.candidateEntityId) return { eligible: false, reason: "NOT_MATCH_EXISTING" };
   if (suggestion.confidence !== "HIGH") return { eligible: false, reason: "NOT_HIGH_CONFIDENCE" };
-
-  const selected = candidates.find((candidate) => candidate.id === suggestion.candidateEntityId);
-  if (!selected || !candidateEntity) return { eligible: false, reason: "CANDIDATE_NOT_ALLOWED" };
-  if (candidateEntity.status !== "ACTIVE") return { eligible: false, reason: "CANDIDATE_INACTIVE" };
-  if (candidateEntity.entityKind !== group.entityKind) return { eligible: false, reason: "KIND_MISMATCH" };
-
-  // Exact/compact equality is strong enough for autonomous linking; weaker lexical
-  // overlap remains suggestion-only. Competing strong candidates fail closed.
-  const strongCandidates = candidates.filter((candidate) => candidate.score >= 80);
-  if (selected.score < 80) return { eligible: false, reason: "CANDIDATE_NOT_STRONG" };
-  if (strongCandidates.length !== 1 || strongCandidates[0].id !== selected.id) {
-    return { eligible: false, reason: "COMPETING_CANDIDATES" };
-  }
 
   if (group.entityKind === "PRODUCT") {
     const parents = productContextParents(group);
@@ -99,5 +101,33 @@ export function evaluateAiAutoResolution(input: {
     if (parents.length > 1) return { eligible: false, reason: "CONTEXT_CONFLICT" };
   }
 
-  return { eligible: true, entityId: selected.id, reason: "SAFE_HIGH_MATCH" };
+  const strongCandidates = candidates.filter((candidate) => candidate.score >= 80);
+
+  if (suggestion.decision === "MATCH_EXISTING" && suggestion.candidateEntityId) {
+    const selected = candidates.find((candidate) => candidate.id === suggestion.candidateEntityId);
+    if (!selected || !candidateEntity) return { eligible: false, reason: "CANDIDATE_NOT_ALLOWED" };
+    if (candidateEntity.status !== "ACTIVE") return { eligible: false, reason: "CANDIDATE_INACTIVE" };
+    if (candidateEntity.entityKind !== group.entityKind) return { eligible: false, reason: "KIND_MISMATCH" };
+    if (selected.score < 80) return { eligible: false, reason: "CANDIDATE_NOT_STRONG" };
+    if (strongCandidates.length !== 1 || strongCandidates[0].id !== selected.id) {
+      return { eligible: false, reason: "COMPETING_CANDIDATES" };
+    }
+    return { eligible: true, action: "LINK_EXISTING", entityId: selected.id, reason: "SAFE_HIGH_MATCH" };
+  }
+
+  if (suggestion.decision === "CREATE_NEW" && suggestion.proposedCanonicalName) {
+    if (isGenericEntityLabel(suggestion.proposedCanonicalName)) return { eligible: false, reason: "GENERIC_LABEL" };
+    if (strongCandidates.length > 0) return { eligible: false, reason: "EXISTING_CANDIDATE_AVAILABLE" };
+    if (!isSafeCanonicalBootstrapName(group.displayValue, suggestion.proposedCanonicalName)) {
+      return { eligible: false, reason: "CREATE_NAME_MISMATCH" };
+    }
+    return {
+      eligible: true,
+      action: "CREATE_NEW",
+      canonicalName: suggestion.proposedCanonicalName.trim(),
+      reason: "SAFE_HIGH_CREATE",
+    };
+  }
+
+  return { eligible: false, reason: "UNSAFE_AI_DECISION" };
 }
