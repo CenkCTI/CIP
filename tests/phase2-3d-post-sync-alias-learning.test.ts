@@ -16,7 +16,7 @@ function recommendationFixture() {
       { id: entity1, entity_kind: "VENDOR", canonical_name: "Google", status: "ACTIVE" },
       { id: entity2, entity_kind: "VENDOR", canonical_name: "Different Google", status: "ACTIVE" },
     ],
-    aliases: [],
+    aliases: [] as Array<{ entity_kind: string; normalized_value: string; display_value: string; status: string }>,
     assertions: [1, 2, 3].map((index) => ({
       id: `20000000-0000-4000-8000-00000000000${index}`,
       entity_kind: "VENDOR",
@@ -95,6 +95,8 @@ describe("Phase 2.3D post-sync automatic reconciliation", () => {
     expect(orchestrator).toContain("reconcileTechnicalEntitiesWorkflow");
     expect(orchestrator).toContain("POST_SYNC_RECONCILE_BATCH = 500");
     expect(orchestrator).toContain("POST_SYNC_RECONCILE_MAX_BATCHES = 10");
+    expect(orchestrator).toContain("entityAssertionsCreated += recorded.entity_assertions_created");
+    expect(orchestrator).toContain("if (entityAssertionsCreated > 0)");
     expect(orchestrator).toContain("entityReconciliation = await reconcileFreshTechnicalAssertions(claim.owner_id)");
     expect(orchestrator).toContain("entityReconciliation = null");
     expect(orchestrator.indexOf("const completion = await completeTechnicalCollection")).toBeLessThan(orchestrator.indexOf("entityReconciliation = await reconcileFreshTechnicalAssertions"));
