@@ -83,6 +83,7 @@ async function reconcileFreshTechnicalAssertions(actorId: string) {
 export async function runClaimedTechnicalCollection(rawClaim: unknown, fetchImpl: typeof fetch = fetch) {
   const claim = collectionClaimSchema.parse(rawClaim);
   const counters = emptyCollectionCounters();
+  let entityAssertionsCreated = 0;
   let issues: Array<{ kind: "SKIPPED" | "WARNING" | "ERROR"; code: string; message: string; sourceRecordKey?: string | null }> = [];
   try {
     const adapter = getTechnicalSourceAdapter(claim.source_key);
@@ -119,6 +120,7 @@ export async function runClaimedTechnicalCollection(rawClaim: unknown, fetchImpl
       if (recorded.observation_created) counters.observationsCreated += 1;
       if (recorded.revision_created) counters.revisionsCreated += 1;
       if (recorded.duplicate_observation) counters.duplicateObservations += 1;
+      entityAssertionsCreated += recorded.entity_assertions_created;
       updateDisposition(counters, recorded.disposition);
     });
 
@@ -133,7 +135,7 @@ export async function runClaimedTechnicalCollection(rawClaim: unknown, fetchImpl
     // Collection success remains authoritative. Entity normalization is a post-collection
     // convenience layer and must never turn a completed source run into a failed run.
     let entityReconciliation: Awaited<ReturnType<typeof reconcileFreshTechnicalAssertions>> | null = null;
-    if (counters.observationsCreated > 0) {
+    if (entityAssertionsCreated > 0) {
       try {
         entityReconciliation = await reconcileFreshTechnicalAssertions(claim.owner_id);
       } catch {
@@ -141,7 +143,7 @@ export async function runClaimedTechnicalCollection(rawClaim: unknown, fetchImpl
       }
     }
 
-    return { success: true as const, ...completion, counters, entityReconciliation };
+    return { success: true as const, ...completion, counters, entityAssertionsCreated, entityReconciliation };
   } catch (error) {
     const controlled = controlledCollectionError(error);
     counters.failedRecords = Math.max(1, counters.failedRecords);
