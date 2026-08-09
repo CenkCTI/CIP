@@ -5,7 +5,7 @@ export const technicalEntityStatuses = ["ACTIVE", "ARCHIVED"] as const;
 export const technicalEntityAliasBases = ["ANALYST_CONFIRMED", "AUTHORITATIVE_SOURCE"] as const;
 export const technicalEntityAliasStatuses = ["ACTIVE", "REVOKED"] as const;
 export const technicalEntityResolutionStatuses = ["RESOLVED", "NEEDS_REVIEW", "DISMISSED"] as const;
-export const technicalEntityResolutionBases = ["DETERMINISTIC_KEY", "CONFIRMED_ALIAS", "AUTHORITATIVE_ALIAS", "ANALYST_LINK", "ANALYST_CREATED"] as const;
+export const technicalEntityResolutionBases = ["DETERMINISTIC_KEY", "CONFIRMED_ALIAS", "AUTHORITATIVE_ALIAS", "ANALYST_LINK", "ANALYST_CREATED", "AI_VERIFIED"] as const;
 export const deterministicEntityKinds = ["CVE", "INDICATOR", "ATTACK_TECHNIQUE"] as const;
 export const technicalEntityIndicatorTypes = ["IP", "CIDR", "DOMAIN", "URL", "HASH", "EMAIL"] as const;
 
