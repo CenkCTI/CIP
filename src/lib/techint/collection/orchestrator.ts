@@ -1,6 +1,6 @@
 import "server-only";
 
-import { reconcileTechnicalEntitiesWorkflow } from "@/lib/techint/entities/trusted-client";
+import { reconcileNewTechnicalEntitiesWorkflow } from "@/lib/techint/entities/trusted-client";
 import { recordTechnicalSignal } from "@/lib/techint/signals/trusted-signal-client";
 import { adapterResultSchema, collectionClaimSchema } from "./schema";
 import { controlledCollectionError, CollectionError } from "./errors";
@@ -62,18 +62,14 @@ async function reconcileFreshTechnicalAssertions(actorId: string) {
   let truncated = false;
 
   for (let batch = 0; batch < POST_SYNC_RECONCILE_MAX_BATCHES; batch += 1) {
-    const result = await reconcileTechnicalEntitiesWorkflow({ p_actor: actorId, p_limit: POST_SYNC_RECONCILE_BATCH });
+    const result = await reconcileNewTechnicalEntitiesWorkflow({ p_actor: actorId, p_limit: POST_SYNC_RECONCILE_BATCH });
     batches += 1;
+    unseenProcessed += result.unseen_processed ?? result.processed;
     resolved += result.resolved;
     needsReview += result.needs_review;
     entitiesCreated += result.entities_created;
 
-    // Migration 040 reports how many rows in this pass had never been reconciled before.
-    // If the field is absent, stop after one compatibility pass rather than repeatedly
-    // recycling a historical NEEDS_REVIEW queue on an environment awaiting migration 040.
-    if (result.unseen_processed == null) break;
-    unseenProcessed += result.unseen_processed;
-    if (result.unseen_processed < POST_SYNC_RECONCILE_BATCH) break;
+    if (result.processed < POST_SYNC_RECONCILE_BATCH) break;
     if (batch === POST_SYNC_RECONCILE_MAX_BATCHES - 1) truncated = true;
   }
 
@@ -132,8 +128,8 @@ export async function runClaimedTechnicalCollection(rawClaim: unknown, fetchImpl
       issues,
     });
 
-    // Collection success remains authoritative. Entity normalization is a post-collection
-    // convenience layer and must never turn a completed source run into a failed run.
+    // Collection success remains authoritative. Entity normalization is post-collection
+    // convenience processing and must never turn a completed source run into a failed run.
     let entityReconciliation: Awaited<ReturnType<typeof reconcileFreshTechnicalAssertions>> | null = null;
     if (entityAssertionsCreated > 0) {
       try {
