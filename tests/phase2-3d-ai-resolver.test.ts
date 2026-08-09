@@ -33,7 +33,7 @@ describe("Phase 2.3D grouped review", () => {
     expect(groups[0].assertionIds).toEqual(["c"]);
   });
 
-  it("uses fuzzy-looking forms only to shortlist positive candidates, never as an automatic deterministic equality", () => {
+  it("uses fuzzy-looking forms only to shortlist positive candidates, never as deterministic equality", () => {
     const group = groupUnresolvedAssertions([
       { id: "a", entity_kind: "MALWARE", display_value: "LummaStealer", normalized_value: "LummaStealer" },
     ], [])[0];
@@ -104,7 +104,7 @@ describe("Phase 2.3D BYOK implementation boundary", () => {
   });
 
   it("keeps the suggestion-only endpoint non-mutating", () => {
-    expect(suggestRoute).not.toMatch(/createTechnicalEntity|linkTechnicalEntity|addTechnicalEntityAlias|reconcileTechnicalEntitiesWorkflow|aiResolveTechnicalEntityAssertionWorkflow/);
+    expect(suggestRoute).not.toMatch(/createTechnicalEntity|linkTechnicalEntity|addTechnicalEntityAlias|reconcileTechnicalEntitiesWorkflow|aiResolveTechnicalEntityAssertionWorkflow|aiCreateTechnicalEntityFromAssertionWorkflow/);
     expect(suggestRoute).toContain("AI suggestions are non-authoritative");
   });
 
@@ -114,15 +114,16 @@ describe("Phase 2.3D BYOK implementation boundary", () => {
     expect(suggestRoute).toContain("multiple existing entities");
   });
 
-  it("preserves explicit analyst confirmation and separates guarded AI auto-resolution", () => {
+  it("preserves explicit analyst confirmation and separates guarded AI automation", () => {
     expect(resolveRoute).toContain("linkTechnicalEntityAssertionWorkflow");
     expect(resolveRoute).toContain("createTechnicalEntityFromAssertionWorkflow");
     expect(resolveRoute).toContain("NEEDS_REVIEW");
-    expect(workspace).toContain("Confirm &amp; teach exact alias");
+    expect(workspace).toContain("Create &amp; teach exact alias");
     expect(workspace).toContain("AI confidence alone never authorizes a write");
-    expect(workspace).toContain("AI never creates an entity or teaches an alias automatically");
+    expect(workspace).toContain("AI never teaches an alias automatically");
     expect(autoResolveRoute).toContain("evaluateAiAutoResolution");
     expect(autoResolveRoute).toContain("aiResolveTechnicalEntityAssertionWorkflow");
+    expect(autoResolveRoute).toContain("aiCreateTechnicalEntityFromAssertionWorkflow");
   });
 
   it("defaults the TechINT BYOK panel to NVIDIA NIM without removing other providers", () => {
