@@ -5,6 +5,7 @@ import { buildAliasRecommendations } from "@/lib/techint/entities/alias-recommen
 const migration040 = readFileSync("supabase/migrations/202608100040_phase2_3d_post_sync_reconciliation.sql", "utf8");
 const orchestrator = readFileSync("src/lib/techint/collection/orchestrator.ts", "utf8");
 const trustedClient = readFileSync("src/lib/techint/entities/trusted-client.ts", "utf8");
+const entityQueries = readFileSync("src/lib/techint/entities/queries.ts", "utf8");
 const sourcesActions = readFileSync("src/app/techint/sources/actions.ts", "utf8");
 const page = readFileSync("src/app/techint/entities/page.tsx", "utf8");
 
@@ -108,6 +109,14 @@ describe("Phase 2.3D post-sync automatic reconciliation", () => {
     expect(orchestrator).toContain("entityReconciliation = await reconcileFreshTechnicalAssertions(claim.owner_id)");
     expect(orchestrator).toContain("entityReconciliation = null");
     expect(orchestrator.indexOf("const completion = await completeTechnicalCollection")).toBeLessThan(orchestrator.indexOf("entityReconciliation = await reconcileFreshTechnicalAssertions"));
+  });
+
+  it("keeps the Resolution Control window focused on real review backlog plus fresh assertions", () => {
+    expect(entityQueries).toContain('.eq("status", "NEEDS_REVIEW")');
+    expect(entityQueries).toContain('.order("updated_at", { ascending: false })');
+    expect(entityQueries).toContain('.order("created_at", { ascending: false })');
+    expect(entityQueries).toContain("reviewAssertions.length >= boundedLimit");
+    expect(entityQueries).not.toContain('.order("created_at", { ascending: true })');
   });
 
   it("refreshes Resolution Control after manual sync and keeps alias confirmation analyst-controlled", () => {
