@@ -1,5 +1,6 @@
 import "server-only";
 
+import { reconcileTechnicalEntitiesWorkflow } from "@/lib/techint/entities/trusted-client";
 import { recordTechnicalSignal } from "@/lib/techint/signals/trusted-signal-client";
 import { adapterResultSchema, collectionClaimSchema } from "./schema";
 import { controlledCollectionError, CollectionError } from "./errors";
@@ -7,6 +8,9 @@ import { resolveTechnicalSourceCredential } from "./credentials";
 import { getTechnicalSourceAdapter } from "./registry";
 import { completeTechnicalCollection, failTechnicalCollection } from "./trusted-collection-client";
 import { emptyCollectionCounters, type CollectionCounters } from "./types";
+
+const POST_SYNC_RECONCILE_BATCH = 500;
+const POST_SYNC_RECONCILE_MAX_BATCHES = 10;
 
 function concurrency(env: NodeJS.ProcessEnv = process.env) {
   const raw = env.TECHINT_COLLECTION_CONCURRENCY ?? "2";
@@ -47,6 +51,33 @@ function updateDisposition(counters: CollectionCounters, disposition: string) {
   if (disposition === "SUPPORTING") counters.supportingObservations += 1;
   if (disposition === "STALE") counters.staleObservations += 1;
   if (disposition === "CONFLICTING") counters.conflictingObservations += 1;
+}
+
+async function reconcileFreshTechnicalAssertions(actorId: string) {
+  let batches = 0;
+  let unseenProcessed = 0;
+  let resolved = 0;
+  let needsReview = 0;
+  let entitiesCreated = 0;
+  let truncated = false;
+
+  for (let batch = 0; batch < POST_SYNC_RECONCILE_MAX_BATCHES; batch += 1) {
+    const result = await reconcileTechnicalEntitiesWorkflow({ p_actor: actorId, p_limit: POST_SYNC_RECONCILE_BATCH });
+    batches += 1;
+    resolved += result.resolved;
+    needsReview += result.needs_review;
+    entitiesCreated += result.entities_created;
+
+    // Migration 040 reports how many rows in this pass had never been reconciled before.
+    // If the field is absent, stop after one compatibility pass rather than repeatedly
+    // recycling a historical NEEDS_REVIEW queue on an environment awaiting migration 040.
+    if (result.unseen_processed == null) break;
+    unseenProcessed += result.unseen_processed;
+    if (result.unseen_processed < POST_SYNC_RECONCILE_BATCH) break;
+    if (batch === POST_SYNC_RECONCILE_MAX_BATCHES - 1) truncated = true;
+  }
+
+  return { batches, unseenProcessed, resolved, needsReview, entitiesCreated, truncated };
 }
 
 export async function runClaimedTechnicalCollection(rawClaim: unknown, fetchImpl: typeof fetch = fetch) {
@@ -98,7 +129,19 @@ export async function runClaimedTechnicalCollection(rawClaim: unknown, fetchImpl
       counters,
       issues,
     });
-    return { success: true as const, ...completion, counters };
+
+    // Collection success remains authoritative. Entity normalization is a post-collection
+    // convenience layer and must never turn a completed source run into a failed run.
+    let entityReconciliation: Awaited<ReturnType<typeof reconcileFreshTechnicalAssertions>> | null = null;
+    if (counters.observationsCreated > 0) {
+      try {
+        entityReconciliation = await reconcileFreshTechnicalAssertions(claim.owner_id);
+      } catch {
+        entityReconciliation = null;
+      }
+    }
+
+    return { success: true as const, ...completion, counters, entityReconciliation };
   } catch (error) {
     const controlled = controlledCollectionError(error);
     counters.failedRecords = Math.max(1, counters.failedRecords);
