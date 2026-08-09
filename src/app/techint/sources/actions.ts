@@ -21,6 +21,7 @@ import { runClaimedTechnicalCollection } from "@/lib/techint/collection/orchestr
 function refresh() {
   revalidatePath("/techint");
   revalidatePath("/techint/sources");
+  revalidatePath("/techint/entities");
 }
 
 function settingsInput(sourceKey: string, intervalMinutes: FormDataEntryValue | null, form: FormData) {
