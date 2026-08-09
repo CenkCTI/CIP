@@ -56,6 +56,10 @@ function stringValue(value: unknown) {
   return value == null ? "" : String(value);
 }
 
+function firstText(primary: unknown, fallback: unknown) {
+  return stringValue(primary) || stringValue(fallback);
+}
+
 function safeNormalize(value: unknown) {
   try {
     return normalizeEntityLookup(stringValue(value));
@@ -83,7 +87,7 @@ export function buildAliasRecommendations(input: {
   for (const alias of input.aliases) {
     if (stringValue(alias.status) !== "ACTIVE") continue;
     const kind = stringValue(alias.entity_kind);
-    const normalized = safeNormalize(alias.normalized_value || alias.display_value);
+    const normalized = safeNormalize(firstText(alias.normalized_value, alias.display_value));
     if (!kind || !normalized) continue;
     activeAliasKeys.add(`${kind}\u001f${normalized}`);
   }
@@ -108,9 +112,9 @@ export function buildAliasRecommendations(input: {
 
     const assertion = assertionById.get(stringValue(resolution.assertion_id));
     if (!assertion) continue;
-    const kind = stringValue(assertion.entity_kind || resolution.entity_kind);
+    const kind = firstText(assertion.entity_kind, resolution.entity_kind);
     if (!kind || deterministicKinds.has(kind)) continue;
-    const normalized = safeNormalize(assertion.normalized_value || assertion.display_value);
+    const normalized = safeNormalize(firstText(assertion.normalized_value, assertion.display_value));
     if (!normalized) continue;
 
     const entityId = stringValue(resolution.entity_id);
@@ -126,7 +130,7 @@ export function buildAliasRecommendations(input: {
     const current = evidence.get(evidenceKey) ?? {
       entityId,
       entityKind: kind,
-      displayValue: stringValue(assertion.display_value || assertion.normalized_value),
+      displayValue: firstText(assertion.display_value, assertion.normalized_value),
       normalizedValue: normalized,
       observationIds: new Set<string>(),
       sourceSystems: new Set<string>(),
