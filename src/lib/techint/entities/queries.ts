@@ -46,12 +46,57 @@ export function listTechnicalEntityResolutionsForAssertions(client: SupabaseClie
     .in("assertion_id", assertionIds.slice(0, 500));
 }
 
-export function listTechnicalEntityAssertions(client: SupabaseClient, limit = 500) {
-  return client
+export async function listTechnicalEntityAssertions(client: SupabaseClient, limit = 500) {
+  const boundedLimit = Math.min(Math.max(limit, 1), 500);
+
+  // Resolution Control is a decision queue, not a historical assertion browser.
+  // Prioritize the actual NEEDS_REVIEW backlog first so old analyst decisions are not
+  // hidden, then fill the remaining bounded window with the newest assertions so fresh
+  // post-sync cases are visible immediately. The previous oldest-first LIMIT 500 window
+  // permanently hid new cases once the table exceeded 500 rows.
+  const reviewResolutionResult = await client
+    .from("technical_entity_assertion_resolutions")
+    .select("assertion_id,updated_at")
+    .eq("status", "NEEDS_REVIEW")
+    .order("updated_at", { ascending: false })
+    .limit(boundedLimit);
+
+  if (reviewResolutionResult.error) return { data: null, error: reviewResolutionResult.error };
+
+  const reviewIds = [...new Set((reviewResolutionResult.data ?? []).map((row) => String(row.assertion_id)).filter(Boolean))];
+  const reviewRank = new Map(reviewIds.map((id, index) => [id, index]));
+  let reviewAssertions: Array<Record<string, unknown>> = [];
+
+  if (reviewIds.length) {
+    const reviewAssertionResult = await client
+      .from("technical_signal_entity_assertions")
+      .select(assertionProjection)
+      .in("id", reviewIds.slice(0, boundedLimit));
+    if (reviewAssertionResult.error) return { data: null, error: reviewAssertionResult.error };
+    reviewAssertions = ((reviewAssertionResult.data ?? []) as Array<Record<string, unknown>>)
+      .sort((left, right) => (reviewRank.get(String(left.id)) ?? Number.MAX_SAFE_INTEGER) - (reviewRank.get(String(right.id)) ?? Number.MAX_SAFE_INTEGER));
+  }
+
+  if (reviewAssertions.length >= boundedLimit) return { data: reviewAssertions.slice(0, boundedLimit), error: null };
+
+  const latestAssertionResult = await client
     .from("technical_signal_entity_assertions")
     .select(assertionProjection)
-    .order("created_at", { ascending: true })
-    .limit(Math.min(Math.max(limit, 1), 500));
+    .order("created_at", { ascending: false })
+    .limit(boundedLimit);
+  if (latestAssertionResult.error) return { data: null, error: latestAssertionResult.error };
+
+  const seen = new Set(reviewAssertions.map((row) => String(row.id)));
+  const data = [...reviewAssertions];
+  for (const row of (latestAssertionResult.data ?? []) as Array<Record<string, unknown>>) {
+    const id = String(row.id);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    data.push(row);
+    if (data.length >= boundedLimit) break;
+  }
+
+  return { data, error: null };
 }
 
 export function listTechnicalEntityAssertionsByIds(client: SupabaseClient, assertionIds: string[]) {
