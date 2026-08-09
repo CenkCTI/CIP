@@ -75,6 +75,16 @@ describe("Phase 2.3D AI auto-resolution safety gates", () => {
     expect(gate({ entityStatus: "ARCHIVED" })).toMatchObject({ eligible: false, reason: "CANDIDATE_INACTIVE" });
   });
 
+  it("keeps PRODUCT without corroborating parent context in analyst review", () => {
+    expect(gate({
+      kind: "PRODUCT",
+      value: "FortiOS",
+      titles: ["FortiOS vulnerability"],
+      candidates: [{ ...candidate(), canonicalName: "FortiOS", canonicalNormalized: "fortios" }],
+      entityKind: "PRODUCT",
+    })).toMatchObject({ eligible: false, reason: "CONTEXT_INSUFFICIENT" });
+  });
+
   it("keeps conflicting PRODUCT Core context in analyst review", () => {
     expect(gate({
       kind: "PRODUCT",
