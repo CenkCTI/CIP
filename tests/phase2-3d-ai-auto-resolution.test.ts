@@ -5,11 +5,13 @@ import {
   isGenericEntityLabel,
   isSafeCanonicalBootstrapName,
 } from "@/lib/techint/entities/auto-resolution";
+import { chunkEntityAiItems, ENTITY_AI_MAX_RUN_GROUPS, ENTITY_AI_PROVIDER_BATCH_SIZE } from "@/lib/techint/entities/ai-batch";
 import type { EntityAiSuggestion } from "@/lib/techint/entities/ai-resolver";
 import type { EntityCandidate } from "@/lib/techint/entities/grouping";
 import type { TechnicalEntityKind } from "@/lib/techint/entities/types";
 
 const route = readFileSync("src/app/api/techint/entities/auto-resolve-ai/route.ts", "utf8");
+const suggestRoute = readFileSync("src/app/api/techint/entities/suggest/route.ts", "utf8");
 const migration038 = readFileSync("supabase/migrations/202608090038_phase2_3d_ai_verified_auto_resolution.sql", "utf8");
 const migration039 = readFileSync("supabase/migrations/202608090039_phase2_3d_ai_verified_canonical_bootstrap.sql", "utf8");
 const workspace = readFileSync("src/app/techint/entities/resolution-workspace.tsx", "utf8");
@@ -170,6 +172,42 @@ describe("Phase 2.3D AI auto-resolution safety gates", () => {
   it("does not broadly auto-resolve threat actors or campaigns", () => {
     expect(gate({ kind: "THREAT_ACTOR", entityKind: "THREAT_ACTOR" })).toMatchObject({ eligible: false, reason: "KIND_NOT_ENABLED" });
     expect(gate({ kind: "CAMPAIGN", entityKind: "CAMPAIGN" })).toMatchObject({ eligible: false, reason: "KIND_NOT_ENABLED" });
+  });
+});
+
+describe("Phase 2.3D AI batch control", () => {
+  it("allows an analyst-selected run of up to 50 while keeping provider prompts at eight or fewer groups", () => {
+    expect(ENTITY_AI_MAX_RUN_GROUPS).toBe(50);
+    expect(ENTITY_AI_PROVIDER_BATCH_SIZE).toBe(8);
+    const batches = chunkEntityAiItems(Array.from({ length: 50 }, (_, index) => index));
+    expect(batches).toHaveLength(7);
+    expect(batches.every((batch) => batch.length <= 8)).toBe(true);
+    expect(batches.flat()).toEqual(Array.from({ length: 50 }, (_, index) => index));
+  });
+
+  it("accepts 0-50 in both AI routes and preserves queue order through bounded sub-batches", () => {
+    expect(route).toContain(".min(0).max(ENTITY_AI_MAX_RUN_GROUPS)");
+    expect(suggestRoute).toContain(".min(0).max(ENTITY_AI_MAX_RUN_GROUPS)");
+    expect(route).toContain("chunkEntityAiItems(aiGroups)");
+    expect(suggestRoute).toContain("chunkEntityAiItems(aiGroups)");
+    expect(workspace).toContain("min={0}");
+    expect(workspace).toContain("max={ENTITY_AI_MAX_RUN_GROUPS}");
+    expect(workspace).toContain("first N currently unresolved cases in queue order");
+  });
+
+  it("keeps AI results for unaffected cases when one manual decision is committed", () => {
+    expect(workspace).toContain("setSuggestions((current) => ({ ...current, ...next }))");
+    expect(workspace).toContain("AI analyses for every other open case were preserved");
+    expect(workspace).toContain("router.refresh()");
+    expect(workspace).not.toContain("window.location.reload");
+  });
+
+  it("closes an auto-resolved case only after every assertion in the selected group linked", () => {
+    expect(route).toContain("linkedInGroup === group.assertionIds.length");
+    expect(route).toContain("WRITE_PARTIAL_SAFE");
+    expect(workspace).toContain("Run activity");
+    expect(workspace).toContain("Auto created + resolved");
+    expect(workspace).toContain("Auto linked + resolved");
   });
 });
 
