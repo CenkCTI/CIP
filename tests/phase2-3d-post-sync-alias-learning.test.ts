@@ -111,11 +111,15 @@ describe("Phase 2.3D post-sync automatic reconciliation", () => {
     expect(orchestrator.indexOf("const completion = await completeTechnicalCollection")).toBeLessThan(orchestrator.indexOf("entityReconciliation = await reconcileFreshTechnicalAssertions"));
   });
 
-  it("keeps the Resolution Control window focused on real review backlog plus fresh assertions", () => {
+  it("pages through the full NEEDS_REVIEW queue while keeping each transport request bounded", () => {
     expect(entityQueries).toContain('.eq("status", "NEEDS_REVIEW")');
-    expect(entityQueries).toContain('.order("updated_at", { ascending: false })');
+    expect(entityQueries).toContain("for (let offset = 0; ; offset += pageSize)");
+    expect(entityQueries).toContain(".range(offset, offset + pageSize - 1)");
+    expect(entityQueries).toContain("ID_QUERY_CHUNK = 200");
+    expect(entityQueries).toContain("index += ID_QUERY_CHUNK");
     expect(entityQueries).toContain('.order("created_at", { ascending: false })');
-    expect(entityQueries).toContain("reviewAssertions.length >= boundedLimit");
+    expect(entityQueries).not.toContain("reviewAssertions.length >= boundedLimit");
+    expect(entityQueries).not.toContain("reviewIds.slice(0, boundedLimit)");
     expect(entityQueries).not.toContain('.order("created_at", { ascending: true })');
   });
 
