@@ -131,6 +131,35 @@ begin
   end;
 end$$;
 
+-- Migration 038: AI may link only a current ambiguous assertion to an existing entity.
+-- It must record truthful AI provenance and must not teach an alias.
+do $$
+declare malware_entity uuid;
+begin
+  select id into malware_entity
+  from public.technical_entities
+  where owner_id='10000000-0000-4000-8000-000000000001'
+    and entity_kind='MALWARE'
+    and canonical_name='Lumma Stealer'
+  order by created_at
+  limit 1;
+
+  perform public.ai_resolve_technical_entity_assertion(
+    '10000000-0000-4000-8000-000000000001',
+    '40000000-0000-4000-8000-000000000005',
+    malware_entity,
+    'nvidia_nim',
+    'test-model',
+    '{"candidateUnique":true,"candidateStrong":true,"kindMatch":true,"genericLabel":false,"contextConflict":false,"aliasTaught":false}'::jsonb
+  );
+
+  if (select basis from public.technical_entity_assertion_resolutions where assertion_id='40000000-0000-4000-8000-000000000005')<>'AI_VERIFIED' then raise exception 'AI verified basis missing'; end if;
+  if (select alias_id from public.technical_entity_assertion_resolutions where assertion_id='40000000-0000-4000-8000-000000000005') is not null then raise exception 'AI resolution taught alias'; end if;
+  if exists(select 1 from public.technical_entity_aliases where owner_id='10000000-0000-4000-8000-000000000001' and status='ACTIVE' and normalized_value='lummastealer') then raise exception 'AI resolution created active alias'; end if;
+  if not exists(select 1 from public.technical_entity_audit_events where assertion_id='40000000-0000-4000-8000-000000000005' and action='ASSERTION_AI_AUTO_RESOLVED' and details->>'provider'='nvidia_nim' and details->>'model'='test-model' and details->>'confidence'='HIGH') then raise exception 'AI audit metadata missing'; end if;
+  if (select display_value from public.technical_signal_entity_assertions where id='40000000-0000-4000-8000-000000000005')<>'LummaStealer' then raise exception 'AI resolution mutated source assertion'; end if;
+end$$;
+
 set role authenticated;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
 do $$begin
@@ -139,6 +168,7 @@ do $$begin
   begin update public.technical_entity_aliases set display_value='x';raise exception 'authenticated alias update accepted';exception when insufficient_privilege then null;end;
   begin delete from public.technical_entity_assertion_resolutions;raise exception 'authenticated resolution delete accepted';exception when insufficient_privilege then null;end;
   if has_function_privilege('authenticated','public.reconcile_technical_entity_assertions(uuid,integer)','EXECUTE') then raise exception 'authenticated trusted RPC execute accepted'; end if;
+  if has_function_privilege('authenticated','public.ai_resolve_technical_entity_assertion(uuid,uuid,uuid,text,text,jsonb)','EXECUTE') then raise exception 'authenticated AI trusted RPC execute accepted'; end if;
 end$$;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000002',false);
 do $$begin
@@ -154,7 +184,10 @@ reset role;
 
 do $$begin
   if not has_function_privilege('service_role','public.reconcile_technical_entity_assertions(uuid,integer)','EXECUTE') then raise exception 'service-role reconcile privilege missing'; end if;
+  if not has_function_privilege('service_role','public.ai_resolve_technical_entity_assertion(uuid,uuid,uuid,text,text,jsonb)','EXECUTE') then raise exception 'service-role AI resolution privilege missing'; end if;
   if not exists(select 1 from pg_enum e join pg_type t on t.oid=e.enumtypid where t.typname='technical_entity_alias_basis' and e.enumlabel='AUTHORITATIVE_SOURCE') then raise exception 'authoritative alias basis missing'; end if;
+  if not exists(select 1 from pg_enum e join pg_type t on t.oid=e.enumtypid where t.typname='technical_entity_resolution_basis' and e.enumlabel='AI_VERIFIED') then raise exception 'AI verified basis missing'; end if;
+  if not exists(select 1 from pg_enum e join pg_type t on t.oid=e.enumtypid where t.typname='technical_entity_audit_action' and e.enumlabel='ASSERTION_AI_AUTO_RESOLVED') then raise exception 'AI audit action missing'; end if;
   if public.technical_entity_normalize_lookup('Lumma-Stealer')=public.technical_entity_normalize_lookup('Lumma Stealer') then raise exception 'punctuation normalization too aggressive'; end if;
 end$$;
 SQL
