@@ -10,7 +10,7 @@ import { buildEntityAiMessages, entityAiGroupSchema, parseEntityAiResponse } fro
 import { groupUnresolvedAssertions, shortlistEntityCandidates } from "@/lib/techint/entities/grouping";
 import { normalizeEntityLookup } from "@/lib/techint/entities/normalization";
 import {
-  listTechnicalEntities,
+  listTechnicalEntitiesForKinds,
   listTechnicalEntityAssertions,
   listTechnicalEntityResolutionsForAssertions,
   listTechnicalObservationLabels,
@@ -44,11 +44,8 @@ export async function POST(request: Request) {
   try {
     const parsed = bodySchema.parse(await request.json().catch(() => ({})));
     const { supabase, user } = await requireUser();
-    const [{ data: assertionRows, error: assertionError }, { data: entityRows, error: entityError }] = await Promise.all([
-      listTechnicalEntityAssertions(supabase, 500),
-      listTechnicalEntities(supabase, 300),
-    ]);
-    if (assertionError || entityError) throw new Error("entity_ai_context_unavailable");
+    const { data: assertionRows, error: assertionError } = await listTechnicalEntityAssertions(supabase, 500);
+    if (assertionError) throw new Error("entity_ai_context_unavailable");
 
     const assertions = (assertionRows ?? []) as Array<{
       id: string;
@@ -62,17 +59,20 @@ export async function POST(request: Request) {
     const resolutionResult = await listTechnicalEntityResolutionsForAssertions(supabase, assertions.map((assertion) => assertion.id));
     if (resolutionResult.error) throw new Error("entity_ai_context_unavailable");
     const resolutions = (resolutionResult.data ?? []) as Array<{ assertion_id: string; status: string }>;
-    const entities = (entityRows ?? []) as Array<{
+    const groups = groupUnresolvedAssertions(assertions, resolutions)
+      .filter((group) => !deterministicKinds.has(group.entityKind))
+      .slice(0, parsed.limit);
+    if (!groups.length) return NextResponse.json({ suggestions: [], provider: null, model: null });
+
+    const entityResult = await listTechnicalEntitiesForKinds(supabase, groups.map((group) => group.entityKind), 500);
+    if (entityResult.error) throw new Error("entity_ai_context_unavailable");
+    const entities = (entityResult.data ?? []) as Array<{
       id: string;
       entity_kind: TechnicalEntityKind;
       canonical_name: string;
       canonical_normalized: string;
       status?: string | null;
     }>;
-    const groups = groupUnresolvedAssertions(assertions, resolutions)
-      .filter((group) => !deterministicKinds.has(group.entityKind))
-      .slice(0, parsed.limit);
-    if (!groups.length) return NextResponse.json({ suggestions: [], provider: null, model: null });
 
     const observationIds = [...new Set(groups.flatMap((group) => group.sourceObservationIds))].slice(0, 500);
     const signalIds = [...new Set(groups.flatMap((group) => group.signalIds))].slice(0, 500);
