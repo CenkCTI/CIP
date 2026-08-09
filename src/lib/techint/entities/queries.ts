@@ -1,11 +1,24 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+const entityProjection = "id,entity_kind,canonical_name,canonical_normalized,deterministic_key,indicator_type,origin,status,created_at,updated_at,archived_at";
+
 export function listTechnicalEntities(client: SupabaseClient, limit = 150) {
   return client
     .from("technical_entities")
-    .select("id,entity_kind,canonical_name,canonical_normalized,deterministic_key,indicator_type,origin,status,created_at,updated_at,archived_at")
+    .select(entityProjection)
     .order("updated_at", { ascending: false })
     .limit(Math.min(Math.max(limit, 1), 300));
+}
+
+export function listTechnicalEntitiesForKinds(client: SupabaseClient, kinds: string[], limit = 500) {
+  if (!kinds.length) return Promise.resolve({ data: [], error: null });
+  return client
+    .from("technical_entities")
+    .select(entityProjection)
+    .in("entity_kind", [...new Set(kinds)].slice(0, 13))
+    .eq("status", "ACTIVE")
+    .order("updated_at", { ascending: false })
+    .limit(Math.min(Math.max(limit, 1), 500));
 }
 
 export function listTechnicalEntityAliases(client: SupabaseClient, limit = 200) {
