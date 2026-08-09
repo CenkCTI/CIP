@@ -4,6 +4,7 @@ import { buildAliasRecommendations } from "@/lib/techint/entities/alias-recommen
 
 const migration040 = readFileSync("supabase/migrations/202608100040_phase2_3d_post_sync_reconciliation.sql", "utf8");
 const orchestrator = readFileSync("src/lib/techint/collection/orchestrator.ts", "utf8");
+const trustedClient = readFileSync("src/lib/techint/entities/trusted-client.ts", "utf8");
 const sourcesActions = readFileSync("src/app/techint/sources/actions.ts", "utf8");
 const page = readFileSync("src/app/techint/entities/page.tsx", "utf8");
 
@@ -83,16 +84,23 @@ describe("Phase 2.3D evidence-backed alias recommendations", () => {
 });
 
 describe("Phase 2.3D post-sync automatic reconciliation", () => {
-  it("prioritizes unseen assertions and exposes a bounded unseen counter", () => {
+  it("prioritizes unseen assertions, provides a new-only RPC, and serializes owner reconciliation", () => {
     expect(migration040).toContain("(q.id is null) as was_unseen");
     expect(migration040).toContain("order by (q.id is null) desc");
     expect(migration040).toContain("'unseen_processed',unseen_count");
+    expect(migration040).toContain("reconcile_new_technical_entity_assertions");
+    expect(migration040).toContain("technical-entity-reconcile");
+    expect(migration040).toContain("pg_advisory_xact_lock");
+    expect(migration040).toContain("NEW_ENTITY_RECONCILE_SCOPE_MISMATCH");
     expect(migration040).toContain("to service_role");
     expect(migration040).toContain("from public,anon,authenticated");
   });
 
-  it("runs deterministic/confirmed-alias reconciliation after a successful collection without making it authoritative for collection success", () => {
-    expect(orchestrator).toContain("reconcileTechnicalEntitiesWorkflow");
+  it("uses the new-only trusted RPC after a successful collection without making post-processing authoritative for collection success", () => {
+    expect(trustedClient).toContain("reconcileNewTechnicalEntitiesWorkflow");
+    expect(trustedClient).toContain('rpc("reconcile_new_technical_entity_assertions"');
+    expect(orchestrator).toContain("reconcileNewTechnicalEntitiesWorkflow");
+    expect(orchestrator).not.toContain("reconcileTechnicalEntitiesWorkflow");
     expect(orchestrator).toContain("POST_SYNC_RECONCILE_BATCH = 500");
     expect(orchestrator).toContain("POST_SYNC_RECONCILE_MAX_BATCHES = 10");
     expect(orchestrator).toContain("entityAssertionsCreated += recorded.entity_assertions_created");
