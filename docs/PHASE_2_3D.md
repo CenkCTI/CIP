@@ -2,11 +2,11 @@
 
 ## Purpose
 
-Phase 2.3D introduces an owner-scoped canonical TechINT entity layer above immutable Phase 2.3B source-backed entity assertions. Its job is to turn repeated source labels into stable canonical identities without making the analyst manually clean every observation.
+Phase 2.3D adds an owner-scoped canonical TechINT entity layer above immutable Phase 2.3B source-backed entity assertions. The analyst should resolve identity exceptions, not clean every source record.
 
-The preferred workflow is now hybrid:
+The current workflow is:
 
-`source assertions → deterministic/known-alias auto resolution → exact unresolved grouping → optional BYOK AI candidate suggestion → explicit analyst confirmation`
+`source assertions → deterministic resolution → confirmed exact aliases → grouped ambiguous review → optional BYOK AI assessment → safe AI-verified auto-link or analyst review`
 
 Phase 2.3D still does **not** perform profile matching, relevance scoring, Global Priority, Global View ranking, Investigation mutation, attribution, alerts, or AI-authored intelligence assessment.
 
@@ -16,290 +16,308 @@ The data flow remains separated:
 
 `external source → Technical Signal → immutable observation → immutable entity assertion → Phase 2.3D resolution`
 
-A source assertion remains source truth. Phase 2.3D never rewrites `technical_signal_entity_assertions.display_value`, `normalized_value`, `assertion_basis`, source provenance, or observation identity.
+A source assertion remains source truth. Phase 2.3D never rewrites provider labels, normalized values, assertion basis, provenance, observation identity, or source snapshots.
 
-The layers remain distinct:
+The layers are distinct:
 
-1. **SOURCE ASSERTION** — immutable source-backed or system-extracted context attached to an exact Technical Signal observation.
-2. **CANONICAL ENTITY** — owner-global TechINT identity used by later matching and prioritization.
-3. **ANALYTICAL ENTITY** — Investigation-scoped Threat Actor, Malware, Campaign, CVE, Indicator, MITRE, or Infrastructure records controlled by an analyst.
-4. **AI SUGGESTION** — optional, ephemeral BYOK-generated proposal for an unresolved group. It is not source truth, not an alias, and not a saved resolution until the analyst explicitly confirms it.
+1. **SOURCE ASSERTION** — immutable source-backed/system-extracted observation context.
+2. **CANONICAL ENTITY** — owner-global TechINT identity.
+3. **ANALYTICAL ENTITY** — Investigation-scoped analyst record.
+4. **AI ASSESSMENT** — optional BYOK output used only as one input to guarded resolution.
 
-Canonicalization never creates or mutates analytical Investigation records.
-
-## Why project CTI records are not the TechINT taxonomy
-
-Existing `threat_actors`, `malware`, `campaigns`, `cves`, `indicators`, and `mitre_techniques` rows are project/Investigation scoped. Their names, aliases, families, and relationships may encode local analytical judgement. They are therefore not promoted automatically into an owner-global taxonomy.
-
-Likewise, `intel_profile_items.normalized_value` is a profile-local normalized value, not a global canonical entity ID.
-
-Project `threat_actors.aliases`, `malware.family`, campaign names, and similar Investigation strings are not silently globalized into Phase 2.3D aliases.
+Canonicalization never creates or mutates Investigation analytical records.
 
 ## Database model
 
-Migration `202608080037_phase2_3d_taxonomy_entity_normalization.sql` adds four owner-scoped tables:
+Migration `202608080037_phase2_3d_taxonomy_entity_normalization.sql` created:
 
 - `technical_entities`
 - `technical_entity_aliases`
 - `technical_entity_assertion_resolutions`
 - `technical_entity_audit_events`
 
-No extra AI-secret or AI-suggestion table is introduced. BYOK suggestions are ephemeral until an analyst explicitly confirms a grouped resolution through the existing trusted mutation boundary.
+Migration 037 is already operator-applied and is immutable.
 
-### `technical_entities`
+Migration `202608090038_phase2_3d_ai_verified_auto_resolution.sql` is additive. It adds:
 
-Stores owner-global canonical identity.
+- resolution basis `AI_VERIFIED`
+- audit action `ASSERTION_AI_AUTO_RESOLVED`
+- service-role-only RPC `ai_resolve_technical_entity_assertion(...)`
 
-Deterministic entity kinds are:
+Migration 038 does not add an AI-secret table, model-output table, alias table, or autonomous entity-creation path.
 
-- `CVE`
-- `ATTACK_TECHNIQUE`
-- `INDICATOR`
+## Deterministic resolver
 
-Their deterministic keys reuse the existing Phase 2.3B identity contract:
+`reconcile_technical_entity_assertions(actor, limit)` remains bounded, non-networking and idempotent.
 
-- `cve:CVE-YYYY-NNNN...`
-- `attack:Txxxx`
-- `attack:Txxxx.xxx`
-- `indicator:<TYPE>:<canonical-value>`
+It automatically handles:
 
-For these kinds, deterministic identity is immutable and owner-unique.
+- CVE deterministic identity
+- ATT&CK technique/sub-technique identity
+- Indicator identity using existing CİTEM normalization
+- exact ACTIVE confirmed aliases
 
-Ambiguous/name-based kinds such as Threat Actor, Malware, Campaign, Vendor, Product, Sector, Country, Region, Infrastructure, and Tag use UUID identity. Equal normalized names are not declared equivalent automatically and are intentionally not globally unique.
+Deterministic resolution does not call BYOK or any external provider.
 
-### `technical_entity_aliases`
+## Grouped analyst review
 
-Aliases are confirmed equivalence mappings, not raw provider strings.
+Unresolved ambiguous assertions are grouped by conservative exact identity value rather than rendered one source assertion at a time.
 
-Alias bases:
+Example:
 
-- `ANALYST_CONFIRMED`
-- `AUTHORITATIVE_SOURCE`
+`147 × VENDOR = Microsoft → one review group`
 
-Normal analyst workflows can create only `ANALYST_CONFIRMED` aliases. `AUTHORITATIVE_SOURCE` exists for future verified authoritative taxonomy ingestion and requires exact source provenance. Phase 2.3D does not fabricate MITRE aliases or scrape external taxonomies.
+Each group carries only bounded context such as occurrence count, source systems, semantic roles and a few signal titles.
 
-Only one ACTIVE alias for one owner + entity kind + conservative normalized value can resolve at a time. Conflicting reassignment fails closed.
+## BYOK / NVIDIA NIM
 
-### `technical_entity_assertion_resolutions`
+Entity Resolution reuses the existing authenticated BYOK architecture:
 
-Stores the current resolution state for an immutable source assertion.
+- encrypted temporary HttpOnly `cip_byok` cookie
+- authenticated user binding
+- existing provider registry
+- existing `byokChat` client
+- NVIDIA NIM as the recommended/default UI provider
+- OpenAI, OpenRouter and Groq remain available
 
-Statuses:
+The API key is never persisted in Technical Signals, canonical entities, aliases, resolutions, audit rows, source cursors, or browser-readable state.
 
-- `RESOLVED`
-- `NEEDS_REVIEW`
-- `DISMISSED`
+AI requests remain bounded to:
 
-Resolution bases:
+- entity kind
+- observed label
+- conservative normalized value
+- occurrence count
+- bounded source-system names
+- semantic roles
+- a few signal titles
+- server-selected existing canonical candidates
 
-- `DETERMINISTIC_KEY`
-- `CONFIRMED_ALIAS`
-- `AUTHORITATIVE_ALIAS`
-- `ANALYST_LINK`
-- `ANALYST_CREATED`
+Raw provider snapshots, Investigation Notes, Evidence, Reports and Intel Profile data are not sent.
 
-Exactly one current resolution row exists per owner/assertion.
-
-An analyst can link an assertion to an entity without teaching a reusable alias. Remembering an alias is a separate explicit decision. Grouped review preserves the same rule: **Confirm current group** and **Confirm & teach exact alias** are separate actions.
-
-### `technical_entity_audit_events`
-
-Append-only bounded audit history records canonical entity lifecycle, alias confirmation/revocation, automatic resolution, analyst resolution, dismissal, and reset-to-review events. Raw provider payloads, credentials, cursors, lease material, and unbounded source data are not stored in the audit table.
-
-## Automatic resolver
-
-`reconcile_technical_entity_assertions(actor, limit)` remains the deterministic, non-networking resolver with a 1–500 assertion bound.
-
-It handles:
-
-- CVE deterministic identity;
-- ATT&CK technique/sub-technique deterministic identity;
-- Indicator deterministic identity using existing CİTEM normalization;
-- exact ACTIVE confirmed aliases.
-
-It does not call BYOK, NVIDIA NIM, another model, or another provider. A taxonomy failure therefore remains isolated from Technical Signal collection.
-
-An ambiguous provider string alone never creates a canonical entity.
-
-## Grouped exception review
-
-The previous raw-assertion review experience was not sufficiently scalable. `/techint/entities` now groups unresolved ambiguous assertions by:
-
-`entity kind + conservative exact normalized value`
-
-For example, 147 unresolved `VENDOR = Microsoft` assertions are presented as one review group rather than 147 analyst tasks.
-
-Each group shows a bounded occurrence count, source systems, semantic roles, and a few signal titles for context.
-
-Resolved and dismissed assertions are excluded from ordinary review groups. Deterministic CVE/Indicator/ATT&CK assertions are routed to the automatic resolver rather than analyst cleanup.
-
-## Candidate discovery
-
-For optional AI assistance, CİTEM first narrows existing canonical entities to a bounded candidate list of the same entity kind.
-
-Candidate shortlisting may use lightweight lexical similarity only to reduce the candidate set sent to the model. This shortlist is **non-authoritative** and never resolves an assertion by itself.
-
-Punctuation-stripped or compact forms such as `LummaStealer` and `Lumma Stealer` may therefore appear near each other as candidates, but they are not automatically declared equivalent by the deterministic resolver.
-
-## BYOK / NVIDIA NIM assistance
-
-Phase 2.3D reuses the existing authenticated BYOK system. No second API-key store is created.
-
-The TechINT entity-resolution UI defaults the connection selector to **NVIDIA NIM**, while keeping the existing BYOK providers available.
-
-Existing BYOK protections remain in force:
-
-- the API key is accepted only by the existing BYOK connect flow;
-- it is encrypted in the temporary HttpOnly cookie;
-- the cookie is user-bound;
-- the key is not stored in taxonomy tables, Technical Signals, audit rows, source cursors, or browser-visible application state;
-- entity suggestion calls use the existing server-side `byokChat` provider client.
-
-The suggestion endpoint is:
+## Suggestion-only endpoint
 
 `POST /api/techint/entities/suggest`
 
-It loads the authenticated user's unresolved groups server-side and sends only a bounded package containing:
-
-- entity kind;
-- observed/display label;
-- conservative normalized lookup value;
-- occurrence count;
-- source-system names;
-- semantic roles;
-- at most a few signal titles;
-- a bounded server-selected list of canonical candidates.
-
-It does not send raw provider snapshots, full Technical Signal facts, credentials, source cursors, lease material, Investigation notes, Evidence, Reports, or profile data.
-
-The model must return one of:
+This endpoint remains non-mutating. It can return:
 
 - `MATCH_EXISTING`
 - `CREATE_NEW`
 - `UNSURE`
 
-with a confidence band and brief rationale.
+with a confidence band and bounded rationale.
 
-For `MATCH_EXISTING`, the model may reference only a candidate UUID supplied by the server. A hallucinated or out-of-set candidate ID is downgraded to `UNSURE` before reaching the UI.
+A model-supplied candidate UUID must be one of the server-supplied candidates. Out-of-set IDs fail closed to `UNSURE`.
 
-AI output is treated as untrusted model output and validated with strict Zod schemas. Source labels and signal titles are also explicitly treated as untrusted quoted content for prompt-injection resistance.
+## Guarded AI auto-resolution
 
-## AI cannot write canonical truth
+`POST /api/techint/entities/auto-resolve-ai`
 
-The AI suggestion endpoint imports no canonical-entity mutation workflow and performs no taxonomy write.
+This is a separate authenticated workflow. It may link current unresolved assertions to an **already-existing canonical entity** only after the server independently validates every safety gate.
 
-An AI response never automatically:
+**AI confidence alone never authorizes a write.**
 
-- creates a canonical entity;
-- creates an alias;
-- links an assertion;
-- changes a source assertion;
-- creates an Investigation entity;
-- creates a profile match;
-- changes attribution;
-- creates Global Priority or a ranking.
+All of the following must pass:
 
-The analyst must separately confirm a group.
+1. model decision is `MATCH_EXISTING`
+2. model confidence is `HIGH`
+3. candidate ID was supplied by the server
+4. candidate is ACTIVE
+5. candidate kind exactly matches the group kind
+6. selected candidate has a strong lexical identity signal
+7. exactly one strong candidate exists
+8. no duplicate/competing strong candidate exists
+9. label is not a bounded generic/provider-placeholder value
+10. PRODUCT context is not contradictory
+11. kind is enabled for guarded AI auto-resolution
+12. assertion is still unresolved/current when the trusted RPC runs
 
-The grouped confirmation endpoint is:
+Initial autonomous kinds are deliberately conservative:
 
-`POST /api/techint/entities/resolve-group`
+- `VENDOR`
+- `MALWARE`
+- `PRODUCT` only when context is unambiguous
 
-It re-loads the authenticated user's current unresolved exact group server-side and then uses the existing service-role-only trusted entity RPCs. It is bounded to at most 250 current assertions per request and is safe to retry.
+Threat Actor and Campaign remain analyst-review only in this phase.
 
-For an AI or manual proposal the analyst can choose:
+Deterministic kinds (`CVE`, `INDICATOR`, `ATTACK_TECHNIQUE`) bypass AI and continue through the deterministic resolver.
 
-- **Confirm current group** — link current exact unresolved occurrences only;
-- **Confirm & teach exact alias** — link current occurrences and explicitly save the exact value as an `ANALYST_CONFIRMED` alias so future exact assertions resolve automatically;
-- **Create current group** — create a canonical entity and link the current exact group;
-- **Create & teach alias** — create, link, and explicitly teach the exact alias.
+## Generic labels
 
-AI never selects between these write actions on behalf of the analyst.
+A bounded explicit rule set blocks provider placeholders such as:
 
-## Conservative normalization
+- `Multiple Products`
+- `Various Products`
+- `Unknown`
+- `Other`
+- `Multiple Versions`
+- `Multiple Devices`
+- `All Versions`
 
-For authoritative equality in the deterministic/alias resolver, ambiguous-name normalization remains intentionally narrow:
+These values are never silently discarded; their immutable source assertions remain intact. They simply cannot be AI-auto-canonicalized.
 
-- trim surrounding whitespace;
-- collapse repeated whitespace;
-- case-fold for lookup.
+## Product context conflicts
 
-It preserves punctuation, periods, hyphens, underscores, digits, and word boundaries.
+PRODUCT auto-resolution fails closed when the bounded context shows materially different parent/vendor contexts.
 
-The automatic resolver does **not** perform fuzzy matching, Levenshtein equality, phonetic equality, punctuation-stripping equality, stemming, token reordering, substring equality, transliteration guesses, or model-generated alias insertion.
+Example:
 
-Correctly unresolved is preferred to incorrectly canonicalized.
+- `WordPress Core ...`
+- `Drupal Core ...`
 
-## Alias revocation
+for observed PRODUCT `Core` remains analyst review even if a model returns HIGH confidence.
 
-Revoking an alias:
+## What AI automation may do
 
-- does not change the source assertion;
-- does not change the canonical entity;
-- does not rewrite audit history;
-- does not disturb analyst-created or analyst-linked per-assertion decisions;
-- returns alias-derived automatic resolutions that depended on that alias to `NEEDS_REVIEW`.
+Allowed after all gates pass:
 
-A later explicit analyst decision may resolve them again.
+`current unresolved group → existing canonical entity`
 
-## Security / RLS / ACL
+The database records:
 
-The four Phase 2.3D tables use owner-scoped RLS.
+- resolution basis `AI_VERIFIED`
+- dedicated append-only `ASSERTION_AI_AUTO_RESOLVED` audit event
+- bounded provider/model/confidence/safety-check metadata
 
-Authenticated users may SELECT only their own rows. Anonymous users receive no table access. Browser roles receive no direct INSERT/UPDATE/DELETE access and cannot execute trusted Phase 2.3D mutation RPCs.
+## What AI automation may NOT do
 
-Server actions and API routes derive the actor from `requireUser()`. Browser input never supplies a trusted owner ID.
+It never automatically:
 
-Canonical mutation still occurs only through the server-only service-role trusted client. Database errors are converted into bounded application failures.
+- creates a canonical entity
+- creates or teaches an alias
+- renames/archives/restores an entity
+- rewrites source assertions
+- creates Investigation entities
+- creates profile matches
+- changes attribution
+- creates Graph relationships
+- creates Global Priority/ranking state
 
-The BYOK suggestion route does not receive or import `SUPABASE_SERVICE_ROLE_KEY` and cannot mutate canonical state.
+`CREATE_NEW` AI proposals always stay analyst-review only.
 
-## UI hierarchy
+## Why aliases remain analyst-controlled
 
-Primary TechINT navigation remains exactly:
+A wrong current-group link has bounded impact. A wrong reusable alias can poison future reconciliation.
 
-- Global View
-- Profiles
-- InvestINT
+Therefore guarded AI automation always writes with **no alias**. Alias teaching stays explicit through the existing analyst actions:
 
-Entity resolution remains a secondary operations workspace at `/techint/entities`, peer in hierarchy to Technical Sources.
+- Confirm & teach exact alias
+- Link & remember exact alias
+- Create & remember exact alias
 
-The revised workspace shows:
+Alias revocation behavior remains unchanged.
 
-- resolved count;
-- deterministic/known-safe work still pending;
-- deduplicated analyst-review groups;
-- dismissed count;
-- automatic resolver action;
-- optional BYOK provider connection, defaulting to NVIDIA NIM;
-- bounded AI suggestions with explicit rationale/confidence;
-- manual group resolution as fallback;
-- canonical entity/alias management;
-- normalization audit history.
+## Audit and security
 
-The intended analyst experience is exception-driven: analysts review ambiguous identity questions rather than clean every source assertion individually.
+Migration 038 adds a narrow service-role-only trusted RPC. Authenticated browser roles cannot execute it directly.
+
+The RPC rechecks:
+
+- owner
+- current assertion
+- current resolution state
+- entity ACTIVE status
+- same entity kind
+- enabled AI-auto kind
+- generic-label denylist
+
+The route performs the broader candidate/conflict/context safety gates before invoking the RPC.
+
+Audit stores bounded non-secret metadata such as provider, model, `HIGH`, `MATCH_EXISTING`, `autoResolution=true`, and structural safety flags.
+
+It never stores:
+
+- API key
+- entire prompt
+- raw model response
+- raw provider snapshot
+
+Source assertions and audit rows remain append-only under the existing Phase 2.3B/2.3D protections.
+
+## UI
+
+`/techint/entities` keeps the current CİTEM AppShell, sidebar, BAYKUSH top bar and existing color system.
+
+The AI panel offers two distinct actions:
+
+- **Analyze next 8 groups** — suggestion only, no write
+- **Analyze & auto-resolve safe groups** — guarded AI assessment plus server-side safety gates
+
+The result report shows:
+
+- analyzed groups
+- auto-resolved groups
+- groups still needing review
+- generic labels
+- conflicts
+- unsure cases
+
+Remaining cards may show why CİTEM stopped, for example:
+
+- conflicting product context
+- multiple strong candidates
+- generic provider label
+- confidence below HIGH
+
+The existing manual resolution controls remain available.
+
+## Testing
+
+Focused tests cover:
+
+- HIGH + unique strong same-kind candidate eligibility
+- MEDIUM/LOW rejection
+- multiple-candidate rejection
+- hallucinated candidate rejection
+- inactive/kind-mismatch rejection
+- PRODUCT `Core` WordPress/Drupal conflict rejection
+- generic-label rejection
+- `CREATE_NEW` never auto-creates
+- deterministic kinds bypass AI
+- Threat Actor/Campaign remain disabled for auto-resolution
+- no automatic alias teaching
+- truthful `AI_VERIFIED` / audit semantics
+- owner/service-role boundaries
+- immutable source assertions
+- no analytical/profile/priority side effects
+- NVIDIA NIM default and existing manual controls
+
+The existing PostgreSQL 16 Phase 2.3D harness is extended so migration 038 is applied in sequence and the AI-verified RPC, audit basis, no-alias behavior and ACLs are validated.
+
+## Deployment procedure
+
+Migration 037 must **not** be reapplied.
+
+Migration 038 is an operator step and must not be applied remotely by the implementation agent.
+
+After explicit operator authorization:
+
+1. apply migration 038 once to the intended Preview/test Supabase
+2. reload PostgREST schema cache
+3. redeploy Preview if required
+4. connect NVIDIA NIM BYOK
+5. run suggestion-only mode first if desired
+6. run **Analyze & auto-resolve safe groups**
+7. verify obvious safe matches are linked with `AI_VERIFIED`
+8. verify generic/conflicting/uncertain groups remain in analyst review
+9. verify no alias/entity/Investigation/profile/priority side effect occurs
+10. verify second-user isolation and audit metadata
 
 ## Explicit exclusions
 
-Phase 2.3D does not implement:
+Phase 2.3D still excludes:
 
-- MITRE ATT&CK source ingestion or TAXII;
-- URLhaus or another provider;
-- authoritative external vendor/product taxonomy ingestion;
-- autonomous AI resolution writes;
-- AI-created aliases without analyst confirmation;
-- embedding-vector storage or a separate vector database;
-- profile matching;
-- direct/contextual match scores;
-- relevance scoring;
-- Global Priority;
-- Global View population/ranking;
-- Standalone Profile matches;
-- InvestINT matches;
-- alerts/discovery;
-- AI intelligence briefs;
-- automatic analytical entity or Graph relationship creation;
-- automatic promotion of project Threat Actor aliases or Malware family strings into the global taxonomy.
+- autonomous canonical entity creation
+- autonomous alias creation
+- authoritative external vendor/product taxonomy ingestion
+- MITRE ATT&CK TAXII/source ingestion
+- URLhaus/new provider work
+- vector/embedding persistence
+- profile matching and relevance scoring
+- Global Priority / Global View ranking
+- alerts/discovery
+- AI intelligence briefs
+- automatic Investigation analytical entities or Graph links
 
 PR #30 remains separate and untouched.
 
@@ -309,46 +327,4 @@ Phase 2.3E may consume:
 
 `resolved Technical Signal entity assertions + canonical entities + Intel Profile definitions`
 
-for matching and priority calculation. Phase 2.3D itself does not create match rows or scores.
-
-## Migration / deployment procedure
-
-Migration 037 remains the only Phase 2.3D migration. Migrations 001–036 remain unchanged.
-
-The grouped review and BYOK suggestion extension adds no new database migration beyond 037.
-
-Operator procedure after code review and explicit authorization:
-
-1. apply migration 037 exactly once to the intended Preview/test Supabase;
-2. reload PostgREST schema cache;
-3. redeploy Preview;
-4. run the acceptance checklist below.
-
-The implementation agent must not apply migration 037 remotely without explicit operator permission.
-
-## Preview acceptance checklist
-
-1. Open `/techint/entities` after migration 037 and redeploy.
-2. Verify repeated exact unresolved labels are grouped instead of rendered as one card per assertion.
-3. Run the automatic resolver with a bounded batch.
-4. Verify existing CVE assertions resolve deterministically.
-5. Verify existing Indicator assertions resolve deterministically.
-6. Verify ATT&CK IDs resolve deterministically when present.
-7. Verify unresolved Malware/Vendor/Product strings remain grouped and do not auto-create canonical entities.
-8. Verify previously confirmed exact aliases resolve automatically on a later reconciliation.
-9. Connect an authenticated BYOK session using NVIDIA NIM.
-10. Run **Analyze next unresolved groups**.
-11. Verify only bounded group context and candidate names are sent; no API key or raw source snapshot appears in application records/log output.
-12. Verify AI suggestions show decision, confidence and rationale but make no database mutation before confirmation.
-13. Verify a hallucinated/non-candidate entity ID cannot be accepted by the response parser.
-14. Confirm one `MATCH_EXISTING` suggestion without teaching an alias and verify only current exact unresolved occurrences are linked.
-15. Verify future equal assertions do not learn from that link alone.
-16. Confirm another group with **teach exact alias** and verify later exact assertions auto-resolve through the confirmed alias.
-17. Confirm a `CREATE_NEW` suggestion and verify a canonical entity is created only after the explicit analyst action.
-18. Revoke a learned alias and verify alias-derived automatic resolutions return to review while direct analyst links remain intact.
-19. Verify original source assertions are unchanged.
-20. Verify no Investigation analytical records, profile matches, Global Priority, Global View ranking, attribution, or Graph rows are created.
-21. Verify second-user isolation for entities, groups, suggestions and confirmations.
-22. Verify audit history records canonical/alias/resolution writes but never the BYOK API key.
-23. Verify the automatic resolver itself performs no provider/network request.
-24. Verify the BYOK suggestion feature fails safely when disconnected, expired, rate-limited, or malformed.
+for matching, relevance and priority. `AI_VERIFIED` is a resolution provenance basis, not an attribution judgement or analytical confidence score.
