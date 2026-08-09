@@ -4,7 +4,7 @@
 
 - [x] Next.js App Router foundation preserved and extended.
 - [x] Supabase SSR clients, authentication pages, protected routes, and sign-out implemented.
-- [x] Versioned Supabase migration authored for profiles, projects, triggers, indexes, updated_at/auth trigger.
+- [x] Versioned Supabase migration authored for profiles, projects, triggers, indexes, and RLS policies.
 - [x] Dashboard reads real project data for the authenticated user.
 - [x] Project create, read, update, delete, search, filtering, and sorting implemented with server actions and Zod validation.
 - [x] Unit tests added for validation and authorization-related helpers.
