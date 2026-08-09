@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { ByokConnectionPanel } from "@/components/ai/byok-connection-panel";
+import { ENTITY_AI_MAX_RUN_GROUPS } from "@/lib/techint/entities/ai-batch";
 
 type Group = {
   key: string;
@@ -35,16 +37,27 @@ type Suggestion = {
 
 type AutoOutcome = {
   groupKey: string;
+  entityKind: string;
   displayValue: string;
   status: "AUTO_RESOLVED" | "REVIEW";
   reason: string;
-  created?: boolean;
+  action: "LINK_EXISTING" | "CREATE_NEW" | "REVIEW_REQUIRED";
+  decision: "MATCH_EXISTING" | "CREATE_NEW" | "UNSURE";
+  confidence: "HIGH" | "MEDIUM" | "LOW";
+  candidateEntityId: string | null;
+  proposedCanonicalName: string | null;
+  canonicalName: string | null;
+  entityId: string | null;
+  assertionsLinked: number;
+  created: boolean;
+  rationale: string;
 };
 
 type AutoReport = {
   provider: string | null;
   model: string | null;
   groups_analyzed: number;
+  model_batches: number;
   auto_resolved: number;
   auto_created: number;
   assertions_linked: number;
@@ -75,6 +88,9 @@ const reasonLabels: Record<string, string> = {
   KIND_NOT_ENABLED: "entity kind is not enabled for AI auto-resolution",
   DETERMINISTIC_KIND: "handled by deterministic resolver",
   WRITE_FAILED_SAFE: "trusted write failed safely",
+  WRITE_PARTIAL_SAFE: "some assertions were linked but the case remains open because the whole group did not complete",
+  SAFE_HIGH_CREATE: "safe HIGH-confidence canonical identity created and the full group resolved",
+  SAFE_HIGH_MATCH: "safe HIGH-confidence existing identity linked and the full group resolved",
 };
 
 export function EntityResolutionWorkspace({
@@ -88,32 +104,46 @@ export function EntityResolutionWorkspace({
   totalGroupCount: number;
   totalOccurrenceCount: number;
 }) {
+  const router = useRouter();
   const [byok, setByok] = useState<ByokStatus>({ connected: false });
   const [suggestions, setSuggestions] = useState<Record<string, Suggestion>>({});
   const [autoReport, setAutoReport] = useState<AutoReport | null>(null);
+  const [resolvedGroupKeys, setResolvedGroupKeys] = useState<Set<string>>(() => new Set());
+  const [batchLimit, setBatchLimit] = useState(8);
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
   const entityById = useMemo(() => new Map(entities.map((entity) => [entity.id, entity])), [entities]);
+  const groupByKey = useMemo(() => new Map(groups.map((group) => [group.key, group])), [groups]);
   const autoOutcomeByKey = useMemo(
     () => new Map((autoReport?.outcomes ?? []).map((outcome) => [outcome.groupKey, outcome])),
     [autoReport],
   );
-  const autoResolvedKeys = useMemo(
-    () => new Set((autoReport?.outcomes ?? []).filter((outcome) => outcome.status === "AUTO_RESOLVED").map((outcome) => outcome.groupKey)),
-    [autoReport],
-  );
-  const reviewGroups = groups.filter((group) => !autoResolvedKeys.has(group.key));
+  const reviewGroups = groups.filter((group) => !resolvedGroupKeys.has(group.key));
+  const locallyResolvedVisibleGroups = groups.filter((group) => resolvedGroupKeys.has(group.key));
+  const locallyResolvedOccurrenceCount = locallyResolvedVisibleGroups.reduce((total, group) => total + group.occurrenceCount, 0);
   const visibleOccurrenceCount = reviewGroups.reduce((total, group) => total + group.occurrenceCount, 0);
-  const remainingGroupCount = Math.max(0, totalGroupCount - autoResolvedKeys.size);
+  const remainingGroupCount = Math.max(0, totalGroupCount - locallyResolvedVisibleGroups.length);
+  const remainingOccurrenceCount = Math.max(0, totalOccurrenceCount - locallyResolvedOccurrenceCount);
+  const selectedBatchCount = Math.min(batchLimit, reviewGroups.length);
+
+  function rememberResolvedKeys(keys: string[]) {
+    if (!keys.length) return;
+    setResolvedGroupKeys((current) => {
+      const next = new Set(current);
+      for (const key of keys) next.add(key);
+      return next;
+    });
+  }
 
   async function analyze() {
-    setMessage("Sending a bounded batch to your connected BYOK provider for suggestions only. No resolution will be saved.");
+    if (selectedBatchCount < 1) return;
+    setMessage(`Sending the first ${selectedBatchCount} unresolved group(s) in queue order to your connected BYOK provider for suggestions only. No resolution will be saved.`);
     startTransition(async () => {
       try {
         const response = await fetch("/api/techint/entities/suggest", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ limit: Math.min(8, Math.max(reviewGroups.length, 1)) }),
+          body: JSON.stringify({ limit: selectedBatchCount }),
         });
         const body = await response.json();
         if (!response.ok) {
@@ -122,8 +152,8 @@ export function EntityResolutionWorkspace({
         }
         const next: Record<string, Suggestion> = {};
         for (const suggestion of (body.suggestions ?? []) as Suggestion[]) next[suggestion.groupKey] = suggestion;
-        setSuggestions(next);
-        setMessage(`Generated ${Object.keys(next).length} non-authoritative suggestion(s) with ${body.provider ?? "BYOK"}${body.model ? ` / ${body.model}` : ""}.`);
+        setSuggestions((current) => ({ ...current, ...next }));
+        setMessage(`Generated ${Object.keys(next).length} non-authoritative suggestion(s) in ${body.model_batches ?? 0} bounded model batch(es) with ${body.provider ?? "BYOK"}${body.model ? ` / ${body.model}` : ""}. Existing AI results for other open cases were preserved.`);
       } catch {
         setMessage("AI entity suggestions could not be generated.");
       }
@@ -131,21 +161,52 @@ export function EntityResolutionWorkspace({
   }
 
   async function autoResolveSafe() {
-    setMessage("AI is assessing a bounded batch. HIGH-confidence decisions must pass every server-side safety gate before CİTEM links or bootstraps a canonical identity.");
+    if (selectedBatchCount < 1) return;
+    setMessage(`AI is assessing the first ${selectedBatchCount} unresolved group(s) in queue order. Safe groups will be written and closed automatically; ambiguous groups will remain for analyst review.`);
     startTransition(async () => {
       try {
         const response = await fetch("/api/techint/entities/auto-resolve-ai", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ limit: Math.min(8, Math.max(reviewGroups.length, 1)) }),
+          body: JSON.stringify({ limit: selectedBatchCount }),
         });
         const body = await response.json();
         if (!response.ok) {
           setMessage(body.error ?? "AI safe auto-resolution could not be completed.");
           return;
         }
-        setAutoReport(body as AutoReport);
-        setMessage(`AI assessed ${body.groups_analyzed ?? 0} group(s): ${body.auto_resolved ?? 0} auto-resolved, ${body.auto_created ?? 0} canonical identity(s) safely bootstrapped, ${body.review_remaining ?? 0} left for analyst review. No alias was taught automatically.`);
+
+        const report = body as AutoReport;
+        const outcomes = report.outcomes ?? [];
+        const resolvedKeys = outcomes.filter((outcome) => outcome.status === "AUTO_RESOLVED").map((outcome) => outcome.groupKey);
+        rememberResolvedKeys(resolvedKeys);
+        setAutoReport(report);
+        setSuggestions((current) => {
+          const next = { ...current };
+          for (const outcome of outcomes) {
+            if (outcome.status === "AUTO_RESOLVED") {
+              delete next[outcome.groupKey];
+              continue;
+            }
+            const group = groupByKey.get(outcome.groupKey);
+            if (!group) continue;
+            next[outcome.groupKey] = {
+              groupKey: outcome.groupKey,
+              entityKind: group.entityKind,
+              displayValue: group.displayValue,
+              normalizedValue: group.normalizedValue,
+              occurrenceCount: group.occurrenceCount,
+              decision: outcome.decision,
+              candidateEntityId: outcome.candidateEntityId,
+              proposedCanonicalName: outcome.proposedCanonicalName,
+              confidence: outcome.confidence,
+              rationale: outcome.rationale,
+            };
+          }
+          return next;
+        });
+        setMessage(`AI assessed ${report.groups_analyzed ?? 0} group(s) in ${report.model_batches ?? 0} bounded model batch(es): ${report.auto_resolved ?? 0} case(s) closed automatically, ${report.auto_created ?? 0} canonical identity(s) created, ${report.assertions_linked ?? 0} assertion(s) linked, and ${report.review_remaining ?? 0} case(s) left for analyst review. No alias was taught automatically.`);
+        router.refresh();
       } catch {
         setMessage("AI safe auto-resolution failed without changing unresolved groups.");
       }
@@ -175,8 +236,22 @@ export function EntityResolutionWorkspace({
           setMessage(body.error ?? "Entity group resolution failed.");
           return;
         }
-        setMessage(`Resolved ${body.linked}/${body.matched} current assertion(s)${rememberAlias ? " and remembered the exact alias for future reconciliation" : ""}.`);
-        window.setTimeout(() => window.location.reload(), 250);
+
+        const complete = body.failed === 0 && !body.truncated && body.linked === body.matched;
+        if (complete) {
+          rememberResolvedKeys([group.key]);
+          setSuggestions((current) => {
+            const next = { ...current };
+            delete next[group.key];
+            return next;
+          });
+        }
+        setMessage(
+          complete
+            ? `Resolved ${body.linked}/${body.matched} current assertion(s)${rememberAlias ? " and remembered the exact alias for future reconciliation" : ""}. AI analyses for every other open case were preserved.`
+            : `Resolved ${body.linked}/${body.matched} current assertion(s), but this case remains open because ${body.failed ? `${body.failed} write(s) failed` : "the bounded group was truncated"}. Other AI analyses were preserved.`,
+        );
+        router.refresh();
       } catch {
         setMessage("Entity group resolution failed safely.");
       }
@@ -201,7 +276,7 @@ export function EntityResolutionWorkspace({
             </div>
             <div className="rounded border border-stone-800 bg-stone-950/20 px-3 py-2">
               <p className="uppercase tracking-[0.13em] text-stone-500">Occurrences</p>
-              <p className="mt-1 text-lg font-semibold text-stone-200">{totalOccurrenceCount}</p>
+              <p className="mt-1 text-lg font-semibold text-stone-200">{remainingOccurrenceCount}</p>
             </div>
           </div>
         </div>
@@ -234,21 +309,48 @@ export function EntityResolutionWorkspace({
             <b className="text-amber-200">Safety boundary:</b> AI confidence alone never authorizes a write. Existing matches require one strong ACTIVE same-kind candidate. CREATE_NEW is limited to a HIGH-confidence identity-equivalent name with no strong existing candidate, no generic label, and safe context. AI never teaches an alias automatically.
           </div>
           <ByokConnectionPanel scope="user" defaultProviderId="nvidia_nim" onStatusChange={setByok} />
+
+          <div className="rounded border border-stone-800 bg-stone-950/20 p-3">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <label className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600" htmlFor="entity-ai-batch-limit">AI case count</label>
+                <p className="mt-1 text-xs text-stone-500">Choose 0–{ENTITY_AI_MAX_RUN_GROUPS}. CİTEM processes the first N currently unresolved cases in queue order.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  id="entity-ai-batch-limit"
+                  className="field w-24"
+                  type="number"
+                  min={0}
+                  max={ENTITY_AI_MAX_RUN_GROUPS}
+                  step={1}
+                  value={batchLimit}
+                  onChange={(event) => {
+                    const value = event.currentTarget.valueAsNumber;
+                    setBatchLimit(Number.isFinite(value) ? Math.min(ENTITY_AI_MAX_RUN_GROUPS, Math.max(0, Math.trunc(value))) : 0);
+                  }}
+                />
+                <span className="rounded border border-stone-800 px-2.5 py-2 text-xs text-stone-400">{selectedBatchCount} selected now</span>
+              </div>
+            </div>
+            <p className="mt-2 text-[11px] text-stone-600">Provider calls remain bounded internally to at most 8 cases per model request even when you select more.</p>
+          </div>
+
           <div className="grid gap-3 lg:grid-cols-2">
             <div className="rounded border border-stone-800 bg-stone-950/20 p-3">
               <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">Suggestion only</p>
               <p className="mt-2 text-sm text-stone-300">Ask AI for candidates without changing any resolution.</p>
-              <p className="mt-1 text-xs text-stone-500">At most eight groups per call.</p>
-              <button className="citem-button-ghost mt-3" type="button" disabled={pending || !byok.connected || !reviewGroups.length} onClick={analyze}>
-                {pending ? "Working…" : "Analyze next 8 groups"}
+              <p className="mt-1 text-xs text-stone-500">Existing AI analyses on other open cases stay intact.</p>
+              <button className="citem-button-ghost mt-3" type="button" disabled={pending || !byok.connected || selectedBatchCount < 1} onClick={analyze}>
+                {pending ? "Working…" : `Analyze next ${selectedBatchCount} group${selectedBatchCount === 1 ? "" : "s"}`}
               </button>
             </div>
             <div className="rounded border border-cyan-950 bg-cyan-950/10 p-3">
               <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-700">AI auto resolution</p>
-              <p className="mt-2 text-sm text-stone-300">Link safe existing identities or bootstrap a safe new canonical identity when no match exists.</p>
-              <p className="mt-1 text-xs text-stone-500">No automatic alias teaching. Ambiguity always returns to review.</p>
-              <button className="citem-button mt-3" type="button" disabled={pending || !byok.connected || !reviewGroups.length} onClick={autoResolveSafe}>
-                {pending ? "Working…" : "Analyze & auto-resolve safe groups"}
+              <p className="mt-2 text-sm text-stone-300">Analyze, write safe matches/bootstraps, and close only fully resolved cases automatically.</p>
+              <p className="mt-1 text-xs text-stone-500">No automatic alias teaching. Ambiguity or partial write always stays in review.</p>
+              <button className="citem-button mt-3" type="button" disabled={pending || !byok.connected || selectedBatchCount < 1} onClick={autoResolveSafe}>
+                {pending ? "Working…" : `Analyze & auto-resolve ${selectedBatchCount} safe group${selectedBatchCount === 1 ? "" : "s"}`}
               </button>
             </div>
           </div>
@@ -261,9 +363,9 @@ export function EntityResolutionWorkspace({
             <div>
               <p className="citem-eyebrow">AI resolution report</p>
               <h3 className="citem-section-title mt-1">Guarded automation completed</h3>
-              <p className="mt-1 text-xs text-stone-500">{autoReport.provider ?? "BYOK"}{autoReport.model ? ` / ${autoReport.model}` : ""} · aliases were never taught automatically.</p>
+              <p className="mt-1 text-xs text-stone-500">{autoReport.provider ?? "BYOK"}{autoReport.model ? ` / ${autoReport.model}` : ""} · {autoReport.model_batches ?? 0} bounded model batch(es) · aliases were never taught automatically.</p>
             </div>
-            {autoReport.auto_resolved > 0 ? <button className="citem-button-ghost" type="button" onClick={() => window.location.reload()}>Refresh queue</button> : null}
+            <button className="citem-button-ghost" type="button" onClick={() => router.refresh()}>Sync queue</button>
           </div>
           <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-7">
             {[
@@ -281,7 +383,27 @@ export function EntityResolutionWorkspace({
               </div>
             ))}
           </div>
-          {autoReport.failed_writes ? <p className="mt-3 text-xs text-amber-200">{autoReport.failed_writes} trusted write(s) failed safely. Confirm additive migrations 038 and 039 are applied to the intended Preview/test environment before acceptance.</p> : null}
+
+          {(autoReport.outcomes ?? []).length ? (
+            <div className="mt-4 space-y-2 border-t border-stone-800 pt-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">Run activity</p>
+              {(autoReport.outcomes ?? []).map((outcome, index) => (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded border border-stone-800 bg-stone-950/20 px-3 py-2" key={`${outcome.groupKey}-${index}`}>
+                  <span className={`rounded border px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] ${outcome.status === "AUTO_RESOLVED" ? "border-cyan-900 text-cyan-200" : "border-amber-900/70 text-amber-200"}`}>
+                    {outcome.status === "AUTO_RESOLVED" ? (outcome.created ? "Auto created + resolved" : "Auto linked + resolved") : "Review required"}
+                  </span>
+                  <span className="text-xs font-medium text-stone-200">{outcome.displayValue}</span>
+                  <span className="text-[10px] uppercase tracking-[0.12em] text-stone-600">{outcome.entityKind}</span>
+                  <span className="text-[10px] uppercase tracking-[0.12em] text-stone-500">AI {outcome.confidence} · {outcome.decision}</span>
+                  {outcome.canonicalName ? <span className="text-xs text-stone-400">→ {outcome.canonicalName}</span> : null}
+                  <span className="text-xs text-stone-500">{outcome.assertionsLinked} assertion(s) linked</span>
+                  <span className="text-xs text-stone-600">{reasonLabels[outcome.reason] ?? outcome.reason.toLowerCase().replaceAll("_", " ")}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {autoReport.failed_writes ? <p className="mt-3 text-xs text-amber-200">{autoReport.failed_writes} trusted write(s) failed safely. Any partially completed case stays in analyst review; confirm additive migrations 038 and 039 are applied to the intended Preview/test environment before acceptance.</p> : null}
         </section>
       ) : null}
 
