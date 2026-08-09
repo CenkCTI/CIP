@@ -33,7 +33,44 @@ type Suggestion = {
   rationale: string;
 };
 
+type AutoOutcome = {
+  groupKey: string;
+  displayValue: string;
+  status: "AUTO_RESOLVED" | "REVIEW";
+  reason: string;
+};
+
+type AutoReport = {
+  provider: string | null;
+  model: string | null;
+  groups_analyzed: number;
+  auto_resolved: number;
+  assertions_linked: number;
+  review_remaining: number;
+  rejected_by_safety_gate: number;
+  unsure: number;
+  generic_labels: number;
+  conflicts: number;
+  failed_writes: number;
+  outcomes?: AutoOutcome[];
+};
+
 type ByokStatus = { connected?: boolean; provider?: string; providerId?: string; model?: string; state?: string };
+
+const reasonLabels: Record<string, string> = {
+  GENERIC_LABEL: "generic provider label",
+  COMPETING_CANDIDATES: "multiple strong candidates",
+  CONTEXT_CONFLICT: "conflicting product context",
+  NOT_HIGH_CONFIDENCE: "AI confidence below HIGH",
+  NOT_MATCH_EXISTING: "no existing identity match",
+  CANDIDATE_NOT_ALLOWED: "candidate failed server validation",
+  CANDIDATE_INACTIVE: "candidate is inactive",
+  KIND_MISMATCH: "entity kind mismatch",
+  CANDIDATE_NOT_STRONG: "match signal is not strong enough",
+  KIND_NOT_ENABLED: "entity kind is not enabled for AI auto-resolution",
+  DETERMINISTIC_KIND: "handled by deterministic resolver",
+  WRITE_FAILED_SAFE: "trusted write failed safely",
+};
 
 export function EntityResolutionWorkspace({
   groups,
@@ -48,19 +85,30 @@ export function EntityResolutionWorkspace({
 }) {
   const [byok, setByok] = useState<ByokStatus>({ connected: false });
   const [suggestions, setSuggestions] = useState<Record<string, Suggestion>>({});
+  const [autoReport, setAutoReport] = useState<AutoReport | null>(null);
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
   const entityById = useMemo(() => new Map(entities.map((entity) => [entity.id, entity])), [entities]);
-  const visibleOccurrenceCount = groups.reduce((total, group) => total + group.occurrenceCount, 0);
+  const autoOutcomeByKey = useMemo(
+    () => new Map((autoReport?.outcomes ?? []).map((outcome) => [outcome.groupKey, outcome])),
+    [autoReport],
+  );
+  const autoResolvedKeys = useMemo(
+    () => new Set((autoReport?.outcomes ?? []).filter((outcome) => outcome.status === "AUTO_RESOLVED").map((outcome) => outcome.groupKey)),
+    [autoReport],
+  );
+  const reviewGroups = groups.filter((group) => !autoResolvedKeys.has(group.key));
+  const visibleOccurrenceCount = reviewGroups.reduce((total, group) => total + group.occurrenceCount, 0);
+  const remainingGroupCount = Math.max(0, totalGroupCount - autoResolvedKeys.size);
 
   async function analyze() {
-    setMessage("Sending a bounded batch of unresolved entity context to your connected BYOK provider. No resolution will be saved automatically.");
+    setMessage("Sending a bounded batch to your connected BYOK provider for suggestions only. No resolution will be saved.");
     startTransition(async () => {
       try {
         const response = await fetch("/api/techint/entities/suggest", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ limit: Math.min(8, Math.max(groups.length, 1)) }),
+          body: JSON.stringify({ limit: Math.min(8, Math.max(reviewGroups.length, 1)) }),
         });
         const body = await response.json();
         if (!response.ok) {
@@ -73,6 +121,28 @@ export function EntityResolutionWorkspace({
         setMessage(`Generated ${Object.keys(next).length} non-authoritative suggestion(s) with ${body.provider ?? "BYOK"}${body.model ? ` / ${body.model}` : ""}. Review before confirming.`);
       } catch {
         setMessage("AI entity suggestions could not be generated.");
+      }
+    });
+  }
+
+  async function autoResolveSafe() {
+    setMessage("AI is assessing a bounded batch. Only HIGH-confidence existing-entity matches that pass every server-side safety gate may be linked.");
+    startTransition(async () => {
+      try {
+        const response = await fetch("/api/techint/entities/auto-resolve-ai", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ limit: Math.min(8, Math.max(reviewGroups.length, 1)) }),
+        });
+        const body = await response.json();
+        if (!response.ok) {
+          setMessage(body.error ?? "AI safe auto-resolution could not be completed.");
+          return;
+        }
+        setAutoReport(body as AutoReport);
+        setMessage(`AI assessed ${body.groups_analyzed ?? 0} group(s): ${body.auto_resolved ?? 0} auto-resolved, ${body.review_remaining ?? 0} left for analyst review. No alias or canonical entity was created.`);
+      } catch {
+        setMessage("AI safe auto-resolution failed without changing unresolved groups.");
       }
     });
   }
@@ -116,13 +186,13 @@ export function EntityResolutionWorkspace({
             <p className="citem-eyebrow">Analyst decision queue</p>
             <h2 className="citem-section-title mt-1">Resolve only what the system cannot prove safely</h2>
             <p className="mt-2 max-w-3xl text-sm text-stone-400">
-              Each card represents one repeated identity label, not one source record. Review the source context, decide what the label represents, and optionally teach that exact mapping for future automatic resolution.
+              Each card represents one repeated identity label, not one source record. Deterministic rules, confirmed aliases and guarded AI automation reduce this queue before you make manual identity decisions.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="rounded border border-stone-800 bg-stone-950/20 px-3 py-2">
               <p className="uppercase tracking-[0.13em] text-stone-500">Need decision</p>
-              <p className="mt-1 text-lg font-semibold text-stone-200">{totalGroupCount}</p>
+              <p className="mt-1 text-lg font-semibold text-stone-200">{remainingGroupCount}</p>
             </div>
             <div className="rounded border border-stone-800 bg-stone-950/20 px-3 py-2">
               <p className="uppercase tracking-[0.13em] text-stone-500">Source occurrences</p>
@@ -131,13 +201,13 @@ export function EntityResolutionWorkspace({
           </div>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-stone-800 pt-3 text-xs text-stone-500">
-          <span className="rounded border border-stone-800 px-2 py-1">Showing {groups.length} of {totalGroupCount} groups</span>
+          <span className="rounded border border-stone-800 px-2 py-1">Showing {reviewGroups.length} of {remainingGroupCount} groups</span>
           <span className="rounded border border-stone-800 px-2 py-1">{visibleOccurrenceCount} occurrences in this visible queue</span>
           <span>Highest-repeat groups are shown first by the current bounded view.</span>
         </div>
       </div>
 
-      <details className="card">
+      <details className="card" open={Boolean(byok.connected)}>
         <summary className="cursor-pointer list-none">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-start gap-3">
@@ -145,31 +215,69 @@ export function EntityResolutionWorkspace({
               <div>
                 <p className="citem-eyebrow">AI analyst aid · optional</p>
                 <h3 className="mt-1 text-base font-medium text-stone-200">{byok.connected ? `${byok.provider ?? byok.providerId ?? "BYOK"}${byok.model ? ` / ${byok.model}` : ""}` : "Connect NVIDIA NIM or another BYOK provider"}</h3>
-                <p className="mt-1 text-xs text-stone-500">AI proposes candidates for a bounded batch. The final identity decision always remains with you.</p>
+                <p className="mt-1 text-xs text-stone-500">AI can suggest matches, or safely auto-link only a narrow subset that passes every structural gate.</p>
               </div>
             </div>
             <span className={`rounded border px-2.5 py-1.5 text-xs uppercase tracking-[0.13em] ${byok.connected ? "border-cyan-900 text-cyan-200" : "border-stone-800 text-stone-500"}`}>
-              {byok.connected ? "Connected · open controls" : "Disconnected · open setup"}
+              {byok.connected ? "Connected · controls available" : "Disconnected · open setup"}
             </span>
           </div>
         </summary>
 
         <div className="mt-4 space-y-4 border-t border-stone-800 pt-4">
           <div className="rounded border border-amber-900/60 bg-amber-950/10 p-3 text-xs text-stone-400">
-            <b className="text-amber-200">Decision boundary:</b> AI never writes a canonical entity or alias by itself. It receives only bounded labels, source names, a few signal titles, and server-selected canonical candidates. Suggestions remain ephemeral until you confirm them.
+            <b className="text-amber-200">Safety boundary:</b> AI confidence alone never authorizes a write. Automatic linking requires HIGH confidence, one strong ACTIVE same-kind candidate, no competing identity, no generic label and no conflicting product context. AI never creates an entity or teaches an alias automatically.
           </div>
           <ByokConnectionPanel scope="user" defaultProviderId="nvidia_nim" onStatusChange={setByok} />
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-stone-800 bg-stone-950/20 p-3">
-            <div>
-              <p className="text-sm text-stone-300">Analyze the next bounded set of unresolved groups</p>
-              <p className="mt-1 text-xs text-stone-500">NVIDIA NIM is the recommended default. At most eight groups are sent per suggestion call.</p>
+          <div className="grid gap-3 lg:grid-cols-2">
+            <div className="rounded border border-stone-800 bg-stone-950/20 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">Suggestion only</p>
+              <p className="mt-2 text-sm text-stone-300">Ask AI for candidates without changing any resolution.</p>
+              <p className="mt-1 text-xs text-stone-500">At most eight groups per call.</p>
+              <button className="citem-button-ghost mt-3" type="button" disabled={pending || !byok.connected || !reviewGroups.length} onClick={analyze}>
+                {pending ? "Working…" : "Analyze next 8 groups"}
+              </button>
             </div>
-            <button className="citem-button" type="button" disabled={pending || !byok.connected || !groups.length} onClick={analyze}>
-              {pending ? "Analyzing…" : "Analyze next 8 groups"}
-            </button>
+            <div className="rounded border border-cyan-950 bg-cyan-950/10 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-700">AI auto resolution</p>
+              <p className="mt-2 text-sm text-stone-300">Assess and auto-link only groups that pass every server-side safety gate.</p>
+              <p className="mt-1 text-xs text-stone-500">Current-group links only. No automatic entity creation or alias teaching.</p>
+              <button className="citem-button mt-3" type="button" disabled={pending || !byok.connected || !reviewGroups.length} onClick={autoResolveSafe}>
+                {pending ? "Working…" : "Analyze & auto-resolve safe groups"}
+              </button>
+            </div>
           </div>
         </div>
       </details>
+
+      {autoReport ? (
+        <section className="card panel-corners border-l-2 border-l-cyan-900">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="citem-eyebrow">AI resolution report</p>
+              <h3 className="citem-section-title mt-1">Guarded automation completed</h3>
+              <p className="mt-1 text-xs text-stone-500">{autoReport.provider ?? "BYOK"}{autoReport.model ? ` / ${autoReport.model}` : ""} · no alias or canonical entity was created automatically.</p>
+            </div>
+            {autoReport.auto_resolved > 0 ? <button className="citem-button-ghost" type="button" onClick={() => window.location.reload()}>Refresh queue</button> : null}
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-6">
+            {[
+              ["Analyzed", autoReport.groups_analyzed],
+              ["Auto resolved", autoReport.auto_resolved],
+              ["Needs review", autoReport.review_remaining],
+              ["Generic", autoReport.generic_labels],
+              ["Conflicts", autoReport.conflicts],
+              ["Unsure", autoReport.unsure],
+            ].map(([label, value]) => (
+              <div className="rounded border border-stone-800 bg-stone-950/20 p-3" key={String(label)}>
+                <p className="text-[10px] uppercase tracking-[0.12em] text-stone-600">{label}</p>
+                <p className="mt-1 text-lg font-semibold text-stone-200">{value}</p>
+              </div>
+            ))}
+          </div>
+          {autoReport.failed_writes ? <p className="mt-3 text-xs text-amber-200">{autoReport.failed_writes} trusted write(s) failed safely. Check that additive migration 038 is applied to the intended environment before acceptance.</p> : null}
+        </section>
+      ) : null}
 
       {message ? (
         <div className="card border-l-2 border-l-cyan-900 text-sm text-cyan-200" role="status">
@@ -178,20 +286,21 @@ export function EntityResolutionWorkspace({
         </div>
       ) : null}
 
-      {!groups.length ? (
+      {!reviewGroups.length ? (
         <div className="card border-l-2 border-l-stone-700">
           <p className="text-sm font-medium text-stone-300">No analyst decision is required in the bounded view.</p>
-          <p className="mt-1 text-xs text-stone-500">Deterministic identities and confirmed aliases are already handled by the safe resolver.</p>
+          <p className="mt-1 text-xs text-stone-500">Deterministic identities, confirmed aliases and safe AI-verified links have handled this visible queue.</p>
         </div>
       ) : (
         <div className="grid gap-3 xl:grid-cols-2">
-          {groups.map((group, index) => (
+          {reviewGroups.map((group, index) => (
             <GroupCard
               key={group.key}
               index={index + 1}
               group={group}
               entities={entities.filter((entity) => entity.entityKind === group.entityKind)}
               suggestion={suggestions[group.key]}
+              autoOutcome={autoOutcomeByKey.get(group.key)}
               entityById={entityById}
               pending={pending}
               onResolve={resolveGroup}
@@ -208,6 +317,7 @@ function GroupCard({
   group,
   entities,
   suggestion,
+  autoOutcome,
   entityById,
   pending,
   onResolve,
@@ -216,6 +326,7 @@ function GroupCard({
   group: Group;
   entities: Entity[];
   suggestion?: Suggestion;
+  autoOutcome?: AutoOutcome;
   entityById: Map<string, Entity>;
   pending: boolean;
   onResolve: (
@@ -245,6 +356,14 @@ function GroupCard({
           <p className="text-[10px] uppercase tracking-[0.13em] text-stone-600">occurrences</p>
         </div>
       </div>
+
+      {autoOutcome?.status === "REVIEW" ? (
+        <div className={`mt-3 rounded border p-2.5 text-xs ${autoOutcome.reason === "GENERIC_LABEL" ? "border-amber-900/70 bg-amber-950/10 text-amber-200" : "border-stone-800 bg-stone-950/20 text-stone-400"}`}>
+          <span className="font-semibold uppercase tracking-[0.12em]">{autoOutcome.reason === "GENERIC_LABEL" ? "Generic label" : "Review required"}</span>
+          <span className="text-stone-600"> · </span>
+          <span>{reasonLabels[autoOutcome.reason] ?? autoOutcome.reason.toLowerCase().replaceAll("_", " ")}</span>
+        </div>
+      ) : null}
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div className="rounded border border-stone-800 bg-stone-950/20 p-3">
@@ -303,8 +422,8 @@ function GroupCard({
           </div>
         ) : (
           <div className="rounded border border-dashed border-stone-800 p-3">
-            <p className="text-xs text-stone-500">No AI suggestion loaded for this case.</p>
-            <p className="mt-1 text-[11px] text-stone-600">Open AI analyst aid above for optional assistance, or resolve manually below.</p>
+            <p className="text-xs text-stone-500">No suggestion-only AI result loaded for this case.</p>
+            <p className="mt-1 text-[11px] text-stone-600">Use guarded AI automation above or resolve manually below.</p>
           </div>
         )}
       </div>
