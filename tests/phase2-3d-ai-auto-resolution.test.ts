@@ -224,7 +224,7 @@ describe("Phase 2.3D AI auto-resolution trust boundary", () => {
 
   it("keeps compact cases expandable while exposing AI confidence and decision buttons", () => {
     expect(workspace).toContain("aria-expanded={expanded}");
-    expect(workspace).toContain("Show case details");
+    expect(workspace).toContain("case details for");
     expect(workspace).toContain("AI {suggestion.confidence}");
     expect(workspace).toContain("Create &amp; resolve");
     expect(workspace).toContain("Create &amp; teach exact alias");
