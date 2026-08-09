@@ -50,6 +50,7 @@ export const createEntityFromAssertionResultSchema = z.object({
 
 export const reconcileEntitiesResultSchema = z.object({
   processed: z.number().int().nonnegative(),
+  unseen_processed: z.number().int().nonnegative().optional(),
   resolved: z.number().int().nonnegative(),
   needs_review: z.number().int().nonnegative(),
   entities_created: z.number().int().nonnegative(),
