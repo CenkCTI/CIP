@@ -10,7 +10,7 @@
 - [x] Unit tests added for validation and authorization-related helpers.
 - [x] Phase 1 SQL migration applied in Supabase, manually verified by the repository owner on the live deployment at https://cip-omega.vercel.app.
 - [x] Real account registration, sign-in, and sign-out manually verified by the repository owner on the live deployment.
-- [x] Project create, read, edit, delete, persistence after refresh/re-sign-in, and real dashboard counts manually verified by the repository owner on the live deployment.
+- [x] Project create, read, edit, delete, persistence after refresh/re-sign-in, and real dashboard counts manually verified by the repository owner against the configured environment.
 - [x] Cross-user project isolation manually verified by the repository owner: a second user cannot see or directly access the first user's project.
 - [x] Production Vercel deployment manually verified by the repository owner.
 
@@ -231,23 +231,24 @@ Manual ThreatFox synchronization uses the provider-independent incremental contr
 
 ## Phase 2.3D — Taxonomy, Alias and Canonical Entity Normalization
 
-- [x] Additive migration 037 authored for owner-global `technical_entities`, confirmed aliases, current assertion resolutions, bounded append-only audit history, indexes, owner-scoped RLS, and service-role-only mutation RPCs.
-- [x] Immutable Phase 2.3B source assertions remain untouched; normalization decisions are stored only in the new Phase 2.3D tables.
-- [x] Deterministic CVE, ATT&CK technique/sub-technique, and Indicator identities reuse existing Phase 2.3B/CİTEM canonical rules and are owner-idempotent.
-- [x] Ambiguous Threat Actor, Malware, Campaign, Vendor, Product, Sector, Country, Region, Infrastructure, and Tag names are not auto-created from source strings.
-- [x] Conservative automatic alias equality still folds only case/whitespace and preserves punctuation/word boundaries; lexical similarity is used only to shortlist non-authoritative review candidates and never performs an automatic identity write.
-- [x] Unresolved ambiguous assertions are deduplicated into exact owner/kind/value review groups so analysts review repeated labels once rather than one source assertion at a time.
-- [x] Existing authenticated BYOK is reused for optional AI-assisted candidate review; the TechINT workflow defaults the UI to NVIDIA NIM while preserving OpenAI, OpenRouter, and Groq.
-- [x] BYOK AI suggestions are bounded, strict-schema, prompt-injection-hardened, and non-authoritative: the suggestion route cannot mutate canonical entities, aliases, source assertions, Investigation records, profile matches, attribution, Graph, or priority state.
-- [x] Hallucinated candidate IDs fail closed to `UNSURE`; model `CREATE_NEW` proposals are checked server-side against existing exact canonical names before being shown as a new-entity action.
-- [x] Grouped writes require a separate explicit analyst confirmation; analysts can resolve only the current group or explicitly teach the exact value as an `ANALYST_CONFIRMED` alias for future automatic reconciliation.
-- [x] `AUTHORITATIVE_SOURCE` alias basis remains reserved for future verified taxonomy ingestion and cannot be forged through the normal analyst/browser or BYOK suggestion workflow; no MITRE alias catalog or ATT&CK ingestion is added here.
-- [x] Alias revocation returns dependent automatic alias resolutions to `NEEDS_REVIEW` while preserving analyst-linked/created decisions and immutable source assertions.
-- [x] Bounded deterministic reconciliation remains separate from `record_technical_signal` and performs no network/AI call, keeping collection and normalization as separate failure domains.
-- [x] Secondary `/techint/entities` remains outside the locked primary TechINT navigation and now presents automatic resolution, grouped exception review, optional BYOK suggestions, manual grouped fallback, canonical entity/alias management, and audit history.
-- [x] Project-scoped Threat Actor aliases, Malware family strings, and other Investigation analytical values are not automatically globalized into the TechINT taxonomy.
-- [x] Focused normalization/grouping/BYOK boundary tests and the PostgreSQL 16 Phase 2.3D migration harness are included; CI remains additive and preserves all prior harnesses.
-- [x] Final implementation head passed lint, typecheck, full tests, production build, all required PostgreSQL harnesses, and Vercel Preview validation before operator acceptance.
-- [ ] Migration 037 applied to Preview/test Supabase and PostgREST schema reloaded — operator step requiring explicit authorization.
-- [ ] Preview/browser acceptance completed for deterministic resolution, grouping, BYOK/NVIDIA NIM suggestions, explicit grouped confirmation, alias teaching/revocation, source immutability, and second-user isolation.
+- [x] Migration 037 is operator-applied and treated as immutable; it provides owner-global canonical entities, confirmed aliases, current assertion resolutions, append-only audit, RLS/ACL boundaries, and service-role-only mutation RPCs.
+- [x] Immutable Phase 2.3B source assertions remain source truth; Phase 2.3D stores resolution decisions separately and never rewrites provider labels/provenance.
+- [x] Deterministic CVE, ATT&CK and Indicator identities remain non-AI, owner-idempotent automatic resolutions using existing CİTEM normalization.
+- [x] Repeated unresolved ambiguous labels are grouped into analyst decision groups rather than one task per source assertion.
+- [x] Existing BYOK is reused for bounded AI assessment; NVIDIA NIM remains the recommended/default provider while existing OpenAI/OpenRouter/Groq options remain available.
+- [x] Suggestion-only mode remains non-mutating and validates model candidate IDs against the server-supplied candidate set.
+- [x] Additive migration 038 authored for truthful `AI_VERIFIED` resolution provenance, dedicated `ASSERTION_AI_AUTO_RESOLVED` audit action, and a narrow service-role-only current-assertion linking RPC. Migration 037 is unchanged.
+- [x] Guarded AI auto-resolution is enabled only for `MATCH_EXISTING` + `HIGH` results that independently pass server-side structural gates; AI confidence alone never authorizes a write.
+- [x] Initial AI auto-link scope is conservative: VENDOR and MALWARE, plus PRODUCT only when a strong unique existing candidate and corroborating non-conflicting parent/vendor context are present. Threat Actor and Campaign remain analyst-review only.
+- [x] Generic/provider-placeholder labels such as `Multiple Products`, `Various Products`, `Unknown`, `Other`, `Multiple Versions`, `Multiple Devices`, and `All Versions` are explicitly blocked from AI auto-canonicalization while their immutable assertions remain preserved.
+- [x] Duplicate/competing strong candidates, inactive candidates, kind mismatches, hallucinated candidate IDs, insufficient PRODUCT context, conflicting PRODUCT context, MEDIUM/LOW confidence, and `CREATE_NEW` model proposals all fail closed to analyst review.
+- [x] Guarded AI automation may only link the current unresolved group to an existing canonical entity; it never creates a canonical entity, never teaches/creates an alias, never renames/archives entities, and never mutates Investigation entities, profile matches, attribution, Graph, or priority/ranking state.
+- [x] AI-verified writes are append-only auditable with bounded provider/model/confidence/safety metadata and no API key, raw prompt, raw model response, or provider snapshot persistence.
+- [x] Existing manual actions remain available: confirm/link current group, explicit alias teaching, create canonical entity after analyst decision, alias revocation, archive/restore, registry management, and audit history.
+- [x] Entity Resolution UI preserves the existing CİTEM colors/AppShell and separates suggestion-only AI from `Analyze & auto-resolve safe groups`, with an automation report and explicit review reasons for stopped cases.
+- [x] Focused unit/static tests cover safe HIGH eligibility, MEDIUM/LOW rejection, duplicate/hallucinated/kind/status rejection, PRODUCT context safety, generic labels, CREATE_NEW rejection, deterministic bypass, disabled actor/campaign auto-resolution, no alias teaching, and trust-boundary behavior.
+- [x] Existing PostgreSQL 16 Phase 2.3D harness now executes migration 038 in sequence and verifies `AI_VERIFIED`, dedicated audit provenance, source immutability, no alias creation, service-role-only RPC execution, RLS/ACL, and owner isolation.
+- [x] GitHub Actions run #252 passed lint, typecheck, full tests, production build, and all existing PostgreSQL harnesses after the guarded AI auto-resolution implementation; Vercel Preview also succeeded on that validated implementation head.
+- [ ] Migration 038 applied once to the intended Preview/test Supabase and PostgREST schema reloaded — operator step; implementation work does not apply it remotely.
+- [ ] Preview/browser acceptance completed for NVIDIA NIM guarded auto-resolution, `AI_VERIFIED` audit records, generic/conflict fail-closed behavior, no alias/entity auto-creation, source immutability, and second-user isolation.
 - [ ] Phase 2.3E profile matching, relevance scoring, Global Priority, Global View population, alerts/discovery, and AI intelligence briefs remain intentionally unimplemented.
