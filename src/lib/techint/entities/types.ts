@@ -1,6 +1,6 @@
 import type { entityKinds } from "@/lib/techint/signals/types";
 
-export const technicalEntityOrigins = ["DETERMINISTIC", "ANALYST"] as const;
+export const technicalEntityOrigins = ["DETERMINISTIC", "ANALYST", "AI_VERIFIED"] as const;
 export const technicalEntityStatuses = ["ACTIVE", "ARCHIVED"] as const;
 export const technicalEntityAliasBases = ["ANALYST_CONFIRMED", "AUTHORITATIVE_SOURCE"] as const;
 export const technicalEntityAliasStatuses = ["ACTIVE", "REVOKED"] as const;
