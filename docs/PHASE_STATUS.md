@@ -4,13 +4,13 @@
 
 - [x] Next.js App Router foundation preserved and extended.
 - [x] Supabase SSR clients, authentication pages, protected routes, and sign-out implemented.
-- [x] Versioned Supabase migration authored for profiles, projects, triggers, indexes, and RLS policies.
+- [x] Versioned Supabase migration authored for profiles, projects, triggers, indexes, updated_at/auth trigger.
 - [x] Dashboard reads real project data for the authenticated user.
 - [x] Project create, read, update, delete, search, filtering, and sorting implemented with server actions and Zod validation.
 - [x] Unit tests added for validation and authorization-related helpers.
 - [x] Phase 1 SQL migration applied in Supabase, manually verified by the repository owner on the live deployment at https://cip-omega.vercel.app.
 - [x] Real account registration, sign-in, and sign-out manually verified by the repository owner on the live deployment.
-- [x] Project create, read, edit, delete, persistence after refresh/re-sign-in, and real dashboard counts manually verified by the repository owner against the configured environment.
+- [x] Project create, read, edit, delete, persistence after refresh/re-sign-in, and real dashboard counts manually verified by the repository owner on the live deployment.
 - [x] Cross-user project isolation manually verified by the repository owner: a second user cannot see or directly access the first user's project.
 - [x] Production Vercel deployment manually verified by the repository owner.
 
@@ -248,7 +248,7 @@ Manual ThreatFox synchronization uses the provider-independent incremental contr
 - [x] Entity Resolution UI preserves the existing CİTEM colors/AppShell and separates suggestion-only AI from `Analyze & auto-resolve safe groups`, with an automation report and explicit review reasons for stopped cases.
 - [x] Focused unit/static tests cover safe HIGH eligibility, MEDIUM/LOW rejection, duplicate/hallucinated/kind/status rejection, PRODUCT context safety, generic labels, CREATE_NEW rejection, deterministic bypass, disabled actor/campaign auto-resolution, no alias teaching, and trust-boundary behavior.
 - [x] Existing PostgreSQL 16 Phase 2.3D harness now executes migration 038 in sequence and verifies `AI_VERIFIED`, dedicated audit provenance, source immutability, no alias creation, service-role-only RPC execution, RLS/ACL, and owner isolation.
-- [x] GitHub Actions run #252 passed lint, typecheck, full tests, production build, and all existing PostgreSQL harnesses after the guarded AI auto-resolution implementation; Vercel Preview also succeeded on that validated implementation head.
+- [x] GitHub Actions run #255 passed lint, typecheck, full tests, production build, and all existing PostgreSQL harnesses after the guarded AI auto-resolution implementation; Vercel Preview also succeeded on that validated implementation head.
 - [ ] Migration 038 applied once to the intended Preview/test Supabase and PostgREST schema reloaded — operator step; implementation work does not apply it remotely.
 - [ ] Preview/browser acceptance completed for NVIDIA NIM guarded auto-resolution, `AI_VERIFIED` audit records, generic/conflict fail-closed behavior, no alias/entity auto-creation, source immutability, and second-user isolation.
 - [ ] Phase 2.3E profile matching, relevance scoring, Global Priority, Global View population, alerts/discovery, and AI intelligence briefs remain intentionally unimplemented.
