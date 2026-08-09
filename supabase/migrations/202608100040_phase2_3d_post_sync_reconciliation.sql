@@ -24,6 +24,7 @@ begin
   if p_actor is null or not exists(select 1 from auth.users where id=p_actor) or p_limit not between 1 and 500 then
     raise exception 'INVALID_RECONCILE_REQUEST' using errcode='22023';
   end if;
+  perform pg_advisory_xact_lock(hashtextextended(p_actor::text||E'\x1ftechnical-entity-reconcile',0));
 
   for x in
     select s.*, (q.id is null) as was_unseen
@@ -123,9 +124,8 @@ begin
 end$$;
 
 -- Post-collection callers must touch only assertions that have never entered the
--- resolution workflow. Count the unseen rows first, then delegate to the canonical
--- resolver with exactly that bounded limit; unseen-first ordering guarantees that
--- historical NEEDS_REVIEW rows are not recycled by source synchronization.
+-- resolution workflow. The owner-scoped transaction lock serializes manual and
+-- post-sync reconciliation so the unseen count cannot race another resolver.
 create or replace function public.reconcile_new_technical_entity_assertions(p_actor uuid,p_limit integer default 500) returns jsonb
 language plpgsql security definer set search_path='' as $$
 declare unseen_limit int; result jsonb;
@@ -133,6 +133,7 @@ begin
   if p_actor is null or not exists(select 1 from auth.users where id=p_actor) or p_limit not between 1 and 500 then
     raise exception 'INVALID_RECONCILE_REQUEST' using errcode='22023';
   end if;
+  perform pg_advisory_xact_lock(hashtextextended(p_actor::text||E'\x1ftechnical-entity-reconcile',0));
 
   select least(count(*)::int,p_limit) into unseen_limit
   from public.technical_signal_entity_assertions s
