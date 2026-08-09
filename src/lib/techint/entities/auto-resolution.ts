@@ -26,6 +26,7 @@ export type AutoResolutionRejection =
   | "KIND_MISMATCH"
   | "CANDIDATE_NOT_STRONG"
   | "COMPETING_CANDIDATES"
+  | "CONTEXT_INSUFFICIENT"
   | "CONTEXT_CONFLICT";
 
 export type AutoResolutionGateResult =
@@ -52,14 +53,17 @@ function contextParent(title: string, observed: string) {
   return tokens.at(-1) ?? null;
 }
 
-export function hasProductContextConflict(group: Pick<EntityAssertionGroup, "entityKind" | "displayValue" | "normalizedValue"> & { sampleSignalTitles?: string[] }) {
-  if (group.entityKind !== "PRODUCT") return false;
-  const parents = new Set(
+export function productContextParents(group: Pick<EntityAssertionGroup, "entityKind" | "displayValue" | "normalizedValue"> & { sampleSignalTitles?: string[] }) {
+  if (group.entityKind !== "PRODUCT") return [];
+  return [...new Set(
     (group.sampleSignalTitles ?? [])
       .map((title) => contextParent(title, group.normalizedValue || group.displayValue))
       .filter((value): value is string => Boolean(value)),
-  );
-  return parents.size > 1;
+  )];
+}
+
+export function hasProductContextConflict(group: Pick<EntityAssertionGroup, "entityKind" | "displayValue" | "normalizedValue"> & { sampleSignalTitles?: string[] }) {
+  return productContextParents(group).length > 1;
 }
 
 export function evaluateAiAutoResolution(input: {
@@ -89,8 +93,10 @@ export function evaluateAiAutoResolution(input: {
     return { eligible: false, reason: "COMPETING_CANDIDATES" };
   }
 
-  if (group.entityKind === "PRODUCT" && hasProductContextConflict(group)) {
-    return { eligible: false, reason: "CONTEXT_CONFLICT" };
+  if (group.entityKind === "PRODUCT") {
+    const parents = productContextParents(group);
+    if (!parents.length) return { eligible: false, reason: "CONTEXT_INSUFFICIENT" };
+    if (parents.length > 1) return { eligible: false, reason: "CONTEXT_CONFLICT" };
   }
 
   return { eligible: true, entityId: selected.id, reason: "SAFE_HIGH_MATCH" };
