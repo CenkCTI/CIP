@@ -122,16 +122,53 @@ begin
   );
 end$$;
 
+-- Post-collection callers must touch only assertions that have never entered the
+-- resolution workflow. Count the unseen rows first, then delegate to the canonical
+-- resolver with exactly that bounded limit; unseen-first ordering guarantees that
+-- historical NEEDS_REVIEW rows are not recycled by source synchronization.
+create or replace function public.reconcile_new_technical_entity_assertions(p_actor uuid,p_limit integer default 500) returns jsonb
+language plpgsql security definer set search_path='' as $$
+declare unseen_limit int; result jsonb;
+begin
+  if p_actor is null or not exists(select 1 from auth.users where id=p_actor) or p_limit not between 1 and 500 then
+    raise exception 'INVALID_RECONCILE_REQUEST' using errcode='22023';
+  end if;
+
+  select least(count(*)::int,p_limit) into unseen_limit
+  from public.technical_signal_entity_assertions s
+  left join public.technical_entity_assertion_resolutions q
+    on q.owner_id=s.owner_id and q.assertion_id=s.id
+  where s.owner_id=p_actor and q.id is null;
+
+  if unseen_limit=0 then
+    return jsonb_build_object('processed',0,'unseen_processed',0,'resolved',0,'needs_review',0,'entities_created',0);
+  end if;
+
+  result:=public.reconcile_technical_entity_assertions(p_actor,unseen_limit);
+  if coalesce((result->>'unseen_processed')::int,0)<>unseen_limit then
+    raise exception 'NEW_ENTITY_RECONCILE_SCOPE_MISMATCH' using errcode='P0001';
+  end if;
+  return result;
+end$$;
+
 revoke all on function public.reconcile_technical_entity_assertions(uuid,integer) from public,anon,authenticated;
+revoke all on function public.reconcile_new_technical_entity_assertions(uuid,integer) from public,anon,authenticated;
 grant execute on function public.reconcile_technical_entity_assertions(uuid,integer) to service_role;
+grant execute on function public.reconcile_new_technical_entity_assertions(uuid,integer) to service_role;
 
 do $$
 begin
   if has_function_privilege('authenticated','public.reconcile_technical_entity_assertions(uuid,integer)','EXECUTE') then
     raise exception 'ENTITY_RECONCILE_ACL_REGRESSION';
   end if;
+  if has_function_privilege('authenticated','public.reconcile_new_technical_entity_assertions(uuid,integer)','EXECUTE') then
+    raise exception 'ENTITY_NEW_RECONCILE_ACL_REGRESSION';
+  end if;
   if not has_function_privilege('service_role','public.reconcile_technical_entity_assertions(uuid,integer)','EXECUTE') then
     raise exception 'ENTITY_SERVICE_ROLE_ACL_REGRESSION';
+  end if;
+  if not has_function_privilege('service_role','public.reconcile_new_technical_entity_assertions(uuid,integer)','EXECUTE') then
+    raise exception 'ENTITY_NEW_SERVICE_ROLE_ACL_REGRESSION';
   end if;
 end$$;
 
