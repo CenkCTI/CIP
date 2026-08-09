@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
+import { buildAliasRecommendations } from "@/lib/techint/entities/alias-recommendations";
 import { groupUnresolvedAssertions } from "@/lib/techint/entities/grouping";
 import {
   listTechnicalEntities,
   listTechnicalEntityAliases,
   listTechnicalEntityAssertions,
+  listTechnicalEntityAssertionsByIds,
   listTechnicalEntityAuditEvents,
+  listTechnicalEntityResolutions,
   listTechnicalEntityResolutionsForAssertions,
   listTechnicalObservationLabels,
   listTechnicalSignalLabels,
@@ -51,20 +54,22 @@ function auditActionLabel(value: unknown) {
 
 export default async function Page() {
   const { supabase } = await requireUser();
-  const [entityResult, aliasResult, assertionResult, auditResult] = await Promise.all([
+  const [entityResult, aliasResult, assertionResult, auditResult, recentResolutionResult] = await Promise.all([
     listTechnicalEntities(supabase, 300),
     listTechnicalEntityAliases(supabase),
     listTechnicalEntityAssertions(supabase, 500),
     listTechnicalEntityAuditEvents(supabase),
+    listTechnicalEntityResolutions(supabase, 500),
   ]);
   const assertions = (assertionResult.data ?? []) as Array<Record<string, unknown>>;
   const assertionIds = assertions.map((row) => String(row.id));
   const resolutionResult = await listTechnicalEntityResolutionsForAssertions(supabase, assertionIds);
 
-  const migrationMissing = Boolean(entityResult.error || aliasResult.error || resolutionResult.error || auditResult.error);
+  const migrationMissing = Boolean(entityResult.error || aliasResult.error || resolutionResult.error || auditResult.error || recentResolutionResult.error);
   const entities = (entityResult.data ?? []) as Array<Record<string, unknown>>;
   const aliases = (aliasResult.data ?? []) as Array<Record<string, unknown>>;
   const resolutions = (resolutionResult.data ?? []) as Array<Record<string, unknown>>;
+  const recentResolutions = (recentResolutionResult.data ?? []) as Array<Record<string, unknown>>;
   const audits = (auditResult.data ?? []) as Array<Record<string, unknown>>;
   const typedAssertions = assertions.map((row) => ({
     id: String(row.id),
@@ -110,6 +115,21 @@ export default async function Page() {
   const deterministicEntities = entities.filter((row) => Boolean(row.deterministic_key));
   const entityNameById = new Map(entities.map((row) => [String(row.id), String(row.canonical_name ?? "Unknown entity")]));
   const assertionNameById = new Map(assertions.map((row) => [String(row.id), String(row.display_value ?? "Unknown source label")]));
+
+  const recommendationAssertionIds = [...new Set(recentResolutions.map((row) => String(row.assertion_id ?? "")).filter(Boolean))].slice(0, 500);
+  const { data: recommendationAssertionRows } = await listTechnicalEntityAssertionsByIds(supabase, recommendationAssertionIds);
+  const recommendationAssertions = (recommendationAssertionRows ?? []) as Array<Record<string, unknown>>;
+  const recommendationObservationIds = [...new Set(recommendationAssertions.map((row) => String(row.source_observation_id ?? "")).filter(Boolean))].slice(0, 500);
+  const { data: recommendationObservationRows } = await listTechnicalObservationLabels(supabase, recommendationObservationIds);
+  const aliasRecommendations = buildAliasRecommendations({
+    resolutions: recentResolutions,
+    assertions: recommendationAssertions,
+    entities,
+    aliases,
+    observations: (recommendationObservationRows ?? []) as Array<Record<string, unknown>>,
+    minimumObservations: 3,
+    limit: 12,
+  });
 
   return (
     <section className="space-y-5">
@@ -182,7 +202,7 @@ export default async function Page() {
 
       {migrationMissing ? (
         <div className="card border border-amber-900 text-amber-200">
-          Phase 2.3D tables are not available in this database yet. Apply migration 037 only through the authorized Preview deployment procedure, reload PostgREST, then redeploy.
+          Phase 2.3D tables are not available in this database yet. Apply the authorized Phase 2.3D migrations, reload PostgREST, then redeploy.
         </div>
       ) : null}
 
@@ -194,7 +214,7 @@ export default async function Page() {
               <p className="citem-eyebrow">Safe automation</p>
               <h2 className="citem-section-title mt-1">{deterministicPending ? `${deterministicPending} safe occurrence(s) waiting` : "Automatic queue is clear"}</h2>
               <p className="mt-2 max-w-3xl text-sm text-stone-500">
-                The resolver handles deterministic identities and already-confirmed exact aliases. It does not call providers or AI and does not create Investigation assessments.
+                Successful Technical Source syncs now run this deterministic/confirmed-alias reconciliation automatically. This manual control remains for replay or recovery; it never calls providers or AI.
               </p>
             </div>
           </div>
@@ -216,6 +236,44 @@ export default async function Page() {
         totalGroupCount={ambiguousGroups.length}
         totalOccurrenceCount={ambiguousOccurrenceCount}
       />
+
+      <section className="card panel-corners border-l-2 border-l-amber-900/80">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="citem-eyebrow">Learning without autonomous taxonomy writes</p>
+            <h2 className="citem-section-title mt-1">Alias recommendations</h2>
+            <p className="mt-2 max-w-3xl text-sm text-stone-500">
+              CİTEM recommends an exact reusable mapping only after the same label has been directly resolved to one canonical identity across at least three source observations with no conflicting direct target. You confirm it once; later exact matches resolve automatically after sync without AI.
+            </p>
+          </div>
+          <span className="rounded border border-stone-800 px-2.5 py-1.5 text-xs text-stone-500">{aliasRecommendations.length} recommendation(s)</span>
+        </div>
+
+        {!aliasRecommendations.length ? (
+          <p className="mt-4 text-sm text-stone-500">No repeated direct mapping is mature enough for an exact-alias recommendation yet.</p>
+        ) : (
+          <div className="mt-4 space-y-2">
+            {aliasRecommendations.map((recommendation) => (
+              <article className="rounded border border-stone-800 bg-stone-950/20 p-3" key={`${recommendation.entityKind}:${recommendation.normalizedValue}:${recommendation.entityId}`}>
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="rounded border border-amber-900/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.13em] text-amber-200">{recommendation.entityKind}</span>
+                  <div className="min-w-[220px] flex-1">
+                    <p className="text-sm font-medium text-stone-200">{recommendation.displayValue} <span className="text-stone-600">→</span> {recommendation.canonicalName}</p>
+                    <p className="mt-1 text-xs text-stone-500">
+                      {recommendation.observationCount} direct observations · {recommendation.sourceSystems.length} source system(s) · {recommendation.aiVerifiedCount} AI-verified · {recommendation.analystConfirmedCount} analyst-confirmed
+                      {recommendation.latestResolvedAt ? ` · latest ${time(recommendation.latestResolvedAt)}` : ""}
+                    </p>
+                  </div>
+                  <form action={addEntityAlias.bind(null, recommendation.entityId)}>
+                    <input type="hidden" name="displayValue" value={recommendation.displayValue} />
+                    <button className="citem-button" type="submit">Confirm exact alias</button>
+                  </form>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
 
       {dismissed.length ? (
         <details className="card">
