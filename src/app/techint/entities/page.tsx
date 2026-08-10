@@ -235,45 +235,45 @@ export default async function Page() {
         entities={activeEntities}
         totalGroupCount={ambiguousGroups.length}
         totalOccurrenceCount={ambiguousOccurrenceCount}
-      />
-
-      <section className="card panel-corners border-l-2 border-l-amber-900/80">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="citem-eyebrow">Learning without autonomous taxonomy writes</p>
-            <h2 className="citem-section-title mt-1">Alias recommendations</h2>
-            <p className="mt-2 max-w-3xl text-sm text-stone-500">
-              CİTEM recommends an exact reusable mapping only after the same label has been directly resolved to one canonical identity across at least three source observations with no conflicting direct target. You confirm it once; later exact matches resolve automatically after sync without AI.
-            </p>
+      >
+        <section className="card panel-corners border-l-2 border-l-amber-900/80">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="citem-eyebrow">Learning without autonomous taxonomy writes</p>
+              <h2 className="citem-section-title mt-1">Alias recommendations</h2>
+              <p className="mt-2 max-w-3xl text-sm text-stone-500">
+                CİTEM recommends an exact reusable mapping only after the same label has been directly resolved to one canonical identity across at least three source observations with no conflicting direct target. You confirm it once; later exact matches resolve automatically after sync without AI.
+              </p>
+            </div>
+            <span className="rounded border border-stone-800 px-2.5 py-1.5 text-xs text-stone-500">{aliasRecommendations.length} recommendation(s)</span>
           </div>
-          <span className="rounded border border-stone-800 px-2.5 py-1.5 text-xs text-stone-500">{aliasRecommendations.length} recommendation(s)</span>
-        </div>
 
-        {!aliasRecommendations.length ? (
-          <p className="mt-4 text-sm text-stone-500">No repeated direct mapping is mature enough for an exact-alias recommendation yet.</p>
-        ) : (
-          <div className="mt-4 space-y-2">
-            {aliasRecommendations.map((recommendation) => (
-              <article className="rounded border border-stone-800 bg-stone-950/20 p-3" key={`${recommendation.entityKind}:${recommendation.normalizedValue}:${recommendation.entityId}`}>
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="rounded border border-amber-900/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.13em] text-amber-200">{recommendation.entityKind}</span>
-                  <div className="min-w-[220px] flex-1">
-                    <p className="text-sm font-medium text-stone-200">{recommendation.displayValue} <span className="text-stone-600">→</span> {recommendation.canonicalName}</p>
-                    <p className="mt-1 text-xs text-stone-500">
-                      {recommendation.observationCount} direct observations · {recommendation.sourceSystems.length} source system(s) · {recommendation.aiVerifiedCount} AI-verified · {recommendation.analystConfirmedCount} analyst-confirmed
-                      {recommendation.latestResolvedAt ? ` · latest ${time(recommendation.latestResolvedAt)}` : ""}
-                    </p>
+          {!aliasRecommendations.length ? (
+            <p className="mt-4 text-sm text-stone-500">No repeated direct mapping is mature enough for an exact-alias recommendation yet.</p>
+          ) : (
+            <div className="mt-4 space-y-2">
+              {aliasRecommendations.map((recommendation) => (
+                <article className="rounded border border-stone-800 bg-stone-950/20 p-3" key={`${recommendation.entityKind}:${recommendation.normalizedValue}:${recommendation.entityId}`}>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="rounded border border-amber-900/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.13em] text-amber-200">{recommendation.entityKind}</span>
+                    <div className="min-w-[220px] flex-1">
+                      <p className="text-sm font-medium text-stone-200">{recommendation.displayValue} <span className="text-stone-600">→</span> {recommendation.canonicalName}</p>
+                      <p className="mt-1 text-xs text-stone-500">
+                        {recommendation.observationCount} direct observations · {recommendation.sourceSystems.length} source system(s) · {recommendation.aiVerifiedCount} AI-verified · {recommendation.analystConfirmedCount} analyst-confirmed
+                        {recommendation.latestResolvedAt ? ` · latest ${time(recommendation.latestResolvedAt)}` : ""}
+                      </p>
+                    </div>
+                    <form action={addEntityAlias.bind(null, recommendation.entityId)}>
+                      <input type="hidden" name="displayValue" value={recommendation.displayValue} />
+                      <button className="citem-button" type="submit">Confirm exact alias</button>
+                    </form>
                   </div>
-                  <form action={addEntityAlias.bind(null, recommendation.entityId)}>
-                    <input type="hidden" name="displayValue" value={recommendation.displayValue} />
-                    <button className="citem-button" type="submit">Confirm exact alias</button>
-                  </form>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      </EntityResolutionWorkspace>
 
       {dismissed.length ? (
         <details className="card">
@@ -296,148 +296,150 @@ export default async function Page() {
         </details>
       ) : null}
 
-      <details className="card panel-corners">
-        <summary className="cursor-pointer list-none">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="citem-eyebrow">Canonical registry</p>
-              <h2 className="citem-section-title mt-1">Stable TechINT identities</h2>
-              <p className="mt-1 text-sm text-stone-500">Manage analyst-owned names and aliases here. Deterministic CVEs stay out of the main decision surface.</p>
-            </div>
-            <div className="flex gap-2 text-xs">
-              <span className="rounded border border-stone-800 px-2.5 py-1.5 text-stone-400">{analystEntities.length} analyst</span>
-              <span className="rounded border border-stone-800 px-2.5 py-1.5 text-stone-400">{deterministicEntities.length} deterministic</span>
-              <span className="rounded border border-amber-900/70 px-2.5 py-1.5 text-amber-200">Open registry</span>
-            </div>
-          </div>
-        </summary>
-
-        <div className="mt-5 space-y-5 border-t border-stone-800 pt-5">
-          <section>
-            <div className="mb-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">Create analyst identity</p>
-              <p className="mt-1 text-xs text-stone-500">Use only when the reviewed source label represents a real reusable entity.</p>
-            </div>
-            <form action={createTechnicalEntity} className="grid gap-2 rounded border border-stone-800 bg-stone-950/20 p-3 md:grid-cols-4">
-              <select className="field" name="kind" defaultValue="MALWARE">
-                {["THREAT_ACTOR", "MALWARE", "CAMPAIGN", "VENDOR", "PRODUCT", "SECTOR", "COUNTRY", "REGION", "TAG"].map((kind) => <option key={kind}>{kind}</option>)}
-              </select>
-              <input className="field md:col-span-2" name="canonicalName" placeholder="Canonical name" maxLength={500} required />
-              <button className="citem-button" type="submit">Create identity</button>
-            </form>
-          </section>
-
-          <section>
-            <div className="flex flex-wrap items-end justify-between gap-2">
+      <section className="grid gap-4 xl:grid-cols-2 xl:items-start">
+        <details className="card panel-corners min-w-0">
+          <summary className="cursor-pointer list-none">
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">Analyst-managed identities</p>
-                <p className="mt-1 text-xs text-stone-500">Aliases stored here can teach future exact automatic resolutions.</p>
+                <p className="citem-eyebrow">Canonical registry</p>
+                <h2 className="citem-section-title mt-1">Stable TechINT identities</h2>
+                <p className="mt-1 text-sm text-stone-500">Manage analyst-owned names and aliases here. Deterministic CVEs stay out of the main decision surface.</p>
               </div>
-              <span className="text-xs text-stone-500">{analystEntities.length} record(s)</span>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <span className="rounded border border-stone-800 px-2.5 py-1.5 text-stone-400">{analystEntities.length} analyst</span>
+                <span className="rounded border border-stone-800 px-2.5 py-1.5 text-stone-400">{deterministicEntities.length} deterministic</span>
+                <span className="rounded border border-amber-900/70 px-2.5 py-1.5 text-amber-200">Open registry</span>
+              </div>
             </div>
-            {!analystEntities.length ? <p className="mt-3 text-sm text-stone-500">No analyst-managed canonical entities yet.</p> : (
-              <div className="mt-3 grid gap-3 xl:grid-cols-2">
-                {analystEntities.map((entity) => {
-                  const entityId = String(entity.id);
-                  const entityAliases = aliases.filter((alias) => String(alias.entity_id) === entityId);
-                  return (
-                    <article className="rounded border border-stone-800 bg-stone-950/20 p-4" key={entityId}>
-                      <div className="flex flex-wrap justify-between gap-3">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded border border-amber-900/70 px-2 py-1 text-[11px] uppercase tracking-[0.12em] text-amber-200">{text(entity.entity_kind)}</span>
-                            <span className="text-[11px] uppercase tracking-[0.12em] text-stone-500">{text(entity.status)}</span>
-                          </div>
-                          <h3 className="mt-2 text-base font-medium text-stone-100">{text(entity.canonical_name)}</h3>
-                        </div>
-                        <form action={setEntityStatus.bind(null, entityId, entity.status === "ARCHIVED" ? "ACTIVE" : "ARCHIVED")}>
-                          <button className="citem-button-ghost" type="submit">{entity.status === "ARCHIVED" ? "Restore" : "Archive"}</button>
-                        </form>
-                      </div>
-                      <div className="mt-3 grid gap-2">
-                        <form action={renameEntity.bind(null, entityId)} className="flex gap-2">
-                          <input className="field flex-1" name="canonicalName" defaultValue={String(entity.canonical_name)} maxLength={500} />
-                          <button className="citem-button-ghost" type="submit">Rename</button>
-                        </form>
-                        <form action={addEntityAlias.bind(null, entityId)} className="flex gap-2">
-                          <input className="field flex-1" name="displayValue" placeholder="Confirmed exact alias" maxLength={500} required />
-                          <button className="citem-button-ghost" type="submit">Add alias</button>
-                        </form>
-                      </div>
-                      <div className="mt-3 space-y-1">
-                        {entityAliases.filter((alias) => alias.status === "ACTIVE").map((alias) => (
-                          <div className="flex items-center justify-between gap-2 rounded border border-stone-800 px-2.5 py-2 text-xs" key={String(alias.id)}>
-                            <span className="text-stone-300"><b>{String(alias.basis) === "AUTHORITATIVE_SOURCE" ? "Authoritative" : "Analyst confirmed"}</b> · {text(alias.display_value)}</span>
-                            <form action={revokeEntityAlias.bind(null, String(alias.id))}><button className="text-amber-300" type="submit">Revoke</button></form>
-                          </div>
-                        ))}
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+          </summary>
 
-          <details className="rounded border border-stone-800 bg-stone-950/20 p-3">
-            <summary className="cursor-pointer list-none">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="mt-5 space-y-5 border-t border-stone-800 pt-5">
+            <section>
+              <div className="mb-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">Create analyst identity</p>
+                <p className="mt-1 text-xs text-stone-500">Use only when the reviewed source label represents a real reusable entity.</p>
+              </div>
+              <form action={createTechnicalEntity} className="grid gap-2 rounded border border-stone-800 bg-stone-950/20 p-3 md:grid-cols-4">
+                <select className="field" name="kind" defaultValue="MALWARE">
+                  {["THREAT_ACTOR", "MALWARE", "CAMPAIGN", "VENDOR", "PRODUCT", "SECTOR", "COUNTRY", "REGION", "TAG"].map((kind) => <option key={kind}>{kind}</option>)}
+                </select>
+                <input className="field md:col-span-2" name="canonicalName" placeholder="Canonical name" maxLength={500} required />
+                <button className="citem-button" type="submit">Create identity</button>
+              </form>
+            </section>
+
+            <section>
+              <div className="flex flex-wrap items-end justify-between gap-2">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">Deterministic registry</p>
-                  <p className="mt-1 text-xs text-stone-500">Machine-managed CVE / Indicator / ATT&amp;CK identities. No analyst action is normally required.</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">Analyst-managed identities</p>
+                  <p className="mt-1 text-xs text-stone-500">Aliases stored here can teach future exact automatic resolutions.</p>
                 </div>
-                <span className="text-xs text-stone-500">{deterministicEntities.length} record(s) · open technical list</span>
+                <span className="text-xs text-stone-500">{analystEntities.length} record(s)</span>
               </div>
-            </summary>
-            <div className="mt-3 divide-y divide-stone-800 border-t border-stone-800">
-              {deterministicEntities.slice(0, 120).map((entity) => (
-                <div className="grid gap-1 py-2 text-xs md:grid-cols-[1fr_180px_1.4fr]" key={String(entity.id)}>
-                  <span className="font-medium text-stone-300">{text(entity.canonical_name)}</span>
-                  <span className="text-stone-500">{text(entity.entity_kind)} · {text(entity.status)}</span>
-                  <span className="truncate font-mono text-stone-600">{text(entity.deterministic_key)}</span>
+              {!analystEntities.length ? <p className="mt-3 text-sm text-stone-500">No analyst-managed canonical entities yet.</p> : (
+                <div className="mt-3 grid gap-3">
+                  {analystEntities.map((entity) => {
+                    const entityId = String(entity.id);
+                    const entityAliases = aliases.filter((alias) => String(alias.entity_id) === entityId);
+                    return (
+                      <article className="rounded border border-stone-800 bg-stone-950/20 p-4" key={entityId}>
+                        <div className="flex flex-wrap justify-between gap-3">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded border border-amber-900/70 px-2 py-1 text-[11px] uppercase tracking-[0.12em] text-amber-200">{text(entity.entity_kind)}</span>
+                              <span className="text-[11px] uppercase tracking-[0.12em] text-stone-500">{text(entity.status)}</span>
+                            </div>
+                            <h3 className="mt-2 text-base font-medium text-stone-100">{text(entity.canonical_name)}</h3>
+                          </div>
+                          <form action={setEntityStatus.bind(null, entityId, entity.status === "ARCHIVED" ? "ACTIVE" : "ARCHIVED")}>
+                            <button className="citem-button-ghost" type="submit">{entity.status === "ARCHIVED" ? "Restore" : "Archive"}</button>
+                          </form>
+                        </div>
+                        <div className="mt-3 grid gap-2">
+                          <form action={renameEntity.bind(null, entityId)} className="flex gap-2">
+                            <input className="field flex-1" name="canonicalName" defaultValue={String(entity.canonical_name)} maxLength={500} />
+                            <button className="citem-button-ghost" type="submit">Rename</button>
+                          </form>
+                          <form action={addEntityAlias.bind(null, entityId)} className="flex gap-2">
+                            <input className="field flex-1" name="displayValue" placeholder="Confirmed exact alias" maxLength={500} required />
+                            <button className="citem-button-ghost" type="submit">Add alias</button>
+                          </form>
+                        </div>
+                        <div className="mt-3 space-y-1">
+                          {entityAliases.filter((alias) => alias.status === "ACTIVE").map((alias) => (
+                            <div className="flex items-center justify-between gap-2 rounded border border-stone-800 px-2.5 py-2 text-xs" key={String(alias.id)}>
+                              <span className="text-stone-300"><b>{String(alias.basis) === "AUTHORITATIVE_SOURCE" ? "Authoritative" : "Analyst confirmed"}</b> · {text(alias.display_value)}</span>
+                              <form action={revokeEntityAlias.bind(null, String(alias.id))}><button className="text-amber-300" type="submit">Revoke</button></form>
+                            </div>
+                          ))}
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
-            {deterministicEntities.length > 120 ? <p className="mt-2 text-xs text-stone-600">Showing the first 120 deterministic identities in this bounded registry view.</p> : null}
-          </details>
-        </div>
-      </details>
+              )}
+            </section>
 
-      <details className="card">
-        <summary className="cursor-pointer list-none">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="citem-eyebrow">Decision log</p>
-              <h2 className="citem-section-title mt-1">Resolution audit trail</h2>
-              <p className="mt-1 text-sm text-stone-500">Human-readable decision history with technical IDs kept secondary.</p>
-            </div>
-            <span className="rounded border border-stone-800 px-2.5 py-1.5 text-xs text-stone-500">{audits.length} event(s) · open log</span>
-          </div>
-        </summary>
-        {!audits.length ? <p className="mt-4 text-sm text-stone-500">No normalization audit events yet.</p> : (
-          <div className="mt-4 divide-y divide-stone-800 border-t border-stone-800">
-            {audits.slice(0, 40).map((audit) => {
-              const entityId = audit.entity_id ? String(audit.entity_id) : null;
-              const assertionId = audit.assertion_id ? String(audit.assertion_id) : null;
-              return (
-                <div className="grid gap-2 py-3 text-sm lg:grid-cols-[1fr_auto]" key={String(audit.id)}>
+            <details className="rounded border border-stone-800 bg-stone-950/20 p-3">
+              <summary className="cursor-pointer list-none">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="text-stone-300">{auditActionLabel(audit.action)}</p>
-                    <p className="mt-1 text-xs text-stone-500">
-                      {entityId ? `Entity: ${entityNameById.get(entityId) ?? "unknown"}` : "Entity: —"}
-                      {assertionId ? ` · Source label: ${assertionNameById.get(assertionId) ?? "unknown"}` : ""}
-                    </p>
-                    <p className="mt-1 font-mono text-[10px] text-stone-700">
-                      {entityId ? `entity ${entityId}` : ""}{entityId && assertionId ? " · " : ""}{assertionId ? `assertion ${assertionId}` : ""}
-                    </p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">Deterministic registry</p>
+                    <p className="mt-1 text-xs text-stone-500">Machine-managed CVE / Indicator / ATT&amp;CK identities. No analyst action is normally required.</p>
                   </div>
-                  <span className="text-xs text-stone-500">{time(audit.created_at as string)}</span>
+                  <span className="text-xs text-stone-500">{deterministicEntities.length} record(s) · open technical list</span>
                 </div>
-              );
-            })}
+              </summary>
+              <div className="mt-3 divide-y divide-stone-800 border-t border-stone-800">
+                {deterministicEntities.slice(0, 120).map((entity) => (
+                  <div className="grid gap-1 py-2 text-xs md:grid-cols-[1fr_180px_1.4fr]" key={String(entity.id)}>
+                    <span className="font-medium text-stone-300">{text(entity.canonical_name)}</span>
+                    <span className="text-stone-500">{text(entity.entity_kind)} · {text(entity.status)}</span>
+                    <span className="truncate font-mono text-stone-600">{text(entity.deterministic_key)}</span>
+                  </div>
+                ))}
+              </div>
+              {deterministicEntities.length > 120 ? <p className="mt-2 text-xs text-stone-600">Showing the first 120 deterministic identities in this bounded registry view.</p> : null}
+            </details>
           </div>
-        )}
-      </details>
+        </details>
+
+        <details className="card min-w-0">
+          <summary className="cursor-pointer list-none">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="citem-eyebrow">Decision log</p>
+                <h2 className="citem-section-title mt-1">Resolution audit trail</h2>
+                <p className="mt-1 text-sm text-stone-500">Human-readable decision history with technical IDs kept secondary.</p>
+              </div>
+              <span className="rounded border border-stone-800 px-2.5 py-1.5 text-xs text-stone-500">{audits.length} event(s) · open log</span>
+            </div>
+          </summary>
+          {!audits.length ? <p className="mt-4 text-sm text-stone-500">No normalization audit events yet.</p> : (
+            <div className="mt-4 divide-y divide-stone-800 border-t border-stone-800">
+              {audits.slice(0, 40).map((audit) => {
+                const entityId = audit.entity_id ? String(audit.entity_id) : null;
+                const assertionId = audit.assertion_id ? String(audit.assertion_id) : null;
+                return (
+                  <div className="grid gap-2 py-3 text-sm lg:grid-cols-[1fr_auto]" key={String(audit.id)}>
+                    <div>
+                      <p className="text-stone-300">{auditActionLabel(audit.action)}</p>
+                      <p className="mt-1 text-xs text-stone-500">
+                        {entityId ? `Entity: ${entityNameById.get(entityId) ?? "unknown"}` : "Entity: —"}
+                        {assertionId ? ` · Source label: ${assertionNameById.get(assertionId) ?? "unknown"}` : ""}
+                      </p>
+                      <p className="mt-1 font-mono text-[10px] text-stone-700">
+                        {entityId ? `entity ${entityId}` : ""}{entityId && assertionId ? " · " : ""}{assertionId ? `assertion ${assertionId}` : ""}
+                      </p>
+                    </div>
+                    <span className="text-xs text-stone-500">{time(audit.created_at as string)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </details>
+      </section>
     </section>
   );
 }
