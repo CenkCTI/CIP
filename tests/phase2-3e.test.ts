@@ -38,9 +38,11 @@ describe("Phase 2.3E architecture", () => {
 
   it("evaluates derived intelligence after collection without making it authoritative for collection success", () => {
     expect(orchestrator).toContain("evaluateTechnicalSignalIntelligenceBatchWorkflow");
-    expect(orchestrator).toContain("POST_SYNC_INTELLIGENCE_BATCH = 250");
+    expect(orchestrator).toContain("POST_SYNC_INTELLIGENCE_BATCH = 50");
+    expect(orchestrator).toContain("POST_SYNC_INTELLIGENCE_RETRY_BATCH = 10");
+    expect(orchestrator).toContain("failed");
+    expect(orchestrator).toContain("complete: failed === 0");
     expect(orchestrator.indexOf("completeTechnicalCollection")).toBeLessThan(orchestrator.lastIndexOf("evaluateFreshTechnicalIntelligence"));
-    expect(orchestrator).toContain("intelligenceEvaluation = null");
   });
 
   it("uses bounded paginated server queries without a hidden 500-row ceiling", () => {
