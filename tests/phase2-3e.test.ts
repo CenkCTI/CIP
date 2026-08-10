@@ -24,7 +24,7 @@ describe("Phase 2.3E architecture", () => {
     expect(migration).not.toMatch(/update\s+public\.technical_signal_entity_assertions/i);
     expect(migration).not.toMatch(/update\s+public\.technical_signal_observations/i);
     expect(migration).not.toMatch(/update\s+public\.technical_signal_revisions/i);
-    expect(orchestrator).not.toMatch(/from\("technical_signal_entity_assertions"\).*\.(insert|update|delete)/s);
+    expect(orchestrator).not.toMatch(/from\("technical_signal_entity_assertions"\)[\s\S]*\.(insert|update|delete)/i);
   });
 
   it("keeps unresolved source identities visible and upgrades matches after resolution", () => {
