@@ -16,10 +16,7 @@ declare v "char";
 begin
   select p.provolatile into v
   from pg_proc p
-  join pg_namespace n on n.oid=p.pronamespace
-  where n.nspname='public'
-    and p.proname='technical_signal_profile_match_snapshot'
-    and pg_get_function_identity_arguments(p.oid)='uuid, uuid, uuid';
+  where p.oid='public.technical_signal_profile_match_snapshot(uuid,uuid,uuid)'::regprocedure;
 
   if v is distinct from 'v' then
     raise exception 'TECHINT_PROFILE_MATCH_SNAPSHOT_VOLATILITY_INVALID';
