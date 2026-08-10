@@ -207,11 +207,11 @@ begin
 
   update public.technical_collector_agents
   set last_tick_completed_at = now(),
-      last_tick_status = case when p_error_code is null then 'SUCCEEDED' else 'FAILED' end,
+      last_tick_status = case when p_error_code is null and p_failed = 0 then 'SUCCEEDED' else 'FAILED' end,
       last_claimed_count = p_claimed,
       last_succeeded_count = p_succeeded,
       last_failed_count = p_failed,
-      last_error_code = p_error_code
+      last_error_code = coalesce(p_error_code, case when p_failed > 0 then 'SOURCE_RUN_FAILED' else null end)
   where id = p_agent_id;
 
   if not found then
