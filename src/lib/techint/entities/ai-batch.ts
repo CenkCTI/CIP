@@ -1,4 +1,4 @@
-export const ENTITY_AI_MAX_RUN_GROUPS = 50;
+export const ENTITY_AI_MAX_RUN_GROUPS = 250;
 export const ENTITY_AI_PROVIDER_BATCH_SIZE = 8;
 
 export function chunkEntityAiItems<T>(items: T[], size = ENTITY_AI_PROVIDER_BATCH_SIZE): T[][] {
