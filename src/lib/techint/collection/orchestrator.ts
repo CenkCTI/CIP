@@ -12,7 +12,8 @@ import { emptyCollectionCounters, type CollectionCounters } from "./types";
 
 const POST_SYNC_RECONCILE_BATCH = 500;
 const POST_SYNC_RECONCILE_MAX_BATCHES = 10;
-const POST_SYNC_INTELLIGENCE_BATCH = 250;
+const POST_SYNC_INTELLIGENCE_BATCH = 50;
+const POST_SYNC_INTELLIGENCE_RETRY_BATCH = 10;
 
 function concurrency(env: NodeJS.ProcessEnv = process.env) {
   const raw = env.TECHINT_COLLECTION_CONCURRENCY ?? "2";
@@ -81,16 +82,48 @@ async function reconcileFreshTechnicalAssertions(actorId: string) {
 async function evaluateFreshTechnicalIntelligence(actorId: string, signalIds: string[]) {
   const unique = [...new Set(signalIds)];
   let batches = 0;
+  let attempts = 0;
   let evaluated = 0;
   let profileMatchesChanged = 0;
+  let failed = 0;
+
+  const evaluateBatch = async (ids: string[], allowRetry: boolean) => {
+    attempts += 1;
+    try {
+      const result = await evaluateTechnicalSignalIntelligenceBatchWorkflow({ p_actor: actorId, p_signal_ids: ids });
+      batches += 1;
+      evaluated += result.evaluated;
+      profileMatchesChanged += result.profile_matches_changed;
+      return;
+    } catch {
+      if (!allowRetry || ids.length <= POST_SYNC_INTELLIGENCE_RETRY_BATCH) {
+        failed += ids.length;
+        return;
+      }
+    }
+
+    // CVE-heavy sources such as FIRST EPSS can expand one requested batch into many
+    // sibling CISA/NVD/FIRST signals inside PostgreSQL. Retry a failed/timeout-prone
+    // primary chunk in smaller bounded pieces instead of abandoning the remaining
+    // post-sync intelligence drain. Collection success remains authoritative.
+    for (let index = 0; index < ids.length; index += POST_SYNC_INTELLIGENCE_RETRY_BATCH) {
+      await evaluateBatch(ids.slice(index, index + POST_SYNC_INTELLIGENCE_RETRY_BATCH), false);
+    }
+  };
+
   for (let index = 0; index < unique.length; index += POST_SYNC_INTELLIGENCE_BATCH) {
-    const ids = unique.slice(index, index + POST_SYNC_INTELLIGENCE_BATCH);
-    const result = await evaluateTechnicalSignalIntelligenceBatchWorkflow({ p_actor: actorId, p_signal_ids: ids });
-    batches += 1;
-    evaluated += result.evaluated;
-    profileMatchesChanged += result.profile_matches_changed;
+    await evaluateBatch(unique.slice(index, index + POST_SYNC_INTELLIGENCE_BATCH), true);
   }
-  return { batches, requested: unique.length, evaluated, profileMatchesChanged };
+
+  return {
+    batches,
+    attempts,
+    requested: unique.length,
+    evaluated,
+    profileMatchesChanged,
+    failed,
+    complete: failed === 0,
+  };
 }
 
 export async function runClaimedTechnicalCollection(rawClaim: unknown, fetchImpl: typeof fetch = fetch) {
@@ -137,7 +170,7 @@ export async function runClaimedTechnicalCollection(rawClaim: unknown, fetchImpl
       entityAssertionsCreated += recorded.entity_assertions_created;
       // Successful record/replay is enough to refresh derived Phase 2.3E projections.
       // This intentionally lets a bounded source re-sync backfill existing Technical Signals
-      // after migrations 041/042 without rewriting source truth or requiring a separate browser backfill.
+      // after migrations 041+ without rewriting source truth or requiring a separate browser backfill.
       intelligenceSignalIds.add(recorded.signal_id);
       updateDisposition(counters, recorded.disposition);
     });
