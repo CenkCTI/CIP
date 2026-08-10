@@ -1,0 +1,390 @@
+import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { AiError } from "@/lib/ai/client";
+import { byokChat } from "@/lib/ai/byok/client";
+import { safeAiErrorMessage } from "@/lib/ai/byok/errors";
+import { BYOK_COOKIE, decryptCredential, type ByokCredential } from "@/lib/ai/byok/vault";
+import { requireUser } from "@/lib/auth";
+import { buildEntityAiMessages, entityAiGroupSchema, parseEntityAiResponse, type EntityAiSuggestion } from "@/lib/techint/entities/ai-resolver";
+import { chunkEntityAiItems, ENTITY_AI_MAX_RUN_GROUPS } from "@/lib/techint/entities/ai-batch";
+import { evaluateAiAutoResolution, productContextParents } from "@/lib/techint/entities/auto-resolution";
+import { groupUnresolvedAssertions, shortlistEntityCandidates } from "@/lib/techint/entities/grouping";
+import {
+  listTechnicalEntitiesForKinds,
+  listTechnicalEntityAssertions,
+  listTechnicalEntityResolutionsForAssertions,
+  listTechnicalObservationLabels,
+  listTechnicalSignalLabels,
+} from "@/lib/techint/entities/queries";
+import {
+  aiCreateTechnicalEntityFromAssertionWorkflow,
+  aiResolveTechnicalEntityAssertionWorkflow,
+} from "@/lib/techint/entities/trusted-client";
+import type { TechnicalEntityKind } from "@/lib/techint/entities/types";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const bodySchema = z.object({ limit: z.coerce.number().int().min(0).max(ENTITY_AI_MAX_RUN_GROUPS).default(8) }).strict();
+const deterministicKinds = new Set<TechnicalEntityKind>(["CVE", "INDICATOR", "ATTACK_TECHNIQUE"]);
+
+type AutoOutcome = {
+  groupKey: string;
+  entityKind: TechnicalEntityKind;
+  displayValue: string;
+  status: "AUTO_RESOLVED" | "REVIEW";
+  reason: string;
+  action: "LINK_EXISTING" | "CREATE_NEW" | "REVIEW_REQUIRED";
+  decision: EntityAiSuggestion["decision"];
+  confidence: EntityAiSuggestion["confidence"];
+  candidateEntityId: string | null;
+  proposedCanonicalName: string | null;
+  canonicalName: string | null;
+  entityId: string | null;
+  assertionsLinked: number;
+  created: boolean;
+  rationale: string;
+};
+
+function safeError(error: unknown) {
+  const code = error instanceof AiError ? error.code : error instanceof Error ? error.message : "entity_ai_auto_resolution_failed";
+  const known = [
+    "byok_required",
+    "byok_expired",
+    "byok_binding_mismatch",
+    "timeout",
+    "provider_rate_limited",
+    "provider_unreachable",
+    "unsupported_model",
+    "nvidia_output_exhausted",
+  ];
+  const message = known.includes(code) ? safeAiErrorMessage(code) : "AI auto-resolution could not be completed safely.";
+  return NextResponse.json({ error: message, code }, { status: code === "provider_rate_limited" ? 429 : 400 });
+}
+
+export async function POST(request: Request) {
+  try {
+    const input = bodySchema.parse(await request.json().catch(() => ({})));
+    if (input.limit === 0) {
+      return NextResponse.json({
+        provider: null,
+        model: null,
+        groups_analyzed: 0,
+        model_batches: 0,
+        auto_resolved: 0,
+        auto_created: 0,
+        assertions_linked: 0,
+        review_remaining: 0,
+        rejected_by_safety_gate: 0,
+        unsure: 0,
+        generic_labels: 0,
+        conflicts: 0,
+        failed_writes: 0,
+        outcomes: [],
+      });
+    }
+
+    const { supabase, user } = await requireUser();
+    const { data: assertionRows, error: assertionError } = await listTechnicalEntityAssertions(supabase, 500);
+    if (assertionError) throw new Error("entity_ai_context_unavailable");
+
+    const assertions = (assertionRows ?? []) as Array<{
+      id: string;
+      entity_kind: TechnicalEntityKind;
+      display_value: string;
+      normalized_value: string;
+      semantic_role?: string | null;
+      source_observation_id?: string | null;
+      signal_id?: string | null;
+    }>;
+    const resolutionResult = await listTechnicalEntityResolutionsForAssertions(supabase, assertions.map((assertion) => assertion.id));
+    if (resolutionResult.error) throw new Error("entity_ai_context_unavailable");
+    const resolutions = (resolutionResult.data ?? []) as Array<{ assertion_id: string; status: string }>;
+
+    const groups = groupUnresolvedAssertions(assertions, resolutions)
+      .filter((group) => !deterministicKinds.has(group.entityKind))
+      .slice(0, input.limit);
+    if (!groups.length) {
+      return NextResponse.json({
+        provider: null,
+        model: null,
+        groups_analyzed: 0,
+        model_batches: 0,
+        auto_resolved: 0,
+        auto_created: 0,
+        assertions_linked: 0,
+        review_remaining: 0,
+        rejected_by_safety_gate: 0,
+        unsure: 0,
+        generic_labels: 0,
+        conflicts: 0,
+        failed_writes: 0,
+        outcomes: [],
+      });
+    }
+
+    const entityResult = await listTechnicalEntitiesForKinds(supabase, groups.map((group) => group.entityKind), 500);
+    if (entityResult.error) throw new Error("entity_ai_context_unavailable");
+    const entities = (entityResult.data ?? []) as Array<{
+      id: string;
+      entity_kind: TechnicalEntityKind;
+      canonical_name: string;
+      canonical_normalized: string;
+      status?: string | null;
+    }>;
+
+    const observationIds = [...new Set(groups.flatMap((group) => group.sourceObservationIds))].slice(0, 500);
+    const signalIds = [...new Set(groups.flatMap((group) => group.signalIds))].slice(0, 500);
+    const [{ data: observationRows }, { data: signalRows }] = await Promise.all([
+      listTechnicalObservationLabels(supabase, observationIds),
+      listTechnicalSignalLabels(supabase, signalIds),
+    ]);
+    const observationById = new Map(((observationRows ?? []) as Array<Record<string, unknown>>).map((row) => [String(row.id), row]));
+    const signalById = new Map(((signalRows ?? []) as Array<Record<string, unknown>>).map((row) => [String(row.id), row]));
+
+    const contextGroups = groups.map((group) => ({
+      ...group,
+      sourceSystems: [...new Set(group.sourceObservationIds.map((id) => String(observationById.get(id)?.source_system ?? "")).filter(Boolean))].slice(0, 8),
+      sampleSignalTitles: [...new Set(group.signalIds.map((id) => String(signalById.get(id)?.title ?? "")).filter(Boolean))].slice(0, 3),
+    }));
+    const candidateLists = contextGroups.map((group) => shortlistEntityCandidates(group, entities, 8));
+    const aiGroups = contextGroups.map((group, index) => entityAiGroupSchema.parse({
+      entityKind: group.entityKind,
+      displayValue: group.displayValue,
+      normalizedValue: group.normalizedValue,
+      occurrenceCount: Math.min(group.occurrenceCount, 500),
+      sourceSystems: group.sourceSystems,
+      semanticRoles: group.semanticRoles.slice(0, 8),
+      sampleSignalTitles: group.sampleSignalTitles,
+      candidates: candidateLists[index].map((candidate) => ({ id: candidate.id, canonicalName: candidate.canonicalName })),
+    }));
+
+    const cookie = (await cookies()).get(BYOK_COOKIE)?.value;
+    if (!cookie) throw new AiError("byok_required");
+    let credential: ByokCredential;
+    try {
+      credential = decryptCredential(cookie, { kind: "user", id: user.id });
+    } catch (error) {
+      throw new AiError(error instanceof Error ? error.message : "byok_required");
+    }
+
+    const decisions: EntityAiSuggestion[] = [];
+    const batches = chunkEntityAiItems(aiGroups);
+    for (const batch of batches) {
+      const content = await byokChat(
+        credential.providerId,
+        credential.model,
+        credential.apiKey,
+        buildEntityAiMessages(batch),
+        "generation",
+      );
+      decisions.push(...parseEntityAiResponse(content, batch));
+    }
+
+    let autoResolved = 0;
+    let autoCreated = 0;
+    let assertionsLinked = 0;
+    let genericLabels = 0;
+    let conflicts = 0;
+    let unsure = 0;
+    let rejected = 0;
+    let failedWrites = 0;
+    const outcomes: AutoOutcome[] = [];
+
+    for (let index = 0; index < contextGroups.length; index += 1) {
+      const group = contextGroups[index];
+      const decision = decisions[index];
+      const candidates = candidateLists[index];
+      const candidateEntity = decision.candidateEntityId
+        ? entities.find((entity) => entity.id === decision.candidateEntityId) ?? null
+        : null;
+      const outcomeBase = {
+        groupKey: group.key,
+        entityKind: group.entityKind,
+        displayValue: group.displayValue,
+        decision: decision.decision,
+        confidence: decision.confidence,
+        candidateEntityId: decision.candidateEntityId,
+        proposedCanonicalName: decision.proposedCanonicalName,
+        rationale: decision.rationale,
+      };
+      const gate = evaluateAiAutoResolution({
+        group,
+        suggestion: decision,
+        candidates,
+        candidateEntity: candidateEntity
+          ? { id: candidateEntity.id, entityKind: candidateEntity.entity_kind, status: candidateEntity.status ?? "ACTIVE" }
+          : null,
+      });
+
+      if (!gate.eligible) {
+        if (gate.reason === "GENERIC_LABEL") genericLabels += 1;
+        else if (
+          gate.reason === "COMPETING_CANDIDATES"
+          || gate.reason === "EXISTING_CANDIDATE_AVAILABLE"
+          || gate.reason === "CONTEXT_CONFLICT"
+        ) conflicts += 1;
+        else if (decision.decision === "UNSURE" || decision.confidence !== "HIGH") unsure += 1;
+        else rejected += 1;
+        outcomes.push({
+          ...outcomeBase,
+          status: "REVIEW",
+          reason: gate.reason,
+          action: "REVIEW_REQUIRED",
+          canonicalName: candidateEntity?.canonical_name ?? decision.proposedCanonicalName,
+          entityId: candidateEntity?.id ?? null,
+          assertionsLinked: 0,
+          created: false,
+        });
+        continue;
+      }
+
+      let linkedInGroup = 0;
+      let entityId: string | null = gate.action === "LINK_EXISTING" ? gate.entityId : null;
+      let canonicalName: string | null = gate.action === "LINK_EXISTING" ? candidateEntity?.canonical_name ?? null : gate.canonicalName;
+      let created = false;
+      const contextParents = productContextParents(group);
+      const safetyChecks = {
+        candidateUnique: gate.action === "LINK_EXISTING",
+        candidateStrong: gate.action === "LINK_EXISTING",
+        noExistingStrongCandidate: gate.action === "CREATE_NEW",
+        canonicalNameEquivalent: gate.action === "CREATE_NEW",
+        kindMatch: true,
+        genericLabel: false,
+        contextConflict: false,
+        contextVerified: group.entityKind !== "PRODUCT" || contextParents.length === 1,
+        aliasTaught: false,
+      };
+
+      if (gate.action === "CREATE_NEW") {
+        const firstAssertionId = group.assertionIds[0];
+        if (!firstAssertionId) {
+          rejected += 1;
+          outcomes.push({
+            ...outcomeBase,
+            status: "REVIEW",
+            reason: "WRITE_FAILED_SAFE",
+            action: "REVIEW_REQUIRED",
+            canonicalName,
+            entityId: null,
+            assertionsLinked: 0,
+            created: false,
+          });
+          continue;
+        }
+        try {
+          const createdResult = await aiCreateTechnicalEntityFromAssertionWorkflow({
+            p_actor: user.id,
+            p_assertion_id: firstAssertionId,
+            p_canonical_name: gate.canonicalName,
+            p_provider: credential.providerId,
+            p_model: credential.model,
+            p_safety_checks: safetyChecks,
+          });
+          entityId = createdResult.entity_id;
+          canonicalName = gate.canonicalName;
+          linkedInGroup = 1;
+          assertionsLinked += 1;
+          created = true;
+          autoCreated += 1;
+        } catch {
+          failedWrites += 1;
+          rejected += 1;
+          outcomes.push({
+            ...outcomeBase,
+            status: "REVIEW",
+            reason: "WRITE_FAILED_SAFE",
+            action: "REVIEW_REQUIRED",
+            canonicalName,
+            entityId: null,
+            assertionsLinked: 0,
+            created: false,
+          });
+          continue;
+        }
+      }
+
+      if (!entityId) {
+        rejected += 1;
+        outcomes.push({
+          ...outcomeBase,
+          status: "REVIEW",
+          reason: "WRITE_FAILED_SAFE",
+          action: "REVIEW_REQUIRED",
+          canonicalName,
+          entityId: null,
+          assertionsLinked: 0,
+          created,
+        });
+        continue;
+      }
+
+      const startIndex = created ? 1 : 0;
+      for (const assertionId of group.assertionIds.slice(startIndex)) {
+        try {
+          await aiResolveTechnicalEntityAssertionWorkflow({
+            p_actor: user.id,
+            p_assertion_id: assertionId,
+            p_entity_id: entityId,
+            p_provider: credential.providerId,
+            p_model: credential.model,
+            p_safety_checks: safetyChecks,
+          });
+          linkedInGroup += 1;
+          assertionsLinked += 1;
+        } catch {
+          failedWrites += 1;
+        }
+      }
+
+      if (linkedInGroup === group.assertionIds.length) {
+        autoResolved += 1;
+        outcomes.push({
+          ...outcomeBase,
+          status: "AUTO_RESOLVED",
+          reason: created ? "SAFE_HIGH_CREATE" : "SAFE_HIGH_MATCH",
+          action: created ? "CREATE_NEW" : "LINK_EXISTING",
+          canonicalName,
+          entityId,
+          assertionsLinked: linkedInGroup,
+          created,
+        });
+      } else {
+        rejected += 1;
+        outcomes.push({
+          ...outcomeBase,
+          status: "REVIEW",
+          reason: linkedInGroup > 0 ? "WRITE_PARTIAL_SAFE" : "WRITE_FAILED_SAFE",
+          action: created ? "CREATE_NEW" : "LINK_EXISTING",
+          canonicalName,
+          entityId,
+          assertionsLinked: linkedInGroup,
+          created,
+        });
+      }
+    }
+
+    revalidatePath("/techint/entities");
+    return NextResponse.json({
+      provider: credential.providerId,
+      model: credential.model,
+      groups_analyzed: contextGroups.length,
+      model_batches: batches.length,
+      auto_resolved: autoResolved,
+      auto_created: autoCreated,
+      assertions_linked: assertionsLinked,
+      review_remaining: contextGroups.length - autoResolved,
+      rejected_by_safety_gate: rejected,
+      unsure,
+      generic_labels: genericLabels,
+      conflicts,
+      failed_writes: failedWrites,
+      outcomes,
+      disclaimer: "AI confidence alone never authorizes a write. Safe HIGH-confidence groups may link to an existing canonical identity or bootstrap one equivalent canonical identity. No alias is taught automatically.",
+    });
+  } catch (error) {
+    return safeError(error);
+  }
+}
