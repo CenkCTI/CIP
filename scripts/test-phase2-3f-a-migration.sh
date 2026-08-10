@@ -59,7 +59,14 @@ declare
   tick jsonb;
   immediate_tick jsonb;
   claim jsonb;
+  work_claim jsonb;
+  checkpoint jsonb;
+  completion jsonb;
+  auth_result jsonb;
   agent_id uuid;
+  run_id uuid;
+  lease_token text;
+  cursor_before jsonb;
 begin
   configured := public.configure_technical_collector(owner_a,true,60,false,'Desktop collector');
   raw_token := configured->>'token';
@@ -81,6 +88,39 @@ begin
   from public.claim_due_technical_collections_for_owner(owner_a,1) as value;
   if claim is null then raise exception 'owner-scoped due claim missing'; end if;
   if (claim->>'owner_id')::uuid <> owner_a then raise exception 'owner-scoped claim leaked another owner'; end if;
+  run_id := (claim->>'run_id')::uuid;
+  lease_token := claim->>'lease_token';
+  cursor_before := (claim->'cursor')::jsonb;
+
+  auth_result := public.authenticate_technical_collector(raw_token);
+  if (auth_result->>'owner_id')::uuid <> owner_a then raise exception 'collector authentication resolved wrong owner'; end if;
+
+  work_claim := public.get_incremental_technical_collection_work_claim(owner_a,run_id,lease_token);
+  if (work_claim->>'source_key') <> 'CISA_KEV' then raise exception 'incremental work claim wrong source'; end if;
+  if (work_claim->'work_state') <> '{}'::jsonb then raise exception 'new incremental work state not empty'; end if;
+
+  checkpoint := public.checkpoint_incremental_technical_collection_run(
+    run_id,
+    lease_token,
+    '{"version":1,"snapshotHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","totalSignals":1,"nextOffset":1}'::jsonb,
+    '{"recordsSeen":1,"recordsMapped":1,"signalsCreated":1,"observationsCreated":1,"revisionsCreated":1,"duplicateObservations":0,"supportingObservations":0,"staleObservations":0,"conflictingObservations":0,"skippedRecords":0,"failedRecords":0}'::jsonb,
+    '[]'::jsonb
+  );
+  if coalesce((checkpoint->>'work_units_completed')::integer,0) <> 1 then raise exception 'incremental checkpoint not counted'; end if;
+  if (select cursor from public.technical_source_connections where owner_id=owner_a and source_key='CISA_KEV') <> cursor_before then
+    raise exception 'intermediate checkpoint advanced authoritative source cursor';
+  end if;
+  if (select work_units_completed from public.technical_collection_runs where id=run_id) <> 1 then raise exception 'safe work progress not stored'; end if;
+
+  completion := public.complete_incremental_technical_collection_run(
+    run_id,
+    lease_token,
+    '{"version":1,"catalogRelease":"acceptance:test"}'::jsonb
+  );
+  if completion->>'status' <> 'SUCCEEDED' then raise exception 'incremental completion failed'; end if;
+  if (select cursor->>'catalogRelease' from public.technical_source_connections where owner_id=owner_a and source_key='CISA_KEV') <> 'acceptance:test' then
+    raise exception 'final incremental completion did not advance cursor';
+  end if;
 
   perform public.finish_technical_collector_tick(agent_id,1,1,0,null);
   if (select last_tick_status from public.technical_collector_agents where id=agent_id) <> 'SUCCEEDED' then raise exception 'collector completion not recorded'; end if;
@@ -89,12 +129,18 @@ begin
   if coalesce((immediate_tick->>'due')::boolean,true) is not false then raise exception 'collector tick rate gate failed'; end if;
   if coalesce((immediate_tick->>'wait_seconds')::integer,0) <= 0 then raise exception 'collector wait not returned'; end if;
 
+  begin
+    perform public.get_incremental_technical_collection_work_claim(owner_b,run_id,lease_token);
+    raise exception 'cross-owner incremental claim unexpectedly succeeded';
+  exception when sqlstate '55000' then null;
+  end;
+
   rotated := public.configure_technical_collector(owner_a,true,60,true,'Desktop collector');
   new_token := rotated->>'token';
   if new_token is null or new_token = raw_token then raise exception 'collector rotation failed'; end if;
 
   begin
-    perform public.begin_technical_collector_tick(raw_token);
+    perform public.authenticate_technical_collector(raw_token);
     raise exception 'old collector token remained valid';
   exception when sqlstate '28000' then null;
   end;
@@ -119,8 +165,25 @@ do $$begin
   exception when insufficient_privilege then null;
   end;
   begin
+    perform collector_work_state from public.technical_collection_runs;
+    raise exception 'authenticated collector work state read unexpectedly succeeded';
+  exception when insufficient_privilege then null;
+  end;
+  begin
     perform public.claim_due_technical_collections_for_owner('10000000-0000-4000-8000-000000000001',1);
     raise exception 'authenticated collector claim unexpectedly succeeded';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.authenticate_technical_collector(repeat('a',64));
+    raise exception 'authenticated collector auth RPC unexpectedly succeeded';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.checkpoint_incremental_technical_collection_run(
+      '10000000-0000-4000-8000-000000000001',repeat('a',64),'{}'::jsonb,'{}'::jsonb,'[]'::jsonb
+    );
+    raise exception 'authenticated incremental checkpoint unexpectedly succeeded';
   exception when insufficient_privilege then null;
   end;
 end$$;
