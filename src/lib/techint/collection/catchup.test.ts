@@ -26,10 +26,17 @@ describe("Phase 2.3F-A catch-up capabilities", () => {
     expect(script).toContain("CITEM_VERCEL_BYPASS_SECRET");
     expect(script).toContain("x-vercel-protection-bypass");
     expect(script).toContain("payload?.error === \"COLLECTOR_UNAUTHORIZED\"");
+    expect(script).toContain("source ${sourceKey}: FAILED (${errorCode})");
     expect(script).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
     expect(script).not.toContain("MALWAREBAZAAR_AUTH_KEY");
     expect(script).not.toContain("NVD_API_KEY");
     expect(script).not.toContain("THREATFOX_AUTH_KEY");
+  });
+
+  it("marks source-level collection failures as collector tick failures", () => {
+    const runtime = readFileSync("src/lib/techint/collection/collector-runtime.ts", "utf8");
+    expect(runtime).toContain('errorCode ??= "SOURCE_RUN_FAILED"');
+    expect(runtime).toContain("runs.push({ sourceKey: claim.source_key, success: false, errorCode: result.error })");
   });
 
   it("keeps collector claims owner-scoped and browser-inaccessible in migration 045", () => {
