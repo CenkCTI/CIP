@@ -23,6 +23,9 @@ describe("Phase 2.3F-A catch-up capabilities", () => {
     const script = readFileSync("scripts/techint-collector.mjs", "utf8");
     expect(script).toContain("CITEM_COLLECTOR_TOKEN");
     expect(script).toContain("/api/techint/collector/tick");
+    expect(script).toContain("CITEM_VERCEL_BYPASS_SECRET");
+    expect(script).toContain("x-vercel-protection-bypass");
+    expect(script).toContain("payload?.error === \"COLLECTOR_UNAUTHORIZED\"");
     expect(script).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
     expect(script).not.toContain("MALWAREBAZAAR_AUTH_KEY");
     expect(script).not.toContain("NVD_API_KEY");
