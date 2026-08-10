@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 
 import { requireUser } from "@/lib/auth";
-import { evaluateTechnicalProfileWorkflow } from "@/lib/techint/intelligence/trusted-client";
 import { idSchema, itemInputSchema, profileDefinitionSchema } from "@/lib/techint/schema";
 import {
   addExplicitItemWorkflow,
@@ -26,15 +25,6 @@ function refresh(projectId?: string | null) {
   revalidatePath("/techint/profiles");
   revalidatePath("/techint/investint");
   if (projectId) revalidatePath(`/projects/${projectId}/intel-profile`);
-}
-
-async function reEvaluateProfile(actorId: string, profileId: string | null | undefined) {
-  if (!profileId) return;
-  try {
-    await evaluateTechnicalProfileWorkflow({ p_actor: actorId, p_profile_id: profileId });
-  } catch {
-    // The profile mutation is authoritative. Matching is a derived projection and can be retried later.
-  }
 }
 
 function definitionParameters(actorId: string, form: FormData) {
@@ -65,9 +55,8 @@ export async function createStandaloneIntelProfile(
     const { user } = await requireUser();
     const parsed = definitionParameters(user.id, form);
     if ("error" in parsed) return { error: parsed.error };
-    const { data: profileId, error } = await createStandaloneProfileWorkflow(parsed.data);
+    const { error } = await createStandaloneProfileWorkflow(parsed.data);
     if (error) return safe();
-    await reEvaluateProfile(user.id, profileId);
     refresh();
     return { success: "Standalone TechINT profile created." };
   } catch {
@@ -84,7 +73,7 @@ export async function createInvestigationIntelProfile(
     if (!idSchema.safeParse(projectId).success) return safe();
     const parsed = definitionParameters(user.id, form);
     if ("error" in parsed) return { error: parsed.error };
-    const { data, error } = await createInvestigationProfileWorkflow({
+    const { error } = await createInvestigationProfileWorkflow({
       ...parsed.data,
       p_project_id: projectId,
     });
@@ -95,7 +84,6 @@ export async function createInvestigationIntelProfile(
           : undefined,
       );
     }
-    await reEvaluateProfile(user.id, data?.profile_id);
     refresh(projectId);
     return { success: "Investigation Intel Profile created." };
   } catch {
@@ -117,7 +105,6 @@ export async function updateIntelProfile(
       p_profile_id: profileId,
     });
     if (error) return safe();
-    await reEvaluateProfile(user.id, profileId);
     refresh(projectId);
     return { success: "Intel Profile saved." };
   } catch {
@@ -140,7 +127,6 @@ export async function setIntelProfileStatus(
       p_restore: restore,
     });
     if (error) return safe();
-    await reEvaluateProfile(user.id, profileId);
     refresh(projectId);
     return {
       success: restore
@@ -183,7 +169,6 @@ export async function addIntelProfileItem(
             : undefined,
       );
     }
-    await reEvaluateProfile(user.id, profileId);
     refresh();
     return { success: "Profile item added." };
   } catch {
@@ -208,7 +193,6 @@ export async function setIntelProfileItemState(
       p_target_state: state,
     });
     if (error) return safe("That item state transition is not allowed.");
-    await reEvaluateProfile(user.id, profileId);
     refresh(projectId);
     return { success: "Item state updated." };
   } catch {
@@ -231,7 +215,6 @@ export async function refreshInvestigationIntelProfile(
       p_project_id: projectId,
     });
     if (error || !data) return safe();
-    await reEvaluateProfile(user.id, profileId);
     refresh(projectId);
     return {
       success: `Refresh complete: ${data.added} added, ${data.already_present} already present, ${data.preserved_exclusions} exclusions preserved, ${data.preserved_removals} removals preserved, ${data.skipped} skipped.`,
