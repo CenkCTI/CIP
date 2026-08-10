@@ -7,6 +7,12 @@ import {
 } from "./trusted-collection-client";
 import { runClaimedTechnicalCollection } from "./orchestrator";
 
+type TechnicalCollectorRunSummary = {
+  sourceKey: string;
+  success: boolean;
+  errorCode: string | null;
+};
+
 export type TechnicalCollectorTickResult =
   | { authorized: false }
   | {
@@ -17,6 +23,7 @@ export type TechnicalCollectorTickResult =
       claimed: number;
       succeeded: number;
       failed: number;
+      runs: TechnicalCollectorRunSummary[];
     };
 
 const MAX_COLLECTIONS_PER_TICK = 1;
@@ -34,6 +41,7 @@ export async function runTechnicalCollectorTick(token: string): Promise<Technica
       claimed: 0,
       succeeded: 0,
       failed: 0,
+      runs: [],
     };
   }
 
@@ -41,14 +49,21 @@ export async function runTechnicalCollectorTick(token: string): Promise<Technica
   let succeeded = 0;
   let failed = 0;
   let errorCode: string | null = null;
+  const runs: TechnicalCollectorRunSummary[] = [];
 
   try {
     const claims = await claimDueTechnicalCollectionsForOwner(tick.owner_id, MAX_COLLECTIONS_PER_TICK);
     claimed = claims.length;
     for (const claim of claims) {
       const result = await runClaimedTechnicalCollection(claim);
-      if (result.success) succeeded += 1;
-      else failed += 1;
+      if (result.success) {
+        succeeded += 1;
+        runs.push({ sourceKey: claim.source_key, success: true, errorCode: null });
+      } else {
+        failed += 1;
+        errorCode ??= "SOURCE_RUN_FAILED";
+        runs.push({ sourceKey: claim.source_key, success: false, errorCode: result.error });
+      }
     }
   } catch {
     errorCode = "COLLECTOR_TICK_FAILED";
@@ -70,5 +85,6 @@ export async function runTechnicalCollectorTick(token: string): Promise<Technica
     claimed,
     succeeded,
     failed,
+    runs,
   };
 }
