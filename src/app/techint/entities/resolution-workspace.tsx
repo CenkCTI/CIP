@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ByokConnectionPanel } from "@/components/ai/byok-connection-panel";
 import { ENTITY_AI_MAX_RUN_GROUPS } from "@/lib/techint/entities/ai-batch";
@@ -98,11 +98,13 @@ export function EntityResolutionWorkspace({
   entities,
   totalGroupCount,
   totalOccurrenceCount,
+  children,
 }: {
   groups: Group[];
   entities: Entity[];
   totalGroupCount: number;
   totalOccurrenceCount: number;
+  children?: ReactNode;
 }) {
   const router = useRouter();
   const [byok, setByok] = useState<ByokStatus>({ connected: false });
@@ -121,10 +123,11 @@ export function EntityResolutionWorkspace({
   const reviewGroups = groups.filter((group) => !resolvedGroupKeys.has(group.key));
   const locallyResolvedVisibleGroups = groups.filter((group) => resolvedGroupKeys.has(group.key));
   const locallyResolvedOccurrenceCount = locallyResolvedVisibleGroups.reduce((total, group) => total + group.occurrenceCount, 0);
+  const visibleGroupCount = reviewGroups.length;
   const visibleOccurrenceCount = reviewGroups.reduce((total, group) => total + group.occurrenceCount, 0);
   const remainingGroupCount = Math.max(0, totalGroupCount - locallyResolvedVisibleGroups.length);
   const remainingOccurrenceCount = Math.max(0, totalOccurrenceCount - locallyResolvedOccurrenceCount);
-  const selectedBatchCount = Math.min(batchLimit, reviewGroups.length);
+  const selectedBatchCount = Math.min(batchLimit, remainingGroupCount);
 
   function rememberResolvedKeys(keys: string[]) {
     if (!keys.length) return;
@@ -281,7 +284,7 @@ export function EntityResolutionWorkspace({
           </div>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-stone-800 pt-3 text-xs text-stone-500">
-          <span className="rounded border border-stone-800 px-2 py-1">Showing {reviewGroups.length} of {remainingGroupCount} groups</span>
+          <span className="rounded border border-stone-800 px-2 py-1">Showing {visibleGroupCount} of {remainingGroupCount} groups</span>
           <span className="rounded border border-stone-800 px-2 py-1">{visibleOccurrenceCount} visible occurrences</span>
           <span>Use the triangle on a case only when you need evidence or manual controls.</span>
         </div>
@@ -314,9 +317,9 @@ export function EntityResolutionWorkspace({
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
                 <label className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600" htmlFor="entity-ai-batch-limit">AI case count</label>
-                <p className="mt-1 text-xs text-stone-500">Choose 0–{ENTITY_AI_MAX_RUN_GROUPS}. CİTEM processes the first N currently unresolved cases in queue order.</p>
+                <p className="mt-1 text-xs text-stone-500">Choose 0–{ENTITY_AI_MAX_RUN_GROUPS}. The selected batch applies to the full unresolved queue, while this page keeps only a bounded visible case list.</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 <input
                   id="entity-ai-batch-limit"
                   className="field w-24"
@@ -331,9 +334,10 @@ export function EntityResolutionWorkspace({
                   }}
                 />
                 <span className="rounded border border-stone-800 px-2.5 py-2 text-xs text-stone-400">{selectedBatchCount} selected now</span>
+                <span className="rounded border border-stone-800 px-2.5 py-2 text-xs text-stone-500">{visibleGroupCount} visible on page</span>
               </div>
             </div>
-            <p className="mt-2 text-[11px] text-stone-600">Provider calls remain bounded internally to at most 8 cases per model request even when you select more.</p>
+            <p className="mt-2 text-[11px] text-stone-600">Provider calls remain bounded internally to at most 8 cases per model request even when you select more. The API request uses the selected full-queue batch, not the visible-page count.</p>
           </div>
 
           <div className="grid gap-3 lg:grid-cols-2">
@@ -356,6 +360,8 @@ export function EntityResolutionWorkspace({
           </div>
         </div>
       </details>
+
+      {children ? <div>{children}</div> : null}
 
       {autoReport ? (
         <section className="card panel-corners border-l-2 border-l-cyan-900">
