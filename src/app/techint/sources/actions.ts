@@ -22,6 +22,9 @@ function refresh() {
   revalidatePath("/techint");
   revalidatePath("/techint/sources");
   revalidatePath("/techint/entities");
+  revalidatePath("/techint/profiles", "layout");
+  revalidatePath("/techint/investint", "layout");
+  revalidatePath("/projects", "layout");
 }
 
 function settingsInput(sourceKey: string, intervalMinutes: FormDataEntryValue | null, form: FormData) {
