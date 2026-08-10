@@ -15,6 +15,7 @@ const suggestRoute = readFileSync("src/app/api/techint/entities/suggest/route.ts
 const migration038 = readFileSync("supabase/migrations/202608090038_phase2_3d_ai_verified_auto_resolution.sql", "utf8");
 const migration039 = readFileSync("supabase/migrations/202608090039_phase2_3d_ai_verified_canonical_bootstrap.sql", "utf8");
 const workspace = readFileSync("src/app/techint/entities/resolution-workspace.tsx", "utf8");
+const resolutionPage = readFileSync("src/app/techint/entities/page.tsx", "utf8");
 
 function suggestion(overrides: Partial<EntityAiSuggestion> = {}): EntityAiSuggestion {
   return {
@@ -192,7 +193,27 @@ describe("Phase 2.3D AI batch control", () => {
     expect(suggestRoute).toContain("chunkEntityAiItems(aiGroups)");
     expect(workspace).toContain("min={0}");
     expect(workspace).toContain("max={ENTITY_AI_MAX_RUN_GROUPS}");
-    expect(workspace).toContain("first N currently unresolved cases in queue order");
+    expect(workspace).toContain("full unresolved queue");
+  });
+
+  it("uses the full remaining queue for the requested AI batch while keeping visible cases bounded independently", () => {
+    expect(workspace).toContain("const visibleGroupCount = reviewGroups.length;");
+    expect(workspace).toContain("const selectedBatchCount = Math.min(batchLimit, remainingGroupCount);");
+    expect(workspace).not.toContain("Math.min(batchLimit, reviewGroups.length)");
+    expect(workspace).toContain("{visibleGroupCount} visible on page");
+    expect(workspace).toContain("body: JSON.stringify({ limit: selectedBatchCount })");
+    expect(workspace).toContain("Analyze next ${selectedBatchCount}");
+    expect(workspace).toContain("Analyze & auto-resolve ${selectedBatchCount}");
+  });
+
+  it("keeps alias recommendations with queue controls and puts registry plus audit log in one desktop row", () => {
+    expect(workspace).toContain("{children ? <div>{children}</div> : null}");
+    expect(resolutionPage).toContain("<EntityResolutionWorkspace");
+    expect(resolutionPage).toContain("Learning without autonomous taxonomy writes");
+    expect(resolutionPage.indexOf("Learning without autonomous taxonomy writes")).toBeLessThan(resolutionPage.indexOf("Deferred decisions"));
+    expect(resolutionPage).toContain('className="grid gap-4 xl:grid-cols-2 xl:items-start"');
+    expect(resolutionPage).toContain("Canonical registry");
+    expect(resolutionPage).toContain("Decision log");
   });
 
   it("keeps AI results for unaffected cases when one manual decision is committed", () => {
