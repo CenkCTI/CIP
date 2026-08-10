@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
+import { technicalHistoryCutoffIso } from "@/lib/techint/history/buckets";
 import {
   getTechnicalHistoryMaintenanceState,
   listTechnicalActivityBuckets,
@@ -13,7 +14,7 @@ function time(value: string | null | undefined) {
 
 export default async function Page() {
   const { supabase } = await requireUser();
-  const from = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const from = technicalHistoryCutoffIso(24);
   const [ingestion, effective, coverage, backfill, maintenance] = await Promise.all([
     listTechnicalActivityBuckets(supabase, { granularity: "HOUR", timeAxis: "INGESTION_TIME", from, limit: 300 }),
     listTechnicalActivityBuckets(supabase, { granularity: "HOUR", timeAxis: "SOURCE_EFFECTIVE_TIME", from, limit: 300 }),
