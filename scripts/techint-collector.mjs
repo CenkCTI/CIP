@@ -34,6 +34,7 @@ if (baseUrl.protocol !== "https:" && !(localHost && baseUrl.protocol === "http:"
 
 const tickEndpoint = new URL("/api/techint/collector/tick", baseUrl);
 const workEndpoint = new URL("/api/techint/collector/work", baseUrl);
+const maintenanceEndpoint = new URL("/api/techint/collector/maintenance", baseUrl);
 let stopped = false;
 let failureBackoffSeconds = 5;
 
@@ -50,14 +51,14 @@ function fatal(message) {
 
 async function requestJson(endpoint, body) {
   const controller = new AbortController();
-  // A work unit must remain bounded below the platform's long-invocation ceiling.
+  // Collection work and history maintenance must remain bounded below the platform's long-invocation ceiling.
   const timeout = setTimeout(() => controller.abort(), 4 * 60 * 1000);
   try {
     const headers = {
       authorization: `Bearer ${token}`,
       accept: "application/json",
       "content-type": "application/json",
-      "user-agent": "CITEM-TechINT-Collector/2.3F-A-v2",
+      "user-agent": "CITEM-TechINT-Collector/2.3F-B",
     };
     if (vercelBypassSecret) headers["x-vercel-protection-bypass"] = vercelBypassSecret;
 
@@ -159,14 +160,32 @@ async function tick() {
   };
 }
 
+async function runHistoryMaintenance() {
+  try {
+    const payload = await requestJson(maintenanceEndpoint, {});
+    if (payload.due !== true) return;
+    const activity = Number(payload.activityBucketsProcessed ?? 0);
+    const coverage = Number(payload.coverageBucketsProcessed ?? 0);
+    const backfill = Number(payload.backfillBucketsProcessed ?? 0);
+    const compacted = payload.compacted === true ? " compacted=true" : "";
+    console.log(`[${new Date().toISOString()}] history maintenance: activityBuckets=${activity} coverageBuckets=${coverage} backfillBuckets=${backfill}${compacted}`);
+  } catch (error) {
+    if (error?.fatal) throw error;
+    const message = error?.name === "AbortError" ? "history maintenance timed out" : "history maintenance unavailable";
+    console.error(`[${new Date().toISOString()}] ${message}; collection loop will continue.`);
+  }
+}
+
 console.log(`CİTEM TechINT collector started for ${baseUrl.origin}.`);
 console.log("Desktop runtime owns the long-running loop; server requests are bounded work units.");
+console.log("Historical activity and coverage rollups are maintained through bounded, rate-gated server work.");
 console.log("Provider credentials and Supabase service-role credentials remain server-side.");
 if (vercelBypassSecret) console.log("Vercel Preview protection bypass is configured for this local collector process.");
 
 while (!stopped) {
   try {
     const result = await tick();
+    if (!result.stop) await runHistoryMaintenance();
     if (once || result.stop) break;
     await sleep(result.waitSeconds);
   } catch (error) {
