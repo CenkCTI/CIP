@@ -93,7 +93,7 @@ export default async function Page() {
       </header>
 
       {connectionError ? <div className="card text-red-300">Unable to load Technical Sources. Verify the latest TechINT source migration.</div> : null}
-      {collectorError ? <div className="card text-amber-300">Continuous collector state is unavailable until the Phase 2.3F-A migration is applied.</div> : <CollectorControl agent={collector} />}
+      {collectorError ? <div className="card text-amber-300">Continuous collector state is unavailable until the Phase 2.3F-A migrations are applied.</div> : <CollectorControl agent={collector} />}
 
       <div className="grid gap-4 xl:grid-cols-3">
         {registry.map((adapter) => {
@@ -129,7 +129,8 @@ export default async function Page() {
                 <div><dt>Last success</dt><dd className="text-stone-200">{time(connection?.last_succeeded_at as string | null)}</dd></div>
                 <div><dt>Last failure</dt><dd className="text-stone-200">{time(connection?.last_failed_at as string | null)}</dd></div>
                 <div><dt>Failures</dt><dd className="text-stone-200">{connection ? String(connection.consecutive_failures) : "0"}</dd></div>
-                <div><dt>Latest run</dt><dd className="text-stone-200">{latestRun ? `${String(latestRun.status)} · ${String(latestRun.records_mapped)} mapped` : "—"}</dd></div>
+                <div><dt>Latest run</dt><dd className="text-stone-200">{latestRun ? `${String(latestRun.status)} · ${String(latestRun.records_mapped)} mapped · ${String(latestRun.work_units_completed ?? 0)} units` : "—"}</dd></div>
+                <div><dt>Last bounded work</dt><dd className="text-stone-200">{time(latestRun?.last_work_at as string | null)}</dd></div>
                 <div><dt>Latest error</dt><dd className="truncate text-stone-200">{latestRun?.controlled_error_code ? String(latestRun.controlled_error_code) : "—"}</dd></div>
               </dl>
               <p className="rounded border border-stone-800 px-3 py-2 text-xs text-stone-500">{catchUp.detail}</p>
@@ -209,8 +210,8 @@ export default async function Page() {
         {!runs.length ? <p className="mt-3 text-sm text-stone-500">No collection runs yet.</p> : (
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="text-xs text-stone-500"><tr><th className="pb-2">Source</th><th>Status</th><th>Trigger</th><th>Started</th><th>Mapped</th><th>Created</th><th>Error</th></tr></thead>
-              <tbody>{runs.map((run) => <tr className="border-t border-stone-800" key={String(run.id)}><td className="py-3">{String(run.source_key)}</td><td>{String(run.status)}</td><td>{String(run.trigger)}</td><td>{time(run.started_at as string)}</td><td>{String(run.records_mapped)}</td><td>{String(run.observations_created)}</td><td className="max-w-xs truncate text-stone-500">{run.controlled_error_code ? `${String(run.controlled_error_code)}: ${String(run.controlled_error_message ?? "")}` : "—"}</td></tr>)}</tbody>
+              <thead className="text-xs text-stone-500"><tr><th className="pb-2">Source</th><th>Status</th><th>Trigger</th><th>Started</th><th>Units</th><th>Last work</th><th>Mapped</th><th>Created</th><th>Error</th></tr></thead>
+              <tbody>{runs.map((run) => <tr className="border-t border-stone-800" key={String(run.id)}><td className="py-3">{String(run.source_key)}</td><td>{String(run.status)}</td><td>{String(run.trigger)}</td><td>{time(run.started_at as string)}</td><td>{String(run.work_units_completed ?? 0)}</td><td>{time(run.last_work_at as string | null)}</td><td>{String(run.records_mapped)}</td><td>{String(run.observations_created)}</td><td className="max-w-xs truncate text-stone-500">{run.controlled_error_code ? `${String(run.controlled_error_code)}: ${String(run.controlled_error_message ?? "")}` : "—"}</td></tr>)}</tbody>
             </table>
           </div>
         )}
