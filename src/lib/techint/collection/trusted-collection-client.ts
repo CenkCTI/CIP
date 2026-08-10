@@ -11,6 +11,8 @@ import {
   sourceStatusSchema,
 } from "./schema";
 
+const boundedObject = z.record(z.string(), z.unknown());
+
 const collectorConfigurationSchema = z.object({
   agent_id: z.uuid(),
   enabled: z.boolean(),
@@ -25,6 +27,34 @@ const collectorTickSchema = z.object({
   due: z.boolean(),
   poll_interval_seconds: z.number().int().min(30).max(3600),
   wait_seconds: z.number().int().nonnegative(),
+});
+
+const collectorAuthSchema = z.object({
+  agent_id: z.uuid(),
+  owner_id: z.uuid(),
+  enabled: z.boolean(),
+  poll_interval_seconds: z.number().int().min(30).max(3600),
+});
+
+const incrementalWorkClaimSchema = z.object({
+  run_id: z.uuid(),
+  owner_id: z.uuid(),
+  connection_id: z.uuid(),
+  source_key: sourceKeySchema,
+  settings: boundedObject,
+  cursor: boundedObject,
+  lease_token: z.string().regex(/^[a-f0-9]{64}$/),
+  lease_expires_at: z.string(),
+  work_state: boundedObject,
+  work_units_completed: z.number().int().nonnegative(),
+});
+
+const incrementalCheckpointSchema = z.object({
+  run_id: z.uuid(),
+  status: z.literal("RUNNING"),
+  work_units_completed: z.number().int().positive(),
+  issues_created: z.number().int().nonnegative(),
+  lease_expires_at: z.string(),
 });
 
 function trustedClient() {
@@ -139,6 +169,17 @@ export async function beginTechnicalCollectorTick(token: string) {
   return collectorTickSchema.parse(data);
 }
 
+export async function authenticateTechnicalCollector(token: string) {
+  const parsed = z.string().regex(/^[a-f0-9]{64}$/).safeParse(token);
+  if (!parsed.success) return null;
+  const { data, error } = await trustedClient().rpc("authenticate_technical_collector", { p_token: parsed.data });
+  if (error) {
+    if (error.code === "28000" || String(error.message).includes("COLLECTOR_UNAUTHORIZED")) return null;
+    throw new Error("TECHINT_COLLECTOR_RPC_FAILED");
+  }
+  return collectorAuthSchema.parse(data);
+}
+
 export async function finishTechnicalCollectorTick(input: {
   agentId: string;
   claimed: number;
@@ -154,6 +195,71 @@ export async function finishTechnicalCollectorTick(input: {
     p_error_code: input.errorCode ? z.string().min(1).max(100).parse(input.errorCode) : null,
   });
   return z.boolean().parse(data);
+}
+
+export async function getIncrementalTechnicalCollectionWorkClaim(input: {
+  ownerId: string;
+  runId: string;
+  leaseToken: string;
+}) {
+  const client = trustedClient();
+  const { data, error } = await client.rpc("get_incremental_technical_collection_work_claim", {
+    p_owner: z.uuid().parse(input.ownerId),
+    p_run_id: z.uuid().parse(input.runId),
+    p_lease_token: z.string().regex(/^[a-f0-9]{64}$/).parse(input.leaseToken),
+  });
+  if (error) {
+    const message = String(error.message);
+    if (message.includes("LEASE_EXPIRED")) throw new Error("LEASE_EXPIRED");
+    if (message.includes("LEASE_MISMATCH")) throw new Error("LEASE_MISMATCH");
+    throw new Error("TECHINT_COLLECTION_RPC_FAILED");
+  }
+  return incrementalWorkClaimSchema.parse(data);
+}
+
+export async function checkpointIncrementalTechnicalCollection(input: {
+  runId: string;
+  leaseToken: string;
+  workState: Record<string, unknown>;
+  counters: z.infer<typeof collectionCountersSchema>;
+  issues: z.infer<typeof collectionIssueSchema>[];
+}) {
+  const data = await rpc("checkpoint_incremental_technical_collection_run", {
+    p_run_id: z.uuid().parse(input.runId),
+    p_lease_token: z.string().regex(/^[a-f0-9]{64}$/).parse(input.leaseToken),
+    p_work_state: boundedObject.parse(input.workState),
+    p_counters: collectionCountersSchema.parse(input.counters),
+    p_issues: z.array(collectionIssueSchema).max(100).parse(input.issues),
+  });
+  return incrementalCheckpointSchema.parse(data);
+}
+
+export async function completeIncrementalTechnicalCollection(input: {
+  runId: string;
+  leaseToken: string;
+  proposedCursor: Record<string, unknown>;
+}) {
+  const data = await rpc("complete_incremental_technical_collection_run", {
+    p_run_id: z.uuid().parse(input.runId),
+    p_lease_token: z.string().regex(/^[a-f0-9]{64}$/).parse(input.leaseToken),
+    p_proposed_cursor: boundedObject.parse(input.proposedCursor),
+  });
+  return z.object({ run_id: z.uuid(), status: z.literal("SUCCEEDED"), work_units_completed: z.number().int().nonnegative() }).parse(data);
+}
+
+export async function failIncrementalTechnicalCollection(input: {
+  runId: string;
+  leaseToken: string;
+  errorCode: string;
+  errorMessage: string;
+}) {
+  const data = await rpc("fail_incremental_technical_collection_run", {
+    p_run_id: z.uuid().parse(input.runId),
+    p_lease_token: z.string().regex(/^[a-f0-9]{64}$/).parse(input.leaseToken),
+    p_error_code: z.string().min(1).max(100).parse(input.errorCode.slice(0, 100)),
+    p_error_message: z.string().min(1).max(500).parse(input.errorMessage.slice(0, 500)),
+  });
+  return z.object({ run_id: z.uuid(), status: z.literal("FAILED") }).parse(data);
 }
 
 export async function completeTechnicalCollection(input: {
