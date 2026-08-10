@@ -23,7 +23,7 @@ describe("Phase 2.3E Global Priority", () => {
       "EPSS_VERY_HIGH",
       "EPSS_PERCENTILE_99",
       "FRESH_LT_24H",
-      "MULTI_SOURCE",
+      "MULTI_SOURCE_3_PLUS",
     ]));
   });
 
@@ -36,8 +36,8 @@ describe("Phase 2.3E Global Priority", () => {
       sourceSystems: ["nvd"],
     });
     expect(result.priority).not.toBe("CRITICAL");
-    expect(result.internalScore).toBe(12);
-    expect(result.reasonCodes).toEqual(["SEVERITY_CRITICAL"]);
+    expect(result.internalScore).toBe(15);
+    expect(result.reasonCodes).toEqual(["TECHNICAL_SEVERITY_CRITICAL"]);
   });
 
   it("is deterministic and preserves the engine version", () => {
@@ -50,6 +50,7 @@ describe("Phase 2.3E Global Priority", () => {
       epss: 0.7,
       epssPercentile: 0.97,
       revisionNumber: 2,
+      revisionUpdatedAt: "2026-08-10T09:00:00Z",
     };
     expect(evaluateGlobalPriority(input)).toEqual(evaluateGlobalPriority(input));
     expect(evaluateGlobalPriority(input).engineVersion).toBe(TECHINT_PRIORITY_ENGINE_VERSION);
