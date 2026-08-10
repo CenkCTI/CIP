@@ -176,16 +176,16 @@ describe("Phase 2.3D AI auto-resolution safety gates", () => {
 });
 
 describe("Phase 2.3D AI batch control", () => {
-  it("allows an analyst-selected run of up to 50 while keeping provider prompts at eight or fewer groups", () => {
-    expect(ENTITY_AI_MAX_RUN_GROUPS).toBe(50);
+  it("allows an analyst-selected run of up to 250 while keeping provider prompts at eight or fewer groups", () => {
+    expect(ENTITY_AI_MAX_RUN_GROUPS).toBe(250);
     expect(ENTITY_AI_PROVIDER_BATCH_SIZE).toBe(8);
-    const batches = chunkEntityAiItems(Array.from({ length: 50 }, (_, index) => index));
-    expect(batches).toHaveLength(7);
+    const batches = chunkEntityAiItems(Array.from({ length: 250 }, (_, index) => index));
+    expect(batches).toHaveLength(32);
     expect(batches.every((batch) => batch.length <= 8)).toBe(true);
-    expect(batches.flat()).toEqual(Array.from({ length: 50 }, (_, index) => index));
+    expect(batches.flat()).toEqual(Array.from({ length: 250 }, (_, index) => index));
   });
 
-  it("accepts 0-50 in both AI routes and preserves queue order through bounded sub-batches", () => {
+  it("accepts 0-250 in both AI routes and preserves queue order through bounded sub-batches", () => {
     expect(route).toContain(".min(0).max(ENTITY_AI_MAX_RUN_GROUPS)");
     expect(suggestRoute).toContain(".min(0).max(ENTITY_AI_MAX_RUN_GROUPS)");
     expect(route).toContain("chunkEntityAiItems(aiGroups)");
