@@ -103,7 +103,7 @@ begin
   tick := public.begin_technical_collector_tick(new_token);
   if coalesce((tick->>'enabled')::boolean,true) is not false then raise exception 'paused collector still enabled'; end if;
 
-  if exists(select 1 from public.technical_collection_runs where owner_id=owner_b and trigger='SCHEDULED') then
+  if exists(select id from public.technical_collection_runs where owner_id=owner_b and trigger='SCHEDULED') then
     raise exception 'owner B source was claimed by owner A collector';
   end if;
 end$$;
@@ -112,7 +112,7 @@ set role authenticated;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
 
 do $$begin
-  if (select count(*) from public.technical_collector_agents) <> 1 then raise exception 'owner A cannot read own collector'; end if;
+  if (select count(id) from public.technical_collector_agents) <> 1 then raise exception 'owner A cannot read own collector'; end if;
   begin
     perform token_hash from public.technical_collector_agents;
     raise exception 'authenticated token hash read unexpectedly succeeded';
@@ -127,7 +127,7 @@ end$$;
 
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000002',false);
 do $$begin
-  if exists(select 1 from public.technical_collector_agents) then raise exception 'collector RLS leaked owner A'; end if;
+  if exists(select id from public.technical_collector_agents) then raise exception 'collector RLS leaked owner A'; end if;
 end$$;
 reset role;
 SQL
