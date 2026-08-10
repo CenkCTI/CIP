@@ -5,6 +5,7 @@ import { indicatorCanonicalKey } from "@/lib/techint/signals/canonical-key";
 import type { JsonValue } from "@/lib/techint/signals/schema";
 import { fetchThreatFoxIocs } from "@/lib/ioc-connectors/providers/threatfox/client";
 import { decimalProviderId } from "@/lib/ioc-connectors/providers/threatfox/cursor";
+import { ThreatFoxError } from "@/lib/ioc-connectors/providers/threatfox/errors";
 import { mapThreatFoxItem, ThreatFoxMappingError } from "@/lib/ioc-connectors/providers/threatfox/mapping";
 import type { NormalizedCandidate } from "@/lib/ioc-connectors/types";
 import { CollectionError } from "../errors";
@@ -31,6 +32,34 @@ function safeProviderUrl(value: string | null, id: string) {
     }
   }
   return `https://threatfox.abuse.ch/ioc/${encodeURIComponent(id)}/`;
+}
+
+function threatFoxCollectionError(error: unknown): CollectionError {
+  if (!(error instanceof ThreatFoxError)) {
+    return new CollectionError("COLLECTION_FAILED", "ThreatFox collection failed safely.");
+  }
+  if (["THREATFOX_CREDENTIAL_REQUIRED", "THREATFOX_CREDENTIAL_INVALID", "THREATFOX_AUTH_FAILED"].includes(error.code)) {
+    return new CollectionError("SOURCE_NOT_AVAILABLE", "ThreatFox rejected or cannot access the configured Auth-Key. Update it in Technical Sources.", null, error.code);
+  }
+  if (error.code === "THREATFOX_RATE_LIMITED") {
+    return new CollectionError("RATE_LIMITED", "ThreatFox rate-limited this collection attempt.", null, error.code);
+  }
+  if (error.code === "THREATFOX_TIMEOUT") {
+    return new CollectionError("HTTP_TIMEOUT", "ThreatFox did not respond within the bounded request window.", null, error.code);
+  }
+  if (error.code === "THREATFOX_RESPONSE_TOO_LARGE") {
+    return new CollectionError("HTTP_BODY_TOO_LARGE", "ThreatFox returned a response larger than the configured safety bound.", null, error.code);
+  }
+  if (["THREATFOX_INVALID_JSON", "THREATFOX_INVALID_RESPONSE", "THREATFOX_QUERY_FAILED"].includes(error.code)) {
+    return new CollectionError("INVALID_SOURCE_RESPONSE", "ThreatFox returned an invalid IOC response.", null, error.code);
+  }
+  if (error.code === "THREATFOX_ITEM_LIMIT") {
+    return new CollectionError("ITEM_LIMIT_EXCEEDED", "ThreatFox exceeded the bounded item limit.", null, error.code);
+  }
+  if (error.code === "THREATFOX_HTTP_ERROR") {
+    return new CollectionError("HTTP_STATUS", "ThreatFox returned an unsuccessful HTTP response.", null, error.code);
+  }
+  return new CollectionError("COLLECTION_FAILED", "ThreatFox collection failed safely.", null, error.code);
 }
 
 export function threatFoxHighWaterForWindow(rawCursor: unknown, lookbackDays: number) {
@@ -117,24 +146,29 @@ export const threatFoxTechnicalAdapter: TechnicalSourceAdapter = {
   metadata: {
     key: "THREATFOX",
     displayName: "ThreatFox → TechINT",
-    description: "Reuses the existing encrypted ThreatFox credential and hardened provider client to emit source-backed IOC Technical Signals.",
+    description: "Uses an encrypted server-side ThreatFox Auth-Key configured directly in Technical Sources to emit source-backed IOC Technical Signals.",
     sourceFamily: "IOC_PROVIDER",
     defaultIntervalMinutes: 120,
     minimumIntervalMinutes: 60,
     maximumIntervalMinutes: 1440,
     manual: true,
     scheduled: true,
-    credentialRequirement: "EXISTING_IOC_CREDENTIAL",
+    credentialRequirement: "TECHINT_MANAGED_CREDENTIAL",
     fixedHosts: ["threatfox-api.abuse.ch"],
     settingsFields: [{ name: "lookbackDays", label: "Lookback days", type: "integer", minimum: 1, maximum: 7, defaultValue: 1 }],
   },
   async collect(context): Promise<AdapterCollectionResult> {
     if (!context.credential) {
-      throw new CollectionError("SOURCE_NOT_AVAILABLE", "Connect ThreatFox in the IOC Inbox before using the TechINT bridge.");
+      throw new CollectionError("SOURCE_NOT_AVAILABLE", "Configure the ThreatFox Auth-Key in Technical Sources before synchronizing.");
     }
     const cursor = threatFoxTechIntCursorSchema.parse(context.cursor);
     const settings = z.object({ lookbackDays: z.number().int().min(1).max(7).optional().default(1) }).strict().parse(context.settings);
-    const raw = await fetchThreatFoxIocs(context.credential, settings.lookbackDays);
+    let raw: unknown;
+    try {
+      raw = await fetchThreatFoxIocs(context.credential, settings.lookbackDays);
+    } catch (error) {
+      throw threatFoxCollectionError(error);
+    }
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
       throw new CollectionError("INVALID_SOURCE_RESPONSE", "ThreatFox returned an invalid response.");
     }
