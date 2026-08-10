@@ -49,7 +49,7 @@ export function CollectorControl({ agent }: { agent: TechnicalCollectorAgentView
           <p className="citem-eyebrow">Phase 2.3F-A / Continuous collection</p>
           <h2 className="citem-section-title mt-1">Desktop collector</h2>
           <p className="mt-2 max-w-3xl text-sm text-stone-400">
-            The desktop companion wakes the server-side TechINT scheduler even when the browser is closed. Source API keys and the Supabase service role stay on the server. Durable source cursors recover missed windows where the provider supports catch-up.
+            The desktop companion owns the long-running collection loop even when the browser is closed. It claims one due source and drains it through bounded server work units, so one large source does not depend on a single long serverless request. Provider API keys and the Supabase service role remain server-side.
           </p>
         </div>
         <span className="rounded border border-stone-700 px-2 py-1 text-xs font-semibold text-stone-300">{status}</span>
@@ -71,13 +71,13 @@ export function CollectorControl({ agent }: { agent: TechnicalCollectorAgentView
           <input type="hidden" name="operation" value="ENABLE" />
           <label className="block text-xs text-stone-400" htmlFor="collector-poll">Scheduler poll seconds</label>
           <input className="field" id="collector-poll" name="poll_interval_seconds" type="number" min="30" max="3600" defaultValue={poll} />
-          <p className="text-xs text-stone-500">This is how often the companion checks for due sources. It does not force every upstream source to sync at that frequency; each source keeps its own safe interval.</p>
+          <p className="text-xs text-stone-500">This controls how often the desktop companion checks for due work. It does not force every upstream provider to synchronize at that frequency; each Technical Source keeps its own safe interval.</p>
           <button className="citem-button" type="submit" disabled={pending}>{pending ? "Saving…" : agent?.enabled ? "Save / keep continuous" : "Enable continuous collection"}</button>
         </form>
 
         <div className="space-y-2 rounded border border-stone-800 p-3">
           <p className="text-xs text-stone-400">Collector credential</p>
-          <p className="text-xs text-stone-500">The bearer capability is shown only when first created or rotated. Rotation immediately invalidates the old local token.</p>
+          <p className="text-xs text-stone-500">The owner-bound bearer capability is shown only when first created or rotated. Rotation immediately invalidates the previous local collector token.</p>
           <form action={action} className="inline-block">
             <input type="hidden" name="operation" value="ROTATE" />
             <input type="hidden" name="poll_interval_seconds" value={poll} />
@@ -108,7 +108,7 @@ export function CollectorControl({ agent }: { agent: TechnicalCollectorAgentView
       ) : null}
 
       <p className="text-xs text-stone-500">
-        Catch-up is source-dependent: cursor/window sources can recover bounded offline gaps; snapshot-only sources recover current state but cannot reconstruct every intermediate state that the upstream provider no longer exposes.
+        Catch-up is source-dependent: cursor/window sources can recover bounded offline gaps; snapshot-only sources recover current state but cannot reconstruct every intermediate state that the upstream provider no longer exposes. Intermediate bounded work never advances the authoritative source cursor.
       </p>
     </section>
   );
