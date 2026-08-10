@@ -10,15 +10,16 @@ export type GlobalPriorityReason =
   | "EPSS_HIGH"
   | "EPSS_PERCENTILE_99"
   | "EPSS_PERCENTILE_95"
-  | "SEVERITY_CRITICAL"
-  | "SEVERITY_HIGH"
-  | "SEVERITY_MEDIUM"
+  | "TECHNICAL_SEVERITY_CRITICAL"
+  | "TECHNICAL_SEVERITY_HIGH"
+  | "TECHNICAL_SEVERITY_MEDIUM"
   | "FRESH_LT_24H"
-  | "FRESH_LT_72H"
+  | "FRESH_LT_7D"
+  | "MULTI_SOURCE_3_PLUS"
   | "MULTI_SOURCE"
   | "VENDOR_ADVISORY"
   | "MATERIAL_REVISION"
-  | "SOURCE_CONFIDENCE_HIGH"
+  | "HIGH_SOURCE_CONFIDENCE"
   | "NON_ACTIVE_LIFECYCLE";
 
 export type GlobalPriorityInput = {
@@ -33,6 +34,7 @@ export type GlobalPriorityInput = {
   epssPercentile?: number | null;
   vendorAdvisory?: boolean;
   revisionNumber?: number;
+  revisionUpdatedAt?: string | Date | null;
   sourceConfidence?: number | null;
 };
 
@@ -90,21 +92,27 @@ export function evaluateGlobalPriority(input: GlobalPriorityInput): GlobalPriori
   if (percentile !== null && percentile >= 0.99) add(10, "EPSS_PERCENTILE_99");
   else if (percentile !== null && percentile >= 0.95) add(5, "EPSS_PERCENTILE_95");
 
-  if (input.severity === "CRITICAL") add(12, "SEVERITY_CRITICAL");
-  else if (input.severity === "HIGH") add(8, "SEVERITY_HIGH");
-  else if (input.severity === "MEDIUM") add(4, "SEVERITY_MEDIUM");
+  if (input.severity === "CRITICAL") add(15, "TECHNICAL_SEVERITY_CRITICAL");
+  else if (input.severity === "HIGH") add(10, "TECHNICAL_SEVERITY_HIGH");
+  else if (input.severity === "MEDIUM") add(5, "TECHNICAL_SEVERITY_MEDIUM");
 
   const now = instant(input.evaluatedAt ?? new Date());
   const firstSeen = instant(input.firstSeenAt);
   const ageHours = Math.max(0, (now.getTime() - firstSeen.getTime()) / 3_600_000);
   if (ageHours < 24) add(10, "FRESH_LT_24H");
-  else if (ageHours < 72) add(5, "FRESH_LT_72H");
+  else if (ageHours < 168) add(5, "FRESH_LT_7D");
 
   const sourceCount = new Set((input.sourceSystems ?? []).map((source) => source.trim().toLowerCase()).filter(Boolean)).size;
-  if (sourceCount >= 2) add(8, "MULTI_SOURCE");
+  if (sourceCount >= 3) add(10, "MULTI_SOURCE_3_PLUS");
+  else if (sourceCount >= 2) add(7, "MULTI_SOURCE");
+
   if (input.vendorAdvisory) add(5, "VENDOR_ADVISORY");
-  if ((input.revisionNumber ?? 1) > 1) add(3, "MATERIAL_REVISION");
-  if (typeof input.sourceConfidence === "number" && input.sourceConfidence >= 80) add(3, "SOURCE_CONFIDENCE_HIGH");
+
+  const revisionUpdatedAt = input.revisionUpdatedAt ? instant(input.revisionUpdatedAt) : now;
+  const revisionAgeHours = Math.max(0, (now.getTime() - revisionUpdatedAt.getTime()) / 3_600_000);
+  if ((input.revisionNumber ?? 1) > 1 && revisionAgeHours < 24) add(5, "MATERIAL_REVISION");
+
+  if (typeof input.sourceConfidence === "number" && input.sourceConfidence >= 80) add(5, "HIGH_SOURCE_CONFIDENCE");
 
   const internalScore = Math.max(0, Math.min(100, score));
   return {
@@ -122,15 +130,16 @@ export const globalPriorityReasonLabels: Record<GlobalPriorityReason, string> = 
   EPSS_HIGH: "EPSS is high",
   EPSS_PERCENTILE_99: "EPSS percentile is at least 99th",
   EPSS_PERCENTILE_95: "EPSS percentile is at least 95th",
-  SEVERITY_CRITICAL: "Technical severity is critical",
-  SEVERITY_HIGH: "Technical severity is high",
-  SEVERITY_MEDIUM: "Technical severity is medium",
+  TECHNICAL_SEVERITY_CRITICAL: "Technical severity is critical",
+  TECHNICAL_SEVERITY_HIGH: "Technical severity is high",
+  TECHNICAL_SEVERITY_MEDIUM: "Technical severity is medium",
   FRESH_LT_24H: "First observed within 24 hours",
-  FRESH_LT_72H: "First observed within 72 hours",
+  FRESH_LT_7D: "First observed within 7 days",
+  MULTI_SOURCE_3_PLUS: "Supported by at least three source systems",
   MULTI_SOURCE: "Supported by multiple source systems",
   VENDOR_ADVISORY: "Vendor advisory context is available",
-  MATERIAL_REVISION: "The technical signal materially changed",
-  SOURCE_CONFIDENCE_HIGH: "Source-backed confidence is high",
+  MATERIAL_REVISION: "The technical signal materially changed recently",
+  HIGH_SOURCE_CONFIDENCE: "Source-backed confidence is high",
   NON_ACTIVE_LIFECYCLE: "Signal is not active",
 };
 
