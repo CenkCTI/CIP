@@ -143,6 +143,29 @@ describe("TechINT collection orchestrator", () => {
     expect(mocks.failTechnicalCollection).not.toHaveBeenCalled();
   });
 
+  it("evaluates a duplicate replay so a bounded source re-sync can backfill Phase 2.3E projections", async () => {
+    mocks.recordTechnicalSignal.mockResolvedValue({
+      ...recordedResult(),
+      revision_id: null,
+      signal_created: false,
+      observation_created: false,
+      revision_created: false,
+      duplicate_observation: true,
+      entity_assertions_created: 0,
+    });
+
+    const result = await runClaimedTechnicalCollection(claim, vi.fn() as unknown as typeof fetch);
+    expect(result.success).toBe(true);
+    expect(mocks.evaluateTechnicalSignalIntelligenceBatchWorkflow).toHaveBeenCalledWith({
+      p_actor: claim.owner_id,
+      p_signal_ids: [recordedResult().signal_id],
+    });
+    expect(result).toMatchObject({
+      counters: expect.objectContaining({ duplicateObservations: 1 }),
+      intelligenceEvaluation: { requested: 1, evaluated: 1 },
+    });
+  });
+
   it("keeps a successful collection authoritative when derived intelligence evaluation fails", async () => {
     mocks.evaluateTechnicalSignalIntelligenceBatchWorkflow.mockRejectedValue(new Error("projection unavailable"));
     const result = await runClaimedTechnicalCollection(claim, vi.fn() as unknown as typeof fetch);
