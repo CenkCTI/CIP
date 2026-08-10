@@ -101,6 +101,9 @@ export function CollectorControl({ agent }: { agent: TechnicalCollectorAgentView
           <p className="text-xs font-semibold uppercase tracking-wide text-amber-300">One-time collector token</p>
           <p className="text-xs text-stone-400">Replace &lt;PREVIEW_URL&gt; with the current CİTEM Preview URL. Run this from a local checkout of CİTEM. Do not share the token or commit it to a file.</p>
           <pre className="overflow-x-auto whitespace-pre-wrap break-all text-xs text-stone-200">{command}</pre>
+          <p className="text-xs text-stone-500">
+            Protected Vercel Previews require an automation bypass secret for non-browser processes. When Preview Deployment Protection is enabled, add <code>CITEM_VERCEL_BYPASS_SECRET=&quot;&lt;secret&gt;&quot;</code> to the local command; the bypass secret is never sent to upstream intelligence providers.
+          </p>
         </div>
       ) : null}
 
