@@ -52,7 +52,7 @@ do $$
 declare
   owner_a uuid:='10000000-0000-4000-8000-000000000001';
   owner_b uuid:='10000000-0000-4000-8000-000000000002';
-  profile_id uuid;
+  watched_profile_id uuid;
   vendor_item uuid;
   product_item uuid;
   match_before uuid;
@@ -60,9 +60,9 @@ declare
   product_entity uuid;
   result jsonb;
 begin
-  profile_id:=public.create_standalone_intel_profile(owner_a,'Splunk Watch','','Watch Splunk technical developments','CRITICAL',90,null,1);
-  vendor_item:=public.add_explicit_intel_profile_item(owner_a,profile_id,'VENDOR','Splunk',null,null);
-  product_item:=public.add_explicit_intel_profile_item(owner_a,profile_id,'PRODUCT','Splunk Enterprise',null,null);
+  watched_profile_id:=public.create_standalone_intel_profile(owner_a,'Splunk Watch','','Watch Splunk technical developments','CRITICAL',90,null,1);
+  vendor_item:=public.add_explicit_intel_profile_item(owner_a,watched_profile_id,'VENDOR','Splunk',null,null);
+  product_item:=public.add_explicit_intel_profile_item(owner_a,watched_profile_id,'PRODUCT','Splunk Enterprise',null,null);
 
   insert into public.technical_signals(
     id,owner_id,signal_type,canonical_key,title,summary,lifecycle,severity,confidence,facts,
@@ -105,45 +105,49 @@ begin
   ]);
   if result->>'engine_version'<>'2.3E-v1' then raise exception 'engine version missing'; end if;
 
-  if (select priority from public.technical_signal_global_priorities where owner_id=owner_a and signal_id='20000000-0000-4000-8000-000000000001')<>'CRITICAL' then
+  if (select gp.priority from public.technical_signal_global_priorities gp where gp.owner_id=owner_a and gp.signal_id='20000000-0000-4000-8000-000000000001')<>'CRITICAL' then
     raise exception 'KEV + exploitation + EPSS + freshness + multi-source should be CRITICAL';
   end if;
-  if (select priority from public.technical_signal_global_priorities where owner_id=owner_a and signal_id='20000000-0000-4000-8000-000000000003')='CRITICAL' then
+  if (select gp.priority from public.technical_signal_global_priorities gp where gp.owner_id=owner_a and gp.signal_id='20000000-0000-4000-8000-000000000003')='CRITICAL' then
     raise exception 'source severity CRITICAL alone became Global Priority CRITICAL';
   end if;
 
-  select id into match_before from public.technical_signal_profile_matches where owner_id=owner_a and signal_id='20000000-0000-4000-8000-000000000001' and profile_id=profile_id;
+  select m.id into match_before
+  from public.technical_signal_profile_matches m
+  where m.owner_id=owner_a and m.signal_id='20000000-0000-4000-8000-000000000001' and m.profile_id=watched_profile_id;
   if match_before is null then raise exception 'unresolved Splunk signal was hidden from profile'; end if;
-  if (select match_quality from public.technical_signal_profile_matches where id=match_before)<>'PROVISIONAL' then raise exception 'unresolved Splunk match should be PROVISIONAL'; end if;
-  if (select relevance from public.technical_signal_profile_matches where id=match_before)<>'HIGH' then raise exception 'Splunk profile match should be HIGH relevance'; end if;
-  if not exists(select 1 from public.technical_signal_profile_matches where id=match_before and vendor_item=any(matched_profile_item_ids)) then raise exception 'direct vendor reason item not preserved'; end if;
+  if (select m.match_quality from public.technical_signal_profile_matches m where m.id=match_before)<>'PROVISIONAL' then raise exception 'unresolved Splunk match should be PROVISIONAL'; end if;
+  if (select m.relevance from public.technical_signal_profile_matches m where m.id=match_before)<>'HIGH' then raise exception 'Splunk profile match should be HIGH relevance'; end if;
+  if not exists(select 1 from public.technical_signal_profile_matches m where m.id=match_before and vendor_item=any(m.matched_profile_item_ids)) then raise exception 'direct vendor reason item not preserved'; end if;
 
   product_entity:=(public.create_technical_entity_from_assertion(owner_a,'40000000-0000-4000-8000-000000000002','Splunk Enterprise',false)->>'entity_id')::uuid;
   if product_entity is null then raise exception 'product canonical resolution failed'; end if;
 
-  select id into match_after from public.technical_signal_profile_matches where owner_id=owner_a and signal_id='20000000-0000-4000-8000-000000000001' and profile_id=profile_id;
+  select m.id into match_after
+  from public.technical_signal_profile_matches m
+  where m.owner_id=owner_a and m.signal_id='20000000-0000-4000-8000-000000000001' and m.profile_id=watched_profile_id;
   if match_after<>match_before then raise exception 'resolution upgrade created duplicate profile match'; end if;
-  if (select match_quality from public.technical_signal_profile_matches where id=match_after)<>'CONFIRMED' then raise exception 'canonical product resolution did not upgrade match to CONFIRMED'; end if;
-  if not exists(select 1 from public.technical_signal_profile_matches where id=match_after and product_item=any(matched_profile_item_ids)) then raise exception 'resolved product item not preserved'; end if;
+  if (select m.match_quality from public.technical_signal_profile_matches m where m.id=match_after)<>'CONFIRMED' then raise exception 'canonical product resolution did not upgrade match to CONFIRMED'; end if;
+  if not exists(select 1 from public.technical_signal_profile_matches m where m.id=match_after and product_item=any(m.matched_profile_item_ids)) then raise exception 'resolved product item not preserved'; end if;
 
   perform public.evaluate_technical_signal_intelligence_batch(owner_a,array['20000000-0000-4000-8000-000000000001'::uuid]);
-  if (select count(*) from public.technical_signal_profile_matches where owner_id=owner_a and signal_id='20000000-0000-4000-8000-000000000001' and profile_id=profile_id)<>1 then raise exception 're-evaluation not idempotent'; end if;
+  if (select count(*) from public.technical_signal_profile_matches m where m.owner_id=owner_a and m.signal_id='20000000-0000-4000-8000-000000000001' and m.profile_id=watched_profile_id)<>1 then raise exception 're-evaluation not idempotent'; end if;
 
   perform public.set_technical_signal_profile_match_lifecycle(owner_a,match_after,'REVIEWED',null);
   perform public.set_technical_signal_profile_match_lifecycle(owner_a,match_after,'ACCEPTED',null);
   perform public.set_technical_signal_profile_match_lifecycle(owner_a,match_after,'SNOOZED',now()+interval '1 day');
   perform public.unsnooze_technical_signal_profile_match(owner_a,match_after);
   perform public.set_technical_signal_profile_match_lifecycle(owner_a,match_after,'NOT_RELEVANT',null);
-  if (select lifecycle from public.technical_signal_profile_matches where id=match_after)<>'NOT_RELEVANT' then raise exception 'match lifecycle transition failed'; end if;
-  if (select count(*) from public.technical_signal_profile_match_events where match_id=match_after)<5 then raise exception 'match lifecycle audit history incomplete'; end if;
+  if (select m.lifecycle from public.technical_signal_profile_matches m where m.id=match_after)<>'NOT_RELEVANT' then raise exception 'match lifecycle transition failed'; end if;
+  if (select count(*) from public.technical_signal_profile_match_events e where e.match_id=match_after)<5 then raise exception 'match lifecycle audit history incomplete'; end if;
 
-  if (select display_value from public.technical_signal_entity_assertions where id='40000000-0000-4000-8000-000000000002')<>'Enterprise' then raise exception 'source assertion was rewritten'; end if;
-  if (select display_value from public.technical_signal_entity_assertions where id='40000000-0000-4000-8000-000000000001')<>'Splunk' then raise exception 'source vendor assertion was rewritten'; end if;
+  if (select a.display_value from public.technical_signal_entity_assertions a where a.id='40000000-0000-4000-8000-000000000002')<>'Enterprise' then raise exception 'source assertion was rewritten'; end if;
+  if (select a.display_value from public.technical_signal_entity_assertions a where a.id='40000000-0000-4000-8000-000000000001')<>'Splunk' then raise exception 'source vendor assertion was rewritten'; end if;
 
   begin
-    perform public.evaluate_technical_profile(owner_b,profile_id);
+    perform public.evaluate_technical_profile(owner_b,watched_profile_id);
     raise exception 'cross-owner profile evaluation unexpectedly succeeded';
-  exception when no_data_found then null; when sqlstate 'P0002' then null;
+  exception when sqlstate 'P0002' then null;
   end;
 end$$;
 
