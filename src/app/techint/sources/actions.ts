@@ -1,7 +1,13 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
+import { authKeySchema } from "@/lib/ioc-connectors/credentials/schema";
+import { encryptCredential } from "@/lib/ioc-connectors/credentials/crypto";
+import { getProvider as getIocProvider } from "@/lib/ioc-connectors/registry";
+import { ThreatFoxError } from "@/lib/ioc-connectors/providers/threatfox/errors";
+import { configureThreatFoxConnection, disconnectThreatFoxCredential } from "@/lib/ioc-connectors/trusted-workflow-client";
 import {
   connectionIdSchema,
   sourceKeySchema,
@@ -17,6 +23,8 @@ import {
   updateTechnicalSourceSettingsWorkflow,
 } from "@/lib/techint/collection/trusted-collection-client";
 import { runClaimedTechnicalCollection } from "@/lib/techint/collection/orchestrator";
+
+export type TechnicalSourceActionState = { success?: string; error?: string };
 
 function refresh() {
   revalidatePath("/techint");
@@ -35,6 +43,81 @@ function settingsInput(sourceKey: string, intervalMinutes: FormDataEntryValue | 
     minimumEpss: form.get("minimumEpss") || undefined,
     lookbackDays: form.get("lookbackDays") || undefined,
   };
+}
+
+function safeThreatFoxCredentialError(error: unknown): string {
+  if (!(error instanceof ThreatFoxError)) return "ThreatFox credential configuration failed safely.";
+  if (["THREATFOX_AUTH_FAILED", "THREATFOX_CREDENTIAL_INVALID", "THREATFOX_CREDENTIAL_REQUIRED"].includes(error.code)) {
+    return "ThreatFox rejected the Auth-Key. Verify the key and try again.";
+  }
+  if (error.code === "THREATFOX_RATE_LIMITED") return "ThreatFox rate-limited the credential test. Try again later.";
+  if (error.code === "THREATFOX_TIMEOUT") return "ThreatFox did not respond before the bounded credential-test timeout.";
+  return "ThreatFox could not validate the Auth-Key safely.";
+}
+
+export async function configureThreatFoxCredential(
+  _state: TechnicalSourceActionState,
+  form: FormData,
+): Promise<TechnicalSourceActionState> {
+  try {
+    const { user, supabase } = await requireUser();
+    const credential = authKeySchema.safeParse(form.get("auth_key"));
+    if (!credential.success) return { error: "Enter a valid ThreatFox Auth-Key." };
+
+    const adapter = getIocProvider("THREATFOX");
+    if (!adapter?.testConnection) return { error: "ThreatFox credential testing is unavailable on this server." };
+    await adapter.testConnection(credential.data);
+
+    const { data: existing } = await supabase
+      .from("ioc_provider_connections")
+      .select("id")
+      .eq("owner_id", user.id)
+      .eq("provider_key", "THREATFOX")
+      .is("archived_at", null)
+      .maybeSingle();
+    const connectionId = existing?.id ?? randomUUID();
+    const encrypted = encryptCredential(credential.data, {
+      ownerId: user.id,
+      connectionId,
+      providerKey: "THREATFOX",
+      keyVersion: 1,
+    });
+    const { error } = await configureThreatFoxConnection({
+      p_owner_id: user.id,
+      p_connection_id: connectionId,
+      p_ciphertext_b64: encrypted.ciphertext_b64,
+      p_iv_b64: encrypted.iv_b64,
+      p_auth_tag_b64: encrypted.auth_tag_b64,
+      p_key_version: encrypted.key_version,
+      // The legacy IOC connection is retained only as the encrypted secret store.
+      // Scheduling and lookback are owned by the TechINT source connection.
+      p_lookback_days: 1,
+      p_scheduler_enabled: false,
+      p_sync_interval_minutes: 120,
+    });
+    if (error) return { error: "ThreatFox credential could not be stored safely." };
+    refresh();
+    return { success: existing?.id ? "ThreatFox Auth-Key tested and rotated." : "ThreatFox Auth-Key tested and configured." };
+  } catch (error) {
+    return { error: safeThreatFoxCredentialError(error) };
+  }
+}
+
+export async function disconnectThreatFoxSourceCredential(
+  _state: TechnicalSourceActionState,
+  form: FormData,
+): Promise<TechnicalSourceActionState> {
+  try {
+    const { user } = await requireUser();
+    const parsed = connectionIdSchema.safeParse(form.get("credential_connection_id"));
+    if (!parsed.success) return { error: "ThreatFox credential connection is unavailable." };
+    const { error } = await disconnectThreatFoxCredential(user.id, parsed.data);
+    if (error) return { error: "ThreatFox credential could not be disconnected safely." };
+    refresh();
+    return { success: "ThreatFox Auth-Key disconnected. Historical Technical Signals and provenance were preserved." };
+  } catch {
+    return { error: "ThreatFox credential could not be disconnected safely." };
+  }
 }
 
 export async function enableTechnicalSource(form: FormData): Promise<void> {
