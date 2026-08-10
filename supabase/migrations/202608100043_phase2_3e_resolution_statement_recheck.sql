@@ -16,7 +16,7 @@ drop trigger if exists technical_profile_recheck_resolution on public.technical_
 
 create or replace function public.technical_profile_recheck_resolution_statement()
 returns trigger language plpgsql security definer set search_path='' as $$
-declare r record;eval_result jsonb;resolution_state jsonb;match_state jsonb;
+declare r record;
 begin
   for r in
     select distinct a.owner_id,a.signal_id
@@ -25,35 +25,8 @@ begin
       on a.owner_id=n.owner_id and a.id=n.assertion_id
   loop
     begin
-      eval_result:=public.evaluate_technical_signal_profile_matches(r.owner_id,r.signal_id);
-      select coalesce(jsonb_agg(jsonb_build_object(
-        'kind',a.entity_kind::text,
-        'observed',a.display_value,
-        'status',coalesce(ar.status::text,'NONE'),
-        'canonical',e.canonical_normalized
-      ) order by a.entity_kind::text,a.id),'[]'::jsonb)
-      into resolution_state
-      from public.technical_signal_entity_assertions a
-      left join public.technical_entity_assertion_resolutions ar
-        on ar.owner_id=a.owner_id and ar.assertion_id=a.id
-      left join public.technical_entities e
-        on e.owner_id=ar.owner_id and e.id=ar.entity_id
-      where a.owner_id=r.owner_id and a.signal_id=r.signal_id;
-
-      select coalesce(jsonb_agg(jsonb_build_object(
-        'profile',m.profile_id,
-        'quality',m.match_quality::text,
-        'relevance',m.relevance::text,
-        'reasons',m.reason_codes,
-        'pending',m.pending_identity_count
-      ) order by m.profile_id),'[]'::jsonb)
-      into match_state
-      from public.technical_signal_profile_matches m
-      where m.owner_id=r.owner_id and m.signal_id=r.signal_id;
-
-      raise notice 'TECHINT_PROFILE_RECHECK_DIAGNOSTIC signal=% eval=% resolutions=% matches=%',r.signal_id,eval_result,resolution_state,match_state;
+      perform public.evaluate_technical_signal_profile_matches(r.owner_id,r.signal_id);
     exception when others then
-      raise notice 'TECHINT_PROFILE_RECHECK_FAILED signal=% sqlstate=% error=%',r.signal_id,sqlstate,sqlerrm;
       -- Resolution is authoritative. Derived Profile Match projection remains
       -- best-effort and can be recomputed by collection/profile evaluation later.
       null;
