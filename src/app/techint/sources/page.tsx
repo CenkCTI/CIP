@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
+import { ActionForm, SubmitButton } from "@/components/form-status";
 import { listTechnicalSources } from "@/lib/techint/collection/registry";
 import { listRecentTechnicalCollectionRuns, listRecentTechnicalSourceAuditEvents, listTechnicalSourceConnections } from "@/lib/techint/collection/queries";
 import type { SourceSettingField } from "@/lib/techint/collection/types";
 import {
+  configureThreatFoxCredential,
+  disconnectThreatFoxSourceCredential,
   enableTechnicalSource,
   setTechnicalSourceStatus,
   syncTechnicalSourceNow,
@@ -33,11 +36,23 @@ function SettingsFields({ fields, settings }: { fields: readonly SourceSettingFi
 }
 
 export default async function Page() {
-  const { supabase } = await requireUser();
-  const [{ data: connectionData, error: connectionError }, { data: runData }, { data: auditData }] = await Promise.all([
+  const { user, supabase } = await requireUser();
+  const [
+    { data: connectionData, error: connectionError },
+    { data: runData },
+    { data: auditData },
+    { data: threatFoxCredentialConnection },
+  ] = await Promise.all([
     listTechnicalSourceConnections(supabase),
     listRecentTechnicalCollectionRuns(supabase),
     listRecentTechnicalSourceAuditEvents(supabase),
+    supabase
+      .from("ioc_provider_connections")
+      .select("id,enabled,health_status,last_checked_at,last_success_at,last_error_message,archived_at")
+      .eq("owner_id", user.id)
+      .eq("provider_key", "THREATFOX")
+      .is("archived_at", null)
+      .maybeSingle(),
   ]);
   const connections = (connectionData ?? []) as Array<Record<string, unknown>>;
   const runs = (runData ?? []) as Array<Record<string, unknown>>;
@@ -49,6 +64,10 @@ export default async function Page() {
     const key = String(run.source_key);
     if (!latestRunByKey.has(key)) latestRunByKey.set(key, run);
   }
+  const threatFoxCredentialConfigured = Boolean(
+    threatFoxCredentialConnection?.id
+      && (threatFoxCredentialConnection.enabled || threatFoxCredentialConnection.health_status !== "UNKNOWN"),
+  );
 
   return (
     <section className="space-y-5">
@@ -57,7 +76,7 @@ export default async function Page() {
           <p className="citem-eyebrow">CİTEM / TechINT / Collection Operations</p>
           <h1 className="citem-title">Technical sources</h1>
           <p className="citem-subtitle">
-            Fixed, server-owned sources record bounded source-backed Technical Signals. They do not represent CİTEM&apos;s final analyst assessment.
+            Configure credentials, collection cadence, and fixed upstream sources here. Source claims become bounded Technical Signals; they are not CİTEM&apos;s final analyst assessment.
           </p>
         </div>
         <Link className="citem-button-ghost" href="/techint">Back to Global View</Link>
@@ -73,6 +92,10 @@ export default async function Page() {
           const settings = (connection?.settings ?? {}) as Record<string, unknown>;
           const latestRun = latestRunByKey.get(adapter.metadata.key);
           const fields = adapter.metadata.settingsFields ?? [];
+          const isThreatFox = adapter.metadata.key === "THREATFOX";
+          const credentialLabel = isThreatFox
+            ? (threatFoxCredentialConfigured ? "Configured" : "Required")
+            : adapter.metadata.credentialRequirement;
           return (
             <article className="card space-y-4" key={adapter.metadata.key}>
               <div>
@@ -85,7 +108,7 @@ export default async function Page() {
               <dl className="grid grid-cols-2 gap-2 text-xs text-stone-400">
                 <div><dt>Status</dt><dd className="text-stone-200">{status}</dd></div>
                 <div><dt>Family</dt><dd className="text-stone-200">{adapter.metadata.sourceFamily}</dd></div>
-                <div><dt>Credential</dt><dd className="text-stone-200">{adapter.metadata.credentialRequirement}</dd></div>
+                <div><dt>Credential</dt><dd className="text-stone-200">{credentialLabel}</dd></div>
                 <div><dt>Interval</dt><dd className="text-stone-200">{connection ? `${String(connection.interval_minutes)} min` : `${adapter.metadata.defaultIntervalMinutes} min`}</dd></div>
                 <div><dt>Scheduling</dt><dd className="text-stone-200">{adapter.metadata.scheduled ? (status === "ENABLED" ? "Enabled" : "Inactive") : "Manual only"}</dd></div>
                 <div><dt>Next run</dt><dd className="text-stone-200">{time(connection?.next_run_at as string | null)}</dd></div>
@@ -96,6 +119,44 @@ export default async function Page() {
                 <div><dt>Latest run</dt><dd className="text-stone-200">{latestRun ? `${String(latestRun.status)} · ${String(latestRun.records_mapped)} mapped` : "—"}</dd></div>
                 <div><dt>Latest error</dt><dd className="truncate text-stone-200">{latestRun?.controlled_error_code ? String(latestRun.controlled_error_code) : "—"}</dd></div>
               </dl>
+
+              {isThreatFox ? (
+                <section className="space-y-3 rounded border border-stone-800 p-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">ThreatFox Auth-Key</p>
+                    <p className="mt-1 text-xs text-stone-500">
+                      The key is tested before storage, encrypted server-side, and never exposed back to the browser. TechINT owns collection scheduling; the legacy IOC scheduler remains disabled.
+                    </p>
+                  </div>
+                  <div className="grid gap-1 text-xs text-stone-400">
+                    <span>Status: <strong className="text-stone-200">{threatFoxCredentialConfigured ? "Configured" : "Not configured"}</strong></span>
+                    <span>Last credential/provider check: <strong className="text-stone-200">{time(threatFoxCredentialConnection?.last_checked_at)}</strong></span>
+                    {threatFoxCredentialConnection?.last_error_message ? <span className="text-red-300">{threatFoxCredentialConnection.last_error_message}</span> : null}
+                  </div>
+                  <ActionForm action={configureThreatFoxCredential}>
+                    <label className="block text-xs text-stone-400" htmlFor="threatfox-auth-key">
+                      {threatFoxCredentialConfigured ? "Rotate Auth-Key" : "Auth-Key"}
+                    </label>
+                    <input
+                      className="field"
+                      id="threatfox-auth-key"
+                      name="auth_key"
+                      type="password"
+                      autoComplete="off"
+                      maxLength={512}
+                      required
+                      placeholder={threatFoxCredentialConfigured ? "New ThreatFox Auth-Key" : "ThreatFox Auth-Key"}
+                    />
+                    <SubmitButton>{threatFoxCredentialConfigured ? "Test and rotate" : "Test and configure"}</SubmitButton>
+                  </ActionForm>
+                  {threatFoxCredentialConfigured && threatFoxCredentialConnection?.id ? (
+                    <ActionForm action={disconnectThreatFoxSourceCredential}>
+                      <input type="hidden" name="credential_connection_id" value={threatFoxCredentialConnection.id} />
+                      <SubmitButton>Disconnect Auth-Key</SubmitButton>
+                    </ActionForm>
+                  ) : null}
+                </section>
+              ) : null}
 
               {!connection ? (
                 <form action={enableTechnicalSource} className="space-y-2">
@@ -116,7 +177,7 @@ export default async function Page() {
                     </form>
                   ) : null}
                   <div className="flex flex-wrap gap-2">
-                    {status !== "ARCHIVED" ? <form action={syncTechnicalSourceNow.bind(null, id!)}><button className="citem-button" type="submit">Sync now</button></form> : null}
+                    {status !== "ARCHIVED" ? <form action={syncTechnicalSourceNow.bind(null, id!)}><button className="citem-button" type="submit" disabled={isThreatFox && !threatFoxCredentialConfigured}>Sync now</button></form> : null}
                     {status === "ENABLED" ? <form action={setTechnicalSourceStatus.bind(null, id!, "PAUSED")}><button className="citem-button-ghost">Pause</button></form> : null}
                     {status === "PAUSED" ? <form action={setTechnicalSourceStatus.bind(null, id!, "ENABLED")}><button className="citem-button-ghost">Resume</button></form> : null}
                     {status !== "ARCHIVED" ? <form action={setTechnicalSourceStatus.bind(null, id!, "ARCHIVED")}><button className="citem-button-ghost">Archive</button></form> : null}
