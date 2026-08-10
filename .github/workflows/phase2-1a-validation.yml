@@ -79,6 +79,7 @@ jobs:
           run_check phase2-3d-migration bash scripts/test-phase2-3d-migration.sh
           run_check phase2-3d-ai-auto-resolution-migration bash scripts/test-phase2-3d-ai-auto-resolution-migration.sh
           run_check phase2-3d-ai-bootstrap-migration bash scripts/test-phase2-3d-ai-bootstrap-migration.sh
+          run_check phase2-3e-migration bash scripts/test-phase2-3e-migration.sh
 
           cat validation-logs/summary.txt
           echo "failed=${failed}" >> "$GITHUB_OUTPUT"

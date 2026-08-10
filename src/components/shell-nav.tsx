@@ -3,69 +3,37 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-type IconName = "dashboard" | "projects" | "osint" | "techint" | "findings";
+type IconName = "dashboard" | "projects" | "techint" | "findings";
 
 const navigation: Array<{ href: string; label: string; icon: IconName }> = [
   { href: "/dashboard", label: "Operational picture", icon: "dashboard" },
   { href: "/projects", label: "Investigations", icon: "projects" },
-  { href: "/osint", label: "OSINT", icon: "osint" },
   { href: "/techint", label: "TechINT", icon: "techint" },
 ];
 
 function NavIcon({ name }: { name: IconName }) {
   if (name === "dashboard") {
     return (
-      <svg
-        viewBox="0 0 24 24"
-        width="19"
-        height="19"
-        fill="none"
-        aria-hidden="true"
-      >
-        <path
-          d="M4 4h6v6H4V4Zm10 0h6v10h-6V4ZM4 14h6v6H4v-6Zm10 4h6v2h-6v-2Z"
-          stroke="currentColor"
-          strokeWidth="1.35"
-        />
+      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" aria-hidden="true">
+        <path d="M4 4h6v6H4V4Zm10 0h6v10h-6V4ZM4 14h6v6H4v-6Zm10 4h6v2h-6v-2Z" stroke="currentColor" strokeWidth="1.35" />
       </svg>
     );
   }
 
   if (name === "projects") {
     return (
-      <svg
-        viewBox="0 0 24 24"
-        width="19"
-        height="19"
-        fill="none"
-        aria-hidden="true"
-      >
-        <path
-          d="M4 7.5h6l1.6 2H20v9.25A1.25 1.25 0 0 1 18.75 20H5.25A1.25 1.25 0 0 1 4 18.75V7.5Z"
-          stroke="currentColor"
-          strokeWidth="1.35"
-        />
+      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" aria-hidden="true">
+        <path d="M4 7.5h6l1.6 2H20v9.25A1.25 1.25 0 0 1 18.75 20H5.25A1.25 1.25 0 0 1 4 18.75V7.5Z" stroke="currentColor" strokeWidth="1.35" />
         <path d="M4 10h16" stroke="currentColor" strokeWidth="1.35" />
       </svg>
     );
   }
 
-  if (name === "osint") return <svg viewBox="0 0 24 24" width="19" height="19" fill="none" aria-hidden="true"><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" stroke="currentColor" strokeWidth="1.35"/><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.35"/></svg>;
   if (name === "techint") return <svg viewBox="0 0 24 24" width="19" height="19" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.35"/><circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.35"/><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round"/></svg>;
   return (
-    <svg
-      viewBox="0 0 24 24"
-      width="19"
-      height="19"
-      fill="none"
-      aria-hidden="true"
-    >
+    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" aria-hidden="true">
       <circle cx="12" cy="12" r="7" stroke="currentColor" strokeWidth="1.35" />
-      <path
-        d="m12 8 .9 2.1L15 11l-2.1.9L12 14l-.9-2.1L9 11l2.1-.9L12 8Z"
-        stroke="currentColor"
-        strokeWidth="1.2"
-      />
+      <path d="m12 8 .9 2.1L15 11l-2.1.9L12 14l-.9-2.1L9 11l2.1-.9L12 8Z" stroke="currentColor" strokeWidth="1.2" />
     </svg>
   );
 }
@@ -82,25 +50,15 @@ export function ShellNav() {
           (item.href === "/techint" && pathname.startsWith("/techint/"));
 
         return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className="citem-nav-link"
-            data-active={active}
-            aria-current={active ? "page" : undefined}
-          >
-            <span className="citem-nav-icon">
-              <NavIcon name={item.icon} />
-            </span>
+          <Link key={item.href} href={item.href} className="citem-nav-link" data-active={active} aria-current={active ? "page" : undefined}>
+            <span className="citem-nav-icon"><NavIcon name={item.icon} /></span>
             <span>{item.label}</span>
           </Link>
         );
       })}
 
       <span className="citem-nav-link citem-nav-disabled" aria-disabled="true">
-        <span className="citem-nav-icon">
-          <NavIcon name="findings" />
-        </span>
+        <span className="citem-nav-icon"><NavIcon name="findings" /></span>
         <span>Strategic findings</span>
       </span>
     </nav>

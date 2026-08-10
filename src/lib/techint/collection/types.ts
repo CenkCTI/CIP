@@ -38,7 +38,7 @@ export type SourceMetadata = {
   maximumIntervalMinutes: number;
   manual: boolean;
   scheduled: boolean;
-  credentialRequirement: "NONE" | "OPTIONAL_SERVER_ENV" | "REQUIRED_SERVER_ENV" | "EXISTING_IOC_CREDENTIAL";
+  credentialRequirement: "NONE" | "OPTIONAL_SERVER_ENV" | "REQUIRED_SERVER_ENV" | "EXISTING_IOC_CREDENTIAL" | "TECHINT_MANAGED_CREDENTIAL";
   fixedHosts: readonly string[];
   settingsFields?: readonly SourceSettingField[];
   testSynthetic?: boolean;

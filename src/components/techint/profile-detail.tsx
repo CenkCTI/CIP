@@ -5,6 +5,7 @@ import {
   setIntelProfileStatus,
   updateIntelProfile,
 } from "@/app/techint/actions";
+import type { ProfileFeedItem } from "@/lib/techint/intelligence/queries";
 import {
   intelProfileItemKinds,
   intelProfileSemanticRoles,
@@ -14,21 +15,33 @@ import {
 } from "@/lib/techint/schema";
 
 import { IntelProfileForm } from "./profile-form";
+import { IntelProfileSignalFeed } from "./profile-feed";
 
 type AuditEvent = { id: string; action: string; created_at: string };
 type Action = (formData: FormData) => void | Promise<void>;
 const asFormAction = (action: unknown) => action as Action;
+
+type Feed = {
+  items: ProfileFeedItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
 
 export function IntelProfileDetail({
   profile,
   items,
   audit,
   investigation,
+  feed,
+  feedBaseHref,
 }: {
   profile: IntelProfile;
   items: IntelProfileItem[];
   audit: AuditEvent[];
   investigation?: boolean;
+  feed?: Feed;
+  feedBaseHref?: string;
 }) {
   const active = items.filter((item) => item.state === "ACTIVE");
   const pending = items.filter((item) => item.state === "PENDING");
@@ -42,32 +55,35 @@ export function IntelProfileDetail({
         </p>
         <h1 className="citem-title">{profile.name}</h1>
         <p className="mt-2 text-sm text-stone-400">
-          This profile defines what future TechINT matching should monitor
-          {investigation ? " for this Investigation" : ""}. Matching and technical signal
-          collection are not active in Phase 2.3A.
+          This profile continuously projects relevant Technical Signals
+          {investigation ? " for this Investigation" : ""}. Confirmed canonical matches, source-backed provisional matches, and bounded contextual matches remain visibly distinct.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
-          <form
-            action={asFormAction(setIntelProfileStatus.bind(
-              null,
-              profile.id,
-              profile.status === "PAUSED" ? "ACTIVE" : "PAUSED",
-              false,
-            ))}
-          >
-            <button className="citem-button-ghost">
-              {profile.status === "PAUSED" ? "Resume" : "Pause"}
-            </button>
-          </form>
-          <form action={asFormAction(setIntelProfileStatus.bind(null, profile.id, "ARCHIVED", false))}>
-            <button className="citem-button-ghost">Archive</button>
-          </form>
+          {profile.status !== "ARCHIVED" && (
+            <form
+              action={asFormAction(setIntelProfileStatus.bind(
+                null,
+                profile.id,
+                profile.status === "PAUSED" ? "ACTIVE" : "PAUSED",
+                false,
+              ))}
+            >
+              <button className="citem-button-ghost">
+                {profile.status === "PAUSED" ? "Resume" : "Pause"}
+              </button>
+            </form>
+          )}
+          {profile.status !== "ARCHIVED" && (
+            <form action={asFormAction(setIntelProfileStatus.bind(null, profile.id, "ARCHIVED", false))}>
+              <button className="citem-button-ghost">Archive</button>
+            </form>
+          )}
           {profile.status === "ARCHIVED" && (
             <form action={asFormAction(setIntelProfileStatus.bind(null, profile.id, "PAUSED", true))}>
               <button className="citem-button-ghost">Restore paused</button>
             </form>
           )}
-          {investigation && profile.project_id && (
+          {investigation && profile.project_id && profile.status !== "ARCHIVED" && (
             <form
               action={asFormAction(refreshInvestigationIntelProfile.bind(
                 null,
@@ -80,6 +96,17 @@ export function IntelProfileDetail({
           )}
         </div>
       </div>
+
+      {feed && feedBaseHref && (
+        <IntelProfileSignalFeed
+          items={items}
+          matches={feed.items}
+          total={feed.total}
+          page={feed.page}
+          pageSize={feed.pageSize}
+          baseHref={feedBaseHref}
+        />
+      )}
 
       <IntelProfileForm profile={profile} action={updateIntelProfile.bind(null, profile.id)} />
 

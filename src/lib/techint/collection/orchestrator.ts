@@ -1,6 +1,7 @@
 import "server-only";
 
 import { reconcileNewTechnicalEntitiesWorkflow } from "@/lib/techint/entities/trusted-client";
+import { evaluateTechnicalSignalIntelligenceBatchWorkflow } from "@/lib/techint/intelligence/trusted-client";
 import { recordTechnicalSignal } from "@/lib/techint/signals/trusted-signal-client";
 import { adapterResultSchema, collectionClaimSchema } from "./schema";
 import { controlledCollectionError, CollectionError } from "./errors";
@@ -11,6 +12,8 @@ import { emptyCollectionCounters, type CollectionCounters } from "./types";
 
 const POST_SYNC_RECONCILE_BATCH = 500;
 const POST_SYNC_RECONCILE_MAX_BATCHES = 10;
+const POST_SYNC_INTELLIGENCE_BATCH = 50;
+const POST_SYNC_INTELLIGENCE_RETRY_BATCH = 10;
 
 function concurrency(env: NodeJS.ProcessEnv = process.env) {
   const raw = env.TECHINT_COLLECTION_CONCURRENCY ?? "2";
@@ -76,10 +79,58 @@ async function reconcileFreshTechnicalAssertions(actorId: string) {
   return { batches, unseenProcessed, resolved, needsReview, entitiesCreated, truncated };
 }
 
+async function evaluateFreshTechnicalIntelligence(actorId: string, signalIds: string[]) {
+  const unique = [...new Set(signalIds)];
+  let batches = 0;
+  let attempts = 0;
+  let evaluated = 0;
+  let profileMatchesChanged = 0;
+  let failed = 0;
+
+  const evaluateBatch = async (ids: string[], allowRetry: boolean) => {
+    attempts += 1;
+    try {
+      const result = await evaluateTechnicalSignalIntelligenceBatchWorkflow({ p_actor: actorId, p_signal_ids: ids });
+      batches += 1;
+      evaluated += result.evaluated;
+      profileMatchesChanged += result.profile_matches_changed;
+      return;
+    } catch {
+      if (!allowRetry || ids.length <= POST_SYNC_INTELLIGENCE_RETRY_BATCH) {
+        failed += ids.length;
+        return;
+      }
+    }
+
+    // CVE-heavy sources such as FIRST EPSS can expand one requested batch into many
+    // sibling CISA/NVD/FIRST signals inside PostgreSQL. Retry a failed/timeout-prone
+    // primary chunk in smaller bounded pieces instead of abandoning the remaining
+    // post-sync intelligence drain. Collection success remains authoritative.
+    for (let index = 0; index < ids.length; index += POST_SYNC_INTELLIGENCE_RETRY_BATCH) {
+      await evaluateBatch(ids.slice(index, index + POST_SYNC_INTELLIGENCE_RETRY_BATCH), false);
+    }
+  };
+
+  for (let index = 0; index < unique.length; index += POST_SYNC_INTELLIGENCE_BATCH) {
+    await evaluateBatch(unique.slice(index, index + POST_SYNC_INTELLIGENCE_BATCH), true);
+  }
+
+  return {
+    batches,
+    attempts,
+    requested: unique.length,
+    evaluated,
+    profileMatchesChanged,
+    failed,
+    complete: failed === 0,
+  };
+}
+
 export async function runClaimedTechnicalCollection(rawClaim: unknown, fetchImpl: typeof fetch = fetch) {
   const claim = collectionClaimSchema.parse(rawClaim);
   const counters = emptyCollectionCounters();
   let entityAssertionsCreated = 0;
+  const intelligenceSignalIds = new Set<string>();
   let issues: Array<{ kind: "SKIPPED" | "WARNING" | "ERROR"; code: string; message: string; sourceRecordKey?: string | null }> = [];
   try {
     const adapter = getTechnicalSourceAdapter(claim.source_key);
@@ -117,6 +168,10 @@ export async function runClaimedTechnicalCollection(rawClaim: unknown, fetchImpl
       if (recorded.revision_created) counters.revisionsCreated += 1;
       if (recorded.duplicate_observation) counters.duplicateObservations += 1;
       entityAssertionsCreated += recorded.entity_assertions_created;
+      // Successful record/replay is enough to refresh derived Phase 2.3E projections.
+      // This intentionally lets a bounded source re-sync backfill existing Technical Signals
+      // after migrations 041+ without rewriting source truth or requiring a separate browser backfill.
+      intelligenceSignalIds.add(recorded.signal_id);
       updateDisposition(counters, recorded.disposition);
     });
 
@@ -128,8 +183,8 @@ export async function runClaimedTechnicalCollection(rawClaim: unknown, fetchImpl
       issues,
     });
 
-    // Collection success remains authoritative. Entity normalization is post-collection
-    // convenience processing and must never turn a completed source run into a failed run.
+    // Collection success is authoritative. Entity reconciliation and derived intelligence
+    // are post-collection projections and must never turn a completed source run into a failure.
     let entityReconciliation: Awaited<ReturnType<typeof reconcileFreshTechnicalAssertions>> | null = null;
     if (entityAssertionsCreated > 0) {
       try {
@@ -139,7 +194,23 @@ export async function runClaimedTechnicalCollection(rawClaim: unknown, fetchImpl
       }
     }
 
-    return { success: true as const, ...completion, counters, entityAssertionsCreated, entityReconciliation };
+    let intelligenceEvaluation: Awaited<ReturnType<typeof evaluateFreshTechnicalIntelligence>> | null = null;
+    if (intelligenceSignalIds.size > 0) {
+      try {
+        intelligenceEvaluation = await evaluateFreshTechnicalIntelligence(claim.owner_id, [...intelligenceSignalIds]);
+      } catch {
+        intelligenceEvaluation = null;
+      }
+    }
+
+    return {
+      success: true as const,
+      ...completion,
+      counters,
+      entityAssertionsCreated,
+      entityReconciliation,
+      intelligenceEvaluation,
+    };
   } catch (error) {
     const controlled = controlledCollectionError(error);
     counters.failedRecords = Math.max(1, counters.failedRecords);
