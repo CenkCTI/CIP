@@ -23,6 +23,8 @@ Migration `202608100041_phase2_3e_matching_priority_relevance.sql` adds three ow
 - `technical_signal_profile_matches` — one current signal/profile match projection per signal/profile pair.
 - `technical_signal_profile_match_events` — append-only lifecycle and re-evaluation history.
 
+Migration `202608100042_phase2_3e_resolution_recheck_visibility.sql` hardens the transaction-visibility contract for resolution-triggered re-evaluation. The profile-match snapshot evaluator is intentionally `VOLATILE` so an AFTER resolution trigger can see the `NEEDS_REVIEW → RESOLVED` state written by the statement that fired it. This is required for automatic `PROVISIONAL → CONFIRMED` upgrades.
+
 The projection tables use composite owner foreign keys, deterministic uniqueness, bounded arrays/JSON, RLS, authenticated owner-scoped read access, and service-role-only trusted mutation RPCs.
 
 Immutable Technical Signal observations, revisions and entity assertions are not rewritten by Phase 2.3E.
@@ -82,7 +84,7 @@ The v1 bounded contextual layer covers exact Sector, Country, Region and Tag ass
 
 The migration also contains a conservative compound-product bridge for source shapes such as CISA KEV `VENDOR=Splunk`, `PRODUCT=Enterprise` when the Technical Signal title explicitly identifies `Splunk Enterprise`. This keeps useful intelligence visible before Product normalization is complete without teaching a global alias.
 
-Deep graph traversal and arbitrary multi-hop inference are not implemented in this phase.
+Investigation-derived direct items preserve an explicit `INVESTIGATION_SCOPE` reason. Arbitrary one-hop expansion across analytical project graph relationships is not claimed in v1 because the current owner-global canonical TechINT layer does not yet provide a trustworthy generic canonical-to-project relationship bridge. Deep or multi-hop graph inference remains out of scope.
 
 ## Match lifecycle
 
@@ -111,7 +113,7 @@ Collection success remains authoritative. Derived post-processing failures do no
 
 Affected signal IDs are evaluated in bounded batches of 250. CVE-linked sibling signals are expanded inside the trusted database evaluation so NVD, CISA KEV and FIRST EPSS context can contribute to the same technical priority picture without collapsing provider-specific Technical Signal identities.
 
-Profile definition/item/status changes trigger a best-effort profile re-evaluation from authenticated server actions. Entity-resolution inserts/updates trigger bounded signal-profile re-evaluation inside PostgreSQL, allowing `PROVISIONAL → CONFIRMED` upgrades without analyst feed maintenance.
+Successful Intel Profile definition/item/status trusted workflows attach a best-effort Phase 2.3E profile projection after the authoritative profile mutation. The original Phase 2.3A action boundary remains free of provider/network/AI/matching logic. Entity-resolution inserts/updates also trigger bounded signal-profile re-evaluation inside PostgreSQL, allowing `PROVISIONAL → CONFIRMED` upgrades without analyst feed maintenance.
 
 ## UI
 
@@ -176,6 +178,7 @@ Phase 2.3E does not implement:
 - autonomous analyst judgement
 - attribution changes
 - strategic analysis
+- arbitrary project-graph one-hop expansion without a canonical relationship bridge
 - deep graph inference
 - automated Investigation creation
 - automatic alias teaching
@@ -188,6 +191,6 @@ Phase 2.3E does not implement:
 
 Migrations 037–040 are Phase 2.3D history and must not be edited or re-run as part of this phase.
 
-Apply only the new additive migration 041 after the existing migration chain is present, then reload the PostgREST schema cache and redeploy the application.
+After the existing migration chain is present, apply the new Phase 2.3E migrations **041 → 042 once, in order**, then reload the PostgREST schema cache and redeploy the application.
 
-Existing historical Technical Signals receive projections when they are touched by subsequent source collection/re-evaluation. For Preview acceptance, re-sync the relevant bounded Technical Sources after applying migration 041, then verify the Global View and Intel Profile feeds.
+Existing historical Technical Signals receive projections when they are touched by subsequent source collection/re-evaluation. For Preview acceptance, re-sync the relevant bounded Technical Sources after applying migrations 041 and 042, then verify the Global View and Intel Profile feeds.
