@@ -32,7 +32,8 @@ if (baseUrl.protocol !== "https:" && !(localHost && baseUrl.protocol === "http:"
   process.exit(2);
 }
 
-const endpoint = new URL("/api/techint/collector/tick", baseUrl);
+const tickEndpoint = new URL("/api/techint/collector/tick", baseUrl);
+const workEndpoint = new URL("/api/techint/collector/work", baseUrl);
 let stopped = false;
 let failureBackoffSeconds = 5;
 
@@ -47,82 +48,119 @@ function fatal(message) {
   return Object.assign(new Error(message), { fatal: true });
 }
 
-async function tick() {
+async function requestJson(endpoint, body) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10 * 60 * 1000);
+  // A work unit must remain bounded below the platform's long-invocation ceiling.
+  const timeout = setTimeout(() => controller.abort(), 4 * 60 * 1000);
   try {
     const headers = {
       authorization: `Bearer ${token}`,
       accept: "application/json",
-      "user-agent": "CITEM-TechINT-Collector/2.3F-A-v1",
+      "content-type": "application/json",
+      "user-agent": "CITEM-TechINT-Collector/2.3F-A-v2",
     };
     if (vercelBypassSecret) headers["x-vercel-protection-bypass"] = vercelBypassSecret;
 
     const response = await fetch(endpoint, {
       method: "POST",
       headers,
+      body: JSON.stringify(body ?? {}),
       cache: "no-store",
       redirect: "error",
       signal: controller.signal,
     });
 
     const contentType = response.headers.get("content-type") ?? "";
-    const body = await response.text();
+    const text = await response.text();
     let payload = null;
-    if (contentType.toLowerCase().includes("application/json") && body) {
-      try {
-        payload = JSON.parse(body);
-      } catch {
-        payload = null;
-      }
+    if (contentType.toLowerCase().includes("application/json") && text) {
+      try { payload = JSON.parse(text); } catch { payload = null; }
     }
 
     if (response.status === 401) {
       if (payload?.error === "COLLECTOR_UNAUTHORIZED") {
-        throw fatal("Collector token was rejected by CİTEM. Rotate the token in TechINT → Technical Sources and update the local environment.");
+        throw fatal("Collector token was rejected by CİTEM. Rotate it in TechINT → Technical Sources and update the local environment.");
       }
       throw fatal(
         "The Preview deployment rejected the collector before it reached CİTEM. If Vercel Authentication/Deployment Protection is enabled, configure Protection Bypass for Automation and set CITEM_VERCEL_BYPASS_SECRET locally.",
       );
     }
-
     if (!response.ok || !payload || typeof payload !== "object") {
       throw new Error(`Collector endpoint returned HTTP ${response.status}.`);
     }
-
-    if (payload.enabled === false) {
-      console.log(`[${new Date().toISOString()}] continuous collection is paused on the server.`);
-      return { stop: true, waitSeconds: Number(payload.waitSeconds ?? 60) };
-    }
-
-    const claimed = Number(payload.claimed ?? 0);
-    const succeeded = Number(payload.succeeded ?? 0);
-    const failed = Number(payload.failed ?? 0);
-    const due = payload.due === true;
-    console.log(
-      `[${new Date().toISOString()}] ${due ? "tick" : "heartbeat"}: claimed=${claimed} succeeded=${succeeded} failed=${failed}`,
-    );
-
-    if (Array.isArray(payload.runs)) {
-      for (const run of payload.runs) {
-        const sourceKey = typeof run?.sourceKey === "string" ? run.sourceKey : "UNKNOWN_SOURCE";
-        if (run?.success === true) {
-          console.log(`  source ${sourceKey}: SUCCEEDED`);
-        } else {
-          const errorCode = typeof run?.errorCode === "string" ? run.errorCode : "SOURCE_RUN_FAILED";
-          console.error(`  source ${sourceKey}: FAILED (${errorCode})`);
-        }
-      }
-    }
-
-    failureBackoffSeconds = 5;
-    return { stop: false, waitSeconds: Math.max(5, Math.min(3600, Number(payload.waitSeconds ?? 60))) };
+    return payload;
   } finally {
     clearTimeout(timeout);
   }
 }
 
+async function processRun(run) {
+  const sourceKey = typeof run?.sourceKey === "string" ? run.sourceKey : "UNKNOWN_SOURCE";
+  const runId = typeof run?.runId === "string" ? run.runId : "";
+  const leaseToken = typeof run?.leaseToken === "string" ? run.leaseToken : "";
+  if (!runId || !/^[a-f0-9]{64}$/.test(leaseToken)) throw new Error("Collector claim was invalid.");
+
+  console.log(`[${new Date().toISOString()}] source ${sourceKey}: claimed; desktop is driving bounded work units.`);
+  let transientBackoff = 5;
+  while (!stopped) {
+    try {
+      const payload = await requestJson(workEndpoint, { runId, leaseToken });
+      if (payload.enabled === false) {
+        console.log(`[${new Date().toISOString()}] continuous collection was paused while ${sourceKey} was active.`);
+        return { stop: true, success: false };
+      }
+      const processed = Number(payload.processedThisUnit ?? 0);
+      const nextOffset = Number(payload.nextOffset ?? 0);
+      const total = Number(payload.totalSignals ?? 0);
+      const unit = Number(payload.workUnitsCompleted ?? 0);
+      if (payload.success === false) {
+        const errorCode = typeof payload.errorCode === "string" ? payload.errorCode : "SOURCE_RUN_FAILED";
+        console.error(`[${new Date().toISOString()}] source ${sourceKey}: FAILED (${errorCode})`);
+        return { stop: false, success: false };
+      }
+      console.log(`[${new Date().toISOString()}] source ${sourceKey}: work unit ${unit} processed=${processed} progress=${nextOffset}/${total}`);
+      transientBackoff = 5;
+      if (payload.done === true) {
+        console.log(`[${new Date().toISOString()}] source ${sourceKey}: SUCCEEDED`);
+        return { stop: false, success: true };
+      }
+    } catch (error) {
+      if (error?.fatal) throw error;
+      const message = error?.name === "AbortError" ? "work unit timed out" : "work endpoint unavailable";
+      console.error(`[${new Date().toISOString()}] source ${sourceKey}: ${message}; retrying same work unit in ${transientBackoff}s.`);
+      await sleep(transientBackoff);
+      transientBackoff = Math.min(60, transientBackoff * 2);
+    }
+  }
+  return { stop: true, success: false };
+}
+
+async function tick() {
+  const payload = await requestJson(tickEndpoint, {});
+  if (payload.enabled === false) {
+    console.log(`[${new Date().toISOString()}] continuous collection is paused on the server.`);
+    return { stop: true, waitSeconds: Number(payload.waitSeconds ?? 60) };
+  }
+
+  const claimed = Number(payload.claimed ?? 0);
+  const due = payload.due === true;
+  if (!Array.isArray(payload.runs) || claimed === 0) {
+    console.log(`[${new Date().toISOString()}] ${due ? "tick" : "heartbeat"}: claimed=0`);
+    failureBackoffSeconds = 5;
+    return { stop: false, waitSeconds: Math.max(5, Math.min(3600, Number(payload.waitSeconds ?? 60))) };
+  }
+
+  const run = payload.runs[0];
+  const result = await processRun(run);
+  failureBackoffSeconds = 5;
+  return {
+    stop: result.stop,
+    waitSeconds: Math.max(5, Math.min(3600, Number(payload.waitSeconds ?? 60))),
+  };
+}
+
 console.log(`CİTEM TechINT collector started for ${baseUrl.origin}.`);
+console.log("Desktop runtime owns the long-running loop; server requests are bounded work units.");
 console.log("Provider credentials and Supabase service-role credentials remain server-side.");
 if (vercelBypassSecret) console.log("Vercel Preview protection bypass is configured for this local collector process.");
 
