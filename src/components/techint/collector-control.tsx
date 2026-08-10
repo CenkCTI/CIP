@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState } from "react";
 import {
   configureTechnicalCollector,
   type TechnicalCollectorActionState,
@@ -36,14 +36,10 @@ function heartbeatState(agent: TechnicalCollectorAgentView | null) {
 
 export function CollectorControl({ agent }: { agent: TechnicalCollectorAgentView | null }) {
   const [state, action, pending] = useActionState<TechnicalCollectorActionState, FormData>(configureTechnicalCollector, {});
-  const [origin, setOrigin] = useState("<CITEM_URL>");
-
-  useEffect(() => setOrigin(window.location.origin), []);
-
   const poll = agent?.poll_interval_seconds ?? 60;
   const status = heartbeatState(agent);
   const command = state.token
-    ? `CITEM_COLLECTOR_URL="${origin}" CITEM_COLLECTOR_TOKEN="${state.token}" npm run techint:collector`
+    ? `CITEM_COLLECTOR_URL="<PREVIEW_URL>" CITEM_COLLECTOR_TOKEN="${state.token}" npm run techint:collector`
     : null;
 
   return (
@@ -103,7 +99,7 @@ export function CollectorControl({ agent }: { agent: TechnicalCollectorAgentView
       {command ? (
         <div className="space-y-2 rounded border border-amber-800/70 bg-amber-950/10 p-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-amber-300">One-time collector token</p>
-          <p className="text-xs text-stone-400">Run this from a local checkout of CİTEM. Do not share the token or commit it to a file.</p>
+          <p className="text-xs text-stone-400">Replace &lt;PREVIEW_URL&gt; with the current CİTEM Preview URL. Run this from a local checkout of CİTEM. Do not share the token or commit it to a file.</p>
           <pre className="overflow-x-auto whitespace-pre-wrap break-all text-xs text-stone-200">{command}</pre>
         </div>
       ) : null}
