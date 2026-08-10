@@ -1,154 +1,264 @@
-# Phase 2.3F-A — Continuous Collection Runtime
+# Phase 2.3F-A — Desktop-Driven Continuous Collection Runtime
 
 ## Purpose
 
-Phase 2.3F-A is the collection-continuity foundation for the later Global Technical Situation Awareness work.
+Phase 2.3F-A is the collection-continuity foundation for Global Technical Situation Awareness.
 
-The problem being solved is not browser refresh. A browser can be closed for hours and source collection still needs a durable way to resume from the last successful source cursor when the upstream provider supports recovery.
+The browser is not a scheduler. The desktop companion owns the long-running continuous control loop; server requests remain bounded and trusted.
 
-The Phase 2.3F-A flow is:
+The revised flow is:
 
-`local collector companion → narrow bearer capability → CİTEM server → owner-scoped due-source claim → existing TechINT collection orchestrator → Technical Signals → existing Global Priority / Profile matching`
+`desktop collector → claim one due source → bounded work unit → checkpoint → bounded work unit → ... → final cursor commit`
 
-The collector does **not** create a second Technical Signal stream for Global View or for individual Intel Profiles. Sources are collected once. Global View, standalone profiles, and InvestINT consume the same persisted Technical Signals and derived projections.
+Global View, Profiles and InvestINT still consume one canonical Technical Signal stream. This phase does not create profile-specific provider requests.
 
-## What this phase delivers
+## Why the runtime was revised
 
-- an owner-scoped continuous collector agent record;
-- a one-time generated/rotatable collector capability token;
-- only the SHA-256 token hash is persisted;
-- a POST-only collector tick endpoint;
-- database-enforced heartbeat/rate gating;
-- owner-scoped due-source claims using the existing exact collection lease model;
-- reuse of the existing source adapters, cursors, idempotent Technical Signal recorder, post-sync entity reconciliation, Global Priority, and Profile matching;
-- a local Node.js collector companion (`npm run techint:collector`);
-- on/off and token-rotation controls in TechINT → Technical Sources;
-- explicit source-specific catch-up capability labels instead of a false universal recovery guarantee;
-- PostgreSQL and unit/static acceptance coverage.
+The first live Preview acceptance proved collector-token authentication, owner scoping, Vercel Deployment Protection bypass, heartbeat state and due-source claiming. It also showed that executing a complete large provider run inside one serverless request is the wrong boundary: a large source can outlive one invocation.
 
-This is the runtime foundation. A packaged Tauri/system-tray desktop shell is intentionally deferred until this narrow collection contract passes live acceptance. The local Node companion exercises the same backend boundary the packaged desktop app will use.
+Phase 2.3F-A therefore keeps the trusted server boundary but moves long-running orchestration to the desktop companion.
 
-## Security boundary
+## Runtime boundary
 
-The local collector receives only a random collector capability token. It does not receive or embed:
+### Desktop companion
 
-- `SUPABASE_SERVICE_ROLE_KEY`;
-- the ThreatFox Auth-Key;
-- `NVD_API_KEY`;
-- `MALWAREBAZAAR_AUTH_KEY`;
-- source cursors;
-- collection lease tokens;
-- raw provider payloads.
+The local Node companion:
 
-Provider credentials remain server-side. The bearer token identifies exactly one owner collector agent. The database resolves that owner and the collector runtime can claim only due Technical Sources belonging to that owner.
+- polls for due work;
+- claims at most one due source;
+- repeatedly asks for bounded work units;
+- may remain active for many minutes while a large source drains;
+- retries transient work-request failures;
+- exits after one complete claimed run when `CITEM_COLLECTOR_ONCE=true`;
+- does not contain the Supabase service role or provider credentials.
 
-`technical_collector_agents.token_hash` is not selectable by authenticated browser users. Collector configuration/tick/claim RPCs are service-role-only. Token rotation immediately invalidates the previous token.
+### Server
 
-## Scheduler poll versus provider synchronization
+The server performs only bounded trusted operations:
 
-The collector poll interval and a source collection interval are deliberately separate.
+- collector authentication / heartbeat;
+- due-source claim;
+- one bounded source work unit;
+- Technical Signal recording;
+- incremental checkpoint;
+- final cursor commit or controlled failure;
+- existing derived entity / Global Priority / Profile projections on bounded batches.
 
-A collector may poll the CİTEM server every 60 seconds (or another bounded value between 30 and 3600 seconds). Each poll asks only whether an owned source is **due**. It does not force CISA, NVD, FIRST, ThreatFox, or MalwareBazaar to run on every heartbeat.
+A single `/tick` request no longer executes a complete provider run.
 
-Each Technical Source keeps its existing provider-safe interval, cooldown, failure backoff, active-run uniqueness, exact lease, and cursor semantics.
+## Endpoints
 
-Only one due source is claimed per companion tick in Phase 2.3F-A. This deliberately bounds one server request and avoids one heartbeat starting several expensive provider collections at once. Repeated ticks drain due sources over time.
+### `POST /api/techint/collector/tick`
 
-## Catch-up semantics
+Authenticates the owner-bound collector, applies database tick gating and returns at most one due source run capability.
 
-Catch-up is provider-dependent. Phase 2.3F-A does not claim that CİTEM can reconstruct data the upstream provider no longer exposes.
+If no source is due it returns a heartbeat result and completes the tick immediately.
 
-| Source | Mode | Recovery contract |
-|---|---|---|
-| NVD CVE | Durable cursor window | Resumes from the last successful `lastModifiedWatermark` with the existing five-minute overlap. The adapter bounds a window to 120 days. Replay is idempotent. |
-| ThreatFox | Bounded lookback + high-water | Replays the configured 1–7 day lookback and filters by provider-ID high water. A ten-hour outage is recoverable when it remains inside the configured lookback and the upstream API still exposes the records. |
-| CISA KEV | Current snapshot | Re-fetches the current catalog. Current KEV state is recovered, but intermediate catalog states that existed only while CİTEM was offline cannot be reconstructed. |
-| FIRST EPSS | Current bounded snapshot | Refreshes the current bounded EPSS view. Intermediate score states missed while offline are not reconstructed. |
-| MalwareBazaar | Latest bounded snapshot | Re-fetches the provider's latest bounded metadata. Long offline gaps can exceed the provider snapshot and are not guaranteed recoverable. |
-| TEST_SYNTHETIC | Not applicable | Excluded from continuous collection claims. |
+### `POST /api/techint/collector/work`
 
-A failed source run does not advance the authoritative source cursor. Existing Phase 2.3B observation identity makes overlap/replay idempotent.
+Accepts the collector bearer token plus the exact claimed run ID/lease capability. It validates owner and lease, processes only a bounded signal slice, checkpoints progress and returns.
 
-## Migration
+The desktop repeats this request until the run reports `done: true` or a controlled failure.
 
-Phase 2.3F-A adds one migration:
+Default work-unit target: 50 signals.
+
+Hard maximum: 100 signals.
+
+## Stable incremental snapshot
+
+Current adapters still produce their canonical bounded adapter result. During an incremental run CİTEM computes a deterministic SHA-256 identity from the ordered source observation identities.
+
+The run work state stores:
+
+- snapshot hash;
+- total mapped signals;
+- next signal offset.
+
+On a later work unit the source result is re-evaluated. If the upstream snapshot changed such that the ordered identity/hash no longer matches, the run fails safely with `SOURCE_SNAPSHOT_CHANGED`. The authoritative connection cursor does not advance.
+
+This avoids silently applying an offset to a shifted provider snapshot.
+
+## Migration contract
+
+Migration `045` has already been applied to Preview/test Supabase and is immutable for this refactor:
 
 `202608100045_phase2_3f_a_continuous_collection.sql`
 
-It must be applied **once after migration 044** in the intended Preview/test environment.
+The desktop-driven incremental work state is additive in:
 
-Do not edit or re-run migrations 041–044 for this phase.
+`202608100046_phase2_3f_a_incremental_collection_work.sql`
 
-After applying 045, reload the PostgREST schema cache if needed:
+Migration 046 adds safe incremental progress state to `technical_collection_runs` and service-role-only RPCs for:
 
-```sql
-NOTIFY pgrst, 'reload schema';
-```
+- collector authentication without starting a new tick;
+- incremental work-claim validation;
+- checkpoint/counter accumulation;
+- lease extension;
+- incremental completion;
+- incremental failure.
+
+Authenticated browser users may read only safe progress (`work_units_completed`, `last_work_at`), not `collector_work_state`, lease material or provider secrets.
+
+## Cursor safety
+
+The authoritative `technical_source_connections.cursor` remains unchanged during all intermediate work units.
+
+Only final successful incremental completion advances the cursor.
+
+If the desktop exits or a work request fails before completion:
+
+- the run remains incomplete until recovered/failed;
+- the connection cursor remains at the previous successful position;
+- expired-run recovery frees the source;
+- the next run replays from the previous cursor;
+- existing Technical Signal observation identity absorbs safe replay/overlap.
+
+## Security boundary
+
+The desktop process has:
+
+- `CITEM_COLLECTOR_URL`;
+- one owner-bound `CITEM_COLLECTOR_TOKEN`;
+- optional Vercel automation bypass secret for protected Preview deployments;
+- a short-lived exact run lease capability only while processing a claimed run.
+
+The desktop process does **not** receive:
+
+- `SUPABASE_SERVICE_ROLE_KEY`;
+- ThreatFox Auth-Key;
+- `NVD_API_KEY`;
+- `MALWAREBAZAAR_AUTH_KEY`;
+- arbitrary database access;
+- another owner's source/run state.
+
+Provider credentials remain server-side in Phase 2.3F-A.
+
+Collector and run capability values must never be logged or committed.
+
+## Vercel Deployment Protection
+
+Protected Preview deployments may require an automation bypass secret. The local companion supports:
+
+- `CITEM_VERCEL_BYPASS_SECRET`;
+- `VERCEL_AUTOMATION_BYPASS_SECRET`.
+
+When configured, it sends `x-vercel-protection-bypass`. The secret is never logged.
+
+The collector distinguishes a Vercel protection 401 from a CİTEM collector-authentication 401.
+
+## Source scheduling
+
+Collector poll frequency and provider synchronization frequency remain separate.
+
+A 60-second collector heartbeat does **not** mean every upstream source runs every minute. Each source keeps its existing interval, cooldown/backoff, one-active-run uniqueness and cursor semantics.
+
+Only one production source is claimed per desktop tick.
+
+`TEST_SYNTHETIC` remains excluded from continuous claims.
+
+## Catch-up semantics
+
+Catch-up remains provider-dependent:
+
+| Source | Recovery contract |
+|---|---|
+| NVD CVE | Durable last-modified watermark with five-minute overlap and bounded window. |
+| ThreatFox | Configured 1–7 day lookback plus provider-ID high-water. |
+| CISA KEV | Current catalog state; intermediate offline catalog states are not reconstructed. |
+| FIRST EPSS | Current bounded score snapshot; missed intermediate score states are not reconstructed. |
+| MalwareBazaar | Latest bounded metadata; long offline gaps are not guaranteed recoverable. |
+
+No universal backfill guarantee is made.
 
 ## Local companion
 
-After enabling/creating the collector in TechINT → Technical Sources, CİTEM displays the token once and gives a command similar to:
+Typical continuous command:
 
 ```bash
 CITEM_COLLECTOR_URL="https://<preview-host>" \
-CITEM_COLLECTOR_TOKEN="<one-time-token>" \
+CITEM_COLLECTOR_TOKEN="<collector-token>" \
+CITEM_VERCEL_BYPASS_SECRET="<optional-preview-bypass>" \
 npm run techint:collector
 ```
 
-For a single acceptance heartbeat/tick:
+Single acceptance run:
 
 ```bash
 CITEM_COLLECTOR_URL="https://<preview-host>" \
-CITEM_COLLECTOR_TOKEN="<one-time-token>" \
+CITEM_COLLECTOR_TOKEN="<collector-token>" \
+CITEM_VERCEL_BYPASS_SECRET="<optional-preview-bypass>" \
 CITEM_COLLECTOR_ONCE=true \
 npm run techint:collector
 ```
 
-The token must not be committed to Git, pasted into public logs, or shared. If exposed, rotate it in CİTEM and replace the local value.
+A large run should now print multiple safe progress lines such as:
+
+```text
+source FIRST_EPSS: work unit 1 processed=50 progress=50/1250
+source FIRST_EPSS: work unit 2 processed=50 progress=100/1250
+...
+source FIRST_EPSS: SUCCEEDED
+```
+
+No token or lease value is printed.
 
 ## Live acceptance
 
-1. Apply migration 045 once to Preview/test Supabase and reload schema cache.
-2. Deploy/open the current PR Preview.
-3. Open TechINT → Technical Sources.
-4. Enable at least one production source and leave its source status `ENABLED`.
-5. Enable **Continuous collection** and create a collector token.
-6. Run the local companion once with `CITEM_COLLECTOR_ONCE=true`.
-7. Refresh Technical Sources and verify:
-   - collector heartbeat is present;
-   - last tick is visible;
-   - the token itself is not rendered again;
-   - if a source was due, a `SCHEDULED` collection run appears.
-8. Run the companion continuously without `CITEM_COLLECTOR_ONCE` and close the browser. Verify scheduled runs continue according to each source's own interval.
-9. Pause continuous collection in CİTEM. The local companion should learn that the collector is paused and stop cleanly. Source cursors/history must remain intact.
-10. Re-enable or rotate the token. An old rotated token must receive unauthorized status; the new token must work.
-11. Catch-up test:
-    - stop the local companion long enough for a due source window to be missed;
-    - restart it;
-    - for NVD, verify the next successful run resumes from the durable last-modified cursor/overlap rather than resetting to a browser-time snapshot;
-    - for ThreatFox, verify the gap is recovered when it remains inside the configured lookback/high-water contract;
-    - do not interpret snapshot-only CISA/FIRST/MalwareBazaar behavior as guaranteed reconstruction of every intermediate offline state.
-12. If a second user is available, verify one user's collector token cannot claim or expose the other user's source runs.
+1. Keep migration 045 as already applied.
+2. Apply migration 046 once to Preview/test Supabase.
+3. Reload PostgREST schema cache if needed.
+4. Deploy/open the current PR Preview.
+5. Enable continuous collection and at least one production source.
+6. Run the desktop companion with `CITEM_COLLECTOR_ONCE=true`.
+7. Verify a due source is claimed and, for a sufficiently large source, more than one bounded work unit is processed.
+8. Verify every intermediate work unit leaves the authoritative source cursor unchanged.
+9. Verify the final successful work unit advances the cursor once and marks the run `SUCCEEDED`.
+10. Stop the collector during a multi-unit run. Verify no partial cursor advancement occurs; after lease recovery, replay starts from the previous successful cursor.
+11. Run continuously with the browser closed and verify scheduling continues.
+12. Pause continuous collection and verify the local companion stops cleanly without deleting source history/cursors.
+13. Rotate the collector token and verify the old token is rejected.
+14. If a second user is available, verify collector/run capabilities cannot cross owner boundaries.
 
-## What this phase does not do
+## Tests
 
-Phase 2.3F-A does not yet implement:
+The Phase 2.3F-A migration harness validates both 045 and additive 046, including:
 
-- historical activity buckets;
-- anomaly/baseline calculations;
-- world map/geographic enrichment;
-- Global Situation state;
-- charts;
-- cross-source convergence/divergence;
-- Tauri packaging/system-tray/autostart UI;
-- a new provider pack;
+- token hashing and rotation;
+- owner-scoped claims;
+- incremental work-claim validation;
+- checkpoint storage;
+- no cursor advancement at checkpoint;
+- final cursor advancement only at incremental completion;
+- safe progress columns;
+- work-state secrecy;
+- trusted RPC denial to authenticated users;
+- cross-owner isolation.
+
+Static/unit coverage also enforces:
+
+- `/tick` is claim-only;
+- desktop loops `/work`;
+- work-unit hard bound is <= 100 signals;
+- source snapshot drift fails safely;
+- desktop contains no service-role/provider-secret variable names;
+- Vercel protection bypass remains optional and safe.
+
+## Out of scope
+
+Phase 2.3F-A does not implement:
+
+- historical activity / coverage buckets (2.3F-B);
+- source semantic taxonomy (2.3F-C);
+- baselines / anomaly engine (2.3F-D);
+- technical situation detectors (2.3F-E);
+- convergence/divergence (2.3F-F);
+- new advisory/reporting/infrastructure sources;
+- geographic enrichment / map;
+- final Global View UI;
+- Tauri/system-tray packaging;
 - AI analysis;
-- business/organizational risk scoring.
-
-Those layers depend on trustworthy continuous collection and are intentionally built after this foundation is accepted.
+- business risk scoring.
 
 ## Acceptance invariant
 
-The decisive invariant for Phase 2.3F-A is:
-
-> Closing the CİTEM browser must not be the event that stops TechINT scheduling. A separately running collector companion can wake the existing owner-scoped Technical Source scheduler, and restarting it after downtime resumes from the last successful provider cursor wherever the upstream source makes that history recoverable.
+> Closing the browser must not stop TechINT scheduling, and a large source run must not depend on one long serverless invocation. The desktop companion owns the long-running loop, each server request performs bounded trusted work, and the authoritative source cursor advances only after the complete run succeeds.
