@@ -3,6 +3,11 @@
 const rawUrl = process.env.CITEM_COLLECTOR_URL?.trim();
 const token = process.env.CITEM_COLLECTOR_TOKEN?.trim();
 const once = process.env.CITEM_COLLECTOR_ONCE === "true";
+const vercelBypassSecret = (
+  process.env.CITEM_VERCEL_BYPASS_SECRET?.trim()
+  || process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim()
+  || ""
+);
 
 if (!rawUrl) {
   console.error("CITEM_COLLECTOR_URL is required.");
@@ -38,27 +43,49 @@ function sleep(seconds) {
   return new Promise((resolve) => setTimeout(resolve, Math.max(1, seconds) * 1000));
 }
 
+function fatal(message) {
+  return Object.assign(new Error(message), { fatal: true });
+}
+
 async function tick() {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10 * 60 * 1000);
   try {
+    const headers = {
+      authorization: `Bearer ${token}`,
+      accept: "application/json",
+      "user-agent": "CITEM-TechINT-Collector/2.3F-A-v1",
+    };
+    if (vercelBypassSecret) headers["x-vercel-protection-bypass"] = vercelBypassSecret;
+
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: {
-        authorization: `Bearer ${token}`,
-        accept: "application/json",
-        "user-agent": "CITEM-TechINT-Collector/2.3F-A-v1",
-      },
+      headers,
       cache: "no-store",
       redirect: "error",
       signal: controller.signal,
     });
 
-    if (response.status === 401) {
-      throw Object.assign(new Error("Collector token was rejected. Rotate the token in CİTEM and update the local environment."), { fatal: true });
+    const contentType = response.headers.get("content-type") ?? "";
+    const body = await response.text();
+    let payload = null;
+    if (contentType.toLowerCase().includes("application/json") && body) {
+      try {
+        payload = JSON.parse(body);
+      } catch {
+        payload = null;
+      }
     }
 
-    const payload = await response.json().catch(() => null);
+    if (response.status === 401) {
+      if (payload?.error === "COLLECTOR_UNAUTHORIZED") {
+        throw fatal("Collector token was rejected by CİTEM. Rotate the token in TechINT → Technical Sources and update the local environment.");
+      }
+      throw fatal(
+        "The Preview deployment rejected the collector before it reached CİTEM. If Vercel Authentication/Deployment Protection is enabled, configure Protection Bypass for Automation and set CITEM_VERCEL_BYPASS_SECRET locally.",
+      );
+    }
+
     if (!response.ok || !payload || typeof payload !== "object") {
       throw new Error(`Collector endpoint returned HTTP ${response.status}.`);
     }
@@ -84,6 +111,7 @@ async function tick() {
 
 console.log(`CİTEM TechINT collector started for ${baseUrl.origin}.`);
 console.log("Provider credentials and Supabase service-role credentials remain server-side.");
+if (vercelBypassSecret) console.log("Vercel Preview protection bypass is configured for this local collector process.");
 
 while (!stopped) {
   try {
