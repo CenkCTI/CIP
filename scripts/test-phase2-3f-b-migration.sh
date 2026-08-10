@@ -51,14 +51,14 @@ insert into auth.users(id) values
 do $$
 declare
   owner_a uuid := '10000000-0000-4000-8000-000000000001';
-  connection_id uuid;
+  v_connection_id uuid;
   signal_id uuid := '20000000-0000-4000-8000-000000000001';
   base timestamptz := public.technical_history_bucket_start(now() - interval '3 hours','HOUR');
   result jsonb;
   before_count integer;
   after_count integer;
 begin
-  connection_id := public.enable_technical_source(owner_a,'CISA_KEV','{}'::jsonb,60);
+  v_connection_id := public.enable_technical_source(owner_a,'CISA_KEV','{}'::jsonb,60);
 
   insert into public.technical_signals(
     id,owner_id,signal_type,canonical_key,title,summary,lifecycle,severity,confidence,facts,
@@ -122,49 +122,46 @@ begin
   insert into public.technical_source_schedule_snapshots(
     owner_id,connection_id,source_key,status,interval_minutes,next_run_at,observed_at,reconstructed,configuration_fingerprint
   ) values (
-    owner_a,connection_id,'CISA_KEV','ENABLED',60,base,base - interval '5 minutes',false,repeat('6',64)
+    owner_a,v_connection_id,'CISA_KEV','ENABLED',60,base,base - interval '5 minutes',false,repeat('6',64)
   );
 
   insert into public.technical_collection_runs(
     owner_id,connection_id,source_key,trigger,status,claimed_cursor,proposed_cursor,
     lease_token_hash,lease_expires_at,started_at,completed_at,records_seen,records_mapped,
-    signals_created,observations_created
+    signals_created,observations_created,controlled_error_code,controlled_error_message
   ) values
-    (owner_a,connection_id,'CISA_KEV','SCHEDULED','SUCCEEDED','{"version":1}','{"version":1}',repeat('7',64),base + interval '10 minutes',base + interval '5 minutes',base + interval '6 minutes',10,10,10,10),
-    (owner_a,connection_id,'CISA_KEV','SCHEDULED','FAILED','{"version":1}',null,repeat('8',64),base + interval '45 minutes',base + interval '40 minutes',base + interval '41 minutes',0,0,0,0);
-  update public.technical_collection_runs
-    set controlled_error_code='HTTP_TIMEOUT',controlled_error_message='Synthetic harness timeout.'
-    where owner_id=owner_a and connection_id=connection_id and status='FAILED';
+    (owner_a,v_connection_id,'CISA_KEV','SCHEDULED','SUCCEEDED','{"version":1}','{"version":1}',repeat('7',64),base + interval '10 minutes',base + interval '5 minutes',base + interval '6 minutes',10,10,10,10,null,null),
+    (owner_a,v_connection_id,'CISA_KEV','SCHEDULED','FAILED','{"version":1}',null,repeat('8',64),base + interval '45 minutes',base + interval '40 minutes',base + interval '41 minutes',0,0,0,0,'HTTP_TIMEOUT','Synthetic harness timeout.');
 
   perform public.refresh_technical_collection_coverage_buckets(owner_a,'HOUR',base,base + interval '1 hour','RECOMPUTED',24);
-  if (select coverage_status from public.technical_collection_coverage_buckets
-      where owner_id=owner_a and connection_id=connection_id and granularity='HOUR' and bucket_start=base) <> 'DEGRADED' then
+  if (select coverage_status from public.technical_collection_coverage_buckets b
+      where b.owner_id=owner_a and b.connection_id=v_connection_id and b.granularity='HOUR' and b.bucket_start=base) <> 'DEGRADED' then
     raise exception 'failed run did not produce degraded coverage';
   end if;
-  if (select expected_runs from public.technical_collection_coverage_buckets
-      where owner_id=owner_a and connection_id=connection_id and granularity='HOUR' and bucket_start=base) <> 1 then
+  if (select expected_runs from public.technical_collection_coverage_buckets b
+      where b.owner_id=owner_a and b.connection_id=v_connection_id and b.granularity='HOUR' and b.bucket_start=base) <> 1 then
     raise exception 'expected schedule occurrence not counted';
   end if;
 
   insert into public.technical_source_schedule_snapshots(
     owner_id,connection_id,source_key,status,interval_minutes,next_run_at,observed_at,reconstructed,configuration_fingerprint
   ) values (
-    owner_a,connection_id,'CISA_KEV','PAUSED',60,null,base + interval '1 hour 1 minute',false,repeat('9',64)
+    owner_a,v_connection_id,'CISA_KEV','PAUSED',60,null,base + interval '1 hour 1 minute',false,repeat('9',64)
   );
   perform public.refresh_technical_collection_coverage_buckets(owner_a,'HOUR',base + interval '1 hour',base + interval '2 hours','RECOMPUTED',24);
-  if (select coverage_status from public.technical_collection_coverage_buckets
-      where owner_id=owner_a and connection_id=connection_id and granularity='HOUR' and bucket_start=base + interval '1 hour') <> 'COMPLETE' then
+  if (select coverage_status from public.technical_collection_coverage_buckets b
+      where b.owner_id=owner_a and b.connection_id=v_connection_id and b.granularity='HOUR' and b.bucket_start=base + interval '1 hour') <> 'COMPLETE' then
     raise exception 'intentional pause was treated as a collection failure';
   end if;
 
   insert into public.technical_source_schedule_snapshots(
     owner_id,connection_id,source_key,status,interval_minutes,next_run_at,observed_at,reconstructed,configuration_fingerprint
   ) values (
-    owner_a,connection_id,'CISA_KEV','ENABLED',60,base + interval '2 hours',base + interval '1 hour 55 minutes',false,repeat('0',64)
+    owner_a,v_connection_id,'CISA_KEV','ENABLED',60,base + interval '2 hours',base + interval '1 hour 55 minutes',false,repeat('0',64)
   );
   perform public.refresh_technical_collection_coverage_buckets(owner_a,'HOUR',base + interval '2 hours',base + interval '3 hours','RECOMPUTED',24);
-  if (select coverage_status from public.technical_collection_coverage_buckets
-      where owner_id=owner_a and connection_id=connection_id and granularity='HOUR' and bucket_start=base + interval '2 hours') <> 'NO_COVERAGE' then
+  if (select coverage_status from public.technical_collection_coverage_buckets b
+      where b.owner_id=owner_a and b.connection_id=v_connection_id and b.granularity='HOUR' and b.bucket_start=base + interval '2 hours') <> 'NO_COVERAGE' then
     raise exception 'missing expected run was not marked NO_COVERAGE';
   end if;
 
@@ -175,7 +172,8 @@ begin
 
   begin
     update public.technical_source_schedule_snapshots
-      set interval_minutes=120 where owner_id=owner_a limit 1;
+      set interval_minutes=120
+      where id=(select id from public.technical_source_schedule_snapshots where owner_id=owner_a order by observed_at,id limit 1);
     raise exception 'schedule snapshot unexpectedly mutable';
   exception when sqlstate '55000' then null;
   end;
