@@ -135,7 +135,10 @@ export async function runClaimedTechnicalCollection(rawClaim: unknown, fetchImpl
       if (recorded.revision_created) counters.revisionsCreated += 1;
       if (recorded.duplicate_observation) counters.duplicateObservations += 1;
       entityAssertionsCreated += recorded.entity_assertions_created;
-      if (recorded.signal_created || recorded.observation_created || recorded.revision_created) intelligenceSignalIds.add(recorded.signal_id);
+      // Successful record/replay is enough to refresh derived Phase 2.3E projections.
+      // This intentionally lets a bounded source re-sync backfill existing Technical Signals
+      // after migrations 041/042 without rewriting source truth or requiring a separate browser backfill.
+      intelligenceSignalIds.add(recorded.signal_id);
       updateDisposition(counters, recorded.disposition);
     });
 
