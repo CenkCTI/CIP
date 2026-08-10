@@ -2,6 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { authKeySchema } from "@/lib/ioc-connectors/credentials/schema";
 import { encryptCredential } from "@/lib/ioc-connectors/credentials/crypto";
@@ -18,6 +19,7 @@ import {
 import { getTechnicalSourceAdapter } from "@/lib/techint/collection/registry";
 import {
   claimManualTechnicalCollection,
+  configureTechnicalCollectorWorkflow,
   enableTechnicalSourceWorkflow,
   setTechnicalSourceStatusWorkflow,
   updateTechnicalSourceSettingsWorkflow,
@@ -25,6 +27,10 @@ import {
 import { runClaimedTechnicalCollection } from "@/lib/techint/collection/orchestrator";
 
 export type TechnicalSourceActionState = { success?: string; error?: string };
+export type TechnicalCollectorActionState = { success?: string; error?: string; token?: string };
+
+const collectorOperationSchema = z.enum(["ENABLE", "PAUSE", "ROTATE"]);
+const collectorPollSchema = z.coerce.number().int().min(30).max(3600);
 
 function refresh() {
   revalidatePath("/techint");
@@ -53,6 +59,48 @@ function safeThreatFoxCredentialError(error: unknown): string {
   if (error.code === "THREATFOX_RATE_LIMITED") return "ThreatFox rate-limited the credential test. Try again later.";
   if (error.code === "THREATFOX_TIMEOUT") return "ThreatFox did not respond before the bounded credential-test timeout.";
   return "ThreatFox could not validate the Auth-Key safely.";
+}
+
+export async function configureTechnicalCollector(
+  _state: TechnicalCollectorActionState,
+  form: FormData,
+): Promise<TechnicalCollectorActionState> {
+  try {
+    const { user } = await requireUser();
+    const operation = collectorOperationSchema.safeParse(form.get("operation"));
+    const poll = collectorPollSchema.safeParse(form.get("poll_interval_seconds") ?? "60");
+    if (!operation.success || !poll.success) {
+      return { error: "Choose a collector poll interval between 30 and 3600 seconds." };
+    }
+
+    const enabled = operation.data !== "PAUSE";
+    const configured = await configureTechnicalCollectorWorkflow({
+      actorId: user.id,
+      enabled,
+      pollIntervalSeconds: poll.data,
+      rotateToken: operation.data === "ROTATE",
+      label: "Desktop collector",
+    });
+    refresh();
+
+    if (operation.data === "PAUSE") {
+      return { success: "Continuous collection paused. Source cursors and history were preserved." };
+    }
+    if (operation.data === "ROTATE") {
+      return {
+        success: "Collector token rotated. The previous desktop token is no longer valid.",
+        token: configured.token ?? undefined,
+      };
+    }
+    return {
+      success: configured.token
+        ? "Continuous collector enabled. Copy the one-time token into the local collector."
+        : "Continuous collector enabled.",
+      token: configured.token ?? undefined,
+    };
+  } catch {
+    return { error: "Continuous collector settings could not be updated safely." };
+  }
 }
 
 export async function configureThreatFoxCredential(
