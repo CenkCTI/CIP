@@ -1,8 +1,15 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { ActionForm, SubmitButton } from "@/components/form-status";
+import { CollectorControl, type TechnicalCollectorAgentView } from "@/components/techint/collector-control";
+import { technicalSourceCatchUpCapability } from "@/lib/techint/collection/catchup";
 import { listTechnicalSources } from "@/lib/techint/collection/registry";
-import { listRecentTechnicalCollectionRuns, listRecentTechnicalSourceAuditEvents, listTechnicalSourceConnections } from "@/lib/techint/collection/queries";
+import {
+  getTechnicalCollectorAgent,
+  listRecentTechnicalCollectionRuns,
+  listRecentTechnicalSourceAuditEvents,
+  listTechnicalSourceConnections,
+} from "@/lib/techint/collection/queries";
 import type { SourceSettingField } from "@/lib/techint/collection/types";
 import {
   configureThreatFoxCredential,
@@ -41,11 +48,13 @@ export default async function Page() {
     { data: connectionData, error: connectionError },
     { data: runData },
     { data: auditData },
+    { data: collectorData, error: collectorError },
     { data: threatFoxCredentialConnection },
   ] = await Promise.all([
     listTechnicalSourceConnections(supabase),
     listRecentTechnicalCollectionRuns(supabase),
     listRecentTechnicalSourceAuditEvents(supabase),
+    getTechnicalCollectorAgent(supabase),
     supabase
       .from("ioc_provider_connections")
       .select("id,enabled,health_status,last_checked_at,last_success_at,last_error_message,archived_at")
@@ -57,6 +66,7 @@ export default async function Page() {
   const connections = (connectionData ?? []) as Array<Record<string, unknown>>;
   const runs = (runData ?? []) as Array<Record<string, unknown>>;
   const audits = (auditData ?? []) as Array<Record<string, unknown>>;
+  const collector = collectorData ? (collectorData as TechnicalCollectorAgentView) : null;
   const registry = listTechnicalSources();
   const byKey = new Map(connections.map((connection) => [String(connection.source_key), connection]));
   const latestRunByKey = new Map<string, Record<string, unknown>>();
@@ -76,13 +86,14 @@ export default async function Page() {
           <p className="citem-eyebrow">CİTEM / TechINT / Collection Operations</p>
           <h1 className="citem-title">Technical sources</h1>
           <p className="citem-subtitle">
-            Configure credentials, collection cadence, and fixed upstream sources here. Source claims become bounded Technical Signals; they are not CİTEM&apos;s final analyst assessment.
+            Configure credentials, source cadence, and continuous collection here. Source claims become bounded Technical Signals; they are not CİTEM&apos;s final analyst assessment.
           </p>
         </div>
         <Link className="citem-button-ghost" href="/techint">Back to Global View</Link>
       </header>
 
       {connectionError ? <div className="card text-red-300">Unable to load Technical Sources. Verify the latest TechINT source migration.</div> : null}
+      {collectorError ? <div className="card text-amber-300">Continuous collector state is unavailable until the Phase 2.3F-A migrations are applied.</div> : <CollectorControl agent={collector} />}
 
       <div className="grid gap-4 xl:grid-cols-3">
         {registry.map((adapter) => {
@@ -93,6 +104,7 @@ export default async function Page() {
           const latestRun = latestRunByKey.get(adapter.metadata.key);
           const fields = adapter.metadata.settingsFields ?? [];
           const isThreatFox = adapter.metadata.key === "THREATFOX";
+          const catchUp = technicalSourceCatchUpCapability(adapter.metadata.key, settings);
           const credentialLabel = isThreatFox
             ? (threatFoxCredentialConfigured ? "Configured" : "Required")
             : adapter.metadata.credentialRequirement;
@@ -111,14 +123,17 @@ export default async function Page() {
                 <div><dt>Credential</dt><dd className="text-stone-200">{credentialLabel}</dd></div>
                 <div><dt>Interval</dt><dd className="text-stone-200">{connection ? `${String(connection.interval_minutes)} min` : `${adapter.metadata.defaultIntervalMinutes} min`}</dd></div>
                 <div><dt>Scheduling</dt><dd className="text-stone-200">{adapter.metadata.scheduled ? (status === "ENABLED" ? "Enabled" : "Inactive") : "Manual only"}</dd></div>
+                <div><dt>Catch-up</dt><dd className="text-stone-200">{catchUp.label}</dd></div>
                 <div><dt>Next run</dt><dd className="text-stone-200">{time(connection?.next_run_at as string | null)}</dd></div>
                 <div><dt>Last started</dt><dd className="text-stone-200">{time(connection?.last_started_at as string | null)}</dd></div>
                 <div><dt>Last success</dt><dd className="text-stone-200">{time(connection?.last_succeeded_at as string | null)}</dd></div>
                 <div><dt>Last failure</dt><dd className="text-stone-200">{time(connection?.last_failed_at as string | null)}</dd></div>
                 <div><dt>Failures</dt><dd className="text-stone-200">{connection ? String(connection.consecutive_failures) : "0"}</dd></div>
-                <div><dt>Latest run</dt><dd className="text-stone-200">{latestRun ? `${String(latestRun.status)} · ${String(latestRun.records_mapped)} mapped` : "—"}</dd></div>
+                <div><dt>Latest run</dt><dd className="text-stone-200">{latestRun ? `${String(latestRun.status)} · ${String(latestRun.records_mapped)} mapped · ${String(latestRun.work_units_completed ?? 0)} units` : "—"}</dd></div>
+                <div><dt>Last bounded work</dt><dd className="text-stone-200">{time(latestRun?.last_work_at as string | null)}</dd></div>
                 <div><dt>Latest error</dt><dd className="truncate text-stone-200">{latestRun?.controlled_error_code ? String(latestRun.controlled_error_code) : "—"}</dd></div>
               </dl>
+              <p className="rounded border border-stone-800 px-3 py-2 text-xs text-stone-500">{catchUp.detail}</p>
 
               {isThreatFox ? (
                 <section className="space-y-3 rounded border border-stone-800 p-3">
@@ -195,8 +210,8 @@ export default async function Page() {
         {!runs.length ? <p className="mt-3 text-sm text-stone-500">No collection runs yet.</p> : (
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="text-xs text-stone-500"><tr><th className="pb-2">Source</th><th>Status</th><th>Trigger</th><th>Started</th><th>Mapped</th><th>Created</th><th>Error</th></tr></thead>
-              <tbody>{runs.map((run) => <tr className="border-t border-stone-800" key={String(run.id)}><td className="py-3">{String(run.source_key)}</td><td>{String(run.status)}</td><td>{String(run.trigger)}</td><td>{time(run.started_at as string)}</td><td>{String(run.records_mapped)}</td><td>{String(run.observations_created)}</td><td className="max-w-xs truncate text-stone-500">{run.controlled_error_code ? `${String(run.controlled_error_code)}: ${String(run.controlled_error_message ?? "")}` : "—"}</td></tr>)}</tbody>
+              <thead className="text-xs text-stone-500"><tr><th className="pb-2">Source</th><th>Status</th><th>Trigger</th><th>Started</th><th>Units</th><th>Last work</th><th>Mapped</th><th>Created</th><th>Error</th></tr></thead>
+              <tbody>{runs.map((run) => <tr className="border-t border-stone-800" key={String(run.id)}><td className="py-3">{String(run.source_key)}</td><td>{String(run.status)}</td><td>{String(run.trigger)}</td><td>{time(run.started_at as string)}</td><td>{String(run.work_units_completed ?? 0)}</td><td>{time(run.last_work_at as string | null)}</td><td>{String(run.records_mapped)}</td><td>{String(run.observations_created)}</td><td className="max-w-xs truncate text-stone-500">{run.controlled_error_code ? `${String(run.controlled_error_code)}: ${String(run.controlled_error_message ?? "")}` : "—"}</td></tr>)}</tbody>
             </table>
           </div>
         )}
