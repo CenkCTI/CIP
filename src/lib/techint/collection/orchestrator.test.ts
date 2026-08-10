@@ -95,6 +95,30 @@ function recordedResult() {
   };
 }
 
+function manyAdapterResult(count: number) {
+  const signals = Array.from({ length: count }, (_, index) => ({
+    ...mappedSignal,
+    signal: {
+      ...mappedSignal.signal,
+      canonicalKey: `cve:CVE-2099-${String(13000 + index)}`,
+      title: `Synthetic orchestrator fixture ${index}`,
+    },
+    observation: {
+      ...mappedSignal.observation,
+      sourceRecordKey: `CVE-2099-${String(13000 + index)}`,
+      sourceRevisionKey: `fixture-${index}`,
+      sourceTitle: `Synthetic orchestrator fixture ${index}`,
+    },
+  }));
+  return {
+    recordsSeen: count,
+    recordsMapped: count,
+    signals,
+    issues: [],
+    nextCursor: { version: 1, catalogRelease: "fixture-many" },
+  };
+}
+
 describe("TechINT collection orchestrator", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -138,7 +162,15 @@ describe("TechINT collection orchestrator", () => {
       p_signal_ids: [recordedResult().signal_id],
     });
     expect(result).toMatchObject({
-      intelligenceEvaluation: { batches: 1, requested: 1, evaluated: 1, profileMatchesChanged: 0 },
+      intelligenceEvaluation: {
+        batches: 1,
+        attempts: 1,
+        requested: 1,
+        evaluated: 1,
+        profileMatchesChanged: 0,
+        failed: 0,
+        complete: true,
+      },
     });
     expect(mocks.failTechnicalCollection).not.toHaveBeenCalled();
   });
@@ -162,22 +194,67 @@ describe("TechINT collection orchestrator", () => {
     });
     expect(result).toMatchObject({
       counters: expect.objectContaining({ duplicateObservations: 1 }),
-      intelligenceEvaluation: { requested: 1, evaluated: 1 },
+      intelligenceEvaluation: { requested: 1, evaluated: 1, failed: 0, complete: true },
     });
   });
 
-  it("keeps a successful collection authoritative when derived intelligence evaluation fails", async () => {
+  it("retries a failed heavy intelligence batch in smaller chunks and drains the remaining queue", async () => {
+    const signalCount = 60;
+    mocks.getTechnicalSourceAdapter.mockReturnValue({ collect: vi.fn().mockResolvedValue(manyAdapterResult(signalCount)) });
+    let recordIndex = 0;
+    mocks.recordTechnicalSignal.mockImplementation(async () => ({
+      ...recordedResult(),
+      signal_id: `10000000-0000-4000-8000-${String(200000000000 + recordIndex++).padStart(12, "0")}`,
+    }));
+    mocks.evaluateTechnicalSignalIntelligenceBatchWorkflow.mockImplementation(async (parameters: { p_signal_ids: string[] }) => {
+      if (parameters.p_signal_ids.length > 10) throw new Error("statement timeout");
+      return {
+        requested: parameters.p_signal_ids.length,
+        evaluated: parameters.p_signal_ids.length,
+        profile_matches_changed: 0,
+        engine_version: "2.3E-v1",
+      };
+    });
+
+    const result = await runClaimedTechnicalCollection(claim, vi.fn() as unknown as typeof fetch);
+
+    expect(result.success).toBe(true);
+    expect(mocks.evaluateTechnicalSignalIntelligenceBatchWorkflow.mock.calls.map(([parameters]) => parameters.p_signal_ids.length)).toEqual([
+      50, 10, 10, 10, 10, 10, 10,
+    ]);
+    expect(result).toMatchObject({
+      intelligenceEvaluation: {
+        batches: 6,
+        attempts: 7,
+        requested: 60,
+        evaluated: 60,
+        failed: 0,
+        complete: true,
+      },
+    });
+    expect(mocks.failTechnicalCollection).not.toHaveBeenCalled();
+  });
+
+  it("keeps a successful collection authoritative and reports incomplete derived intelligence", async () => {
     mocks.evaluateTechnicalSignalIntelligenceBatchWorkflow.mockRejectedValue(new Error("projection unavailable"));
     const result = await runClaimedTechnicalCollection(claim, vi.fn() as unknown as typeof fetch);
     expect(result.success).toBe(true);
-    expect(result).toMatchObject({ intelligenceEvaluation: null });
+    expect(result).toMatchObject({
+      intelligenceEvaluation: {
+        batches: 0,
+        attempts: 1,
+        requested: 1,
+        evaluated: 0,
+        failed: 1,
+        complete: false,
+      },
+    });
     expect(mocks.failTechnicalCollection).not.toHaveBeenCalled();
   });
 
   it("fails the exact run without completing or advancing a cursor when persistence fails", async () => {
     mocks.recordTechnicalSignal.mockRejectedValue(new Error("database detail must not escape"));
     mocks.failTechnicalCollection.mockResolvedValue({ run_id: claim.run_id, status: "FAILED" });
-
     const result = await runClaimedTechnicalCollection(claim, vi.fn() as unknown as typeof fetch);
 
     expect(result).toMatchObject({ success: false, error: "SIGNAL_RECORDING_FAILED" });
