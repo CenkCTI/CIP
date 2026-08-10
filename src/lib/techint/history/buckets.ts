@@ -21,6 +21,11 @@ export function floorTechnicalHistoryTime(value: Date | string | number, granula
   return new Date(Math.floor(input / step) * step);
 }
 
+export function technicalHistoryCutoffIso(hours: number, now: Date = new Date()) {
+  if (!Number.isFinite(hours) || hours <= 0) throw new Error("INVALID_HISTORY_WINDOW");
+  return new Date(now.getTime() - hours * 60 * 60 * 1000).toISOString();
+}
+
 export function boundedTechnicalHistoryWindow(input: {
   from: Date | string | number;
   to: Date | string | number;
