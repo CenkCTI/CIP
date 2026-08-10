@@ -12,6 +12,8 @@ import {
   setProfileStatusWorkflow,
   transitionItemWorkflow,
   updateProfileDefinitionWorkflow,
+  setProfileMatchLifecycleWorkflow,
+  unsnoozeProfileMatchWorkflow,
 } from "@/lib/techint/trusted-workflow-client";
 
 export type IntelActionResult = { success?: string; error?: string };
@@ -223,3 +225,11 @@ export async function refreshInvestigationIntelProfile(
     return safe();
   }
 }
+
+export async function setProfileMatchLifecycle(matchId:string,lifecycle:"NEW"|"REVIEWED"|"ACCEPTED"|"DISMISSED"|"NOT_RELEVANT"|"SNOOZED",snoozedUntil?:string):Promise<IntelActionResult>{
+  try{const {user}=await requireUser();if(!idSchema.safeParse(matchId).success)return safe();
+    const until=snoozedUntil?new Date(snoozedUntil):null;if(snoozedUntil&&Number.isNaN(until?.getTime()))return safe("Invalid snooze time.");
+    const {error}=await setProfileMatchLifecycleWorkflow({p_actor:user.id,p_match_id:matchId,p_lifecycle:lifecycle,p_snoozed_until:until?.toISOString()??null});if(error)return safe("That match lifecycle transition is not allowed.");refresh();return{success:"Match lifecycle updated."};
+  }catch{return safe();}
+}
+export async function unsnoozeProfileMatch(matchId:string):Promise<IntelActionResult>{try{const {user}=await requireUser();if(!idSchema.safeParse(matchId).success)return safe();const{error}=await unsnoozeProfileMatchWorkflow({p_actor:user.id,p_match_id:matchId});if(error)return safe("This match cannot be unsnoozed.");refresh();return{success:"Match unsnoozed."};}catch{return safe();}}

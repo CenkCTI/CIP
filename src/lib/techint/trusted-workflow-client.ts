@@ -42,6 +42,8 @@ export const transitionItemWorkflow = (parameters: Parameters) =>
   techIntRpc<string | null>("transition_intel_profile_item", parameters);
 export const refreshInvestigationProfileWorkflow = (parameters: Parameters) =>
   techIntRpc<TechIntRefreshCounts>("refresh_investigation_intel_profile", parameters);
+export const setProfileMatchLifecycleWorkflow=(parameters:Parameters)=>techIntRpc<Record<string,unknown>>("set_technical_signal_profile_match_lifecycle",parameters);
+export const unsnoozeProfileMatchWorkflow=(parameters:Parameters)=>techIntRpc<Record<string,unknown>>("unsnooze_technical_signal_profile_match",parameters);
 
 export type TechIntRefreshCounts = {
   added: number;

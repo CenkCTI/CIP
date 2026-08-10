@@ -1,32 +1,10 @@
 import Link from "next/link";
-import { EmptyTechInt } from "@/components/techint/nav";
+import { requireUser } from "@/lib/auth";
+import { listGlobalTechnicalAgenda } from "@/lib/techint/queries";
 
-export default function Page(){
-  const cards=["Global Technical Picture","Global Critical","Vulnerability Watch","Malware & Campaigns","Technical Reports","Daily Technical Brief"];
-  return <section className="space-y-5">
-    <header className="citem-page-header">
-      <div>
-        <p className="citem-eyebrow">CİTEM / TechINT / Global View</p>
-        <h1 className="citem-title">Global View</h1>
-        <p className="citem-subtitle">Profile-independent technical intelligence overview. Phase 2.3D adds canonical entity normalization but does not populate rankings, matches, alerts, or analyst assessments.</p>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Link className="citem-button" href="/techint/entities">Entity normalization</Link>
-        <Link className="citem-button-ghost" href="/techint/sources">Collection operations</Link>
-      </div>
-    </header>
-    <div className="grid gap-4 md:grid-cols-2">
-      <div className="card panel-corners">
-        <p className="citem-eyebrow">Phase 2.3C</p>
-        <h2 className="citem-section-title mt-2">Technical source collection</h2>
-        <p className="mt-2 text-sm text-stone-500">Manage fixed Technical Sources, manual synchronization, bounded schedules, and run history. External source-backed signals do not represent CİTEM&apos;s final analyst assessment.</p>
-      </div>
-      <div className="card panel-corners">
-        <p className="citem-eyebrow">Phase 2.3D</p>
-        <h2 className="citem-section-title mt-2">Taxonomy &amp; entity normalization</h2>
-        <p className="mt-2 text-sm text-stone-500">Resolve immutable source assertions into owner-global canonical entities with deterministic identity or explicit confirmed aliases. Ambiguous names remain reviewable.</p>
-      </div>
-    </div>
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{cards.map(c=><EmptyTechInt key={c} title={c} body="Not populated in Phase 2.3D. Matching, ranking, alerts, reports, and AI briefs remain later-phase work."/>)}</div>
-  </section>
+type AgendaRow={id:string;priority:string;reason_codes:string[];source_systems:string[];technical_signals:{title:string;signal_type:string;lifecycle:string;first_seen_at:string}|null};
+export default async function Page(){
+ const {supabase}=await requireUser();const {data,count}=await listGlobalTechnicalAgenda(supabase);const agenda=(data??[]) as unknown as AgendaRow[];
+ return <section className="space-y-5"><header className="citem-page-header"><div><p className="citem-eyebrow">CİTEM / TechINT / Global View</p><h1 className="citem-title">Global View</h1><p className="citem-subtitle">Profile-independent, deterministic global technical agenda. Priority is not organizational or business risk.</p></div><div className="flex gap-2"><Link className="citem-button" href="/techint/entities">Entity normalization</Link><Link className="citem-button-ghost" href="/techint/sources">Collection operations</Link></div></header>
+ <div className="card"><div className="flex justify-between"><h2 className="citem-section-title">Global technical agenda</h2><span className="text-sm text-stone-500">{count??0} evaluated</span></div><div className="mt-3 space-y-3">{agenda.map(row=><article key={row.id} className="rounded border border-stone-800 p-3"><p className="citem-eyebrow">{row.priority} · {row.technical_signals?.lifecycle}</p><h3 className="font-semibold">{row.technical_signals?.title}</h3><p className="text-xs text-stone-500">{row.technical_signals?.signal_type} · first observed {row.technical_signals&&new Date(row.technical_signals.first_seen_at).toLocaleString()} · {row.source_systems.length} source system(s)</p><p className="mt-2 text-sm">Why: {row.reason_codes.join(" · ")||"Baseline technical context"}</p></article>)}{!agenda.length&&<p className="text-sm text-stone-500">No evaluated signals yet. Collection workflows populate this projection without AI.</p>}</div></div></section>;
 }

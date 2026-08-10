@@ -16,6 +16,7 @@ import {
 import { IntelProfileForm } from "./profile-form";
 
 type AuditEvent = { id: string; action: string; created_at: string };
+type ProfileMatch = {id:string;relevance:string;match_quality:string;lifecycle:string;reason_codes:string[];pending_identity_count:number;technical_signals?:{title:string}|null;technical_signal_global_priorities?:{priority:string;reason_codes:string[]}|null};
 type Action = (formData: FormData) => void | Promise<void>;
 const asFormAction = (action: unknown) => action as Action;
 
@@ -24,11 +25,15 @@ export function IntelProfileDetail({
   items,
   audit,
   investigation,
+  matches = [],
+  matchCount = 0,
 }: {
   profile: IntelProfile;
   items: IntelProfileItem[];
   audit: AuditEvent[];
   investigation?: boolean;
+  matches?: ProfileMatch[];
+  matchCount?: number;
 }) {
   const active = items.filter((item) => item.state === "ACTIVE");
   const pending = items.filter((item) => item.state === "PENDING");
@@ -42,9 +47,8 @@ export function IntelProfileDetail({
         </p>
         <h1 className="citem-title">{profile.name}</h1>
         <p className="mt-2 text-sm text-stone-400">
-          This profile defines what future TechINT matching should monitor
-          {investigation ? " for this Investigation" : ""}. Matching and technical signal
-          collection are not active in Phase 2.3A.
+          This live watch feed matches canonical identities and immutable source assertions
+          {investigation ? " for this Investigation" : ""}. Unresolved identity never gates visibility.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <form
@@ -79,6 +83,15 @@ export function IntelProfileDetail({
             </form>
           )}
         </div>
+      </div>
+
+      <div className="card">
+        <div className="flex justify-between"><h2 className="citem-section-title">Matched intelligence feed</h2><span className="text-sm text-stone-500">{matchCount} matches</span></div>
+        <div className="mt-3 space-y-3">{matches.map((match)=><article key={match.id} className="rounded border border-stone-800 p-3">
+          <p className="citem-eyebrow">{match.technical_signal_global_priorities?.priority ?? "INFO"} GLOBAL · {match.lifecycle}</p><h3 className="font-semibold">{match.technical_signals?.title}</h3>
+          <div className="mt-2 grid gap-1 text-sm md:grid-cols-3"><div>Profile relevance: <b>{match.relevance}</b></div><div>Match quality: <b>{match.match_quality}</b></div><div>Identity pending: <b>{match.pending_identity_count}</b></div></div>
+          <p className="mt-2 text-sm">Why this matched: {match.reason_codes.join(" · ")}</p><p className="mt-1 text-xs text-stone-500">Global context: {(match.technical_signal_global_priorities?.reason_codes ?? []).join(" · ")}</p>
+        </article>)}{!matches.length&&<p className="text-sm text-stone-500">No active signal matches yet.</p>}</div>
       </div>
 
       <IntelProfileForm profile={profile} action={updateIntelProfile.bind(null, profile.id)} />
