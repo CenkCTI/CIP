@@ -24,6 +24,7 @@ const DEFAULT_WORK_UNIT_SIGNALS = 50;
 
 const workStateSchema = z.object({
   version: z.literal(1),
+  snapshotAt: z.iso.datetime({ offset: true }),
   snapshotHash: z.string().regex(/^[a-f0-9]{64}$/),
   totalSignals: z.number().int().nonnegative().max(2500),
   nextOffset: z.number().int().nonnegative().max(2500),
@@ -143,10 +144,12 @@ export async function runTechnicalCollectorWorkUnit(input: {
       runId: input.runId,
       leaseToken: input.leaseToken,
     });
+    const previous = Object.keys(claim.work_state).length ? workStateSchema.parse(claim.work_state) : null;
+    const snapshotAt = previous?.snapshotAt ?? new Date().toISOString();
     const adapter = getTechnicalSourceAdapter(claim.source_key);
     const credential = await resolveTechnicalSourceCredential(claim.source_key, claim.owner_id);
     const result = adapterResultSchema.parse(await adapter.collect({
-      now: new Date(),
+      now: new Date(snapshotAt),
       cursor: claim.cursor,
       settings: claim.settings,
       fetchImpl: input.fetchImpl ?? fetch,
@@ -154,7 +157,6 @@ export async function runTechnicalCollectorWorkUnit(input: {
     }));
 
     const digest = stableSnapshotHash(result);
-    const previous = Object.keys(claim.work_state).length ? workStateSchema.parse(claim.work_state) : null;
     if (previous && (previous.snapshotHash !== digest || previous.totalSignals !== result.signals.length)) {
       throw new CollectionError("COLLECTION_FAILED", "The upstream source snapshot changed during an incremental run.", null, "SOURCE_SNAPSHOT_CHANGED");
     }
@@ -176,7 +178,7 @@ export async function runTechnicalCollectorWorkUnit(input: {
     const checkpoint = await checkpointIncrementalTechnicalCollection({
       runId: claim.run_id,
       leaseToken: input.leaseToken,
-      workState: { version: 1, snapshotHash: digest, totalSignals: result.signals.length, nextOffset },
+      workState: { version: 1, snapshotAt, snapshotHash: digest, totalSignals: result.signals.length, nextOffset },
       counters,
       issues: offset === 0 ? result.issues : [],
     });
@@ -184,7 +186,11 @@ export async function runTechnicalCollectorWorkUnit(input: {
     const done = nextOffset >= result.signals.length;
     if (done) {
       await completeIncrementalTechnicalCollection({ runId: claim.run_id, leaseToken: input.leaseToken, proposedCursor: result.nextCursor });
-      await finishTechnicalCollectorTick({ agentId: auth.agent_id, claimed: 1, succeeded: 1, failed: 0, errorCode: null });
+      try {
+        await finishTechnicalCollectorTick({ agentId: auth.agent_id, claimed: 1, succeeded: 1, failed: 0, errorCode: null });
+      } catch {
+        // Source completion is authoritative even if collector status bookkeeping fails.
+      }
     }
 
     return {
