@@ -102,6 +102,19 @@ async function tick() {
     console.log(
       `[${new Date().toISOString()}] ${due ? "tick" : "heartbeat"}: claimed=${claimed} succeeded=${succeeded} failed=${failed}`,
     );
+
+    if (Array.isArray(payload.runs)) {
+      for (const run of payload.runs) {
+        const sourceKey = typeof run?.sourceKey === "string" ? run.sourceKey : "UNKNOWN_SOURCE";
+        if (run?.success === true) {
+          console.log(`  source ${sourceKey}: SUCCEEDED`);
+        } else {
+          const errorCode = typeof run?.errorCode === "string" ? run.errorCode : "SOURCE_RUN_FAILED";
+          console.error(`  source ${sourceKey}: FAILED (${errorCode})`);
+        }
+      }
+    }
+
     failureBackoffSeconds = 5;
     return { stop: false, waitSeconds: Math.max(5, Math.min(3600, Number(payload.waitSeconds ?? 60))) };
   } finally {
