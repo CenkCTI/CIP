@@ -9,6 +9,7 @@ import {
   listTechnicalBaselineProfiles,
 } from "@/lib/techint/analysis/queries";
 import type { TechnicalAnomalyMetric } from "@/lib/techint/analysis/types";
+import { technicalHistoryCutoffIso } from "@/lib/techint/history/buckets";
 
 function time(value: unknown) {
   return typeof value === "string" ? new Date(value).toLocaleString() : "—";
@@ -21,7 +22,7 @@ function number(value: unknown, digits = 2) {
 
 export default async function Page() {
   const { supabase } = await requireUser();
-  const from = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const from = technicalHistoryCutoffIso(24);
   const [series, baselines, evaluations, maintenance, backfill] = await Promise.all([
     listTechnicalAnalysisSeries(supabase),
     listTechnicalBaselineProfiles(supabase),
@@ -69,7 +70,7 @@ export default async function Page() {
       </header>
 
       {unavailable ? (
-        <div className="card text-amber-300">Baseline diagnostics are unavailable until migration 049 is applied and bounded anomaly maintenance has run.</div>
+        <div className="card text-amber-300">Baseline diagnostics are unavailable until migrations 049–050 are applied and bounded anomaly maintenance has run.</div>
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
