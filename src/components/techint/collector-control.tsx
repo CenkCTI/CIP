@@ -47,13 +47,14 @@ export function CollectorControl({ agent }: { agent: TechnicalCollectorAgentView
     <section className="card panel-corners space-y-4 border-l-2 border-l-amber-500/60">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="citem-eyebrow">Phase 2.3F-A/B / Continuous collection &amp; history</p>
+          <p className="citem-eyebrow">Phase 2.3F-A/B/C / Collection, history &amp; semantics</p>
           <h2 className="citem-section-title mt-1">Desktop collector</h2>
           <p className="mt-2 max-w-3xl text-sm text-stone-400">
             The desktop companion owns the long-running collection loop even when the browser is closed. It claims one due source and drains it through bounded server work units, then requests rate-gated historical activity/coverage maintenance. Provider API keys and the Supabase service role remain server-side.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Link className="citem-button-ghost" href="/techint/sources/semantics">Source semantics</Link>
           <Link className="citem-button-ghost" href="/techint/sources/history">History diagnostics</Link>
           <span className="rounded border border-stone-700 px-2 py-1 text-xs font-semibold text-stone-300">{status}</span>
         </div>

@@ -32,11 +32,12 @@ export async function recordTechnicalSignal(input: RecordTechnicalSignalInput) {
 
   let response: Awaited<ReturnType<typeof client.rpc>>;
   try {
-    response = await client.rpc("record_technical_signal", {
+    response = await client.rpc("record_technical_signal_with_semantics", {
       p_actor: parsed.actorId,
       p_signal: parsed.signal,
       p_observation: parsed.observation,
       p_entity_assertions: parsed.entityAssertions,
+      p_semantics: parsed.observationSemantics ?? null,
     });
   } catch {
     throw new TechnicalSignalRecordError(null, null, "TRANSPORT");

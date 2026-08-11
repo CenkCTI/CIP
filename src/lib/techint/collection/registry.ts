@@ -7,6 +7,7 @@ import { nvdCveAdapter } from "./providers/nvd-cve";
 import { testSyntheticAdapter } from "./providers/test-synthetic";
 import { threatFoxTechnicalAdapter } from "./providers/threatfox";
 import { CollectionError } from "./errors";
+import { observationSemanticsForSourceKey, sourceSemanticMetadataForKey } from "@/lib/techint/semantics/source-semantics";
 import type { TechnicalSourceAdapter, TechnicalSourceKey } from "./types";
 
 const nvdAdapter: TechnicalSourceAdapter = {
@@ -26,13 +27,35 @@ const nvdAdapter: TechnicalSourceAdapter = {
   },
 };
 
+function withSourceSemantics(adapter: TechnicalSourceAdapter): TechnicalSourceAdapter {
+  const semanticMetadata = sourceSemanticMetadataForKey(adapter.metadata.key);
+  return {
+    ...adapter,
+    metadata: {
+      ...adapter.metadata,
+      semantics: semanticMetadata,
+    },
+    async collect(context) {
+      const result = await adapter.collect(context);
+      const observationSemantics = observationSemanticsForSourceKey(adapter.metadata.key);
+      return {
+        ...result,
+        signals: result.signals.map((signal) => ({
+          ...signal,
+          observationSemantics: signal.observationSemantics ?? observationSemantics,
+        })),
+      };
+    },
+  };
+}
+
 const adapters: Record<TechnicalSourceKey, TechnicalSourceAdapter> = {
-  TEST_SYNTHETIC: testSyntheticAdapter,
-  CISA_KEV: cisaKevAdapter,
-  NVD_CVE: nvdAdapter,
-  FIRST_EPSS: firstEpssAdapter,
-  THREATFOX: threatFoxTechnicalAdapter,
-  MALWAREBAZAAR: malwareBazaarAdapter,
+  TEST_SYNTHETIC: withSourceSemantics(testSyntheticAdapter),
+  CISA_KEV: withSourceSemantics(cisaKevAdapter),
+  NVD_CVE: withSourceSemantics(nvdAdapter),
+  FIRST_EPSS: withSourceSemantics(firstEpssAdapter),
+  THREATFOX: withSourceSemantics(threatFoxTechnicalAdapter),
+  MALWAREBAZAAR: withSourceSemantics(malwareBazaarAdapter),
 };
 
 export function isSyntheticSourceEnabled(env: NodeJS.ProcessEnv = process.env) {
