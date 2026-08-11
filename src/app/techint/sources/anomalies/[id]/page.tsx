@@ -17,11 +17,13 @@ function time(value: unknown) {
 }
 
 function number(value: unknown, digits = 2) {
+  if (value === null || value === undefined || value === "") return "—";
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed.toFixed(digits).replace(/\.00$/, "") : "—";
 }
 
 function percent(value: unknown) {
+  if (value === null || value === undefined || value === "") return "—";
   const parsed = Number(value);
   return Number.isFinite(parsed) ? `${(parsed * 100).toFixed(1)}%` : "—";
 }
