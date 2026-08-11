@@ -183,9 +183,10 @@ A collection failure that produces zero mapped records must **not** become a vol
 
 ## Database model
 
-Migration:
+Migrations:
 
-`202608110049_phase2_3f_d_baseline_anomaly.sql`
+- `202608110049_phase2_3f_d_baseline_anomaly.sql` — primary Phase 2.3F-D schema, robust baseline/evaluation RPCs, bounded maintenance, RLS and retention;
+- `202608110050_phase2_3f_d_backfill_reopen_hardening.sql` — additive hardening that safely reopens a completed D backfill if Phase 2.3F-B later materializes older eligible coverage within the 30-day analysis horizon.
 
 Migrations 041–048 remain immutable.
 
@@ -209,6 +210,8 @@ Late observation/coverage repair updates the same evaluation identity rather tha
 
 Bounded per-series 30-day evaluation backfill cursor.
 
+The cursor is not treated as permanently final while Phase 2.3F-B history is still expanding. Migration 050 detects newly materialized eligible coverage buckets that lack a D evaluation and reopens the series from the earliest missing bucket. This prevents a race where historical coverage arrives after D previously declared its own backfill complete.
+
 ### `technical_anomaly_maintenance_state`
 
 Owner-scoped five-minute rate gate and maintenance timestamps.
@@ -227,6 +230,7 @@ Analysis uses an independent database rate gate. Analysis failure is isolated: i
 A D maintenance cycle:
 
 - refreshes analytical-series identities;
+- repairs/reopens backfill state if B exposed older eligible coverage;
 - evaluates at most 20 recent series/buckets;
 - advances at most 12 historical evaluations;
 - compacts evaluations older than one year at most once per day.
@@ -303,13 +307,15 @@ The PostgreSQL harness verifies:
 - authenticated direct writes/RPC execution are denied;
 - cross-owner RLS isolation holds.
 
+The Phase 2.3F-C harness is also phase-bounded: it materializes only migrations earlier than 048 before testing migration 048 itself, so future downstream migrations cannot invalidate C's historical migration-boundary test.
+
 Vitest validates versioned/bounded D configuration.
 
 ## Preview acceptance
 
 After CI is green:
 
-1. Apply migration 049 exactly once to Preview/test. Do not rerun 041–048.
+1. Apply migration 049 exactly once to Preview/test, followed by migration 050 exactly once. Do not rerun 041–048.
 2. Reload PostgREST schema cache if required.
 3. Run one bounded desktop maintenance cycle.
 4. Open `/techint/sources/anomalies` and confirm production series materialize.
@@ -318,7 +324,8 @@ After CI is green:
 7. Observe/create a controlled provider failure (for example the existing rejected MalwareBazaar credential case) and verify `DEGRADED_COVERAGE` suppression, not `VOLUME_DROP`.
 8. Verify a successful scheduled collection opportunity with no activity can be represented as a real zero.
 9. Re-run maintenance for the same closed bucket and verify no duplicate evaluation rows and stable fingerprints when inputs did not change.
-10. Verify another owner cannot read the first owner's series, baselines, evaluations, or backfill state.
+10. Verify that if B later materializes an older eligible coverage bucket inside the 30-day horizon, D backfill reopens and evaluates the missing bucket rather than leaving a silent hole.
+11. Verify another owner cannot read the first owner's series, baselines, evaluations, or backfill state.
 
 Manual acceptance should be performed one step at a time.
 
