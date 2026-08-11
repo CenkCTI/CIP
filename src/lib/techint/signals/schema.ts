@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { entityKinds, entityRoles, recordingAssertionBases, signalLifecycles, signalSeverities, signalTypes, sourceFamilies } from "./types";
 import { indicatorCanonicalKey, validateCanonicalKey, validateSourceDefinedCanonicalKey } from "./canonical-key";
+import {
+  technicalObservationBases,
+  technicalSemanticClassificationBases,
+  technicalSemanticKinds,
+  technicalSourceClasses,
+} from "@/lib/techint/semantics/types";
 
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
@@ -49,10 +55,19 @@ export const signalEntityAssertionSchema = z.object({
   }
 });
 
+export const observationSemanticsSchema = z.object({
+  sourceClass: z.enum(technicalSourceClasses),
+  observationBasis: z.enum(technicalObservationBases),
+  semanticKind: z.enum(technicalSemanticKinds),
+  semanticsVersion: z.string().trim().min(1).max(80).regex(/^[A-Za-z0-9._-]+$/),
+  classificationBasis: z.enum(technicalSemanticClassificationBases),
+}).strict();
+
 export const recordTechnicalSignalSchema = z.object({
   actorId: z.uuid(),
   signal: z.object({ signalType: z.enum(signalTypes), canonicalKey: z.string().trim().min(1).max(700), title: z.string().trim().min(1).max(500), summary: z.string().max(4000), lifecycle: z.enum(signalLifecycles), severity: z.enum(signalSeverities), confidence: z.number().int().min(0).max(100).nullable(), facts: boundedJsonObject(65536), publishedAt: instant.nullable(), observedAt: instant.nullable(), effectiveAt: instant, supersededBySignalId: z.uuid().nullable().optional() }).strict(),
   observation: z.object({ sourceFamily: z.enum(sourceFamilies), sourceSystem: identifier, sourceRecordKey: identifier, sourceRevisionKey: identifier.nullable().optional(), sourceUrl: safeUrl.nullable().optional(), sourceTitle: z.string().trim().max(500).nullable().optional(), sourcePublishedAt: instant.nullable(), sourceModifiedAt: instant.nullable(), sourceObservedAt: instant.nullable(), receivedAt: instant, effectiveAt: instant, sourceSnapshot: boundedJsonObject(65536) }).strict(),
+  observationSemantics: observationSemanticsSchema.optional(),
   entityAssertions: z.array(signalEntityAssertionSchema).max(100),
 }).strict().superRefine((value, context) => {
   if (value.signal.effectiveAt !== value.observation.effectiveAt) context.addIssue({ code: "custom", path: ["observation", "effectiveAt"], message: "Effective times must match exactly." });
