@@ -1,5 +1,6 @@
 import type { RecordTechnicalSignalInput } from "@/lib/techint/signals/schema";
 import type { TechnicalSignalSourceFamily } from "@/lib/techint/signals/types";
+import type { TechnicalSourceSemanticMetadata } from "@/lib/techint/semantics/types";
 
 export const technicalSourceKeys = [
   "TEST_SYNTHETIC",
@@ -42,6 +43,7 @@ export type SourceMetadata = {
   fixedHosts: readonly string[];
   settingsFields?: readonly SourceSettingField[];
   testSynthetic?: boolean;
+  semantics?: TechnicalSourceSemanticMetadata;
 };
 
 export type CollectionIssue = {
