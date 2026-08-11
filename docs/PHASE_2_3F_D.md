@@ -186,7 +186,8 @@ A collection failure that produces zero mapped records must **not** become a vol
 Migrations:
 
 - `202608110049_phase2_3f_d_baseline_anomaly.sql` — primary Phase 2.3F-D schema, robust baseline/evaluation RPCs, bounded maintenance, RLS and retention;
-- `202608110050_phase2_3f_d_backfill_reopen_hardening.sql` — additive hardening that safely reopens a completed D backfill if Phase 2.3F-B later materializes older eligible coverage within the 30-day analysis horizon.
+- `202608110050_phase2_3f_d_backfill_reopen_hardening.sql` — additive hardening that safely reopens a completed D backfill if Phase 2.3F-B later materializes older eligible coverage within the 30-day analysis horizon;
+- `202608110051_phase2_3f_d_empty_baseline_hardening.sql` — additive hardening that normalizes an empty eligible sample set to `sample_count=0`, `method=NONE`, and `INSUFFICIENT_HISTORY` instead of propagating grouped aggregate NULLs into baseline persistence.
 
 Migrations 041–048 remain immutable.
 
@@ -199,6 +200,8 @@ Deterministic analytical series identity and semantic contract.
 Current recomputable baseline profile per series. Stores readiness, robust statistics, sample provenance, fingerprints, engine/config versions, and `as_of`.
 
 Historical backfill is allowed to calculate an older baseline for an evaluation, but cannot replace a newer current profile because profile upsert is monotonic on `as_of`.
+
+An empty eligible history is a normal analytical state: the current profile stores zero samples with `method=NONE` and remains `INSUFFICIENT_HISTORY`.
 
 ### `technical_anomaly_evaluations`
 
@@ -301,6 +304,7 @@ The PostgreSQL harness verifies:
 - manual recomputation changes the input fingerprint without duplicating the evaluation row;
 - degraded provider collection is suppressed and never emitted as a volume drop;
 - COMPLETE scheduled collection with no activity row becomes a valid zero;
+- empty history remains a persisted `INSUFFICIENT_HISTORY` baseline state instead of raising a NOT NULL failure;
 - repeated evaluation is idempotent;
 - anomaly backfill respects the requested bound;
 - unbounded maintenance requests are rejected;
@@ -315,7 +319,7 @@ Vitest validates versioned/bounded D configuration.
 
 After CI is green:
 
-1. Apply migration 049 exactly once to Preview/test, followed by migration 050 exactly once. Do not rerun 041–048.
+1. Apply migration 049 exactly once to Preview/test, then migration 050 exactly once, then migration 051 exactly once. Do not rerun 041–048.
 2. Reload PostgREST schema cache if required.
 3. Run one bounded desktop maintenance cycle.
 4. Open `/techint/sources/anomalies` and confirm production series materialize.
