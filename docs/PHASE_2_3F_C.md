@@ -36,7 +36,9 @@ Unknown historical sources remain explicitly `UNKNOWN` rather than receiving inv
 
 ## Source character
 
-Source metadata additionally exposes categorical authority, semantic collection mode, freshness semantics, `represents`, and `doesNotRepresent` descriptions. No numeric trust score is introduced.
+Source metadata additionally exposes categorical authority, semantic collection mode, explicit coverage semantics, freshness semantics, `represents`, and `doesNotRepresent` descriptions. No numeric trust score is introduced.
+
+`coverageSemantics` describes the population or information universe a source can speak about. It is separate from Phase 2.3F-B collection coverage: a source can be collected with `COMPLETE` operational coverage while still representing only a selective catalog, sharing community, scoring population, or repository-submission universe.
 
 Important examples:
 
@@ -52,7 +54,7 @@ The server-side source registry attaches deterministic semantics to adapter outp
 
 The wrapper validates semantics against the source-system mapping, calls the existing `record_technical_signal` function, and writes the semantic projection in the same database transaction. A mismatch fails the transaction rather than committing an observation with contradictory semantics.
 
-Legacy callers that omit semantic fields are conservatively classified server-side from `sourceSystem`; unknown systems receive `UNKNOWN` semantics.
+Legacy callers that omit semantic fields are conservatively classified server-side from `sourceSystem`; unknown systems receive `UNKNOWN` semantics. The generic trusted signal client remains provider-independent; provider-specific runtime semantics belong to the collection registry/adapter boundary while migration 048 contains the immutable v1 database mapping needed for backfill and enforcement.
 
 ## Historical backfill
 
@@ -62,7 +64,7 @@ No AI, natural-language inference, or arbitrary trust judgement is used.
 
 ## UI
 
-`/techint/sources/semantics` provides a bounded source-semantics diagnostic surface showing source class, authority, basis, semantic kind, collection mode, freshness semantics, and the `Represents` / `Does not represent` boundary.
+`/techint/sources/semantics` provides a bounded source-semantics diagnostic surface showing source class, authority, basis, semantic kind, collection mode, coverage semantics, freshness semantics, and the `Represents` / `Does not represent` boundary.
 
 This is not the final Global View.
 
