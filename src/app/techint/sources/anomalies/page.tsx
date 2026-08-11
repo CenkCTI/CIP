@@ -16,6 +16,7 @@ function time(value: unknown) {
 }
 
 function number(value: unknown, digits = 2) {
+  if (value === null || value === undefined || value === "") return "—";
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed.toFixed(digits).replace(/\.00$/, "") : "—";
 }
@@ -118,7 +119,7 @@ export default async function Page() {
                     <td>{String(row.signal_type)}</td>
                     <td>{metricLabel(metric)}</td>
                     <td>{baseline ? String(baseline.status) : "—"}</td>
-                    <td>{baseline ? String(baseline.sample_count) : "0"}</td>
+                    <td>{baseline ? String(baseline.sample_count) : "—"}</td>
                     <td>{number(baseline?.median_value)}</td>
                     <td>{number(baseline?.mad_value)}</td>
                     <td>{number(evaluation?.target_value)}</td>
