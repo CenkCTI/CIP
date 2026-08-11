@@ -83,6 +83,7 @@ jobs:
           run_check phase2-3f-a-migration bash scripts/test-phase2-3f-a-migration.sh
           run_check phase2-3f-b-migration bash scripts/test-phase2-3f-b-migration.sh
           run_check phase2-3f-c-migration bash scripts/test-phase2-3f-c-migration.sh
+          run_check phase2-3f-d-migration bash scripts/test-phase2-3f-d-migration.sh
 
           cat validation-logs/summary.txt
           echo "failed=${failed}" >> "$GITHUB_OUTPUT"
