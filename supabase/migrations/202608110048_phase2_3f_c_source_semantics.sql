@@ -142,8 +142,8 @@ as $$
 declare
   result jsonb;
   expected jsonb;
-  observation_id uuid;
-  signal_id uuid;
+  v_observation_id uuid;
+  v_signal_id uuid;
   existing public.technical_observation_semantics;
 begin
   expected := public.technical_source_semantics_defaults(p_observation->>'sourceSystem');
@@ -171,16 +171,16 @@ begin
   end if;
 
   result := public.record_technical_signal(p_actor, p_signal, p_observation, p_entity_assertions);
-  observation_id := (result->>'observation_id')::uuid;
-  signal_id := (result->>'signal_id')::uuid;
+  v_observation_id := (result->>'observation_id')::uuid;
+  v_signal_id := (result->>'signal_id')::uuid;
 
   insert into public.technical_observation_semantics(
     owner_id, observation_id, signal_id, source_class, observation_basis, semantic_kind,
     semantics_version, classification_basis
   ) values (
     p_actor,
-    observation_id,
-    signal_id,
+    v_observation_id,
+    v_signal_id,
     (p_semantics->>'sourceClass')::public.technical_source_class,
     (p_semantics->>'observationBasis')::public.technical_observation_basis,
     (p_semantics->>'semanticKind')::public.technical_semantic_kind,
@@ -191,11 +191,11 @@ begin
   select * into existing
   from public.technical_observation_semantics s
   where s.owner_id = p_actor
-    and s.observation_id = observation_id
+    and s.observation_id = v_observation_id
     and s.semantics_version = p_semantics->>'semanticsVersion';
 
   if existing.id is null
-     or existing.signal_id <> signal_id
+     or existing.signal_id <> v_signal_id
      or existing.source_class::text <> p_semantics->>'sourceClass'
      or existing.observation_basis::text <> p_semantics->>'observationBasis'
      or existing.semantic_kind::text <> p_semantics->>'semanticKind'
