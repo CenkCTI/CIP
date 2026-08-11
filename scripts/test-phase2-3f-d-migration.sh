@@ -58,7 +58,7 @@ declare
   b timestamptz;
   v integer;
   i integer;
-  series_id uuid;
+  v_series_id uuid;
   result jsonb;
   baseline jsonb;
   first_fingerprint text;
@@ -171,29 +171,29 @@ begin
     raise exception 'expected four generic v1 anomaly series';
   end if;
 
-  select id into series_id
-  from public.technical_analysis_series
-  where owner_id=owner_a and source_key='THREATFOX' and signal_type='IOC_OBSERVATION' and metric_kind='OBSERVATION_COUNT';
-  if series_id is null then raise exception 'observation-count series was not created'; end if;
+  select s.id into v_series_id
+  from public.technical_analysis_series s
+  where s.owner_id=owner_a and s.source_key='THREATFOX' and s.signal_type='IOC_OBSERVATION' and s.metric_kind='OBSERVATION_COUNT';
+  if v_series_id is null then raise exception 'observation-count series was not created'; end if;
   if not exists(
-    select 1 from public.technical_analysis_series
-    where id=series_id and source_class='IOC_SHARING' and observation_basis='REPORTED'
-      and semantic_kind='IOC_REPORT' and semantics_version='2.3F-C-v1'
-      and time_axis='INGESTION_TIME' and granularity='HOUR'
+    select 1 from public.technical_analysis_series s
+    where s.id=v_series_id and s.source_class='IOC_SHARING' and s.observation_basis='REPORTED'
+      and s.semantic_kind='IOC_REPORT' and s.semantics_version='2.3F-C-v1'
+      and s.time_axis='INGESTION_TIME' and s.granularity='HOUR'
   ) then raise exception 'series did not preserve ThreatFox epistemic semantics'; end if;
 
-  baseline := public.refresh_technical_baseline_profile(owner_a,series_id,target);
+  baseline := public.refresh_technical_baseline_profile(owner_a,v_series_id,target);
   if baseline->>'status' <> 'READY' then raise exception 'strict baseline did not become READY'; end if;
   if (baseline->>'sampleCount')::integer <> 32 then raise exception 'baseline sample count should be 32'; end if;
   if abs((baseline->>'median')::numeric - 100) > 1 then raise exception 'baseline median unexpected'; end if;
   if coalesce((baseline->>'mad')::numeric,0) <= 0 then raise exception 'baseline MAD should be positive'; end if;
 
-  result := public.evaluate_technical_anomaly_bucket(owner_a,series_id,target);
+  result := public.evaluate_technical_anomaly_bucket(owner_a,v_series_id,target);
   if result->>'state' <> 'ANOMALOUS' or result->>'anomalyKind' <> 'VOLUME_SPIKE' then
     raise exception 'scheduled high-volume target was not emitted as VOLUME_SPIKE';
   end if;
-  select input_fingerprint into first_fingerprint from public.technical_anomaly_evaluations
-  where owner_id=owner_a and series_id=series_id and bucket_start=target;
+  select e.input_fingerprint into first_fingerprint from public.technical_anomaly_evaluations e
+  where e.owner_id=owner_a and e.series_id=v_series_id and e.bucket_start=target;
 
   -- Add a manual run to the same target bucket. Re-evaluation must suppress the prior anomaly rather than keep a contaminated conclusion.
   insert into public.technical_collection_runs(
@@ -203,39 +203,39 @@ begin
     owner_a,connection_id,'THREATFOX','MANUAL','SUCCEEDED','{"version":1}'::jsonb,'{"version":1}'::jsonb,
     repeat('d',64),target+interval '20 minutes',target+interval '15 minutes',target+interval '16 minutes',390,390
   );
-  result := public.evaluate_technical_anomaly_bucket(owner_a,series_id,target);
+  result := public.evaluate_technical_anomaly_bucket(owner_a,v_series_id,target);
   if result->>'state' <> 'SUPPRESSED' or result->>'suppressionReason' <> 'MANUAL_RUN_PRESENT' then
     raise exception 'manual collection did not suppress anomaly evaluation';
   end if;
-  if exists(select 1 from public.technical_anomaly_evaluations where owner_id=owner_a and series_id=series_id and bucket_start=target and anomaly_kind is not null) then
+  if exists(select 1 from public.technical_anomaly_evaluations e where e.owner_id=owner_a and e.series_id=v_series_id and e.bucket_start=target and e.anomaly_kind is not null) then
     raise exception 'manual-suppressed evaluation retained an anomaly kind';
   end if;
-  select input_fingerprint into second_fingerprint from public.technical_anomaly_evaluations
-  where owner_id=owner_a and series_id=series_id and bucket_start=target;
+  select e.input_fingerprint into second_fingerprint from public.technical_anomaly_evaluations e
+  where e.owner_id=owner_a and e.series_id=v_series_id and e.bucket_start=target;
   if first_fingerprint = second_fingerprint then raise exception 'input fingerprint did not change after manual contamination'; end if;
-  if (select count(*) from public.technical_anomaly_evaluations where owner_id=owner_a and series_id=series_id and bucket_start=target) <> 1 then
+  if (select count(*) from public.technical_anomaly_evaluations e where e.owner_id=owner_a and e.series_id=v_series_id and e.bucket_start=target) <> 1 then
     raise exception 'recomputation duplicated target evaluation';
   end if;
 
-  result := public.evaluate_technical_anomaly_bucket(owner_a,series_id,degraded_bucket);
+  result := public.evaluate_technical_anomaly_bucket(owner_a,v_series_id,degraded_bucket);
   if result->>'state' <> 'SUPPRESSED' or result->>'suppressionReason' <> 'DEGRADED_COVERAGE' then
     raise exception 'failed collection was not coverage-suppressed';
   end if;
-  if exists(select 1 from public.technical_anomaly_evaluations where owner_id=owner_a and series_id=series_id and bucket_start=degraded_bucket and anomaly_kind is not null) then
+  if exists(select 1 from public.technical_anomaly_evaluations e where e.owner_id=owner_a and e.series_id=v_series_id and e.bucket_start=degraded_bucket and e.anomaly_kind is not null) then
     raise exception 'degraded collection produced a volume anomaly';
   end if;
 
-  result := public.evaluate_technical_anomaly_bucket(owner_a,series_id,zero_bucket);
+  result := public.evaluate_technical_anomaly_bucket(owner_a,v_series_id,zero_bucket);
   if (result->>'targetValue')::numeric <> 0 then raise exception 'valid complete scheduled zero was not represented as zero'; end if;
   if result->>'state' = 'SUPPRESSED' then raise exception 'valid complete scheduled zero was incorrectly suppressed'; end if;
 
-  select input_fingerprint into first_fingerprint from public.technical_anomaly_evaluations
-  where owner_id=owner_a and series_id=series_id and bucket_start=zero_bucket;
-  before_count := (select count(*) from public.technical_anomaly_evaluations where owner_id=owner_a and series_id=series_id and bucket_start=zero_bucket);
-  perform public.evaluate_technical_anomaly_bucket(owner_a,series_id,zero_bucket);
-  after_count := (select count(*) from public.technical_anomaly_evaluations where owner_id=owner_a and series_id=series_id and bucket_start=zero_bucket);
-  select input_fingerprint into second_fingerprint from public.technical_anomaly_evaluations
-  where owner_id=owner_a and series_id=series_id and bucket_start=zero_bucket;
+  select e.input_fingerprint into first_fingerprint from public.technical_anomaly_evaluations e
+  where e.owner_id=owner_a and e.series_id=v_series_id and e.bucket_start=zero_bucket;
+  before_count := (select count(*) from public.technical_anomaly_evaluations e where e.owner_id=owner_a and e.series_id=v_series_id and e.bucket_start=zero_bucket);
+  perform public.evaluate_technical_anomaly_bucket(owner_a,v_series_id,zero_bucket);
+  after_count := (select count(*) from public.technical_anomaly_evaluations e where e.owner_id=owner_a and e.series_id=v_series_id and e.bucket_start=zero_bucket);
+  select e.input_fingerprint into second_fingerprint from public.technical_anomaly_evaluations e
+  where e.owner_id=owner_a and e.series_id=v_series_id and e.bucket_start=zero_bucket;
   if before_count <> after_count or first_fingerprint <> second_fingerprint then raise exception 'anomaly recomputation is not idempotent'; end if;
 
   result := public.advance_technical_anomaly_backfill(owner_a,1);
