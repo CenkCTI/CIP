@@ -70,7 +70,7 @@ export default async function Page() {
       </header>
 
       {unavailable ? (
-        <div className="card text-amber-300">Baseline diagnostics are unavailable until migrations 049–050 are applied and bounded anomaly maintenance has run.</div>
+        <div className="card text-amber-300">Baseline diagnostics are unavailable until migrations 049–051 are applied and bounded anomaly maintenance has run.</div>
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
