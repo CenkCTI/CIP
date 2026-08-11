@@ -88,6 +88,7 @@ export type TechnicalSourceSemanticMetadata = {
   sourceClass: TechnicalSourceClass;
   authorityType: TechnicalAuthorityType;
   collectionMode: TechnicalSemanticCollectionMode;
+  coverageSemantics: string;
   freshnessSemantics: TechnicalFreshnessSemantic;
   defaultObservationBasis: TechnicalObservationBasis;
   defaultSemanticKind: TechnicalSemanticKind;
