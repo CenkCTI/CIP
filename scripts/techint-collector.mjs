@@ -51,14 +51,14 @@ function fatal(message) {
 
 async function requestJson(endpoint, body) {
   const controller = new AbortController();
-  // Collection work and history maintenance must remain bounded below the platform's long-invocation ceiling.
+  // Collection work, history maintenance, and anomaly maintenance remain bounded below the platform's long-invocation ceiling.
   const timeout = setTimeout(() => controller.abort(), 4 * 60 * 1000);
   try {
     const headers = {
       authorization: `Bearer ${token}`,
       accept: "application/json",
       "content-type": "application/json",
-      "user-agent": "CITEM-TechINT-Collector/2.3F-B",
+      "user-agent": "CITEM-TechINT-Collector/2.3F-D",
     };
     if (vercelBypassSecret) headers["x-vercel-protection-bypass"] = vercelBypassSecret;
 
@@ -163,22 +163,32 @@ async function tick() {
 async function runHistoryMaintenance() {
   try {
     const payload = await requestJson(maintenanceEndpoint, {});
-    if (payload.due !== true) return;
-    const activity = Number(payload.activityBucketsProcessed ?? 0);
-    const coverage = Number(payload.coverageBucketsProcessed ?? 0);
-    const backfill = Number(payload.backfillBucketsProcessed ?? 0);
-    const compacted = payload.compacted === true ? " compacted=true" : "";
-    console.log(`[${new Date().toISOString()}] history maintenance: activityBuckets=${activity} coverageBuckets=${coverage} backfillBuckets=${backfill}${compacted}`);
+    if (payload.due === true) {
+      const activity = Number(payload.activityBucketsProcessed ?? 0);
+      const coverage = Number(payload.coverageBucketsProcessed ?? 0);
+      const backfill = Number(payload.backfillBucketsProcessed ?? 0);
+      const compacted = payload.compacted === true ? " compacted=true" : "";
+      console.log(`[${new Date().toISOString()}] history maintenance: activityBuckets=${activity} coverageBuckets=${coverage} backfillBuckets=${backfill}${compacted}`);
+    }
+
+    const analysis = payload.analysis;
+    if (analysis?.error === "ANALYSIS_MAINTENANCE_FAILED") {
+      console.error(`[${new Date().toISOString()}] anomaly maintenance failed; collection/history remain healthy.`);
+    } else if (analysis?.due === true) {
+      console.log(
+        `[${new Date().toISOString()}] anomaly maintenance: seriesCreated=${Number(analysis.seriesCreated ?? 0)} recentEvaluated=${Number(analysis.recentEvaluated ?? 0)} backfillEvaluated=${Number(analysis.backfillEvaluated ?? 0)}${analysis.compacted === true ? " compacted=true" : ""}`,
+      );
+    }
   } catch (error) {
     if (error?.fatal) throw error;
-    const message = error?.name === "AbortError" ? "history maintenance timed out" : "history maintenance unavailable";
+    const message = error?.name === "AbortError" ? "history/anomaly maintenance timed out" : "history/anomaly maintenance unavailable";
     console.error(`[${new Date().toISOString()}] ${message}; collection loop will continue.`);
   }
 }
 
 console.log(`CİTEM TechINT collector started for ${baseUrl.origin}.`);
 console.log("Desktop runtime owns the long-running loop; server requests are bounded work units.");
-console.log("Historical activity and coverage rollups are maintained through bounded, rate-gated server work.");
+console.log("Historical rollups and deterministic anomaly evaluations are maintained through bounded, rate-gated server work.");
 console.log("Provider credentials and Supabase service-role credentials remain server-side.");
 if (vercelBypassSecret) console.log("Vercel Preview protection bypass is configured for this local collector process.");
 
