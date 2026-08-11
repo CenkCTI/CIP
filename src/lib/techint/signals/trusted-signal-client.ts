@@ -1,6 +1,5 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
-import { observationSemanticsForSourceSystem } from "@/lib/techint/semantics/source-semantics";
 import { recordTechnicalSignalResultSchema, recordTechnicalSignalSchema, type RecordTechnicalSignalInput } from "./schema";
 
 export type TechnicalSignalRecordStage = "TRANSPORT" | "RPC_UNCLASSIFIED" | "RESULT_SCHEMA" | null;
@@ -26,7 +25,6 @@ export class TechnicalSignalRecordError extends Error {
 
 export async function recordTechnicalSignal(input: RecordTechnicalSignalInput) {
   const parsed = recordTechnicalSignalSchema.parse(input);
-  const semantics = parsed.observationSemantics ?? observationSemanticsForSourceSystem(parsed.observation.sourceSystem);
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error("Technical Signal trusted workflow is not configured.");
@@ -39,7 +37,7 @@ export async function recordTechnicalSignal(input: RecordTechnicalSignalInput) {
       p_signal: parsed.signal,
       p_observation: parsed.observation,
       p_entity_assertions: parsed.entityAssertions,
-      p_semantics: semantics,
+      p_semantics: parsed.observationSemantics ?? null,
     });
   } catch {
     throw new TechnicalSignalRecordError(null, null, "TRANSPORT");
