@@ -40,8 +40,12 @@ create function storage.foldername(name text)returns text[] language sql immutab
 create function storage.filename(name text)returns text language sql immutable as $$select(string_to_array(name,'/'))[array_length(string_to_array(name,'/'),1)]$$;
 SQL
 
-find "$ROOT/supabase/migrations" -maxdepth 1 -name '*.sql' | sort | grep -v '202608110048_phase2_3f_c_source_semantics.sql' | while read -r migration; do
-  printf "\\i '%s'\n" "$migration"
+# This harness validates the database immediately before and at migration 048.
+# Downstream migrations must never be applied before 048 merely because newer files were added later.
+find "$ROOT/supabase/migrations" -maxdepth 1 -name '*.sql' | sort | while read -r migration; do
+  if [[ "$(basename "$migration")" < "202608110048_phase2_3f_c_source_semantics.sql" ]]; then
+    printf "\\i '%s'\n" "$migration"
+  fi
 done > "$MIGRATIONS_SQL"
 "${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" -f "$MIGRATIONS_SQL" >/dev/null
 
