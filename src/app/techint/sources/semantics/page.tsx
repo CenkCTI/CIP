@@ -39,6 +39,7 @@ export default async function Page() {
                 <div><dt>Semantic kind</dt><dd className="text-stone-200">{semantics.defaultSemanticKind}</dd></div>
                 <div><dt>Collection mode</dt><dd className="text-stone-200">{semantics.collectionMode}</dd></div>
                 <div><dt>Freshness</dt><dd className="text-stone-200">{semantics.freshnessSemantics}</dd></div>
+                <div className="sm:col-span-2"><dt>Coverage semantics</dt><dd className="text-stone-200">{semantics.coverageSemantics}</dd></div>
               </dl>
 
               <div className="grid gap-3 md:grid-cols-2">
