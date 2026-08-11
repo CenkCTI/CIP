@@ -146,13 +146,17 @@ declare
   signal_id uuid;
   existing public.technical_observation_semantics;
 begin
-  if p_semantics is null or jsonb_typeof(p_semantics) <> 'object'
+  expected := public.technical_source_semantics_defaults(p_observation->>'sourceSystem');
+  if p_semantics is null then
+    p_semantics := expected;
+  end if;
+
+  if jsonb_typeof(p_semantics) <> 'object'
      or p_semantics - array['sourceClass','observationBasis','semanticKind','semanticsVersion','classificationBasis'] <> '{}'::jsonb
      or not (p_semantics ?& array['sourceClass','observationBasis','semanticKind','semanticsVersion','classificationBasis']) then
     raise exception 'INVALID_OBSERVATION_SEMANTICS' using errcode = '22023';
   end if;
 
-  expected := public.technical_source_semantics_defaults(p_observation->>'sourceSystem');
   if p_semantics <> expected then
     raise exception 'SEMANTICS_MISMATCH' using errcode = '22023';
   end if;
