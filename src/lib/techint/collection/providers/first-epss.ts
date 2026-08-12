@@ -133,7 +133,7 @@ export const firstEpssAdapter: TechnicalSourceAdapter = {
     const settings = z.object({ minimumEpss: z.number().min(0).max(1).optional().default(0.1) }).strict().parse(context.settings);
     const url = new URL(FIRST_EPSS_URL);
     url.searchParams.set("epss-gt", String(settings.minimumEpss));
-    url.searchParams.set("sort", "-epss");
+    url.searchParams.set("order", "!epss");
     url.searchParams.set("limit", String(RECORD_LIMIT));
     url.searchParams.set("offset", "0");
     const sameQuery = cursor.minimumEpss === settings.minimumEpss;
