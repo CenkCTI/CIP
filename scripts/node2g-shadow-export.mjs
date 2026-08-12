@@ -59,7 +59,22 @@ function explicitWindow() {
   return { start: new Date(startMs).toISOString(), end: new Date(endMs).toISOString() };
 }
 
+function epssScoreDate() {
+  if (sourceKey !== "FIRST_EPSS") return null;
+  if (!upstreamSnapshotId) {
+    throw new Error("FIRST_EPSS shadow export requires upstreamSnapshotId in EPSS:YYYY-MM-DD form so different score dates cannot be mixed.");
+  }
+  const match = /^EPSS:(\d{4}-\d{2}-\d{2})$/.exec(upstreamSnapshotId);
+  if (!match) throw new Error("FIRST_EPSS upstreamSnapshotId must use EPSS:YYYY-MM-DD form.");
+  const parsed = Date.parse(`${match[1]}T00:00:00.000Z`);
+  if (!Number.isFinite(parsed) || new Date(parsed).toISOString().slice(0, 10) !== match[1]) {
+    throw new Error("FIRST_EPSS upstreamSnapshotId contains an invalid score date.");
+  }
+  return match[1];
+}
+
 const requestedWindow = explicitWindow();
+const requestedEpssScoreDate = epssScoreDate();
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 const requestedOwnerId = process.env.CITEM_NODE2G_OWNER_ID?.trim() || null;
@@ -201,18 +216,25 @@ function projectFacts(row) {
 }
 
 const observations = await fetchObservations();
-if (observations.length === 0) {
-  const scope = requestedWindow ? ` in window ${requestedWindow.start}..${requestedWindow.end}` : "";
+const scopedObservations = requestedEpssScoreDate
+  ? observations.filter((row) => text(object(row.source_snapshot).scoreDate) === requestedEpssScoreDate)
+  : observations;
+if (scopedObservations.length === 0) {
+  const scope = requestedWindow
+    ? ` in window ${requestedWindow.start}..${requestedWindow.end}`
+    : requestedEpssScoreDate
+      ? ` for score date ${requestedEpssScoreDate}`
+      : "";
   throw new Error(`No CİTEM Technical Signal observations found for ${sourceKey}${scope}. Run the bounded legacy shadow collector in the acceptance workspace first.`);
 }
 
-const ownerIds = [...new Set(observations.map((row) => row.owner_id))];
+const ownerIds = [...new Set(scopedObservations.map((row) => row.owner_id))];
 if (!requestedOwnerId && ownerIds.length !== 1) {
   throw new Error(`Expected exactly one CİTEM owner in the shadow export, found ${ownerIds.length}. Set CITEM_NODE2G_OWNER_ID explicitly.`);
 }
 const ownerId = requestedOwnerId ?? ownerIds[0];
 const latestByIdentity = new Map();
-for (const row of observations) {
+for (const row of scopedObservations) {
   if (row.owner_id !== ownerId) continue;
   latestByIdentity.set(row.source_record_key, row);
 }
@@ -233,7 +255,7 @@ const records = [...latestByIdentity.values()]
     };
   });
 
-const received = observations
+const received = scopedObservations
   .filter((row) => row.owner_id === ownerId)
   .map((row) => iso(row.received_at))
   .filter(Boolean)
