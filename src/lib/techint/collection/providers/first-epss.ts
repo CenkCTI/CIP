@@ -10,7 +10,6 @@ import type { AdapterCollectionResult, CollectionIssue, MappedTechnicalSignal, T
 export const FIRST_EPSS_URL = "https://api.first.org/data/v1/epss";
 const RECORD_LIMIT = 2500;
 const RESPONSE_LIMIT_BYTES = 4 * 1024 * 1024;
-const FIRST_EPSS_QUERY_CONTRACT = "TOP_SCORE_ORDER_V1" as const;
 
 const epssRecordSchema = z.object({
   cve: z.string().regex(/^CVE-\d{4}-\d{4,}$/),
@@ -130,6 +129,11 @@ export const firstEpssAdapter: TechnicalSourceAdapter = {
     settingsFields: [{ name: "minimumEpss", label: "Minimum EPSS", type: "number", minimum: 0, maximum: 1, step: 0.01, defaultValue: 0.1 }],
   },
   async collect(context) {
+    // Keep parsing the durable legacy cursor, but intentionally do not reuse its
+    // Last-Modified validator during NODE-2G cutover. The corrected top-score
+    // query changed request semantics while the trusted DB cursor contract is
+    // intentionally frozen. A bounded 2,500-row refresh is safe and persistence
+    // remains idempotent; the legacy collector is paused after NODE-2G acceptance.
     const cursor = firstEpssCursorSchema.parse(context.cursor);
     const settings = z.object({ minimumEpss: z.number().min(0).max(1).optional().default(0.1) }).strict().parse(context.settings);
     const url = new URL(FIRST_EPSS_URL);
@@ -137,13 +141,11 @@ export const firstEpssAdapter: TechnicalSourceAdapter = {
     url.searchParams.set("order", "!epss");
     url.searchParams.set("limit", String(RECORD_LIMIT));
     url.searchParams.set("offset", "0");
-    const sameQuery = cursor.minimumEpss === settings.minimumEpss && cursor.queryContract === FIRST_EPSS_QUERY_CONTRACT;
     const response = await fetchBoundedJson({
       url,
       allowedHost: "api.first.org",
       allowedPath: "/data/v1/epss",
       maxBytes: RESPONSE_LIMIT_BYTES,
-      headers: sameQuery && cursor.lastModified ? { "if-modified-since": cursor.lastModified } : undefined,
       fetchImpl: context.fetchImpl,
     });
     if (response.status === 304) {
@@ -152,21 +154,10 @@ export const firstEpssAdapter: TechnicalSourceAdapter = {
         recordsMapped: 0,
         signals: [],
         issues: [],
-        nextCursor: {
-          ...cursor,
-          minimumEpss: settings.minimumEpss,
-          queryContract: FIRST_EPSS_QUERY_CONTRACT,
-        },
+        nextCursor: { ...cursor, minimumEpss: settings.minimumEpss },
       };
     }
     const result = mapFirstEpssResponse(response.json, context.now.toISOString(), response.lastModified);
-    return {
-      ...result,
-      nextCursor: {
-        ...result.nextCursor,
-        minimumEpss: settings.minimumEpss,
-        queryContract: FIRST_EPSS_QUERY_CONTRACT,
-      },
-    };
+    return { ...result, nextCursor: { ...result.nextCursor, minimumEpss: settings.minimumEpss } };
   },
 };
