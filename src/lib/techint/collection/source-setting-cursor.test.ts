@@ -25,34 +25,33 @@ describe("source-setting-bound incremental cursors", () => {
       settings: { minimumEpss: 0.2 },
       fetchImpl: fetchImpl as typeof fetch,
     });
-    expect(result.nextCursor).toMatchObject({
+    expect(result.nextCursor).toEqual({
+      version: 1,
       minimumEpss: 0.2,
       lastModified: "Fri, 02 Jan 2099 01:00:00 GMT",
-      queryContract: "TOP_SCORE_ORDER_V1",
     });
   });
 
-  it("reuses FIRST Last-Modified only for the same EPSS threshold and query contract", async () => {
+  it("does not reuse FIRST Last-Modified for the same threshold during NODE-2G cutover", async () => {
     const fetchImpl = vi.fn(async (_input: URL | RequestInfo | Request, init?: RequestInit) => {
       const headers = new Headers(init?.headers);
-      expect(headers.get("if-modified-since")).toBe("Thu, 01 Jan 2099 01:00:00 GMT");
-      return new Response(null, { status: 304 });
+      expect(headers.get("if-modified-since")).toBeNull();
+      return new Response(JSON.stringify(epssPayload), {
+        status: 200,
+        headers: { "content-type": "application/json", "last-modified": "Fri, 02 Jan 2099 01:00:00 GMT" },
+      });
     });
     const result = await firstEpssAdapter.collect({
       now: new Date("2099-01-02T02:00:00Z"),
-      cursor: {
-        version: 1,
-        minimumEpss: 0.2,
-        lastModified: "Thu, 01 Jan 2099 01:00:00 GMT",
-        queryContract: "TOP_SCORE_ORDER_V1",
-      },
+      cursor: { version: 1, minimumEpss: 0.2, lastModified: "Thu, 01 Jan 2099 01:00:00 GMT" },
       settings: { minimumEpss: 0.2 },
       fetchImpl: fetchImpl as typeof fetch,
     });
-    expect(result.recordsMapped).toBe(0);
-    expect(result.nextCursor).toMatchObject({
+    expect(result.recordsMapped).toBe(1);
+    expect(result.nextCursor).toEqual({
+      version: 1,
       minimumEpss: 0.2,
-      queryContract: "TOP_SCORE_ORDER_V1",
+      lastModified: "Fri, 02 Jan 2099 01:00:00 GMT",
     });
   });
 
