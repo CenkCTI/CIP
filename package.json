@@ -14,7 +14,7 @@
     "ai:smoke": "node scripts/ai-smoke.mjs",
     "guest:cleanup": "node scripts/guest-cleanup.mjs",
     "techint:collector": "node scripts/techint-collector.mjs",
-    "node2g:shadow-export": "node scripts/node2g-shadow-export.mjs"
+    "node2g:shadow-export": "node scripts/node2g-shadow-export-current.mjs"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",
