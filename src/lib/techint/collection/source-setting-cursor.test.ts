@@ -32,7 +32,7 @@ describe("source-setting-bound incremental cursors", () => {
     });
   });
 
-  it("does not reuse FIRST Last-Modified even for the same threshold during NODE-2G cutover", async () => {
+  it("refreshes the bounded FIRST page without conditional reuse during NODE-2G cutover", async () => {
     const fetchImpl = vi.fn(async (_input: URL | RequestInfo | Request, init?: RequestInit) => {
       const headers = new Headers(init?.headers);
       expect(headers.get("if-modified-since")).toBeNull();
