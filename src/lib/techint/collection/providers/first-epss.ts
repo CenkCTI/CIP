@@ -10,6 +10,7 @@ import type { AdapterCollectionResult, CollectionIssue, MappedTechnicalSignal, T
 export const FIRST_EPSS_URL = "https://api.first.org/data/v1/epss";
 const RECORD_LIMIT = 2500;
 const RESPONSE_LIMIT_BYTES = 4 * 1024 * 1024;
+const FIRST_EPSS_QUERY_CONTRACT = "TOP_SCORE_ORDER_V1" as const;
 
 const epssRecordSchema = z.object({
   cve: z.string().regex(/^CVE-\d{4}-\d{4,}$/),
@@ -136,7 +137,7 @@ export const firstEpssAdapter: TechnicalSourceAdapter = {
     url.searchParams.set("order", "!epss");
     url.searchParams.set("limit", String(RECORD_LIMIT));
     url.searchParams.set("offset", "0");
-    const sameQuery = cursor.minimumEpss === settings.minimumEpss;
+    const sameQuery = cursor.minimumEpss === settings.minimumEpss && cursor.queryContract === FIRST_EPSS_QUERY_CONTRACT;
     const response = await fetchBoundedJson({
       url,
       allowedHost: "api.first.org",
@@ -151,10 +152,21 @@ export const firstEpssAdapter: TechnicalSourceAdapter = {
         recordsMapped: 0,
         signals: [],
         issues: [],
-        nextCursor: { ...cursor, minimumEpss: settings.minimumEpss },
+        nextCursor: {
+          ...cursor,
+          minimumEpss: settings.minimumEpss,
+          queryContract: FIRST_EPSS_QUERY_CONTRACT,
+        },
       };
     }
     const result = mapFirstEpssResponse(response.json, context.now.toISOString(), response.lastModified);
-    return { ...result, nextCursor: { ...result.nextCursor, minimumEpss: settings.minimumEpss } };
+    return {
+      ...result,
+      nextCursor: {
+        ...result.nextCursor,
+        minimumEpss: settings.minimumEpss,
+        queryContract: FIRST_EPSS_QUERY_CONTRACT,
+      },
+    };
   },
 };
