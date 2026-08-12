@@ -38,13 +38,28 @@ const SOURCE_CONFIG = {
 };
 
 const sourceKey = process.argv[2];
-const upstreamSnapshotId = process.argv[3]?.trim() || null;
+const rawSnapshotId = process.argv[3]?.trim();
+const upstreamSnapshotId = rawSnapshotId && rawSnapshotId !== "-" ? rawSnapshotId : null;
+const windowStartRaw = process.argv[4]?.trim() || null;
+const windowEndRaw = process.argv[5]?.trim() || null;
 const config = SOURCE_CONFIG[sourceKey];
 if (!config) {
-  console.error(`Usage: node scripts/node2g-shadow-export.mjs <${Object.keys(SOURCE_CONFIG).join("|")}> [upstreamSnapshotId]`);
+  console.error(`Usage: node scripts/node2g-shadow-export.mjs <${Object.keys(SOURCE_CONFIG).join("|")}> [upstreamSnapshotId|-] [windowStart] [windowEnd]`);
   process.exit(2);
 }
 
+function explicitWindow() {
+  if (!windowStartRaw && !windowEndRaw) return null;
+  if (!windowStartRaw || !windowEndRaw) throw new Error("CİTEM shadow export requires both windowStart and windowEnd");
+  if (sourceKey !== "NVD_CVE") throw new Error("Explicit shadow-export windows are currently supported only for NVD_CVE");
+  const startMs = Date.parse(windowStartRaw);
+  const endMs = Date.parse(windowEndRaw);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) throw new Error("Shadow-export window must contain valid datetimes");
+  if (startMs > endMs) throw new Error("Shadow-export windowStart must not be after windowEnd");
+  return { start: new Date(startMs).toISOString(), end: new Date(endMs).toISOString() };
+}
+
+const requestedWindow = explicitWindow();
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 const requestedOwnerId = process.env.CITEM_NODE2G_OWNER_ID?.trim() || null;
@@ -88,6 +103,11 @@ async function fetchObservations() {
       .order("created_at", { ascending: true })
       .range(from, from + PAGE_SIZE - 1);
     if (requestedOwnerId) query = query.eq("owner_id", requestedOwnerId);
+    if (requestedWindow) {
+      query = query
+        .gte("source_modified_at", requestedWindow.start)
+        .lte("source_modified_at", requestedWindow.end);
+    }
     const { data, error } = await query;
     if (error) throw error;
     rows.push(...(data ?? []));
@@ -182,7 +202,8 @@ function projectFacts(row) {
 
 const observations = await fetchObservations();
 if (observations.length === 0) {
-  throw new Error(`No CİTEM Technical Signal observations found for ${sourceKey}. Run the bounded legacy shadow collector in the acceptance workspace first.`);
+  const scope = requestedWindow ? ` in window ${requestedWindow.start}..${requestedWindow.end}` : "";
+  throw new Error(`No CİTEM Technical Signal observations found for ${sourceKey}${scope}. Run the bounded legacy shadow collector in the acceptance workspace first.`);
 }
 
 const ownerIds = [...new Set(observations.map((row) => row.owner_id))];
@@ -224,7 +245,7 @@ const snapshot = {
   sourceKey,
   capturedAt: new Date().toISOString(),
   upstreamSnapshotId,
-  window: {
+  window: requestedWindow ?? {
     start: received[0] ?? null,
     end: received.at(-1) ?? null,
   },
