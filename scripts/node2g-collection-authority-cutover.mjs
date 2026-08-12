@@ -3,6 +3,7 @@ import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 
 const SOURCE_KEYS = ["CISA_KEV", "NVD_CVE", "FIRST_EPSS", "THREATFOX", "MALWAREBAZAAR"];
+const CUTOVER_ADMITTED_STATUSES = new Set(["ENABLED", "PAUSED"]);
 
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
@@ -55,7 +56,13 @@ async function fetchConnections(db) {
   for (const key of SOURCE_KEYS) {
     if (!byKey.has(key)) throw new Error(`Missing CITEM source connection: ${key}`);
   }
-  return { ownerId, rows: SOURCE_KEYS.map((key) => byKey.get(key)) };
+  const ordered = SOURCE_KEYS.map((key) => byKey.get(key));
+  for (const row of ordered) {
+    if (!CUTOVER_ADMITTED_STATUSES.has(row.status)) {
+      throw new Error(`CUTOVER_UNSUPPORTED_PRE_STATUS:${row.source_key}:${row.status}`);
+    }
+  }
+  return { ownerId, rows: ordered };
 }
 
 async function runningRuns(db, connectionIds) {
@@ -151,16 +158,26 @@ async function main() {
     if (before.schemaVersion !== "CITEM_NODE2_CUTOVER_SNAPSHOT_V1") throw new Error("Unsupported cutover snapshot");
     const selected = args.source ? before.sources.filter((item) => item.sourceKey === args.source) : before.sources;
     if (selected.length === 0) throw new Error("No rollback sources selected");
+    for (const previous of selected) {
+      if (!CUTOVER_ADMITTED_STATUSES.has(previous.status)) {
+        throw new Error(`ROLLBACK_UNSUPPORTED_PRE_STATUS:${previous.sourceKey}:${previous.status}`);
+      }
+    }
     const { ownerId, rows } = await fetchConnections(db);
     if (ownerId !== before.ownerId) throw new Error("CUTOVER_OWNER_CHANGED");
     const currentByKey = new Map(rows.map((row) => [row.source_key, row]));
     for (const previous of selected) {
       const current = currentByKey.get(previous.sourceKey);
       if (!current) throw new Error(`CUTOVER_CONNECTION_DISAPPEARED:${previous.sourceKey}`);
+      if (current.status !== "PAUSED") throw new Error(`ROLLBACK_REQUIRES_PAUSED_CITEM_SOURCE:${previous.sourceKey}:${current.status}`);
       if (sha256Json(current.cursor) !== previous.cursorSha256) throw new Error(`ROLLBACK_CURSOR_CHANGED:${previous.sourceKey}`);
-      await setStatus(db, ownerId, current.id, "ENABLED");
+      if (previous.status === "ENABLED") await setStatus(db, ownerId, current.id, "ENABLED");
     }
-    console.log(JSON.stringify({ mode: "rollback", automaticFailback: false, sources: selected.map((item) => item.sourceKey) }, null, 2));
+    console.log(JSON.stringify({
+      mode: "rollback",
+      automaticFailback: false,
+      sources: selected.map((item) => ({ sourceKey: item.sourceKey, restoredStatus: item.status })),
+    }, null, 2));
     return;
   }
 
@@ -180,7 +197,9 @@ async function main() {
     return;
   }
 
-  for (const row of rows) await setStatus(db, ownerId, row.id, "PAUSED");
+  for (const row of rows) {
+    if (row.status === "ENABLED") await setStatus(db, ownerId, row.id, "PAUSED");
+  }
   await verifyPreserved(db, snapshot, "PAUSED");
   console.log(JSON.stringify({
     mode: "pause",
