@@ -25,20 +25,20 @@ describe("NODE-2G current shadow projection", () => {
     expect(result.records.map((item) => item.sourceRecordId)).not.toContain("CVE-2099-99991");
   });
 
-  it("uses percentile and CVE identity as deterministic tie breakers", () => {
-    const result = canonicalizeNode2gShadowSnapshot({
-      sourceKey: "FIRST_EPSS",
-      records: [
-        record("CVE-2099-0003", 0.9, 0.8),
-        record("CVE-2099-0002", 0.9, 0.9),
-        record("CVE-2099-0001", 0.9, 0.9),
-      ],
-    });
-    expect(result.records.map((item) => item.sourceRecordId)).toEqual([
-      "CVE-2099-0001",
-      "CVE-2099-0002",
-      "CVE-2099-0003",
-    ]);
+  it("uses percentile and CVE identity as cutoff tie breakers", () => {
+    const records = [];
+    for (let i = 0; i < 2498; i += 1) {
+      records.push(record(`CVE-2099-${String(20000 + i)}`, 0.95, 0.95));
+    }
+    records.push(record("CVE-2099-0003", 0.9, 0.8));
+    records.push(record("CVE-2099-0002", 0.9, 0.9));
+    records.push(record("CVE-2099-0001", 0.9, 0.9));
+
+    const result = canonicalizeNode2gShadowSnapshot({ sourceKey: "FIRST_EPSS", records });
+    const ids = result.records.map((item) => item.sourceRecordId);
+    expect(ids).toContain("CVE-2099-0001");
+    expect(ids).toContain("CVE-2099-0002");
+    expect(ids).not.toContain("CVE-2099-0003");
   });
 
   it("leaves non-EPSS snapshots untouched", () => {
