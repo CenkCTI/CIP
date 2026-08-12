@@ -51,21 +51,52 @@ describe("FIRST EPSS", () => {
     expect(result.issues[0]?.code).toBe("INVALID_EPSS_RECORD");
   });
 
-  it("uses conditional collection and the fixed FIRST endpoint", async () => {
-    const fetchImpl = vi.fn(async (input: URL | RequestInfo | Request) => {
+  it("invalidates a legacy conditional cursor while adopting the top-score query contract", async () => {
+    const legacyLastModified = "Thu, 01 Jan 2099 01:00:00 GMT";
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo | Request, init?: RequestInit) => {
       const url = new URL(String(input));
       expect(url.hostname).toBe("api.first.org");
       expect(url.pathname).toBe("/data/v1/epss");
       expect(url.searchParams.get("order")).toBe("!epss");
       expect(url.searchParams.get("sort")).toBeNull();
+      expect(new Headers(init?.headers).get("if-modified-since")).toBeNull();
       return new Response(JSON.stringify({ total: 1, offset: 0, limit: 2000, data: [row] }), {
         status: 200,
         headers: { "content-type": "application/json", "last-modified": "Fri, 02 Jan 2099 01:00:00 GMT" },
       });
     });
-    const result = await firstEpssAdapter.collect({ now: new Date("2099-01-02T02:00:00Z"), cursor: { version: 1 }, settings: { minimumEpss: 0.1 }, fetchImpl: fetchImpl as typeof fetch });
+    const result = await firstEpssAdapter.collect({
+      now: new Date("2099-01-02T02:00:00Z"),
+      cursor: { version: 1, lastModified: legacyLastModified, minimumEpss: 0.1 },
+      settings: { minimumEpss: 0.1 },
+      fetchImpl: fetchImpl as typeof fetch,
+    });
     expect(result.signals).toHaveLength(1);
-    expect(result.nextCursor).toMatchObject({ version: 1, lastModified: "Fri, 02 Jan 2099 01:00:00 GMT" });
+    expect(result.nextCursor).toMatchObject({
+      version: 1,
+      lastModified: "Fri, 02 Jan 2099 01:00:00 GMT",
+      minimumEpss: 0.1,
+      queryContract: "TOP_SCORE_ORDER_V1",
+    });
+  });
+
+  it("resumes conditional collection after the top-score query contract is established", async () => {
+    const lastModified = "Fri, 02 Jan 2099 01:00:00 GMT";
+    const fetchImpl = vi.fn(async (_input: URL | RequestInfo | Request, init?: RequestInit) => {
+      expect(new Headers(init?.headers).get("if-modified-since")).toBe(lastModified);
+      return new Response(JSON.stringify({ total: 1, offset: 0, limit: 2000, data: [row] }), {
+        status: 200,
+        headers: { "content-type": "application/json", "last-modified": lastModified },
+      });
+    });
+    const result = await firstEpssAdapter.collect({
+      now: new Date("2099-01-02T03:00:00Z"),
+      cursor: { version: 1, lastModified, minimumEpss: 0.1, queryContract: "TOP_SCORE_ORDER_V1" },
+      settings: { minimumEpss: 0.1 },
+      fetchImpl: fetchImpl as typeof fetch,
+    });
+    expect(result.signals).toHaveLength(1);
+    expect(result.nextCursor).toMatchObject({ queryContract: "TOP_SCORE_ORDER_V1" });
   });
 });
 
