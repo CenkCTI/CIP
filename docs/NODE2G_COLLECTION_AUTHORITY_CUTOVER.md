@@ -24,7 +24,7 @@ It never:
 - exports investigations, notes, evidence, attribution, products or analyst judgement;
 - enables automatic dual-authority failback.
 
-A real pause is refused if any of the five CİTEM connections has a `RUNNING` collection.
+A real pause is refused if any of the five CİTEM connections has a `RUNNING` collection. After the status changes it checks for `RUNNING` collections again, so a scheduler claim racing the initial check cannot silently pass the authority handoff.
 
 Pre-cutover source status is also preserved as rollback state. `ENABLED` and `PAUSED` are admitted. `ARCHIVED` fails closed because cutover must not silently restore an archived source. A source that is already `PAUSED` before cutover remains `PAUSED`; it is not treated as an error and rollback must not enable it.
 
@@ -82,9 +82,12 @@ ENABLED -> PAUSED
 PAUSED  -> PAUSED (no write)
 ```
 
+Immediately after pausing it repeats the active-run query. If any scheduler claim raced the first check, cutover fails closed with the CİTEM sources left paused rather than declaring dual authority safe.
+
 After the change it re-reads all connections and verifies:
 
 - all five statuses are `PAUSED`;
+- zero `RUNNING` collection remains;
 - every cursor SHA-256 is unchanged;
 - every legacy run-history count is unchanged.
 
