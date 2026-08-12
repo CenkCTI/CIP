@@ -145,6 +145,18 @@ async function verifyPreserved(db, before, expectedStatus) {
   }
 }
 
+function printRunning(label, runs) {
+  console.error(JSON.stringify({
+    label,
+    running: runs.map(({ source_key, id, started_at, lease_expires_at }) => ({
+      sourceKey: source_key,
+      runId: id,
+      startedAt: started_at,
+      leaseExpiresAt: lease_expires_at,
+    })),
+  }, null, 2));
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const db = client();
@@ -182,9 +194,10 @@ async function main() {
   }
 
   const { ownerId, rows } = await fetchConnections(db);
-  const running = await runningRuns(db, rows.map((row) => row.id));
+  const connectionIds = rows.map((row) => row.id);
+  const running = await runningRuns(db, connectionIds);
   if (running.length > 0) {
-    console.error(JSON.stringify({ running: running.map(({ source_key, id, started_at, lease_expires_at }) => ({ sourceKey: source_key, runId: id, startedAt: started_at, leaseExpiresAt: lease_expires_at })) }, null, 2));
+    printRunning("pre-pause", running);
     throw new Error("CUTOVER_BLOCKED_ACTIVE_CITEM_RUNS");
   }
   const counts = await historyCounts(db, ownerId);
@@ -200,6 +213,13 @@ async function main() {
   for (const row of rows) {
     if (row.status === "ENABLED") await setStatus(db, ownerId, row.id, "PAUSED");
   }
+
+  const postPauseRunning = await runningRuns(db, connectionIds);
+  if (postPauseRunning.length > 0) {
+    printRunning("post-pause", postPauseRunning);
+    throw new Error("CUTOVER_BLOCKED_POST_PAUSE_ACTIVE_CITEM_RUNS");
+  }
+
   await verifyPreserved(db, snapshot, "PAUSED");
   console.log(JSON.stringify({
     mode: "pause",
