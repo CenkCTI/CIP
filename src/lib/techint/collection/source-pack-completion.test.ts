@@ -56,7 +56,8 @@ describe("FIRST EPSS", () => {
       const url = new URL(String(input));
       expect(url.hostname).toBe("api.first.org");
       expect(url.pathname).toBe("/data/v1/epss");
-      expect(url.searchParams.get("sort")).toBe("-epss");
+      expect(url.searchParams.get("order")).toBe("!epss");
+      expect(url.searchParams.get("sort")).toBeNull();
       return new Response(JSON.stringify({ total: 1, offset: 0, limit: 2000, data: [row] }), {
         status: 200,
         headers: { "content-type": "application/json", "last-modified": "Fri, 02 Jan 2099 01:00:00 GMT" },
