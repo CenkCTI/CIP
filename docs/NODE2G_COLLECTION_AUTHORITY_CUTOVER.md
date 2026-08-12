@@ -26,6 +26,8 @@ It never:
 
 A real pause is refused if any of the five CİTEM connections has a `RUNNING` collection.
 
+Pre-cutover source status is also preserved as rollback state. `ENABLED` and `PAUSED` are admitted. `ARCHIVED` fails closed because cutover must not silently restore an archived source. A source that is already `PAUSED` before cutover remains `PAUSED`; it is not treated as an error and rollback must not enable it.
+
 ## Environment
 
 Use the server-side Supabase environment already used for trusted collection tooling:
@@ -52,12 +54,13 @@ node --env-file=.env.local scripts/node2g-collection-authority-cutover.mjs --dry
 The dry-run:
 
 1. resolves exactly one owner and all five source connections;
-2. verifies zero `RUNNING` legacy collection runs;
-3. captures status/cursor/version/schedule/last-run metadata;
-4. computes SHA-256 for every cursor;
-5. counts preserved run history per source;
-6. writes a mode-0600 local snapshot under `/tmp`;
-7. prints only safe summary metadata and cursor hashes.
+2. verifies every pre-cutover status is `ENABLED` or `PAUSED`;
+3. verifies zero `RUNNING` legacy collection runs;
+4. captures status/cursor/version/schedule/last-run metadata;
+5. computes SHA-256 for every cursor;
+6. counts preserved run history per source;
+7. writes a mode-0600 local snapshot under `/tmp`;
+8. prints only safe summary metadata and cursor hashes.
 
 No status is changed.
 
@@ -72,10 +75,11 @@ node --env-file=.env.local \
   --snapshot=/tmp/citem-node2g-pre-cutover.json
 ```
 
-The tool first repeats the active-run gate and writes the pre-cutover snapshot. It then calls the existing trusted `set_technical_source_status` RPC for every source and requires:
+The tool first repeats the active-run gate and writes the pre-cutover snapshot. It then calls the existing trusted `set_technical_source_status` RPC only for connections that are currently `ENABLED`:
 
 ```text
 ENABLED -> PAUSED
+PAUSED  -> PAUSED (no write)
 ```
 
 After the change it re-reads all connections and verifies:
@@ -100,7 +104,7 @@ CİTEM Node API consumption remains NODE-4. No temporary dual-authority collecti
 
 ## Rollback
 
-Rollback is manual and source-specific. First disable and drain the corresponding Node source. Only after that explicit operator action may CİTEM be resumed.
+Rollback is manual and source-specific. First disable and drain the corresponding Node source. Only after that explicit operator action may CİTEM be restored to its pre-cutover state.
 
 The tool requires a hard acknowledgement so rollback cannot become an automatic failback path:
 
@@ -113,7 +117,20 @@ node --env-file=.env.local \
   --source=MALWAREBAZAAR
 ```
 
-Before enabling the CİTEM source the tool requires the current cursor hash to still match the preserved pre-cutover cursor hash.
+Before restoring the CİTEM source the tool requires:
+
+- the current CİTEM status is still `PAUSED`;
+- the current cursor hash still matches the preserved pre-cutover cursor hash;
+- the preserved pre-cutover status is admitted.
+
+Rollback restores the exact pre-cutover authority status:
+
+```text
+pre-cutover ENABLED -> rollback restores ENABLED
+pre-cutover PAUSED  -> rollback keeps PAUSED
+```
+
+Therefore a source that was already paused before collection-authority cutover is never accidentally enabled by an all-source rollback.
 
 To rollback all five sources, omit `--source` only after Node authority has been disabled/drained for all five.
 
