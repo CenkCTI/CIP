@@ -167,6 +167,27 @@ describe("MalwareBazaar metadata-only source", () => {
     expect(JSON.stringify(mapped)).not.toContain("get_file");
   });
 
+  it("preserves NODE-2G critical facts from a shared raw MalwareBazaar provider payload", () => {
+    const mapped = mapMalwareBazaarRecord(item, "2099-01-03T00:00:00.000Z");
+    const snapshot = mapped.observation.sourceSnapshot as Record<string, unknown>;
+
+    expect(mapped.observation.sourceRecordKey).toBe("a".repeat(64));
+    expect(mapped.observation.sourcePublishedAt).toBe("2099-01-01T00:00:00.000Z");
+    expect(mapped.observation.sourceModifiedAt).toBe("2099-01-02T00:00:00.000Z");
+    expect(snapshot).toMatchObject({
+      sha256: "a".repeat(64),
+      sha1: "b".repeat(40),
+      md5: "c".repeat(32),
+      fileName: "example.bin",
+      fileSize: 1234,
+      fileType: "exe",
+      fileTypeMime: "application/x-dosexec",
+      signature: "ExampleFamily",
+      reporter: "example",
+      tags: ["exe", "test"],
+    });
+  });
+
   it("uses a fixed POST query and never places the Auth-Key in URL/body", async () => {
     const fetchImpl = vi.fn(async (input: URL | RequestInfo | Request, init?: RequestInit) => {
       expect(String(input)).toBe("https://mb-api.abuse.ch/api/v1/");
