@@ -27,12 +27,12 @@ describe("source-setting-bound incremental cursors", () => {
     });
     expect(result.nextCursor).toEqual({
       version: 1,
-      minimumEpss: 0.2,
       lastModified: "Fri, 02 Jan 2099 01:00:00 GMT",
+      minimumEpss: 0.2,
     });
   });
 
-  it("does not reuse FIRST Last-Modified for the same threshold during NODE-2G cutover", async () => {
+  it("does not reuse FIRST Last-Modified even for the same threshold during NODE-2G cutover", async () => {
     const fetchImpl = vi.fn(async (_input: URL | RequestInfo | Request, init?: RequestInit) => {
       const headers = new Headers(init?.headers);
       expect(headers.get("if-modified-since")).toBeNull();
@@ -50,8 +50,8 @@ describe("source-setting-bound incremental cursors", () => {
     expect(result.recordsMapped).toBe(1);
     expect(result.nextCursor).toEqual({
       version: 1,
-      minimumEpss: 0.2,
       lastModified: "Fri, 02 Jan 2099 01:00:00 GMT",
+      minimumEpss: 0.2,
     });
   });
 
