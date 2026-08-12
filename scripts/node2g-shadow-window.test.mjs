@@ -18,6 +18,10 @@ describe("NODE-2G source-native shadow windows", () => {
     });
   });
 
+  it("requires an explicit provider first_seen window for ThreatFox", () => {
+    expect(() => explicitShadowWindow("THREATFOX", null, null)).toThrow("requires an explicit provider first_seen window");
+  });
+
   it("rejects half-open, invalid, reversed, and unsupported windows", () => {
     expect(() => explicitShadowWindow("THREATFOX", "2099-01-01T00:00:00Z", null)).toThrow("requires both windowStart and windowEnd");
     expect(() => explicitShadowWindow("THREATFOX", "not-a-date", "2099-01-01T00:00:00Z")).toThrow("valid datetimes");
@@ -25,7 +29,7 @@ describe("NODE-2G source-native shadow windows", () => {
     expect(() => explicitShadowWindow("CISA_KEV", "2099-01-01T00:00:00Z", "2099-01-02T00:00:00Z")).toThrow("not supported for CISA_KEV");
   });
 
-  it("returns null when no explicit window is requested", () => {
-    expect(explicitShadowWindow("THREATFOX", null, null)).toBeNull();
+  it("leaves optional NVD export unbounded when no explicit window is requested", () => {
+    expect(explicitShadowWindow("NVD_CVE", null, null)).toBeNull();
   });
 });
