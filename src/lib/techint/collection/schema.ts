@@ -34,7 +34,6 @@ export const firstEpssCursorSchema = z
     version: z.literal(1),
     lastModified: z.string().trim().min(1).max(200).optional(),
     minimumEpss: z.number().min(0).max(1).optional(),
-    queryContract: z.literal("TOP_SCORE_ORDER_V1").optional(),
   })
   .strict();
 export const threatFoxTechIntCursorSchema = z
@@ -62,7 +61,7 @@ export const sourceSettingsInputSchema = z
       ctx.addIssue({ code: "custom", path: ["intervalMinutes"], message: "Synthetic collection is manual only." });
     }
     if (value.sourceKey !== "TEST_SYNTHETIC" && (value.intervalMinutes < 60 || value.intervalMinutes > 1440)) {
-      ctx.addIssue({ code: "custom", path: ["intervalMinutes"], message: "Technical source interval must be 60–1440 minutes." });
+      ctx.addIssue({ code: "custom", message: "Technical source interval must be 60–1440 minutes." });
     }
     if (value.sourceKey === "NVD_CVE") {
       if (value.minimumEpss !== undefined || value.lookbackDays !== undefined) ctx.addIssue({ code: "custom", message: "NVD settings contain unsupported fields." });
