@@ -12,8 +12,7 @@ describe("source-setting-bound incremental cursors", () => {
 
   it("does not reuse FIRST Last-Modified when the EPSS threshold changes", async () => {
     const fetchImpl = vi.fn(async (_input: URL | RequestInfo | Request, init?: RequestInit) => {
-      const headers = new Headers(init?.headers);
-      expect(headers.get("if-modified-since")).toBeNull();
+      expect(new Headers(init?.headers).get("if-modified-since")).toBeNull();
       return new Response(JSON.stringify(epssPayload), {
         status: 200,
         headers: { "content-type": "application/json", "last-modified": "Fri, 02 Jan 2099 01:00:00 GMT" },
@@ -25,17 +24,12 @@ describe("source-setting-bound incremental cursors", () => {
       settings: { minimumEpss: 0.2 },
       fetchImpl: fetchImpl as typeof fetch,
     });
-    expect(result.nextCursor).toEqual({
-      version: 1,
-      lastModified: "Fri, 02 Jan 2099 01:00:00 GMT",
-      minimumEpss: 0.2,
-    });
+    expect(result.nextCursor).toEqual({ version: 1, lastModified: "Fri, 02 Jan 2099 01:00:00 GMT", minimumEpss: 0.2 });
   });
 
   it("refreshes the bounded FIRST page without conditional reuse during NODE-2G cutover", async () => {
     const fetchImpl = vi.fn(async (_input: URL | RequestInfo | Request, init?: RequestInit) => {
-      const headers = new Headers(init?.headers);
-      expect(headers.get("if-modified-since")).toBeNull();
+      expect(new Headers(init?.headers).get("if-modified-since")).toBeNull();
       return new Response(JSON.stringify(epssPayload), {
         status: 200,
         headers: { "content-type": "application/json", "last-modified": "Fri, 02 Jan 2099 01:00:00 GMT" },
@@ -48,11 +42,7 @@ describe("source-setting-bound incremental cursors", () => {
       fetchImpl: fetchImpl as typeof fetch,
     });
     expect(result.recordsMapped).toBe(1);
-    expect(result.nextCursor).toEqual({
-      version: 1,
-      lastModified: "Fri, 02 Jan 2099 01:00:00 GMT",
-      minimumEpss: 0.2,
-    });
+    expect(result.nextCursor).toEqual({ version: 1, lastModified: "Fri, 02 Jan 2099 01:00:00 GMT", minimumEpss: 0.2 });
   });
 
   it("resets the ThreatFox high-water mark when lookback changes", () => {
