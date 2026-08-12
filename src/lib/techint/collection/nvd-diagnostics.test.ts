@@ -15,6 +15,17 @@ const base = {
 };
 
 describe("NVD safe mapping diagnostics", () => {
+  it("preserves NODE-2G critical source facts from the shared NVD common payload", () => {
+    const mapped = mapNvdCve(base, "2099-01-03T00:00:00.000Z");
+
+    expect(mapped.observation.sourceRecordKey).toBe("CVE-2099-13001");
+    expect(mapped.observation.sourcePublishedAt).toBe("2099-01-01T00:00:00.000Z");
+    expect(mapped.observation.sourceModifiedAt).toBe("2099-01-02T00:00:00.000Z");
+    expect(mapped.observation.sourceSnapshot).toMatchObject({
+      vulnStatus: "Analyzed",
+    });
+  });
+
   it("distinguishes schema and timestamp failures without exposing raw payloads", () => {
     try {
       mapNvdCve({ ...base, id: "not-a-cve" }, "2099-01-03T00:00:00.000Z");
