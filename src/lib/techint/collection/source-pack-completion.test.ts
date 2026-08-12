@@ -51,20 +51,34 @@ describe("FIRST EPSS", () => {
     expect(result.issues[0]?.code).toBe("INVALID_EPSS_RECORD");
   });
 
-  it("uses conditional collection and the fixed FIRST endpoint", async () => {
-    const fetchImpl = vi.fn(async (input: URL | RequestInfo | Request) => {
+  it("requests the corrected bounded top-score page without reusing legacy conditional state", async () => {
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo | Request, init?: RequestInit) => {
       const url = new URL(String(input));
       expect(url.hostname).toBe("api.first.org");
       expect(url.pathname).toBe("/data/v1/epss");
-      expect(url.searchParams.get("sort")).toBe("-epss");
-      return new Response(JSON.stringify({ total: 1, offset: 0, limit: 2000, data: [row] }), {
+      expect(url.searchParams.get("epss-gt")).toBe("0.1");
+      expect(url.searchParams.get("order")).toBe("!epss");
+      expect(url.searchParams.get("sort")).toBeNull();
+      expect(url.searchParams.get("limit")).toBe("2500");
+      expect(url.searchParams.get("offset")).toBe("0");
+      expect(new Headers(init?.headers).get("if-modified-since")).toBeNull();
+      return new Response(JSON.stringify({ total: 1, offset: 0, limit: 2500, data: [row] }), {
         status: 200,
         headers: { "content-type": "application/json", "last-modified": "Fri, 02 Jan 2099 01:00:00 GMT" },
       });
     });
-    const result = await firstEpssAdapter.collect({ now: new Date("2099-01-02T02:00:00Z"), cursor: { version: 1 }, settings: { minimumEpss: 0.1 }, fetchImpl: fetchImpl as typeof fetch });
+    const result = await firstEpssAdapter.collect({
+      now: new Date("2099-01-02T02:00:00Z"),
+      cursor: { version: 1, lastModified: "Thu, 01 Jan 2099 01:00:00 GMT", minimumEpss: 0.1 },
+      settings: { minimumEpss: 0.1 },
+      fetchImpl: fetchImpl as typeof fetch,
+    });
     expect(result.signals).toHaveLength(1);
-    expect(result.nextCursor).toMatchObject({ version: 1, lastModified: "Fri, 02 Jan 2099 01:00:00 GMT" });
+    expect(result.nextCursor).toEqual({
+      version: 1,
+      lastModified: "Fri, 02 Jan 2099 01:00:00 GMT",
+      minimumEpss: 0.1,
+    });
   });
 });
 

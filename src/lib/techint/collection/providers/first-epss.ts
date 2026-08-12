@@ -129,20 +129,23 @@ export const firstEpssAdapter: TechnicalSourceAdapter = {
     settingsFields: [{ name: "minimumEpss", label: "Minimum EPSS", type: "number", minimum: 0, maximum: 1, step: 0.01, defaultValue: 0.1 }],
   },
   async collect(context) {
+    // Keep parsing the durable legacy cursor, but intentionally do not reuse its
+    // Last-Modified validator during NODE-2G cutover. The corrected top-score
+    // query changed request semantics while the trusted DB cursor contract is
+    // intentionally frozen. A bounded 2,500-row refresh is safe and persistence
+    // remains idempotent; the legacy collector is paused after NODE-2G acceptance.
     const cursor = firstEpssCursorSchema.parse(context.cursor);
     const settings = z.object({ minimumEpss: z.number().min(0).max(1).optional().default(0.1) }).strict().parse(context.settings);
     const url = new URL(FIRST_EPSS_URL);
     url.searchParams.set("epss-gt", String(settings.minimumEpss));
-    url.searchParams.set("sort", "-epss");
+    url.searchParams.set("order", "!epss");
     url.searchParams.set("limit", String(RECORD_LIMIT));
     url.searchParams.set("offset", "0");
-    const sameQuery = cursor.minimumEpss === settings.minimumEpss;
     const response = await fetchBoundedJson({
       url,
       allowedHost: "api.first.org",
       allowedPath: "/data/v1/epss",
       maxBytes: RESPONSE_LIMIT_BYTES,
-      headers: sameQuery && cursor.lastModified ? { "if-modified-since": cursor.lastModified } : undefined,
       fetchImpl: context.fetchImpl,
     });
     if (response.status === 304) {
