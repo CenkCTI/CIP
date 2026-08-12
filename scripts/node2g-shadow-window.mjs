@@ -1,7 +1,10 @@
 const WINDOW_COLUMNS = Object.freeze({
   NVD_CVE: "source_modified_at",
   THREATFOX: "source_published_at",
+  MALWAREBAZAAR: "source_published_at",
 });
+
+const REQUIRED_BOUNDED_SOURCES = new Set(["THREATFOX", "MALWAREBAZAAR"]);
 
 export function shadowWindowColumn(sourceKey) {
   const column = WINDOW_COLUMNS[sourceKey];
@@ -15,8 +18,8 @@ export function explicitShadowWindow(sourceKey, startRaw, endRaw) {
   const start = startRaw?.trim() || null;
   const end = endRaw?.trim() || null;
   if (!start && !end) {
-    if (sourceKey === "THREATFOX") {
-      throw new Error("THREATFOX shadow export requires an explicit provider first_seen window");
+    if (REQUIRED_BOUNDED_SOURCES.has(sourceKey)) {
+      throw new Error(`${sourceKey} shadow export requires an explicit provider first_seen window`);
     }
     return null;
   }
