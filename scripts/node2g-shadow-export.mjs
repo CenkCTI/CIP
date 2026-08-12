@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { createClient } from "@supabase/supabase-js";
+import { explicitShadowWindow, shadowWindowColumn } from "./node2g-shadow-window.mjs";
 
 const SOURCE_CONFIG = {
   CISA_KEV: {
@@ -48,17 +49,6 @@ if (!config) {
   process.exit(2);
 }
 
-function explicitWindow() {
-  if (!windowStartRaw && !windowEndRaw) return null;
-  if (!windowStartRaw || !windowEndRaw) throw new Error("CİTEM shadow export requires both windowStart and windowEnd");
-  if (sourceKey !== "NVD_CVE") throw new Error("Explicit shadow-export windows are currently supported only for NVD_CVE");
-  const startMs = Date.parse(windowStartRaw);
-  const endMs = Date.parse(windowEndRaw);
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) throw new Error("Shadow-export window must contain valid datetimes");
-  if (startMs > endMs) throw new Error("Shadow-export windowStart must not be after windowEnd");
-  return { start: new Date(startMs).toISOString(), end: new Date(endMs).toISOString() };
-}
-
 function epssScoreDate() {
   if (sourceKey !== "FIRST_EPSS") return null;
   if (!upstreamSnapshotId) {
@@ -73,7 +63,7 @@ function epssScoreDate() {
   return match[1];
 }
 
-const requestedWindow = explicitWindow();
+const requestedWindow = explicitShadowWindow(sourceKey, windowStartRaw, windowEndRaw);
 const requestedEpssScoreDate = epssScoreDate();
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
@@ -119,9 +109,10 @@ async function fetchObservations() {
       .range(from, from + PAGE_SIZE - 1);
     if (requestedOwnerId) query = query.eq("owner_id", requestedOwnerId);
     if (requestedWindow) {
+      const windowColumn = shadowWindowColumn(sourceKey);
       query = query
-        .gte("source_modified_at", requestedWindow.start)
-        .lte("source_modified_at", requestedWindow.end);
+        .gte(windowColumn, requestedWindow.start)
+        .lte(windowColumn, requestedWindow.end);
     }
     const { data, error } = await query;
     if (error) throw error;

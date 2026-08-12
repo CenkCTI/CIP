@@ -5,6 +5,7 @@ import { mapThreatFoxCandidate } from "./providers/threatfox";
 import { mapMalwareBazaarRecord, malwareBazaarAdapter } from "./providers/malwarebazaar";
 import { fetchMalwareBazaarMetadata } from "./abusech-transport";
 import { normalizeProviderItem } from "@/lib/ioc-connectors/normalize";
+import { mapThreatFoxItem } from "@/lib/ioc-connectors/providers/threatfox/mapping";
 import { listTechnicalSources } from "./registry";
 
 const originalSynthetic = process.env.TECHINT_TEST_SOURCE_ENABLED;
@@ -103,6 +104,42 @@ describe("ThreatFox TechINT bridge", () => {
     expect(mapped.signal.confidence).toBeNull();
     expect(mapped.observation.sourceSnapshot).toMatchObject({ networkPort: 443, providerConfidence: 75, malwareFamily: "ExampleMalware" });
     expect(mapped.entityAssertions[0]).toMatchObject({ entityKind: "INDICATOR", indicatorType: "IP", confidence: 75 });
+  });
+
+  it("preserves NODE-2G critical facts from a shared raw ThreatFox provider payload", () => {
+    const candidate = mapThreatFoxItem({
+      id: "123456",
+      ioc: "192.0.2.10:443",
+      threat_type: "botnet_cc",
+      threat_type_desc: "Botnet command and control",
+      ioc_type: "ip:port",
+      ioc_type_desc: "ip:port",
+      malware: "win.example",
+      malware_printable: "Example Malware",
+      malware_alias: null,
+      malware_malpedia: "https://malpedia.caad.fkie.fraunhofer.de/details/win.example",
+      confidence_level: 75,
+      first_seen: "2099-01-01 00:00:00 UTC",
+      last_seen: "2099-01-02 00:00:00 UTC",
+      reporter: "fixture",
+      reference: null,
+      tags: ["test"],
+    });
+    const mapped = mapThreatFoxCandidate(candidate, "2099-01-03T00:00:00.000Z");
+    const snapshot = mapped.observation.sourceSnapshot as Record<string, unknown>;
+
+    expect(mapped.observation.sourceRecordKey).toBe("123456");
+    expect(snapshot).toMatchObject({
+      providerItemId: "123456",
+      originalValue: "192.0.2.10:443",
+      firstSeen: "2099-01-01T00:00:00.000Z",
+      lastSeen: "2099-01-02T00:00:00.000Z",
+      malwareFamily: "Example Malware",
+      providerConfidence: 75,
+      metadata: {
+        ioc_type: "ip:port",
+      },
+    });
   });
 });
 
