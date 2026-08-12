@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const EPSS_LIMIT = 2500;
 
@@ -25,10 +25,10 @@ export function canonicalizeNode2gShadowSnapshot(snapshot) {
 
   const ranked = [...snapshot.records]
     .sort((left, right) => {
-      const score = numeric(right?.facts?.score) - numeric(left?.facts?.score);
-      if (score !== 0) return score;
-      const percentile = numeric(right?.facts?.percentile) - numeric(left?.facts?.percentile);
-      if (percentile !== 0) return percentile;
+      const scoreDelta = numeric(right?.facts?.score) - numeric(left?.facts?.score);
+      if (scoreDelta !== 0) return scoreDelta;
+      const percentileDelta = numeric(right?.facts?.percentile) - numeric(left?.facts?.percentile);
+      if (percentileDelta !== 0) return percentileDelta;
       return String(left?.sourceRecordId ?? "").localeCompare(String(right?.sourceRecordId ?? ""));
     })
     .slice(0, EPSS_LIMIT)
@@ -53,7 +53,7 @@ function runRawExporter(args) {
   return JSON.parse(result.stdout);
 }
 
-const isMain = process.argv[1] && fileURLToPath(import.meta.url) === fileURLToPath(new URL(`file://${process.argv[1]}`));
+const isMain = Boolean(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
   const snapshot = runRawExporter(process.argv.slice(2));
   const canonical = canonicalizeNode2gShadowSnapshot(snapshot);
