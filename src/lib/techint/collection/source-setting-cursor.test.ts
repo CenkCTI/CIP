@@ -25,10 +25,14 @@ describe("source-setting-bound incremental cursors", () => {
       settings: { minimumEpss: 0.2 },
       fetchImpl: fetchImpl as typeof fetch,
     });
-    expect(result.nextCursor).toMatchObject({ minimumEpss: 0.2, lastModified: "Fri, 02 Jan 2099 01:00:00 GMT" });
+    expect(result.nextCursor).toMatchObject({
+      minimumEpss: 0.2,
+      lastModified: "Fri, 02 Jan 2099 01:00:00 GMT",
+      queryContract: "TOP_SCORE_ORDER_V1",
+    });
   });
 
-  it("reuses FIRST Last-Modified only for the same EPSS threshold", async () => {
+  it("reuses FIRST Last-Modified only for the same EPSS threshold and query contract", async () => {
     const fetchImpl = vi.fn(async (_input: URL | RequestInfo | Request, init?: RequestInit) => {
       const headers = new Headers(init?.headers);
       expect(headers.get("if-modified-since")).toBe("Thu, 01 Jan 2099 01:00:00 GMT");
@@ -36,12 +40,20 @@ describe("source-setting-bound incremental cursors", () => {
     });
     const result = await firstEpssAdapter.collect({
       now: new Date("2099-01-02T02:00:00Z"),
-      cursor: { version: 1, minimumEpss: 0.2, lastModified: "Thu, 01 Jan 2099 01:00:00 GMT" },
+      cursor: {
+        version: 1,
+        minimumEpss: 0.2,
+        lastModified: "Thu, 01 Jan 2099 01:00:00 GMT",
+        queryContract: "TOP_SCORE_ORDER_V1",
+      },
       settings: { minimumEpss: 0.2 },
       fetchImpl: fetchImpl as typeof fetch,
     });
     expect(result.recordsMapped).toBe(0);
-    expect(result.nextCursor).toMatchObject({ minimumEpss: 0.2 });
+    expect(result.nextCursor).toMatchObject({
+      minimumEpss: 0.2,
+      queryContract: "TOP_SCORE_ORDER_V1",
+    });
   });
 
   it("resets the ThreatFox high-water mark when lookback changes", () => {
