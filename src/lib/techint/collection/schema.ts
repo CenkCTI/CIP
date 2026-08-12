@@ -34,6 +34,7 @@ export const firstEpssCursorSchema = z
     version: z.literal(1),
     lastModified: z.string().trim().min(1).max(200).optional(),
     minimumEpss: z.number().min(0).max(1).optional(),
+    queryContract: z.literal("TOP_SCORE_ORDER_V1").optional(),
   })
   .strict();
 export const threatFoxTechIntCursorSchema = z
