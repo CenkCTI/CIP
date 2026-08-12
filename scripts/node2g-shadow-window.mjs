@@ -14,7 +14,12 @@ export function shadowWindowColumn(sourceKey) {
 export function explicitShadowWindow(sourceKey, startRaw, endRaw) {
   const start = startRaw?.trim() || null;
   const end = endRaw?.trim() || null;
-  if (!start && !end) return null;
+  if (!start && !end) {
+    if (sourceKey === "THREATFOX") {
+      throw new Error("THREATFOX shadow export requires an explicit provider first_seen window");
+    }
+    return null;
+  }
   if (!start || !end) throw new Error("CİTEM shadow export requires both windowStart and windowEnd");
   shadowWindowColumn(sourceKey);
 
