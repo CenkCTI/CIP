@@ -1,6 +1,7 @@
 import { NodeSeriesChart } from "./node-series-chart";
 import type { NodeMeasurementSeries } from "@/lib/baykush-node/measurement-schema";
 import type { GlobalRange } from "@/lib/baykush-node/range";
+import type { NodeComparison } from "@/lib/baykush-node/schemas";
 
 export interface NodeSourceStatusView {
   sourceKey: string;
@@ -17,7 +18,7 @@ function freshness(value: string | null) {
   return value ? new Date(value).toLocaleString() : "No successful collection reported";
 }
 
-function SeriesCard({ series }: { series: NodeMeasurementSeries }) {
+function SeriesCard({ series, comparison }: { series: NodeMeasurementSeries; comparison?: NodeComparison }) {
   return (
     <article className="card panel-corners space-y-3">
       <div>
@@ -25,6 +26,7 @@ function SeriesCard({ series }: { series: NodeMeasurementSeries }) {
         <h3 className="mt-1 text-base font-semibold text-stone-100">{series.measurement.unit}</h3>
       </div>
       <NodeSeriesChart series={series} />
+      {comparison?.comparisonStatus === "AVAILABLE" ? <div className="rounded border border-stone-800 px-3 py-2 text-xs text-stone-400"><p>Current period: {comparison.current.value ?? "Unavailable"} · Previous period: {comparison.previous.value ?? "Unavailable"}</p><p className="mt-1">Node-computed change: {comparison.absoluteDelta === null ? "Unavailable" : comparison.absoluteDelta} {comparison.percentChange === null ? "" : `(${comparison.percentChange.toFixed(1)}%)`}</p></div>:<div className="rounded border border-stone-800 px-3 py-2 text-xs text-stone-500"><p>Comparison unavailable</p><p>Incomplete or non-comparable coverage</p></div>}
       <details className="rounded border border-stone-800 px-3 py-2 text-xs text-stone-400">
         <summary className="cursor-pointer text-stone-300">Measurement semantics</summary>
         <p className="mt-2"><strong className="text-stone-300">Represents:</strong> {series.measurement.represents}</p>
@@ -41,6 +43,7 @@ export function NodeGlobalView(input: {
   sources: readonly NodeSourceStatusView[];
   vulnerability: readonly NodeMeasurementSeries[];
   malwareIoc: readonly NodeMeasurementSeries[];
+  comparisons: readonly NodeComparison[];
 }) {
   return (
     <section className="space-y-5">
@@ -72,7 +75,7 @@ export function NodeGlobalView(input: {
           <h2 className="citem-section-title">Vulnerability & Exploitation</h2>
         </div>
         <div className="grid gap-4 xl:grid-cols-2">
-          {input.vulnerability.map((series) => <SeriesCard key={series.measurement.measurementKey} series={series} />)}
+          {input.vulnerability.map((series) => <SeriesCard key={series.measurement.measurementKey} series={series} comparison={input.comparisons.find(item=>item.measurementKey===series.measurement.measurementKey)} />)}
         </div>
       </section>
 
@@ -82,7 +85,7 @@ export function NodeGlobalView(input: {
           <h2 className="citem-section-title">Malware & IOC</h2>
         </div>
         <div className="grid gap-4 xl:grid-cols-2">
-          {input.malwareIoc.map((series) => <SeriesCard key={series.measurement.measurementKey} series={series} />)}
+          {input.malwareIoc.map((series) => <SeriesCard key={series.measurement.measurementKey} series={series} comparison={input.comparisons.find(item=>item.measurementKey===series.measurement.measurementKey)} />)}
         </div>
       </section>
     </section>

@@ -10,6 +10,7 @@ import {
   sourceKeySchema,
   sourceStatusSchema,
 } from "./schema";
+import { assertLegacyCollectionAllowed, collectionAuthorityEnforced, LEGACY_COLLECTION_BLOCKED_MESSAGE } from "./authority";
 
 const boundedObject = z.record(z.string(), z.unknown());
 
@@ -72,12 +73,15 @@ async function rpc(name: string, parameters: Record<string, unknown>) {
   return data;
 }
 
+async function ownedConnectionSourceKey(ownerId:string,connectionId:string){const {data,error}=await trustedClient().from('technical_source_connections').select('source_key').eq('owner_id',z.uuid().parse(ownerId)).eq('id',z.uuid().parse(connectionId)).maybeSingle();if(error||!data)throw new Error('TECHINT_CONNECTION_NOT_FOUND');return sourceKeySchema.parse(data.source_key);}
+
 export async function enableTechnicalSourceWorkflow(input: {
   actorId: string;
   sourceKey: z.infer<typeof sourceKeySchema>;
   settings: Record<string, unknown>;
   intervalMinutes: number;
 }) {
+  if(collectionAuthorityEnforced())assertLegacyCollectionAllowed(input.sourceKey);
   const data = await rpc("enable_technical_source", {
     p_actor: input.actorId,
     p_source: input.sourceKey,
@@ -92,6 +96,7 @@ export async function setTechnicalSourceStatusWorkflow(input: {
   connectionId: string;
   status: z.infer<typeof sourceStatusSchema>;
 }) {
+  if(input.status==='ENABLED'&&collectionAuthorityEnforced())assertLegacyCollectionAllowed(await ownedConnectionSourceKey(input.actorId,input.connectionId));
   const data = await rpc("set_technical_source_status", {
     p_actor: input.actorId,
     p_connection_id: input.connectionId,
@@ -120,6 +125,7 @@ export async function claimManualTechnicalCollection(input: {
   connectionId: string;
   trigger?: z.infer<typeof collectionTriggerSchema>;
 }) {
+  if(collectionAuthorityEnforced())assertLegacyCollectionAllowed(await ownedConnectionSourceKey(input.actorId,input.connectionId));
   const data = await rpc("claim_manual_technical_collection", {
     p_actor: input.actorId,
     p_connection_id: input.connectionId,
@@ -129,11 +135,13 @@ export async function claimManualTechnicalCollection(input: {
 }
 
 export async function claimDueTechnicalCollections(limit: number) {
+  if(collectionAuthorityEnforced())throw new Error(LEGACY_COLLECTION_BLOCKED_MESSAGE);
   const data = await rpc("claim_due_technical_collections", { p_limit: limit });
   return z.array(collectionClaimSchema).parse(data ?? []);
 }
 
 export async function claimDueTechnicalCollectionsForOwner(ownerId: string, limit: number) {
+  if(collectionAuthorityEnforced())throw new Error(LEGACY_COLLECTION_BLOCKED_MESSAGE);
   const data = await rpc("claim_due_technical_collections_for_owner", {
     p_owner: z.uuid().parse(ownerId),
     p_limit: z.number().int().min(1).max(10).parse(limit),
@@ -148,6 +156,7 @@ export async function configureTechnicalCollectorWorkflow(input: {
   rotateToken?: boolean;
   label?: string;
 }) {
+  if(collectionAuthorityEnforced()&&(input.enabled||input.rotateToken))throw new Error(LEGACY_COLLECTION_BLOCKED_MESSAGE);
   const data = await rpc("configure_technical_collector", {
     p_actor: z.uuid().parse(input.actorId),
     p_enabled: input.enabled,
@@ -214,7 +223,7 @@ export async function getIncrementalTechnicalCollectionWorkClaim(input: {
     if (message.includes("LEASE_MISMATCH")) throw new Error("LEASE_MISMATCH");
     throw new Error("TECHINT_COLLECTION_RPC_FAILED");
   }
-  return incrementalWorkClaimSchema.parse(data);
+  const claim=incrementalWorkClaimSchema.parse(data);if(collectionAuthorityEnforced())assertLegacyCollectionAllowed(claim.source_key);return claim;
 }
 
 export async function checkpointIncrementalTechnicalCollection(input: {

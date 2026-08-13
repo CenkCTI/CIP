@@ -1,4 +1,5 @@
 import type { NodeMeasurementSeries } from "@/lib/baykush-node/measurement-schema";
+import Link from "next/link";
 
 function finiteValues(series: NodeMeasurementSeries) {
   return series.points.flatMap((point) => point.value === null ? [] : [point.value]);
@@ -41,6 +42,7 @@ export function NodeSeriesChart({ series }: { series: NodeMeasurementSeries }) {
         <span>Unit: {series.measurement.unit}</span>
         <span>Dashed buckets: unavailable / unproven data, not zero.</span>
       </div>
+      <div className="flex flex-wrap gap-2 text-[11px]">{series.points.filter(point=>point.revisionId).slice(-8).map(point=><Link className="text-amber-300 hover:text-amber-200" key={point.revisionId} href={`/techint/global/provenance/${point.revisionId}?measurementKey=${encodeURIComponent(series.measurement.measurementKey)}&bucketStart=${encodeURIComponent(point.bucketStart)}&bucketEnd=${encodeURIComponent(point.bucketEnd)}&value=${point.value??''}&coverage=${encodeURIComponent(point.coverage.status)}&availability=${encodeURIComponent(point.coverage.dataAvailability)}`}>{new Date(point.bucketStart).toLocaleString()} provenance</Link>)}</div>
     </div>
   );
 }

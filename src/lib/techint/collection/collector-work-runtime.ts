@@ -18,7 +18,7 @@ import {
   getIncrementalTechnicalCollectionWorkClaim,
 } from "./trusted-collection-client";
 import { emptyCollectionCounters, type CollectionCounters } from "./types";
-import { assertLegacyCollectionAllowed } from "./authority";
+import { assertLegacyCollectionAllowed, collectionAuthorityEnforced } from "./authority";
 
 export const MAX_COLLECTOR_WORK_UNIT_SIGNALS = 100;
 const DEFAULT_WORK_UNIT_SIGNALS = 50;
@@ -145,7 +145,7 @@ export async function runTechnicalCollectorWorkUnit(input: {
       runId: input.runId,
       leaseToken: input.leaseToken,
     });
-    if (process.env.NODE_ENV !== "test") assertLegacyCollectionAllowed(claim.source_key);
+    if (collectionAuthorityEnforced()) assertLegacyCollectionAllowed(claim.source_key);
     const previous = Object.keys(claim.work_state).length ? workStateSchema.parse(claim.work_state) : null;
     const snapshotAt = previous?.snapshotAt ?? new Date().toISOString();
     const adapter = getTechnicalSourceAdapter(claim.source_key);
