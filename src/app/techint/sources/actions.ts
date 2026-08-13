@@ -25,6 +25,7 @@ import {
   updateTechnicalSourceSettingsWorkflow,
 } from "@/lib/techint/collection/trusted-collection-client";
 import { runClaimedTechnicalCollection } from "@/lib/techint/collection/orchestrator";
+import { assertLegacyCollectionAllowed } from "@/lib/techint/collection/authority";
 
 export type TechnicalSourceActionState = { success?: string; error?: string };
 export type TechnicalCollectorActionState = { success?: string; error?: string; token?: string };
@@ -172,6 +173,7 @@ export async function enableTechnicalSource(form: FormData): Promise<void> {
   try {
     const { user } = await requireUser();
     const sourceKey = sourceKeySchema.parse(form.get("sourceKey"));
+    assertLegacyCollectionAllowed(sourceKey);
     const adapter = getTechnicalSourceAdapter(sourceKey);
     const parsed = sourceSettingsInputSchema.safeParse(
       settingsInput(sourceKey, form.get("intervalMinutes") ?? String(adapter.metadata.defaultIntervalMinutes), form),

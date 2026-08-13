@@ -7,6 +7,10 @@ export interface NodeSourceStatusView {
   displayName: string;
   operationalHealth: string;
   lastSuccessfulCollectionAt: string | null;
+  freshness?: string;
+  coverage?: string;
+  dataAvailability?: string;
+  historicalBackfillStatus?: string;
 }
 
 function freshness(value: string | null) {
@@ -55,6 +59,9 @@ export function NodeGlobalView(input: {
             <p className="citem-eyebrow">{source.displayName}</p>
             <p className="mt-2 text-sm font-semibold text-stone-200">{source.operationalHealth}</p>
             <p className="mt-1 text-xs text-stone-500">Last success: {freshness(source.lastSuccessfulCollectionAt)}</p>
+            <p className="mt-1 text-xs text-stone-500">Freshness: {source.freshness ?? "UNKNOWN"}</p>
+            <p className="mt-1 text-xs text-stone-500">Coverage: {source.coverage ?? "NO_COVERAGE"}</p>
+            <p className="mt-1 text-xs text-stone-500">Availability: {source.dataAvailability ?? "UNKNOWN"}</p>
           </article>
         ))}
       </div>
