@@ -19,6 +19,7 @@ import {
   syncTechnicalSourceNow,
   updateTechnicalSourceSettings,
 } from "./actions";
+import { LEGACY_COLLECTION_BLOCKED_MESSAGE } from "@/lib/techint/collection/authority";
 
 function time(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString() : "—";
@@ -42,7 +43,8 @@ function SettingsFields({ fields, settings }: { fields: readonly SourceSettingFi
   ));
 }
 
-export default async function Page() {
+export default async function Page({ searchParams }: { searchParams: Promise<{ authorityBlocked?: string }> }) {
+  const query = await searchParams;
   const { user, supabase } = await requireUser();
   const [
     { data: connectionData, error: connectionError },
@@ -93,6 +95,7 @@ export default async function Page() {
       </header>
 
       {connectionError ? <div className="card text-red-300">Unable to load Technical Sources. Verify the latest TechINT source migration.</div> : null}
+      {query.authorityBlocked === "1" ? <div className="card text-amber-300">{LEGACY_COLLECTION_BLOCKED_MESSAGE}</div> : null}
       {collectorError ? <div className="card text-amber-300">Continuous collector state is unavailable until the Phase 2.3F-A migrations are applied.</div> : <CollectorControl agent={collector} />}
 
       <div className="grid gap-4 xl:grid-cols-3">

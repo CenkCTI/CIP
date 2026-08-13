@@ -9,6 +9,7 @@ import { resolveTechnicalSourceCredential } from "./credentials";
 import { getTechnicalSourceAdapter } from "./registry";
 import { completeTechnicalCollection, failTechnicalCollection } from "./trusted-collection-client";
 import { emptyCollectionCounters, type CollectionCounters } from "./types";
+import { assertLegacyCollectionAllowed, collectionAuthorityEnforced } from "./authority";
 
 const POST_SYNC_RECONCILE_BATCH = 500;
 const POST_SYNC_RECONCILE_MAX_BATCHES = 10;
@@ -128,6 +129,7 @@ async function evaluateFreshTechnicalIntelligence(actorId: string, signalIds: st
 
 export async function runClaimedTechnicalCollection(rawClaim: unknown, fetchImpl: typeof fetch = fetch) {
   const claim = collectionClaimSchema.parse(rawClaim);
+  if (collectionAuthorityEnforced()) assertLegacyCollectionAllowed(claim.source_key);
   const counters = emptyCollectionCounters();
   let entityAssertionsCreated = 0;
   const intelligenceSignalIds = new Set<string>();

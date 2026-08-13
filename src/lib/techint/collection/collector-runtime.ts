@@ -5,6 +5,7 @@ import {
   claimDueTechnicalCollectionsForOwner,
   finishTechnicalCollectorTick,
 } from "./trusted-collection-client";
+import { collectionAuthorityEnforced, LEGACY_COLLECTION_BLOCKED_MESSAGE } from "./authority";
 
 type TechnicalCollectorRunClaim = {
   runId: string;
@@ -27,6 +28,7 @@ export type TechnicalCollectorTickResult =
 const MAX_COLLECTIONS_PER_TICK = 1;
 
 export async function runTechnicalCollectorTick(token: string): Promise<TechnicalCollectorTickResult> {
+  if(collectionAuthorityEnforced())throw new Error(LEGACY_COLLECTION_BLOCKED_MESSAGE);
   const tick = await beginTechnicalCollectorTick(token);
   if (!tick) return { authorized: false };
 

@@ -2,6 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { authKeySchema } from "@/lib/ioc-connectors/credentials/schema";
@@ -25,6 +26,7 @@ import {
   updateTechnicalSourceSettingsWorkflow,
 } from "@/lib/techint/collection/trusted-collection-client";
 import { runClaimedTechnicalCollection } from "@/lib/techint/collection/orchestrator";
+import { assertLegacyCollectionAllowed, isAuthorityBlockedError, LEGACY_COLLECTION_BLOCKED_MESSAGE } from "@/lib/techint/collection/authority";
 
 export type TechnicalSourceActionState = { success?: string; error?: string };
 export type TechnicalCollectorActionState = { success?: string; error?: string; token?: string };
@@ -98,7 +100,8 @@ export async function configureTechnicalCollector(
         : "Continuous collector enabled.",
       token: configured.token ?? undefined,
     };
-  } catch {
+  } catch (error) {
+    if (isAuthorityBlockedError(error)) return { error: LEGACY_COLLECTION_BLOCKED_MESSAGE };
     return { error: "Continuous collector settings could not be updated safely." };
   }
 }
@@ -172,6 +175,7 @@ export async function enableTechnicalSource(form: FormData): Promise<void> {
   try {
     const { user } = await requireUser();
     const sourceKey = sourceKeySchema.parse(form.get("sourceKey"));
+    assertLegacyCollectionAllowed(sourceKey);
     const adapter = getTechnicalSourceAdapter(sourceKey);
     const parsed = sourceSettingsInputSchema.safeParse(
       settingsInput(sourceKey, form.get("intervalMinutes") ?? String(adapter.metadata.defaultIntervalMinutes), form),
@@ -184,7 +188,8 @@ export async function enableTechnicalSource(form: FormData): Promise<void> {
       intervalMinutes: parsed.data.intervalMinutes,
     });
     refresh();
-  } catch {
+  } catch (error) {
+    if (isAuthorityBlockedError(error)) redirect("/techint/sources?authorityBlocked=1");
     return;
   }
 }
@@ -199,7 +204,8 @@ export async function setTechnicalSourceStatus(
     const parsedStatus = sourceStatusSchema.parse(status);
     await setTechnicalSourceStatusWorkflow({ actorId: user.id, connectionId: id, status: parsedStatus });
     refresh();
-  } catch {
+  } catch (error) {
+    if (isAuthorityBlockedError(error)) redirect("/techint/sources?authorityBlocked=1");
     return;
   }
 }
@@ -222,7 +228,8 @@ export async function updateTechnicalSourceSettings(
       settings: technicalSourceSettingsObject(parsed.data),
     });
     refresh();
-  } catch {
+  } catch (error) {
+    if (isAuthorityBlockedError(error)) redirect("/techint/sources?authorityBlocked=1");
     return;
   }
 }
