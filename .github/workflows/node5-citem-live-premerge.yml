@@ -1,0 +1,95 @@
+name: CİTEM NODE-5 live pre-merge
+
+on:
+  push:
+    branches:
+      - feat/techint-global-view-v2-node5
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: citem-node5-live-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  live-node-client:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: baykush
+          POSTGRES_USER: baykush
+          POSTGRES_PASSWORD: baykush
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U baykush -d baykush"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://baykush:baykush@127.0.0.1:5432/baykush
+      BAYKUSH_NODE_API_TOKEN: node5-citem-live-api-token-0123456789abcdef
+      ENABLE_TEST_SYNTHETIC: false
+    steps:
+      - name: Check out CİTEM candidate
+        uses: actions/checkout@v4
+
+      - name: Check out NODE-5 candidate
+        uses: actions/checkout@v4
+        with:
+          repository: CenkCTI/BAYKUSH-Intel-Node
+          ref: agent/node5l-source-read-api-v1
+          path: .node-candidate
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install and migrate NODE candidate
+        working-directory: .node-candidate
+        run: |
+          npm install
+          npm run db:migrate
+          npm run build
+
+      - name: Populate NODE through real provider pipeline
+        working-directory: .node-candidate
+        env:
+          NODE_ENV: test
+        run: npx tsx scripts/node5-live-pipeline-acceptance.ts
+
+      - name: Start authenticated NODE API
+        working-directory: .node-candidate
+        shell: bash
+        run: |
+          nohup npm run dev:api > /tmp/node5-api.log 2>&1 &
+          echo $! > /tmp/node5-api.pid
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/v1/health >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/node5-api.log
+          exit 1
+
+      - name: Install CİTEM dependencies
+        run: npm ci
+
+      - name: Run CİTEM live Node client acceptance
+        env:
+          NODE_ENV: test
+          RUN_NODE5_LIVE_INTEGRATION: "true"
+          BAYKUSH_NODE_BASE_URL: http://127.0.0.1:8080
+          BAYKUSH_NODE_TIMEOUT_MS: "9000"
+        run: npx vitest run src/lib/baykush-node/node5-live.integration.test.ts
+
+      - name: Print NODE API log on failure
+        if: failure()
+        run: cat /tmp/node5-api.log || true
