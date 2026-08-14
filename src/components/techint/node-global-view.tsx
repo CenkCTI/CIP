@@ -14,6 +14,20 @@ export interface NodeSourceStatusView {
   historicalBackfillStatus?: string;
 }
 
+const metricLabels: Record<string, string> = {
+  "vulnerability.cisa_kev.additions": "CISA KEV additions",
+  "vulnerability.nvd.publications": "NVD CVE publications",
+  "exploitation.epss.scored_records": "EPSS retained scored records",
+  "vulnerability.github_advisory.publications": "GitHub reviewed advisory publications",
+  "vulnerability.github_advisory.updates_observed": "GitHub advisory updates observed",
+  "vulnerability.cisa_ics.advisory_publications": "CISA ICS advisory publications",
+  "vulnerability.cisa_ics.advisory_updates_observed": "CISA ICS advisory updates observed",
+  "ioc.threatfox.reporting_volume": "ThreatFox IOC reporting volume",
+  "malware.malwarebazaar.sample_reporting": "MalwareBazaar sample reporting",
+  "ioc.feodo_tracker.new_records_observed": "Feodo C2 records newly observed",
+  "ioc.sslbl.certificate_listings_observed": "SSLBL certificate listings observed",
+};
+
 function freshness(value: string | null) {
   return value ? new Date(value).toLocaleString() : "No successful collection reported";
 }
@@ -23,7 +37,8 @@ function SeriesCard({ series, comparison }: { series: NodeMeasurementSeries; com
     <article className="card panel-corners space-y-3">
       <div>
         <p className="citem-eyebrow">{series.measurement.measurementKey}</p>
-        <h3 className="mt-1 text-base font-semibold text-stone-100">{series.measurement.unit}</h3>
+        <h3 className="mt-1 text-base font-semibold text-stone-100">{metricLabels[series.measurement.measurementKey] ?? series.measurement.measurementKey}</h3>
+        <p className="mt-1 text-xs text-stone-500">Unit: {series.measurement.unit}</p>
       </div>
       <NodeSeriesChart series={series} />
       {comparison?.comparisonStatus === "AVAILABLE" ? <div className="rounded border border-stone-800 px-3 py-2 text-xs text-stone-400"><p>Current period: {comparison.current.value ?? "Unavailable"} · Previous period: {comparison.previous.value ?? "Unavailable"}</p><p className="mt-1">Node-computed change: {comparison.absoluteDelta === null ? "Unavailable" : comparison.absoluteDelta} {comparison.percentChange === null ? "" : `(${comparison.percentChange.toFixed(1)}%)`}</p></div>:<div className="rounded border border-stone-800 px-3 py-2 text-xs text-stone-500"><p>Comparison unavailable</p><p>Incomplete or non-comparable coverage</p></div>}
@@ -50,9 +65,9 @@ export function NodeGlobalView(input: {
       <header className="citem-page-header">
         <div>
           <p className="citem-eyebrow">CİTEM / TechINT / BAYKUSH Intelligence Node</p>
-          <h1 className="citem-title">Global View</h1>
-          <p className="citem-subtitle">Coverage-aware public technical measurements from the central BAYKUSH Intelligence Node. Measurement movement is not an automated threat judgement.</p>
-          <p className="mt-2 text-xs text-stone-500">Generated {new Date(input.generatedAt).toLocaleString()} · range {input.range.toUpperCase()}</p>
+          <h1 className="citem-title">Global View v2</h1>
+          <p className="citem-subtitle">Coverage-aware public technical measurements from the central BAYKUSH Intelligence Node. The expanded source matrix is visible here, while measurements appear only where the Node admission policy permits projection.</p>
+          <p className="mt-2 text-xs text-stone-500">Generated {new Date(input.generatedAt).toLocaleString()} · range {input.range.toUpperCase()} · source status {input.sources.length}</p>
         </div>
       </header>
 
