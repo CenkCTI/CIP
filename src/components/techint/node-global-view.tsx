@@ -1,5 +1,7 @@
 import { NodeSeriesChart } from "./node-series-chart";
+import { InternetInfrastructureLane } from "./internet-infrastructure-lane";
 import type { NodeMeasurementSeries } from "@/lib/baykush-node/measurement-schema";
+import type { NodeRoutingStatus } from "@/lib/baykush-node/routing-schema";
 import type { GlobalRange } from "@/lib/baykush-node/range";
 import type { NodeComparison } from "@/lib/baykush-node/schemas";
 
@@ -58,6 +60,9 @@ export function NodeGlobalView(input: {
   sources: readonly NodeSourceStatusView[];
   vulnerability: readonly NodeMeasurementSeries[];
   malwareIoc: readonly NodeMeasurementSeries[];
+  routing: readonly NodeMeasurementSeries[];
+  routingStatus?: NodeRoutingStatus;
+  routingStatusUnavailable?: boolean;
   comparisons: readonly NodeComparison[];
 }) {
   return (
@@ -66,7 +71,7 @@ export function NodeGlobalView(input: {
         <div>
           <p className="citem-eyebrow">CİTEM / TechINT / BAYKUSH Intelligence Node</p>
           <h1 className="citem-title">Global View v2</h1>
-          <p className="citem-subtitle">Coverage-aware public technical measurements from the central BAYKUSH Intelligence Node. The expanded source matrix is visible here, while measurements appear only where the Node admission policy permits projection.</p>
+          <p className="citem-subtitle">Coverage-aware public technical measurements from the central BAYKUSH Intelligence Node. Vulnerability reporting, malware/IOC reporting, and Internet infrastructure observations remain separate semantic lanes.</p>
           <p className="mt-2 text-xs text-stone-500">Generated {new Date(input.generatedAt).toLocaleString()} · range {input.range.toUpperCase()} · source status {input.sources.length}</p>
         </div>
       </header>
@@ -103,6 +108,8 @@ export function NodeGlobalView(input: {
           {input.malwareIoc.map((series) => <SeriesCard key={series.measurement.measurementKey} series={series} comparison={input.comparisons.find(item=>item.measurementKey===series.measurement.measurementKey)} />)}
         </div>
       </section>
+
+      <InternetInfrastructureLane series={input.routing} status={input.routingStatus} statusUnavailable={input.routingStatusUnavailable}/>
     </section>
   );
 }
