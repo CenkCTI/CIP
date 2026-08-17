@@ -65,6 +65,20 @@ liveDescribe("CİTEM BAYKUSH Node live integration", () => {
     }
   });
 
+  it("reads the real NODE-6 routing operational contract without flattening live and recovered state", async () => {
+    const status = await queries.getNodeRoutingStatus();
+    expect(status.apiVersion).toBe("v1");
+    expect(status.data.sourceKey).toBe("RIPE_RIS_BGP");
+    expect(status.data.authority).toBe("BAYKUSH_INTELLIGENCE_NODE");
+    expect(status.data.upstreamOrigin).toBe("RIPE_RIS");
+    expect(status.data.attribution).toMatch(/RIPE/i);
+    if (status.data.latest) {
+      expect(["COMPLETE","PARTIAL","DEGRADED","NO_COVERAGE"]).toContain(status.data.latest.liveCollectionCoverage);
+      expect(["AVAILABLE","PARTIAL","UNAVAILABLE","UNKNOWN"]).toContain(status.data.latest.dataAvailability);
+      expect(["LIVE_STREAM","MRT_RECOVERY","HISTORICAL_BACKFILL"]).toContain(status.data.latest.acquisitionBasis);
+    }
+  });
+
   it("reads real canonical Node evidence without exposing raw-storage internals", async () => {
     const records = await queries.getNodeRecords("sourceKey=GITHUB_ADVISORY_REVIEWED&limit=5");
     expect(records.apiVersion).toBe("v1");
