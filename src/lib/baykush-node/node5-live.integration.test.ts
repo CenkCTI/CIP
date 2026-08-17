@@ -7,7 +7,7 @@ const liveDescribe = process.env.RUN_NODE5_LIVE_INTEGRATION === "true" ? describ
 type Queries = typeof import("./queries");
 let queries: Queries;
 
-liveDescribe("CİTEM NODE-5 live integration", () => {
+liveDescribe("CİTEM BAYKUSH Node live integration", () => {
   beforeAll(async () => {
     queries = await import("./queries");
   });
@@ -43,13 +43,13 @@ liveDescribe("CİTEM NODE-5 live integration", () => {
     expect(status.data.some((source) => source.sourceKey === "GITHUB_ADVISORY_REVIEWED")).toBe(true);
   });
 
-  it("consumes all 11 Global View metrics through the real 8+3 bounded batching contract", async () => {
+  it("consumes all Global View metrics through the real bounded batching contract", async () => {
     const now = new Date();
     const measurements = await queries.getNodeMeasurements("24h", now);
     expect(measurements.apiVersion).toBe("v1");
-    expect(measurements.meta).toEqual({ batchCount: 2, maxMeasurementsPerRequest: 8 });
+    expect(measurements.meta).toEqual({ batchCount: 3, maxMeasurementsPerRequest: 8 });
     expect(measurements.data).toHaveLength(queries.GLOBAL_MEASUREMENTS.length);
-    expect(queries.GLOBAL_MEASUREMENTS).toHaveLength(11);
+    expect(queries.GLOBAL_MEASUREMENTS).toHaveLength(18);
 
     const actual = new Set(measurements.data.map((series) => series.measurement.measurementKey));
     expect(actual).toEqual(new Set(queries.GLOBAL_MEASUREMENTS));
