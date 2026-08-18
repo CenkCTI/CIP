@@ -63,6 +63,7 @@ export function NodeGlobalView(input: {
   routing: readonly NodeMeasurementSeries[];
   routingStatus?: NodeRoutingStatus;
   routingStatusUnavailable?: boolean;
+  routingMeasurementsUnavailable?: boolean;
   comparisons: readonly NodeComparison[];
 }) {
   return (
@@ -90,26 +91,16 @@ export function NodeGlobalView(input: {
       </div>
 
       <section className="space-y-3">
-        <div>
-          <p className="citem-eyebrow">Lane 01</p>
-          <h2 className="citem-section-title">Vulnerability & Exploitation</h2>
-        </div>
-        <div className="grid gap-4 xl:grid-cols-2">
-          {input.vulnerability.map((series) => <SeriesCard key={series.measurement.measurementKey} series={series} comparison={input.comparisons.find(item=>item.measurementKey===series.measurement.measurementKey)} />)}
-        </div>
+        <div><p className="citem-eyebrow">Lane 01</p><h2 className="citem-section-title">Vulnerability & Exploitation</h2></div>
+        <div className="grid gap-4 xl:grid-cols-2">{input.vulnerability.map((series) => <SeriesCard key={series.measurement.measurementKey} series={series} comparison={input.comparisons.find(item=>item.measurementKey===series.measurement.measurementKey)} />)}</div>
       </section>
 
       <section className="space-y-3">
-        <div>
-          <p className="citem-eyebrow">Lane 02</p>
-          <h2 className="citem-section-title">Malware & IOC</h2>
-        </div>
-        <div className="grid gap-4 xl:grid-cols-2">
-          {input.malwareIoc.map((series) => <SeriesCard key={series.measurement.measurementKey} series={series} comparison={input.comparisons.find(item=>item.measurementKey===series.measurement.measurementKey)} />)}
-        </div>
+        <div><p className="citem-eyebrow">Lane 02</p><h2 className="citem-section-title">Malware & IOC</h2></div>
+        <div className="grid gap-4 xl:grid-cols-2">{input.malwareIoc.map((series) => <SeriesCard key={series.measurement.measurementKey} series={series} comparison={input.comparisons.find(item=>item.measurementKey===series.measurement.measurementKey)} />)}</div>
       </section>
 
-      <InternetInfrastructureLane series={input.routing} status={input.routingStatus} statusUnavailable={input.routingStatusUnavailable}/>
+      <InternetInfrastructureLane series={input.routing} status={input.routingStatus} statusUnavailable={input.routingStatusUnavailable} measurementsUnavailable={input.routingMeasurementsUnavailable}/>
     </section>
   );
 }
