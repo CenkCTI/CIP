@@ -1,0 +1,272 @@
+name: NODE-6 CITEM real RIPE acceptance
+
+on:
+  push:
+    branches:
+      - agent/techint-internet-infrastructure-lane
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: node6-citem-real-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-ripe-consumer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-bookworm
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: baykush
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d baykush"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/baykush
+      BAYKUSH_NODE_API_TOKEN: node6-citem-real-acceptance-token-2026-08-18
+      BAYKUSH_NODE_BASE_URL: http://127.0.0.1:18080
+      BAYKUSH_NODE_TIMEOUT_MS: "9000"
+      RUN_NODE6_LIVE_INTEGRATION: "true"
+      NODE6_PRODUCER_REF: agent/node6-3-citem-consumer-contract
+
+    steps:
+      - name: Check out CITEM consumer branch
+        uses: actions/checkout@v4
+        with:
+          path: citem
+
+      - name: Check out NODE-6.3 producer branch
+        uses: actions/checkout@v4
+        with:
+          repository: CenkCTI/BAYKUSH-Intel-Node
+          ref: agent/node6-3-citem-consumer-contract
+          path: node
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install producer dependencies
+        working-directory: node
+        run: npm install
+
+      - name: Install consumer dependencies
+        working-directory: citem
+        run: npm ci
+
+      - name: Apply NODE database migrations
+        working-directory: node
+        run: npm run db:migrate
+
+      - name: Enable only RIPE RIS routing collection for acceptance
+        working-directory: node
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import pg from 'pg';
+          const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+          try {
+            await pool.query("UPDATE source_definitions SET enabled=false");
+            const result = await pool.query(
+              "UPDATE source_definitions SET enabled=true WHERE source_key='RIPE_RIS_BGP' RETURNING source_key,enabled"
+            );
+            if (result.rowCount !== 1 || result.rows[0]?.enabled !== true) {
+              throw new Error('Failed to enable RIPE_RIS_BGP for acceptance');
+            }
+            console.log(result.rows[0]);
+          } finally {
+            await pool.end();
+          }
+          NODE
+
+      - name: Start NODE-6.3 API and real RIPE workers
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p acceptance-logs acceptance-evidence
+          (
+            cd node
+            NODE_INSTANCE_ID=node63-acceptance-api PORT=18080 npm run dev:api
+          ) > acceptance-logs/node-api.log 2>&1 &
+          echo $! > acceptance-logs/node-api.pid
+
+          (
+            cd node
+            NODE_INSTANCE_ID=node63-acceptance-measurement MEASUREMENT_TICK_MS=500 npm run dev:measurement
+          ) > acceptance-logs/node-measurement.log 2>&1 &
+          echo $! > acceptance-logs/node-measurement.pid
+
+          (
+            cd node
+            NODE_INSTANCE_ID=node63-acceptance-recovery npm run dev:recovery
+          ) > acceptance-logs/node-recovery.log 2>&1 &
+          echo $! > acceptance-logs/node-recovery.pid
+
+          (
+            cd node
+            NODE_INSTANCE_ID=node63-acceptance-stream STREAM_FLUSH_INTERVAL_MS=500 npm run dev:stream
+          ) > acceptance-logs/node-stream.log 2>&1 &
+          echo $! > acceptance-logs/node-stream.pid
+
+      - name: Wait for NODE API
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=false
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error http://127.0.0.1:18080/v1/health > acceptance-evidence/node-health.json; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then
+            echo "NODE API did not become healthy"
+            exit 1
+          fi
+          cat acceptance-evidence/node-health.json
+
+      - name: Wait for a real RIPE RIS Live routing head
+        shell: bash
+        run: |
+          set -euo pipefail
+          accepted=false
+          for attempt in $(seq 1 120); do
+            if curl --fail --silent --show-error \
+              -H "Authorization: Bearer ${BAYKUSH_NODE_API_TOKEN}" \
+              -H "Accept: application/json" \
+              http://127.0.0.1:18080/v1/techint/routing/status \
+              > acceptance-evidence/routing-status.json; then
+              if python3 - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('acceptance-evidence/routing-status.json')
+          try:
+              envelope = json.loads(path.read_text())
+              data = envelope['data']
+              stream = data['stream']
+              latest = data['latest']
+              ok = (
+                  data['sourceKey'] == 'RIPE_RIS_BGP'
+                  and data['upstreamOrigin'] == 'RIPE_RIS'
+                  and stream['heartbeatFreshness'] == 'FRESH'
+                  and stream['latestSessionStatus'] == 'STREAMING'
+                  and int(stream['messagesObserved'] or '0') > 0
+                  and int(stream['segmentsPersisted'] or '0') > 0
+                  and latest is not None
+                  and latest['acquisitionBasis'] == 'LIVE_STREAM'
+                  and latest['acquisitionChannel'] == 'RIS_LIVE_WEBSOCKET'
+                  and int(latest['updateMessages']) > 0
+                  and int(latest['rrcCount']) > 0
+                  and int(latest['captureProfileRrcCount'] or 0) > 0
+              )
+          except Exception:
+              ok = False
+          raise SystemExit(0 if ok else 1)
+          PY
+              then
+                accepted=true
+                break
+              fi
+            fi
+            sleep 2
+          done
+          if [ "$accepted" != true ]; then
+            echo "No acceptable real RIPE RIS Live routing head was observed"
+            cat acceptance-evidence/routing-status.json || true
+            exit 1
+          fi
+          cat acceptance-evidence/routing-status.json
+
+      - name: Run CITEM real NODE-6 consumer acceptance
+        working-directory: citem
+        run: npx vitest run src/lib/baykush-node/node6-live.integration.test.ts
+
+      - name: Record machine-readable acceptance evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CITEM_COMMIT="$(git -C citem rev-parse HEAD)"
+          export NODE_COMMIT="$(git -C node rev-parse HEAD)"
+          export TESTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          status = json.loads(Path('acceptance-evidence/routing-status.json').read_text())
+          data = status['data']
+          evidence = {
+              'schemaVersion': 'NODE6_CITEM_REAL_INTEGRATION_ACCEPTANCE_V1',
+              'accepted': True,
+              'testedAt': os.environ['TESTED_AT'],
+              'citemCommit': os.environ['CITEM_COMMIT'],
+              'nodeCommit': os.environ['NODE_COMMIT'],
+              'producerRef': os.environ['NODE6_PRODUCER_REF'],
+              'upstreamOrigin': data['upstreamOrigin'],
+              'sourceKey': data['sourceKey'],
+              'stream': {
+                  'heartbeatFreshness': data['stream']['heartbeatFreshness'],
+                  'sessionStatus': data['stream']['latestSessionStatus'],
+                  'messagesObserved': data['stream']['messagesObserved'],
+                  'segmentsPersisted': data['stream']['segmentsPersisted'],
+                  'latestSourceObservedAt': data['stream']['latestSourceObservedAt'],
+                  'latestNodeReceivedAt': data['stream']['latestNodeReceivedAt'],
+              },
+              'latest': data['latest'],
+              'consumerAssertions': {
+                  'routingStatusSchemaAccepted': True,
+                  'sevenRoutingMeasurementContractsAccepted': True,
+                  'nodeOwnedAutoResolutionUsed': True,
+                  'noCoverageNotFlattenedToZero': True,
+                  'producerBearerTokenRemainedServerSide': True,
+              },
+              'carryForward': {
+                  'mrtRecoveryAcceptance': 'NODE-6.2 Gate B already accepted on merged producer main; this run validates the new consumer boundary against actual RIPE RIS Live without modifying recovery semantics.'
+              },
+          }
+          Path('acceptance-evidence/NODE_6_CITEM_REAL_INTEGRATION_ACCEPTANCE.json').write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + '\n'
+          )
+          print(json.dumps(evidence, indent=2, sort_keys=True))
+          PY
+
+      - name: Stop acceptance processes
+        if: always()
+        shell: bash
+        run: |
+          for pidfile in acceptance-logs/*.pid; do
+            [ -f "$pidfile" ] || continue
+            pid="$(cat "$pidfile")"
+            kill -TERM "$pid" 2>/dev/null || true
+          done
+          sleep 2
+          for pidfile in acceptance-logs/*.pid; do
+            [ -f "$pidfile" ] || continue
+            pid="$(cat "$pidfile")"
+            kill -KILL "$pid" 2>/dev/null || true
+          done
+
+      - name: Upload acceptance evidence and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: node6-citem-real-ripe-acceptance
+          path: |
+            acceptance-evidence
+            acceptance-logs
+          if-no-files-found: error
+          retention-days: 14
