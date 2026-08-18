@@ -6,6 +6,25 @@ const coverageSchema = z.enum(["COMPLETE", "PARTIAL", "DEGRADED", "NO_COVERAGE"]
 const availabilitySchema = z.enum(["AVAILABLE", "PARTIAL", "UNAVAILABLE", "UNKNOWN"]);
 const acquisitionBasisSchema = z.enum(["LIVE_STREAM", "MRT_RECOVERY", "HISTORICAL_BACKFILL"]);
 
+const routingBucketStatusSchema = z.object({
+  bucketStart: z.iso.datetime({ offset: true }),
+  bucketEnd: z.iso.datetime({ offset: true }),
+  updateMessages: countStringSchema,
+  announcementPrefixEvents: countStringSchema,
+  withdrawalPrefixEvents: countStringSchema,
+  distinctPrefixesObserved: z.number().int().nonnegative(),
+  distinctOriginAsnsObserved: z.number().int().nonnegative(),
+  rrcCount: z.number().int().nonnegative(),
+  coverageStatus: coverageSchema,
+  dataAvailability: availabilitySchema,
+  acquisitionBasis: acquisitionBasisSchema,
+  acquisitionChannel: z.string().nullable(),
+  liveCollectionCoverage: coverageSchema,
+  captureProfileKey: z.string().nullable(),
+  captureProfileVersion: z.string().nullable(),
+  captureProfileRrcCount: z.number().int().nonnegative().nullable(),
+}).passthrough();
+
 export const routingStatusSchema = z.object({
   sourceKey: z.literal("RIPE_RIS_BGP"),
   displayName: z.string(),
@@ -34,24 +53,8 @@ export const routingStatusSchema = z.object({
     latestRequestStartedAt: z.iso.datetime({ offset: true }).nullable(),
     latestRequestCompletedAt: z.iso.datetime({ offset: true }).nullable(),
   }).passthrough(),
-  latest: z.object({
-    bucketStart: z.iso.datetime({ offset: true }),
-    bucketEnd: z.iso.datetime({ offset: true }),
-    updateMessages: countStringSchema,
-    announcementPrefixEvents: countStringSchema,
-    withdrawalPrefixEvents: countStringSchema,
-    distinctPrefixesObserved: z.number().int().nonnegative(),
-    distinctOriginAsnsObserved: z.number().int().nonnegative(),
-    rrcCount: z.number().int().nonnegative(),
-    coverageStatus: coverageSchema,
-    dataAvailability: availabilitySchema,
-    acquisitionBasis: acquisitionBasisSchema,
-    acquisitionChannel: z.string().nullable(),
-    liveCollectionCoverage: coverageSchema,
-    captureProfileKey: z.string().nullable(),
-    captureProfileVersion: z.string().nullable(),
-    captureProfileRrcCount: z.number().int().nonnegative().nullable(),
-  }).passthrough().nullable(),
+  latest: routingBucketStatusSchema.nullable(),
+  latestRecovered: routingBucketStatusSchema.nullable().optional(),
 }).passthrough();
 
 export type NodeRoutingStatus = z.infer<typeof routingStatusSchema>;
