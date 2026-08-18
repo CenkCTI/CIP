@@ -234,3 +234,85 @@ jobs:
       - name: Run CITEM real NODE-6 consumer acceptance
         working-directory: citem
         run: npx vitest run src/lib/baykush-node/node6-live.integration.test.ts
+
+      - name: Record machine-readable acceptance evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CITEM_COMMIT="$(git -C citem rev-parse HEAD)"
+          export NODE_COMMIT="$(git -C node rev-parse HEAD)"
+          export TESTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          status = json.loads(Path('acceptance-evidence/routing-status.json').read_text())
+          data = status['data']
+          evidence = {
+              'schemaVersion': 'NODE6_CITEM_REAL_INTEGRATION_ACCEPTANCE_V2',
+              'accepted': True,
+              'testedAt': os.environ['TESTED_AT'],
+              'citemCommit': os.environ['CITEM_COMMIT'],
+              'nodeCommit': os.environ['NODE_COMMIT'],
+              'producerRef': os.environ['NODE6_PRODUCER_REF'],
+              'upstreamOrigin': data['upstreamOrigin'],
+              'sourceKey': data['sourceKey'],
+              'stream': {
+                  'heartbeatFreshness': data['stream']['heartbeatFreshness'],
+                  'sessionStatus': data['stream']['latestSessionStatus'],
+                  'messagesObserved': data['stream']['messagesObserved'],
+                  'segmentsPersisted': data['stream']['segmentsPersisted'],
+                  'latestSourceObservedAt': data['stream']['latestSourceObservedAt'],
+                  'latestNodeReceivedAt': data['stream']['latestNodeReceivedAt'],
+              },
+              'liveHead': data['latest'],
+              'recovery': {
+                  'workerHeartbeatFreshness': data['recovery']['heartbeatFreshness'],
+                  'latestRequestStatus': data['recovery']['latestRequestStatus'],
+                  'latestRequestCompletedAt': data['recovery']['latestRequestCompletedAt'],
+                  'recoveredHead': data['latestRecovered'],
+                  'fixture': json.loads(Path('acceptance-evidence/recovery-fixture.json').read_text().splitlines()[-1]),
+              },
+              'consumerAssertions': {
+                  'routingStatusSchemaAccepted': True,
+                  'liveAndRecoveredProvenanceAccepted': True,
+                  'sevenRoutingMeasurementContractsAccepted': True,
+                  'nodeOwnedAutoResolutionUsed': True,
+                  'noCoverageNotFlattenedToZero': True,
+                  'producerBearerTokenRemainedServerSide': True,
+                  'coreAndRoutingMeasurementFailureDomainsSeparated': True,
+              },
+          }
+          Path('acceptance-evidence/NODE_6_CITEM_REAL_INTEGRATION_ACCEPTANCE.json').write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + '\n'
+          )
+          print(json.dumps(evidence, indent=2, sort_keys=True))
+          PY
+
+      - name: Stop acceptance processes
+        if: always()
+        shell: bash
+        run: |
+          for pidfile in acceptance-logs/*.pid; do
+            [ -f "$pidfile" ] || continue
+            pid="$(cat "$pidfile")"
+            kill -TERM "$pid" 2>/dev/null || true
+          done
+          sleep 2
+          for pidfile in acceptance-logs/*.pid; do
+            [ -f "$pidfile" ] || continue
+            pid="$(cat "$pidfile")"
+            kill -KILL "$pid" 2>/dev/null || true
+          done
+
+      - name: Upload acceptance evidence and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: node6-citem-real-ripe-acceptance
+          path: |
+            acceptance-evidence
+            acceptance-logs
+          if-no-files-found: error
+          retention-days: 14
