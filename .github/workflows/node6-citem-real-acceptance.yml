@@ -16,7 +16,7 @@ concurrency:
 jobs:
   real-ripe-consumer:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:16-bookworm
@@ -33,7 +33,6 @@ jobs:
           --health-retries 12
     env:
       DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/baykush
-      BAYKUSH_NODE_API_TOKEN: node6-citem-real-acceptance-token-2026-08-18
       BAYKUSH_NODE_BASE_URL: http://127.0.0.1:18080
       BAYKUSH_NODE_TIMEOUT_MS: "9000"
       RUN_NODE6_LIVE_INTEGRATION: "true"
@@ -57,6 +56,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      - name: Generate ephemeral acceptance credential and paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(openssl rand -hex 32)"
+          echo "::add-mask::${token}"
+          echo "BAYKUSH_NODE_API_TOKEN=${token}" >> "$GITHUB_ENV"
+          echo "RECOVERY_DECODER_PATH=${GITHUB_WORKSPACE}/acceptance-bin/baykush-mrt-decoder" >> "$GITHUB_ENV"
+          echo "RECOVERY_STAGING_DIR=${GITHUB_WORKSPACE}/acceptance-recovery" >> "$GITHUB_ENV"
+          mkdir -p acceptance-bin acceptance-recovery acceptance-logs acceptance-evidence
 
       - name: Install producer dependencies
         working-directory: node
@@ -92,11 +102,31 @@ jobs:
           }
           NODE
 
+      - name: Build the pinned production MRT decoder
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --target mrt-decoder-build -t baykush-mrt-decoder:node6-citem node
+          decoder_container="$(docker create baykush-mrt-decoder:node6-citem)"
+          trap 'docker rm -f "${decoder_container}" >/dev/null 2>&1 || true' EXIT
+          docker cp "${decoder_container}:/decoder/target/release/baykush-mrt-decoder" "${RECOVERY_DECODER_PATH}"
+          chmod 0755 "${RECOVERY_DECODER_PATH}"
+          "${RECOVERY_DECODER_PATH}" --version
+
+      - name: Create a real official-MRT recovered routing head
+        working-directory: node
+        env:
+          NODE6_3_CITEM_RECOVERY_ACCEPTANCE_CONFIRMED: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsx scripts/node6-3-citem-recovery-acceptance.ts | tee ../acceptance-evidence/recovery-fixture.json
+          grep -q '"accepted":true' ../acceptance-evidence/recovery-fixture.json
+
       - name: Start NODE-6.3 API and real RIPE workers
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p acceptance-logs acceptance-evidence
           (
             cd node
             NODE_INSTANCE_ID=node63-acceptance-api PORT=18080 npm run dev:api
@@ -139,7 +169,7 @@ jobs:
           fi
           cat acceptance-evidence/node-health.json
 
-      - name: Wait for a real RIPE RIS Live routing head
+      - name: Wait for real RIPE Live plus retained MRT-recovery provenance
         shell: bash
         run: |
           set -euo pipefail
@@ -158,7 +188,9 @@ jobs:
               envelope = json.loads(path.read_text())
               data = envelope['data']
               stream = data['stream']
+              recovery = data['recovery']
               latest = data['latest']
+              recovered = data['latestRecovered']
               ok = (
                   data['sourceKey'] == 'RIPE_RIS_BGP'
                   and data['upstreamOrigin'] == 'RIPE_RIS'
@@ -172,6 +204,17 @@ jobs:
                   and int(latest['updateMessages']) > 0
                   and int(latest['rrcCount']) > 0
                   and int(latest['captureProfileRrcCount'] or 0) > 0
+                  and recovery['heartbeatFreshness'] == 'FRESH'
+                  and recovery['latestRequestStatus'] == 'SUCCEEDED'
+                  and recovered is not None
+                  and recovered['acquisitionBasis'] == 'MRT_RECOVERY'
+                  and recovered['acquisitionChannel'] == 'RIS_MRT_UPDATE'
+                  and recovered['coverageStatus'] == 'COMPLETE'
+                  and recovered['dataAvailability'] == 'AVAILABLE'
+                  and recovered['liveCollectionCoverage'] == 'PARTIAL'
+                  and recovered['captureProfileKey'] == 'NODE6_3_CITEM_RECOVERY_ACCEPTANCE_RRC00'
+                  and int(recovered['captureProfileRrcCount'] or 0) == 1
+                  and int(recovered['updateMessages']) > 0
               )
           except Exception:
               ok = False
@@ -185,7 +228,7 @@ jobs:
             sleep 2
           done
           if [ "$accepted" != true ]; then
-            echo "No acceptable real RIPE RIS Live routing head was observed"
+            echo "No acceptable combined RIPE Live + MRT recovered routing state was observed"
             cat acceptance-evidence/routing-status.json || true
             exit 1
           fi
@@ -210,7 +253,7 @@ jobs:
           status = json.loads(Path('acceptance-evidence/routing-status.json').read_text())
           data = status['data']
           evidence = {
-              'schemaVersion': 'NODE6_CITEM_REAL_INTEGRATION_ACCEPTANCE_V1',
+              'schemaVersion': 'NODE6_CITEM_REAL_INTEGRATION_ACCEPTANCE_V2',
               'accepted': True,
               'testedAt': os.environ['TESTED_AT'],
               'citemCommit': os.environ['CITEM_COMMIT'],
@@ -226,16 +269,22 @@ jobs:
                   'latestSourceObservedAt': data['stream']['latestSourceObservedAt'],
                   'latestNodeReceivedAt': data['stream']['latestNodeReceivedAt'],
               },
-              'latest': data['latest'],
+              'liveHead': data['latest'],
+              'recovery': {
+                  'workerHeartbeatFreshness': data['recovery']['heartbeatFreshness'],
+                  'latestRequestStatus': data['recovery']['latestRequestStatus'],
+                  'latestRequestCompletedAt': data['recovery']['latestRequestCompletedAt'],
+                  'recoveredHead': data['latestRecovered'],
+                  'fixture': json.loads(Path('acceptance-evidence/recovery-fixture.json').read_text().splitlines()[-1]),
+              },
               'consumerAssertions': {
                   'routingStatusSchemaAccepted': True,
+                  'liveAndRecoveredProvenanceAccepted': True,
                   'sevenRoutingMeasurementContractsAccepted': True,
                   'nodeOwnedAutoResolutionUsed': True,
                   'noCoverageNotFlattenedToZero': True,
                   'producerBearerTokenRemainedServerSide': True,
-              },
-              'carryForward': {
-                  'mrtRecoveryAcceptance': 'NODE-6.2 Gate B already accepted on merged producer main; this run validates the new consumer boundary against actual RIPE RIS Live without modifying recovery semantics.'
+                  'coreAndRoutingMeasurementFailureDomainsSeparated': True,
               },
           }
           Path('acceptance-evidence/NODE_6_CITEM_REAL_INTEGRATION_ACCEPTANCE.json').write_text(
