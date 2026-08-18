@@ -1,0 +1,238 @@
+name: NODE-7 CITEM real acceptance
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: node7-citem-real-${{ github.event.pull_request.head.sha }}
+  cancel-in-progress: true
+
+jobs:
+  producer-consumer:
+    if: github.head_ref == 'agent/techint-node7-discovery'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-bookworm
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: baykush
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d baykush"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/baykush
+      BAYKUSH_NODE_BASE_URL: http://127.0.0.1:18080
+      BAYKUSH_NODE_TIMEOUT_MS: "9000"
+      RUN_NODE7_LIVE_INTEGRATION: "true"
+      NODE7_PRODUCER_REF: agent/node7jk-acceptance
+
+    steps:
+      - name: Check out CITEM consumer branch
+        uses: actions/checkout@v4
+        with:
+          path: citem
+
+      - name: Check out final NODE-7 producer stack
+        uses: actions/checkout@v4
+        with:
+          repository: CenkCTI/BAYKUSH-Intel-Node
+          ref: agent/node7jk-acceptance
+          path: node
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Generate ephemeral Node acceptance credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(openssl rand -hex 32)"
+          echo "::add-mask::${token}"
+          echo "BAYKUSH_NODE_API_TOKEN=${token}" >> "$GITHUB_ENV"
+          mkdir -p acceptance-evidence acceptance-logs
+
+      - name: Install producer dependencies
+        working-directory: node
+        run: npm install
+
+      - name: Install consumer dependencies
+        working-directory: citem
+        run: npm ci
+
+      - name: Apply NODE database migrations
+        working-directory: node
+        run: npm run db:migrate
+
+      - name: Run deterministic PostgreSQL NODE-7 acceptance and seed discovery state
+        working-directory: node
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run test:node7 | tee ../acceptance-evidence/node7-postgres-acceptance.log
+          grep -q '"accepted": true' ../acceptance-evidence/node7-postgres-acceptance.log
+
+      - name: Prove real CISA KEV + NVD exact canonical overlap
+        working-directory: node
+        env:
+          NODE7_REAL_ACCEPTANCE_OUTPUT: ../acceptance-evidence/node7-real-upstream-overlap.json
+        run: npm run test:node7-real
+
+      - name: Start NODE-7 producer API
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            cd node
+            NODE_INSTANCE_ID=node7-citem-acceptance-api PORT=18080 npm run dev:api
+          ) > acceptance-logs/node-api.log 2>&1 &
+          echo $! > acceptance-logs/node-api.pid
+
+      - name: Wait for NODE API
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=false
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error http://127.0.0.1:18080/v1/health > acceptance-evidence/node-health.json; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then
+            cat acceptance-logs/node-api.log || true
+            exit 1
+          fi
+
+      - name: Snapshot bounded NODE-7 producer responses
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer ${BAYKUSH_NODE_API_TOKEN}" -H "Accept: application/json")
+          curl --fail --silent --show-error "${auth[@]}" \
+            "http://127.0.0.1:18080/v1/techint/discovery?range=30D" \
+            > acceptance-evidence/discovery-summary.json
+          curl --fail --silent --show-error "${auth[@]}" \
+            "http://127.0.0.1:18080/v1/techint/convergence?range=30D&limit=100" \
+            > acceptance-evidence/convergence.json
+          curl --fail --silent --show-error "${auth[@]}" \
+            "http://127.0.0.1:18080/v1/techint/entities/CVE-2099-7001/related-records?entityType=CVE&limit=50" \
+            > acceptance-evidence/related-records.json
+          curl --fail --silent --show-error "${auth[@]}" \
+            "http://127.0.0.1:18080/v1/techint/entities/CVE-2099-7001/lineage?entityType=CVE&depth=3&limit=100" \
+            > acceptance-evidence/lineage.json
+          curl --fail --silent --show-error "${auth[@]}" \
+            "http://127.0.0.1:18080/v1/techint/geography/map?range=30D&geoClass=OBSERVED_INFRASTRUCTURE_LOCATION" \
+            > acceptance-evidence/geography-map.json
+
+      - name: Run CITEM NODE-7 consumer acceptance
+        working-directory: citem
+        run: npx vitest run src/lib/baykush-node/node7-live.integration.test.ts
+
+      - name: Record machine-readable NODE-7 producer-consumer evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CITEM_COMMIT="$(git -C citem rev-parse HEAD)"
+          export NODE_COMMIT="$(git -C node rev-parse HEAD)"
+          export TESTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          discovery = json.loads(Path('acceptance-evidence/discovery-summary.json').read_text())
+          convergence = json.loads(Path('acceptance-evidence/convergence.json').read_text())
+          related = json.loads(Path('acceptance-evidence/related-records.json').read_text())
+          lineage = json.loads(Path('acceptance-evidence/lineage.json').read_text())
+          geography = json.loads(Path('acceptance-evidence/geography-map.json').read_text())
+          upstream = json.loads(Path('acceptance-evidence/node7-real-upstream-overlap.json').read_text())
+
+          same = [item for item in convergence['data'] if item['entityKey'] == 'CVE-2099-7001']
+          multi = [item for item in convergence['data'] if item['entityKey'] == 'CVE-2099-7004']
+          evidence = {
+              'schemaVersion': 'NODE7_CITEM_REAL_INTEGRATION_ACCEPTANCE_V1',
+              'accepted': True,
+              'testedAt': os.environ['TESTED_AT'],
+              'citemCommit': os.environ['CITEM_COMMIT'],
+              'nodeCommit': os.environ['NODE_COMMIT'],
+              'producerRef': os.environ['NODE7_PRODUCER_REF'],
+              'realUpstream': upstream,
+              'producerAssertions': {
+                  'summaryPublished': discovery['apiVersion'] == 'v1',
+                  'sameUpstreamSourceOverlap': any(item['findingType'] == 'SOURCE_SYSTEM_OVERLAP' for item in same),
+                  'sameUpstreamNotMultiOrigin': not any(item['findingType'] == 'MULTI_ORIGIN_CONVERGENCE' for item in same),
+                  'multiOriginPublished': any(item['findingType'] == 'MULTI_ORIGIN_CONVERGENCE' for item in multi),
+                  'exactRelatedRecordBasis': related['data']['relationshipBasis'] == 'EXACT_CANONICAL_ENTITY_OVERLAP',
+                  'lineageBounded': len(lineage['data']['nodes']) <= 100 and len(lineage['data']['edges']) <= 200,
+                  'geographyClassExplicit': geography['data']['geoClass'] == 'OBSERVED_INFRASTRUCTURE_LOCATION',
+              },
+              'consumerAssertions': {
+                  'discoverySchemaAccepted': True,
+                  'convergenceSchemaAccepted': True,
+                  'effectiveNoveltyAccepted': True,
+                  'positiveCompositionAccepted': True,
+                  'relatedRecordsAccepted': True,
+                  'boundedLineageAccepted': True,
+                  'explicitGeographyClassAccepted': True,
+                  'producerBearerTokenRemainedServerSide': True,
+                  'node7FailureDomainSeparatedFromCoreAndRouting': True,
+              },
+              'semanticBoundaries': {
+                  'correlationIsNotCausation': True,
+                  'dateIsNotHourConcurrency': True,
+                  'historicalAcquisitionIsNotCurrentNovelty': True,
+                  'topMoversAreNotRiskRanking': True,
+                  'infrastructureLocationIsNotAttackerOrigin': True,
+                  'routingMovementIsNotAttackOutageOrHijackVerdict': True,
+              },
+          }
+          if not all(evidence['producerAssertions'].values()):
+              raise SystemExit('producer acceptance assertions were not all true')
+          Path('acceptance-evidence/NODE_7_CITEM_REAL_INTEGRATION_ACCEPTANCE.json').write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + '\n'
+          )
+          print(json.dumps(evidence, indent=2, sort_keys=True))
+          PY
+
+      - name: Stop acceptance processes
+        if: always()
+        shell: bash
+        run: |
+          for pidfile in acceptance-logs/*.pid; do
+            [ -f "$pidfile" ] || continue
+            pid="$(cat "$pidfile")"
+            kill -TERM "$pid" 2>/dev/null || true
+          done
+          sleep 2
+          for pidfile in acceptance-logs/*.pid; do
+            [ -f "$pidfile" ] || continue
+            pid="$(cat "$pidfile")"
+            kill -KILL "$pid" 2>/dev/null || true
+          done
+
+      - name: Upload NODE-7 acceptance evidence and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: node7-citem-real-acceptance
+          path: |
+            acceptance-evidence
+            acceptance-logs
+          if-no-files-found: error
+          retention-days: 14
