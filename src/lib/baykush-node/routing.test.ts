@@ -11,6 +11,8 @@ function series(key:string, points:Array<{value:number|null;coverage:string}>):N
   };
 }
 
+const bucket=(overrides:Record<string,unknown>={})=>({bucketStart:"2026-08-17T23:59:00.000Z",bucketEnd:"2026-08-18T00:00:00.000Z",updateMessages:"0",announcementPrefixEvents:"0",withdrawalPrefixEvents:"0",distinctPrefixesObserved:0,distinctOriginAsnsObserved:0,rrcCount:1,coverageStatus:"COMPLETE",dataAvailability:"AVAILABLE",acquisitionBasis:"LIVE_STREAM",acquisitionChannel:"RIS_LIVE_WEBSOCKET",liveCollectionCoverage:"COMPLETE",captureProfileKey:"test",captureProfileVersion:"v1",captureProfileRrcCount:1,...overrides});
+
 describe("CİTEM Internet Infrastructure adapter",()=>{
   it("sums additive routing counts only across fully proven buckets",()=>{
     expect(completeAdditiveTotal(series("routing.ripe_ris.update_messages",[{value:2,coverage:"COMPLETE"},{value:3,coverage:"COMPLETE"}]))).toBe(5);
@@ -27,15 +29,17 @@ describe("CİTEM Internet Infrastructure adapter",()=>{
     expect(formatIntegerString("9007199254740993")).toBe(BigInt("9007199254740993").toLocaleString("en-US"));
   });
 
-  it("validates live and recovered state independently",()=>{
+  it("validates current live state and retained recovered provenance independently",()=>{
     const parsed=routingStatusSchema.parse({
       sourceKey:"RIPE_RIS_BGP",displayName:"RIPE RIS BGP",authority:"BAYKUSH_INTELLIGENCE_NODE",upstreamOrigin:"RIPE_RIS",attribution:"RIPE NCC Routing Information Service (RIS)",represents:"Observed BGP activity",doesNotRepresent:"Attack or outage verdicts",
       stream:{heartbeatAt:"2026-08-18T00:00:00.000Z",heartbeatFreshness:"FRESH",latestSessionStatus:"STREAMING",latestSessionStartedAt:null,latestSessionConnectedAt:null,latestSessionEndedAt:null,latestSourceObservedAt:null,latestNodeReceivedAt:null,messagesObserved:"10",segmentsPersisted:"1"},
       recovery:{heartbeatAt:"2026-08-18T00:00:00.000Z",heartbeatFreshness:"FRESH",latestRequestStatus:"SUCCEEDED",latestRequestCreatedAt:null,latestRequestStartedAt:null,latestRequestCompletedAt:null},
-      latest:{bucketStart:"2026-08-17T23:59:00.000Z",bucketEnd:"2026-08-18T00:00:00.000Z",updateMessages:"0",announcementPrefixEvents:"0",withdrawalPrefixEvents:"0",distinctPrefixesObserved:0,distinctOriginAsnsObserved:0,rrcCount:1,coverageStatus:"COMPLETE",dataAvailability:"AVAILABLE",acquisitionBasis:"MRT_RECOVERY",acquisitionChannel:"RIS_MRT_UPDATE",liveCollectionCoverage:"PARTIAL",captureProfileKey:"test",captureProfileVersion:"v1",captureProfileRrcCount:1},
+      latest:bucket(),
+      latestRecovered:bucket({bucketStart:"2024-01-01T00:00:00.000Z",bucketEnd:"2024-01-01T00:01:00.000Z",updateMessages:"37159",coverageStatus:"COMPLETE",dataAvailability:"AVAILABLE",acquisitionBasis:"MRT_RECOVERY",acquisitionChannel:"RIS_MRT_UPDATE",liveCollectionCoverage:"PARTIAL",captureProfileKey:"NODE6_3_CITEM_RECOVERY_ACCEPTANCE_RRC00"}),
     });
-    expect(parsed.latest?.dataAvailability).toBe("AVAILABLE");
-    expect(parsed.latest?.liveCollectionCoverage).toBe("PARTIAL");
-    expect(parsed.latest?.updateMessages).toBe("0");
+    expect(parsed.latest?.acquisitionBasis).toBe("LIVE_STREAM");
+    expect(parsed.latestRecovered?.dataAvailability).toBe("AVAILABLE");
+    expect(parsed.latestRecovered?.liveCollectionCoverage).toBe("PARTIAL");
+    expect(parsed.latestRecovered?.acquisitionBasis).toBe("MRT_RECOVERY");
   });
 });
