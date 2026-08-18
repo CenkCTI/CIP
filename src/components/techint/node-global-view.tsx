@@ -1,5 +1,7 @@
 import { NodeSeriesChart } from "./node-series-chart";
+import { InternetInfrastructureLane } from "./internet-infrastructure-lane";
 import type { NodeMeasurementSeries } from "@/lib/baykush-node/measurement-schema";
+import type { NodeRoutingStatus } from "@/lib/baykush-node/routing-schema";
 import type { GlobalRange } from "@/lib/baykush-node/range";
 import type { NodeComparison } from "@/lib/baykush-node/schemas";
 
@@ -58,6 +60,10 @@ export function NodeGlobalView(input: {
   sources: readonly NodeSourceStatusView[];
   vulnerability: readonly NodeMeasurementSeries[];
   malwareIoc: readonly NodeMeasurementSeries[];
+  routing: readonly NodeMeasurementSeries[];
+  routingStatus?: NodeRoutingStatus;
+  routingStatusUnavailable?: boolean;
+  routingMeasurementsUnavailable?: boolean;
   comparisons: readonly NodeComparison[];
 }) {
   return (
@@ -66,7 +72,7 @@ export function NodeGlobalView(input: {
         <div>
           <p className="citem-eyebrow">CİTEM / TechINT / BAYKUSH Intelligence Node</p>
           <h1 className="citem-title">Global View v2</h1>
-          <p className="citem-subtitle">Coverage-aware public technical measurements from the central BAYKUSH Intelligence Node. The expanded source matrix is visible here, while measurements appear only where the Node admission policy permits projection.</p>
+          <p className="citem-subtitle">Coverage-aware public technical measurements from the central BAYKUSH Intelligence Node. Vulnerability reporting, malware/IOC reporting, and Internet infrastructure observations remain separate semantic lanes.</p>
           <p className="mt-2 text-xs text-stone-500">Generated {new Date(input.generatedAt).toLocaleString()} · range {input.range.toUpperCase()} · source status {input.sources.length}</p>
         </div>
       </header>
@@ -85,24 +91,16 @@ export function NodeGlobalView(input: {
       </div>
 
       <section className="space-y-3">
-        <div>
-          <p className="citem-eyebrow">Lane 01</p>
-          <h2 className="citem-section-title">Vulnerability & Exploitation</h2>
-        </div>
-        <div className="grid gap-4 xl:grid-cols-2">
-          {input.vulnerability.map((series) => <SeriesCard key={series.measurement.measurementKey} series={series} comparison={input.comparisons.find(item=>item.measurementKey===series.measurement.measurementKey)} />)}
-        </div>
+        <div><p className="citem-eyebrow">Lane 01</p><h2 className="citem-section-title">Vulnerability & Exploitation</h2></div>
+        <div className="grid gap-4 xl:grid-cols-2">{input.vulnerability.map((series) => <SeriesCard key={series.measurement.measurementKey} series={series} comparison={input.comparisons.find(item=>item.measurementKey===series.measurement.measurementKey)} />)}</div>
       </section>
 
       <section className="space-y-3">
-        <div>
-          <p className="citem-eyebrow">Lane 02</p>
-          <h2 className="citem-section-title">Malware & IOC</h2>
-        </div>
-        <div className="grid gap-4 xl:grid-cols-2">
-          {input.malwareIoc.map((series) => <SeriesCard key={series.measurement.measurementKey} series={series} comparison={input.comparisons.find(item=>item.measurementKey===series.measurement.measurementKey)} />)}
-        </div>
+        <div><p className="citem-eyebrow">Lane 02</p><h2 className="citem-section-title">Malware & IOC</h2></div>
+        <div className="grid gap-4 xl:grid-cols-2">{input.malwareIoc.map((series) => <SeriesCard key={series.measurement.measurementKey} series={series} comparison={input.comparisons.find(item=>item.measurementKey===series.measurement.measurementKey)} />)}</div>
       </section>
+
+      <InternetInfrastructureLane series={input.routing} status={input.routingStatus} statusUnavailable={input.routingStatusUnavailable} measurementsUnavailable={input.routingMeasurementsUnavailable}/>
     </section>
   );
 }

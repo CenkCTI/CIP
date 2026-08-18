@@ -1,0 +1,35 @@
+name: NODE-6 CITEM real acceptance gate
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch-and-wait:
+    if: github.head_ref == 'agent/techint-internet-infrastructure-lane'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Dispatch real RIPE acceptance on the PR branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_BRANCH: agent/techint-internet-infrastructure-lane
+        shell: bash
+        run: |
+          set -euo pipefail
+          dispatch_url="$(gh workflow run node6-citem-real-acceptance.yml \
+            --repo "${GITHUB_REPOSITORY}" \
+            --ref "${TARGET_BRANCH}")"
+          echo "Dispatched ${dispatch_url}"
+          run_id="${dispatch_url##*/}"
+          if ! [[ "${run_id}" =~ ^[0-9]+$ ]]; then
+            echo "Could not parse dispatched run id from ${dispatch_url}"
+            exit 1
+          fi
+          echo "Watching acceptance run ${run_id}"
+          gh run watch "${run_id}" --repo "${GITHUB_REPOSITORY}" --exit-status

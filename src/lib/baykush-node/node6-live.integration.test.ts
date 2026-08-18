@@ -1,0 +1,31 @@
+import { beforeAll, describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
+
+const liveDescribe = process.env.RUN_NODE6_LIVE_INTEGRATION === "true" ? describe : describe.skip;
+
+type Queries = typeof import("./queries");
+type Routing = typeof import("./routing");
+let queries: Queries;
+let routing: Routing;
+
+liveDescribe("CİTEM NODE-6 real RIPE integration", () => {
+  beforeAll(async () => { queries=await import("./queries");routing=await import("./routing"); });
+
+  it("consumes real RIPE live and recovered routing provenance through the NODE-6.3 status contract",async()=>{
+    const response=await queries.getNodeRoutingStatus();expect(response.apiVersion).toBe("v1");expect(response.data.sourceKey).toBe("RIPE_RIS_BGP");expect(response.data.authority).toBe("BAYKUSH_INTELLIGENCE_NODE");expect(response.data.upstreamOrigin).toBe("RIPE_RIS");expect(response.data.attribution).toMatch(/RIPE/i);
+    expect(response.data.stream.heartbeatFreshness).toBe("FRESH");expect(response.data.stream.latestSessionStatus).toBe("STREAMING");expect(response.data.stream.messagesObserved).not.toBeNull();expect(response.data.stream.segmentsPersisted).not.toBeNull();expect(BigInt(response.data.stream.messagesObserved??"0")).toBeGreaterThan(BigInt(0));expect(BigInt(response.data.stream.segmentsPersisted??"0")).toBeGreaterThan(BigInt(0));expect(response.data.stream.latestSourceObservedAt).not.toBeNull();expect(response.data.stream.latestNodeReceivedAt).not.toBeNull();
+    const latest=response.data.latest;expect(latest).not.toBeNull();if(!latest)throw new Error("Expected a current routing head from real RIPE RIS Live traffic");expect(latest.acquisitionBasis).toBe("LIVE_STREAM");expect(latest.acquisitionChannel).toBe("RIS_LIVE_WEBSOCKET");expect(BigInt(latest.updateMessages)).toBeGreaterThan(BigInt(0));expect(latest.rrcCount).toBeGreaterThan(0);expect(latest.captureProfileKey).not.toBeNull();expect(latest.captureProfileVersion).not.toBeNull();expect(latest.captureProfileRrcCount??0).toBeGreaterThan(0);expect(["COMPLETE","PARTIAL","DEGRADED"]).toContain(latest.liveCollectionCoverage);expect(["AVAILABLE","PARTIAL"]).toContain(latest.dataAvailability);
+
+    const recovered=response.data.latestRecovered;expect(recovered).toBeTruthy();if(!recovered)throw new Error("Expected a retained real MRT recovered routing head");expect(recovered.acquisitionBasis).toBe("MRT_RECOVERY");expect(recovered.acquisitionChannel).toBe("RIS_MRT_UPDATE");expect(recovered.coverageStatus).toBe("COMPLETE");expect(recovered.dataAvailability).toBe("AVAILABLE");expect(recovered.liveCollectionCoverage).toBe("PARTIAL");expect(recovered.captureProfileKey).toBe("NODE6_3_CITEM_RECOVERY_ACCEPTANCE_RRC00");expect(recovered.captureProfileRrcCount).toBe(1);expect(BigInt(recovered.updateMessages)).toBeGreaterThan(BigInt(0));
+
+    const serialized=JSON.stringify(response);for(const forbidden of ["staging_key","stagingKey","RECOVERY_STAGING_DIR","DATABASE_URL","BAYKUSH_NODE_API_TOKEN","/var/lib/baykush","decoderCommand","stackTrace"]){expect(serialized).not.toContain(forbidden);}
+  });
+
+  it("consumes all seven routing measurement contracts through the independent Node-owned AUTO-resolution path",async()=>{
+    const measurements=await queries.getNodeRoutingMeasurements("24h",new Date());
+    expect(measurements.meta).toEqual({batchCount:1,maxMeasurementsPerRequest:8});
+    const routingSeries=routing.routingSeries(measurements.data);expect(routingSeries).toHaveLength(routing.ROUTING_MEASUREMENTS.length);expect(new Set(routingSeries.map(series=>series.measurement.measurementKey))).toEqual(new Set(routing.ROUTING_MEASUREMENTS));
+    for(const series of routingSeries){expect(["FIVE_MINUTES","HOUR","DAY"]).toContain(series.resolution);expect(series.measurement.timeAxis).toBe("SOURCE_OBSERVED_TIME");expect(series.measurement.represents.length).toBeGreaterThan(0);expect(series.measurement.doesNotRepresent.length).toBeGreaterThan(0);expect(series.points.length).toBeGreaterThan(0);for(const point of series.points){if(!point.materialized&&point.coverage.status==="NO_COVERAGE")expect(point.value).toBeNull();}}
+  });
+});
