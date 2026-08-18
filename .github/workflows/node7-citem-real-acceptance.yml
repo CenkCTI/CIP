@@ -36,19 +36,20 @@ jobs:
       BAYKUSH_NODE_BASE_URL: http://127.0.0.1:18080
       BAYKUSH_NODE_TIMEOUT_MS: "9000"
       RUN_NODE7_LIVE_INTEGRATION: "true"
-      NODE7_PRODUCER_REF: agent/node7jk-acceptance
+      NODE7_PRODUCER_REF: e92c6b050ff57ef44dee97dab165f80a976f7ae3
 
     steps:
-      - name: Check out CITEM consumer branch
+      - name: Check out exact CITEM consumer head
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           path: citem
 
-      - name: Check out final NODE-7 producer stack
+      - name: Check out validated final NODE-7 producer stack
         uses: actions/checkout@v4
         with:
           repository: CenkCTI/BAYKUSH-Intel-Node
-          ref: agent/node7jk-acceptance
+          ref: e92c6b050ff57ef44dee97dab165f80a976f7ae3
           path: node
           persist-credentials: false
 
