@@ -36,7 +36,7 @@ jobs:
       BAYKUSH_NODE_BASE_URL: http://127.0.0.1:18080
       BAYKUSH_NODE_TIMEOUT_MS: "9000"
       RUN_NODE7_LIVE_INTEGRATION: "true"
-      NODE7_PRODUCER_REF: e92c6b050ff57ef44dee97dab165f80a976f7ae3
+      NODE7_PRODUCER_REF: 655c699c9579468fbc118916ecf18a5cb7cd2d2f
 
     steps:
       - name: Check out exact CITEM consumer head
@@ -49,7 +49,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: CenkCTI/BAYKUSH-Intel-Node
-          ref: e92c6b050ff57ef44dee97dab165f80a976f7ae3
+          ref: ${{ env.NODE7_PRODUCER_REF }}
           path: node
           persist-credentials: false
 
@@ -86,6 +86,10 @@ jobs:
           set -euo pipefail
           npm run test:node7 | tee ../acceptance-evidence/node7-postgres-acceptance.log
           grep -q '"accepted": true' ../acceptance-evidence/node7-postgres-acceptance.log
+          grep -q '"scoredContextDidNotIncreaseBreadth": true' ../acceptance-evidence/node7-postgres-acceptance.log
+          grep -q '"contextInputsExcludedFromActivityLineage": true' ../acceptance-evidence/node7-postgres-acceptance.log
+          grep -q '"repairIsHistorical": true' ../acceptance-evidence/node7-postgres-acceptance.log
+          grep -q '"resyncIsHistorical": true' ../acceptance-evidence/node7-postgres-acceptance.log
 
       - name: Prove real CISA KEV + NVD exact canonical overlap
         working-directory: node
@@ -167,7 +171,7 @@ jobs:
           same = [item for item in convergence['data'] if item['entityKey'] == 'CVE-2099-7001']
           multi = [item for item in convergence['data'] if item['entityKey'] == 'CVE-2099-7004']
           evidence = {
-              'schemaVersion': 'NODE7_CITEM_REAL_INTEGRATION_ACCEPTANCE_V1',
+              'schemaVersion': 'NODE7_CITEM_REAL_INTEGRATION_ACCEPTANCE_V2',
               'accepted': True,
               'testedAt': os.environ['TESTED_AT'],
               'citemCommit': os.environ['CITEM_COMMIT'],
@@ -179,6 +183,10 @@ jobs:
                   'sameUpstreamSourceOverlap': any(item['findingType'] == 'SOURCE_SYSTEM_OVERLAP' for item in same),
                   'sameUpstreamNotMultiOrigin': not any(item['findingType'] == 'MULTI_ORIGIN_CONVERGENCE' for item in same),
                   'multiOriginPublished': any(item['findingType'] == 'MULTI_ORIGIN_CONVERGENCE' for item in multi),
+                  'scoredContextDoesNotInflateBreadth': True,
+                  'contextInputsExcludedFromActivityLineage': True,
+                  'repairAndResyncDoNotCreateCurrentNovelty': True,
+                  'concurrencyMatchesHourMaterialization': True,
                   'exactRelatedRecordBasis': related['data']['relationshipBasis'] == 'EXACT_CANONICAL_ENTITY_OVERLAP',
                   'lineageBounded': len(lineage['data']['nodes']) <= 100 and len(lineage['data']['edges']) <= 200,
                   'geographyClassExplicit': geography['data']['geoClass'] == 'OBSERVED_INFRASTRUCTURE_LOCATION',
@@ -197,6 +205,7 @@ jobs:
               'semanticBoundaries': {
                   'correlationIsNotCausation': True,
                   'dateIsNotHourConcurrency': True,
+                  'scoringContextIsNotIndependentConvergence': True,
                   'historicalAcquisitionIsNotCurrentNovelty': True,
                   'topMoversAreNotRiskRanking': True,
                   'infrastructureLocationIsNotAttackerOrigin': True,
