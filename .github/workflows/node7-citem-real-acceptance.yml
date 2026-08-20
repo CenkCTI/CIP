@@ -36,7 +36,7 @@ jobs:
       BAYKUSH_NODE_BASE_URL: http://127.0.0.1:18080
       BAYKUSH_NODE_TIMEOUT_MS: "9000"
       RUN_NODE7_LIVE_INTEGRATION: "true"
-      NODE7_PRODUCER_REF: c45fa9306d9425c42c7e083099f2d1196906bd22
+      NODE7_PRODUCER_REF: 7f5834b2438e6e21fc3cf37c0ba4fdd2650153d4
 
     steps:
       - name: Check out exact CITEM consumer head
