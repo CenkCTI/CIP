@@ -12,7 +12,7 @@ export const VersionedDocument = Document.extend({
   },
 });
 
-export function reportEditorExtensions() {
+export function documentEditorExtensions() {
   return [
     VersionedDocument,
     StarterKit.configure({
@@ -35,4 +35,8 @@ export function reportEditorExtensions() {
     TableHeader,
     TableCell,
   ];
+}
+
+export function reportEditorExtensions() {
+  return documentEditorExtensions();
 }
