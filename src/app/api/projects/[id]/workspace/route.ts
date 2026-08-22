@@ -57,12 +57,7 @@ export async function POST(
         return dbError("Parent folder not found.");
       const { data, error } = await supabase
         .from("workspace_folders")
-        .insert({
-          project_id: id,
-          kind: body.kind,
-          parent_id: body.parentId ?? null,
-          name: body.name,
-        })
+        .insert({ project_id: id, kind: body.kind, parent_id: body.parentId ?? null, name: body.name })
         .select("id,project_id,kind,parent_id,name")
         .single();
       if (error || !data) return dbError("A folder with that name may already exist here.", 409);
@@ -160,6 +155,27 @@ export async function POST(
       if (error) return dbError("Note could not be deleted.");
       revalidatePath(`/projects/${id}`);
       return NextResponse.json({ ok: true });
+    }
+
+    if (body.action === "create_report") {
+      if (!(await folderExists(supabase, id, body.folderId, "REPORTS")))
+        return dbError("Destination folder not found.");
+      const { data, error } = await supabase
+        .from("reports")
+        .insert({
+          project_id: id,
+          author_id: user.id,
+          folder_id: body.folderId ?? null,
+          title: "Untitled report",
+          type: "TECHNICAL",
+          status: "DRAFT",
+          content: emptyTiptapDoc,
+        })
+        .select("id")
+        .single();
+      if (error || !data) return dbError("Report could not be created.");
+      revalidatePath(`/projects/${id}`);
+      return NextResponse.json({ ok: true, id: data.id });
     }
 
     if (body.action === "move_report") {
