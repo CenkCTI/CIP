@@ -42,8 +42,10 @@ export function useAutosave<T>({
   const [status, setStatus] = useState<AutosaveStatus>("saved");
   const [error, setError] = useState<string | null>(null);
 
-  snapshotRef.current = snapshot;
-  saveRef.current = save;
+  useEffect(() => {
+    snapshotRef.current = snapshot;
+    saveRef.current = save;
+  }, [snapshot, save]);
 
   const persist = useCallback(async (): Promise<boolean> => {
     if (conflictRef.current) return false;
@@ -53,37 +55,40 @@ export function useAutosave<T>({
       return true;
     }
 
-    const seq = changeSeqRef.current;
-    const currentSnapshot = snapshotRef.current;
-    const baseRevision = revisionRef.current;
-    setStatus("saving");
-    setError(null);
-
     const request = (async () => {
-      try {
-        const result = await saveRef.current(currentSnapshot, baseRevision);
-        revisionRef.current = result.revision;
-        savedSeqRef.current = seq;
-        inFlightRef.current = null;
-        if (changeSeqRef.current !== savedSeqRef.current) return persist();
-        setStatus("saved");
-        return true;
-      } catch (cause) {
-        inFlightRef.current = null;
-        const message = cause instanceof Error ? cause.message : "Autosave failed.";
-        setError(message);
-        if (message === "EDIT_CONFLICT") {
-          conflictRef.current = true;
-          setStatus("conflict");
-        } else {
-          setStatus("error");
+      while (!conflictRef.current && changeSeqRef.current !== savedSeqRef.current) {
+        const seq = changeSeqRef.current;
+        const currentSnapshot = snapshotRef.current;
+        const baseRevision = revisionRef.current;
+        setStatus("saving");
+        setError(null);
+
+        try {
+          const result = await saveRef.current(currentSnapshot, baseRevision);
+          revisionRef.current = result.revision;
+          savedSeqRef.current = seq;
+        } catch (cause) {
+          const message = cause instanceof Error ? cause.message : "Autosave failed.";
+          setError(message);
+          if (message === "EDIT_CONFLICT") {
+            conflictRef.current = true;
+            setStatus("conflict");
+          } else {
+            setStatus("error");
+          }
+          return false;
         }
-        return false;
       }
+
+      if (conflictRef.current) return false;
+      setStatus("saved");
+      return true;
     })();
 
     inFlightRef.current = request;
-    return request;
+    const result = await request;
+    inFlightRef.current = null;
+    return result;
   }, []);
 
   useEffect(() => {
@@ -139,5 +144,5 @@ export function useAutosave<T>({
     return () => window.removeEventListener("beforeunload", beforeUnload);
   }, [status]);
 
-  return { status, error, flush, retry, revision: revisionRef.current };
+  return { status, error, flush, retry };
 }
