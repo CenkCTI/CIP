@@ -5,6 +5,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export type AutosaveStatus = "saved" | "dirty" | "saving" | "error" | "conflict";
 
 type SaveResult = { revision: number };
+type FlushEvent = CustomEvent<{ promises: Promise<boolean>[] }>;
+
+const AUTOSAVE_FLUSH_EVENT = "citem:autosave-flush";
+
+export async function requestAutosaveFlush() {
+  const detail = { promises: [] as Promise<boolean>[] };
+  window.dispatchEvent(new CustomEvent(AUTOSAVE_FLUSH_EVENT, { detail }));
+  if (!detail.promises.length) return true;
+  const results = await Promise.all(detail.promises);
+  return results.every(Boolean);
+}
 
 type Options<T> = {
   snapshot: T;
@@ -104,6 +115,14 @@ export function useAutosave<T>({
     if (conflictRef.current) return false;
     return persist();
   }, [persist]);
+
+  useEffect(() => {
+    const onFlush = (event: Event) => {
+      (event as FlushEvent).detail.promises.push(flush());
+    };
+    window.addEventListener(AUTOSAVE_FLUSH_EVENT, onFlush);
+    return () => window.removeEventListener(AUTOSAVE_FLUSH_EVENT, onFlush);
+  }, [flush]);
 
   useEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => {
