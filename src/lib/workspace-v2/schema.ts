@@ -33,60 +33,15 @@ export const reportDraftAutosaveSchema = z
 const optionalUuid = z.string().uuid().nullable().optional();
 
 export const workspaceMutationSchema = z.discriminatedUnion("action", [
-  z
-    .object({
-      action: z.literal("create_folder"),
-      kind: z.enum(workspaceKinds),
-      name: folderNameSchema,
-      parentId: optionalUuid,
-    })
-    .strict(),
-  z
-    .object({
-      action: z.literal("rename_folder"),
-      folderId: z.string().uuid(),
-      name: folderNameSchema,
-    })
-    .strict(),
-  z
-    .object({
-      action: z.literal("move_folder"),
-      folderId: z.string().uuid(),
-      parentId: optionalUuid,
-    })
-    .strict(),
-  z
-    .object({
-      action: z.literal("delete_folder"),
-      folderId: z.string().uuid(),
-    })
-    .strict(),
-  z
-    .object({
-      action: z.literal("create_note"),
-      folderId: optionalUuid,
-    })
-    .strict(),
-  z
-    .object({
-      action: z.literal("move_note"),
-      noteId: z.string().uuid(),
-      folderId: optionalUuid,
-    })
-    .strict(),
-  z
-    .object({
-      action: z.literal("delete_note"),
-      noteId: z.string().uuid(),
-    })
-    .strict(),
-  z
-    .object({
-      action: z.literal("move_report"),
-      reportId: z.string().uuid(),
-      folderId: optionalUuid,
-    })
-    .strict(),
+  z.object({ action: z.literal("create_folder"), kind: z.enum(workspaceKinds), name: folderNameSchema, parentId: optionalUuid }).strict(),
+  z.object({ action: z.literal("rename_folder"), folderId: z.string().uuid(), name: folderNameSchema }).strict(),
+  z.object({ action: z.literal("move_folder"), folderId: z.string().uuid(), parentId: optionalUuid }).strict(),
+  z.object({ action: z.literal("delete_folder"), folderId: z.string().uuid() }).strict(),
+  z.object({ action: z.literal("create_note"), folderId: optionalUuid }).strict(),
+  z.object({ action: z.literal("move_note"), noteId: z.string().uuid(), folderId: optionalUuid }).strict(),
+  z.object({ action: z.literal("delete_note"), noteId: z.string().uuid() }).strict(),
+  z.object({ action: z.literal("create_report"), folderId: optionalUuid }).strict(),
+  z.object({ action: z.literal("move_report"), reportId: z.string().uuid(), folderId: optionalUuid }).strict(),
 ]);
 
 export function plainTextFromTiptap(value: unknown) {
