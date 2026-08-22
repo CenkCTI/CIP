@@ -24,6 +24,7 @@ export function useAutosave<T>({
   const saveRef = useRef(save);
   const changeSeqRef = useRef(0);
   const savedSeqRef = useRef(0);
+  const conflictRef = useRef(false);
   const inFlightRef = useRef<Promise<boolean> | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(false);
@@ -34,7 +35,7 @@ export function useAutosave<T>({
   saveRef.current = save;
 
   const persist = useCallback(async (): Promise<boolean> => {
-    if (status === "conflict") return false;
+    if (conflictRef.current) return false;
     if (inFlightRef.current) return inFlightRef.current;
     if (changeSeqRef.current === savedSeqRef.current) {
       setStatus("saved");
@@ -60,14 +61,19 @@ export function useAutosave<T>({
         inFlightRef.current = null;
         const message = cause instanceof Error ? cause.message : "Autosave failed.";
         setError(message);
-        setStatus(message === "EDIT_CONFLICT" ? "conflict" : "error");
+        if (message === "EDIT_CONFLICT") {
+          conflictRef.current = true;
+          setStatus("conflict");
+        } else {
+          setStatus("error");
+        }
         return false;
       }
     })();
 
     inFlightRef.current = request;
     return request;
-  }, [status]);
+  }, []);
 
   useEffect(() => {
     if (!mountedRef.current) {
@@ -75,7 +81,7 @@ export function useAutosave<T>({
       return;
     }
     changeSeqRef.current += 1;
-    if (status !== "conflict") setStatus("dirty");
+    if (!conflictRef.current) setStatus("dirty");
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
@@ -84,7 +90,7 @@ export function useAutosave<T>({
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [snapshot, debounceMs, persist, status]);
+  }, [snapshot, debounceMs, persist]);
 
   const flush = useCallback(async () => {
     if (timerRef.current) {
@@ -95,13 +101,17 @@ export function useAutosave<T>({
   }, [persist]);
 
   const retry = useCallback(async () => {
-    if (status === "conflict") return false;
+    if (conflictRef.current) return false;
     return persist();
-  }, [persist, status]);
+  }, [persist]);
 
   useEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => {
-      if (changeSeqRef.current !== savedSeqRef.current || status === "error" || status === "conflict") {
+      if (
+        changeSeqRef.current !== savedSeqRef.current ||
+        status === "error" ||
+        status === "conflict"
+      ) {
         event.preventDefault();
         event.returnValue = "";
       }
