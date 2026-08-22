@@ -112,7 +112,7 @@ export function NotesWorkspace({ projectId, folders, notes, activeNoteId }: Prop
           folders={folders}
           documents={notes.map(({ id, folder_id, title }) => ({ id, folder_id, title }))}
           currentDocumentId={active?.id ?? null}
-          documentHref={(id) => `/projects/${projectId}?tab=notes&note=${id}`}
+          documentHref={(id) => `/projects/${projectId}/notes?note=${id}`}
         />
         <main className="min-w-0 bg-[#172016]">
           {!active ? (
