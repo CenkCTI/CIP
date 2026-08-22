@@ -102,10 +102,19 @@ export function WorkspaceExplorer({
     void run({ action: "create_folder", kind, parentId, name: name.trim() });
   };
 
-  const createNote = (folderId: string | null) => {
-    void run({ action: "create_note", folderId }, (result) => {
-      if (result.id) void navigate(`/projects/${projectId}/notes?note=${result.id}`);
-    });
+  const createDocument = (folderId: string | null) => {
+    void run(
+      kind === "NOTES"
+        ? { action: "create_note", folderId }
+        : { action: "create_report", folderId },
+      (result) => {
+        if (!result.id) return;
+        const href = kind === "NOTES"
+          ? `/projects/${projectId}/notes?note=${result.id}`
+          : `/projects/${projectId}/reports/${result.id}`;
+        void navigate(href);
+      },
+    );
   };
 
   const moveDocument = (document: ExplorerDocument, folderId: string | null) => {
@@ -192,7 +201,7 @@ export function WorkspaceExplorer({
           <details className="relative">
             <summary className="cursor-pointer list-none rounded px-1 text-slate-600 hover:text-white">⋯</summary>
             <div className="absolute right-0 z-30 w-52 rounded border border-slate-700 bg-slate-950 p-2 shadow-xl">
-              {kind === "NOTES" && <button type="button" className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-slate-800" disabled={busy} onClick={() => createNote(folder.id)}>New note here</button>}
+              <button type="button" className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-slate-800" disabled={busy} onClick={() => createDocument(folder.id)}>{kind === "NOTES" ? "New note here" : "New report here"}</button>
               <button type="button" className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-slate-800" disabled={busy} onClick={() => createFolder(folder.id)}>New subfolder</button>
               <button type="button" className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-slate-800" disabled={busy} onClick={() => {
                 const name = window.prompt("Rename folder", folder.name);
@@ -232,7 +241,7 @@ export function WorkspaceExplorer({
       <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2">
         <span className="text-xs font-semibold tracking-[0.16em] text-slate-400">FILES</span>
         <div className="flex gap-1">
-          {kind === "NOTES" && <button type="button" title="New note" className="rounded px-2 py-1 text-sm text-slate-400 hover:bg-slate-800 hover:text-white" disabled={busy} onClick={() => createNote(null)}>＋▤</button>}
+          <button type="button" title={kind === "NOTES" ? "New note" : "New report"} className="rounded px-2 py-1 text-sm text-slate-400 hover:bg-slate-800 hover:text-white" disabled={busy} onClick={() => createDocument(null)}>＋▤</button>
           <button type="button" title="New folder" className="rounded px-2 py-1 text-sm text-slate-400 hover:bg-slate-800 hover:text-white" disabled={busy} onClick={() => createFolder(null)}>＋▰</button>
         </div>
       </div>
