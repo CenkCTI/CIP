@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { requestAutosaveFlush } from "@/components/document-workspace/use-autosave";
 
 export type ExplorerFolder = {
   id: string;
@@ -46,9 +47,10 @@ export function WorkspaceExplorer({
   documentHref,
 }: Props) {
   const router = useRouter();
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(folders.map((f) => f.id)));
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(folders.map((folder) => folder.id)));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
   const byParent = useMemo(() => {
     const map = new Map<string | null, ExplorerFolder[]>();
     for (const folder of folders) {
@@ -59,16 +61,26 @@ export function WorkspaceExplorer({
     for (const list of map.values()) list.sort((a, b) => a.name.localeCompare(b.name));
     return map;
   }, [folders]);
+
   const docsByFolder = useMemo(() => {
     const map = new Map<string | null, ExplorerDocument[]>();
-    for (const doc of documents) {
-      const list = map.get(doc.folder_id) ?? [];
-      list.push(doc);
-      map.set(doc.folder_id, list);
+    for (const document of documents) {
+      const list = map.get(document.folder_id) ?? [];
+      list.push(document);
+      map.set(document.folder_id, list);
     }
     for (const list of map.values()) list.sort((a, b) => a.title.localeCompare(b.title));
     return map;
   }, [documents]);
+
+  const navigate = async (href: string) => {
+    setError(null);
+    if (!(await requestAutosaveFlush())) {
+      setError("Current document could not be saved. Resolve the save error before leaving it.");
+      return;
+    }
+    router.push(href);
+  };
 
   const run = async (body: Record<string, unknown>, after?: (payload: { id?: string }) => void) => {
     setBusy(true);
@@ -92,7 +104,7 @@ export function WorkspaceExplorer({
 
   const createNote = (folderId: string | null) => {
     void run({ action: "create_note", folderId }, (result) => {
-      if (result.id) router.push(`/projects/${projectId}?tab=notes&note=${result.id}`);
+      if (result.id) void navigate(`/projects/${projectId}/notes?note=${result.id}`);
     });
   };
 
@@ -104,49 +116,59 @@ export function WorkspaceExplorer({
     );
   };
 
-  const renderDocument = (document: ExplorerDocument, depth: number) => (
-    <div
-      key={document.id}
-      className={`group flex items-center gap-1 rounded px-1 ${currentDocumentId === document.id ? "bg-slate-800 text-amber-200" : "text-slate-300 hover:bg-slate-900"}`}
-      style={{ paddingLeft: `${8 + depth * 14}px` }}
-    >
-      <Link href={documentHref(document.id)} className="min-w-0 flex-1 truncate py-1.5 text-sm">
-        <span className="mr-2 text-slate-500">▤</span>{document.title}
-      </Link>
-      <details className="relative">
-        <summary className="cursor-pointer list-none rounded px-1 text-slate-500 hover:text-white">⋯</summary>
-        <div className="absolute right-0 z-30 w-48 rounded border border-slate-700 bg-slate-950 p-2 shadow-xl">
-          <label className="block text-xs text-slate-400">Move to</label>
-          <select
-            className="field mt-1 w-full text-xs"
-            value={document.folder_id ?? ""}
-            onChange={(event) => moveDocument(document, event.target.value || null)}
-            disabled={busy}
-          >
-            <option value="">Root</option>
-            {folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
-          </select>
-          {kind === "NOTES" && (
-            <button
-              type="button"
-              className="mt-2 w-full rounded px-2 py-1 text-left text-xs text-red-300 hover:bg-red-950/40"
+  const renderDocument = (document: ExplorerDocument, depth: number) => {
+    const href = documentHref(document.id);
+    return (
+      <div
+        key={document.id}
+        className={`group flex items-center gap-1 rounded px-1 ${currentDocumentId === document.id ? "bg-slate-800 text-amber-200" : "text-slate-300 hover:bg-slate-900"}`}
+        style={{ paddingLeft: `${8 + depth * 14}px` }}
+      >
+        <Link
+          href={href}
+          onClick={(event) => {
+            event.preventDefault();
+            void navigate(href);
+          }}
+          className="min-w-0 flex-1 truncate py-1.5 text-sm"
+        >
+          <span className="mr-2 text-slate-500">▤</span>{document.title}
+        </Link>
+        <details className="relative">
+          <summary className="cursor-pointer list-none rounded px-1 text-slate-500 hover:text-white">⋯</summary>
+          <div className="absolute right-0 z-30 w-48 rounded border border-slate-700 bg-slate-950 p-2 shadow-xl">
+            <label className="block text-xs text-slate-400">Move to</label>
+            <select
+              className="field mt-1 w-full text-xs"
+              value={document.folder_id ?? ""}
+              onChange={(event) => moveDocument(document, event.target.value || null)}
               disabled={busy}
-              onClick={() => {
-                if (window.confirm(`Delete note “${document.title}”?`))
-                  void run({ action: "delete_note", noteId: document.id }, () => {
-                    if (currentDocumentId === document.id) router.push(`/projects/${projectId}?tab=notes`);
-                  });
-              }}
             >
-              Delete note
-            </button>
-          )}
-        </div>
-      </details>
-    </div>
-  );
+              <option value="">Root</option>
+              {folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
+            </select>
+            {kind === "NOTES" && (
+              <button
+                type="button"
+                className="mt-2 w-full rounded px-2 py-1 text-left text-xs text-red-300 hover:bg-red-950/40"
+                disabled={busy}
+                onClick={() => {
+                  if (window.confirm(`Delete note “${document.title}”?`))
+                    void run({ action: "delete_note", noteId: document.id }, () => {
+                      if (currentDocumentId === document.id) void navigate(`/projects/${projectId}/notes`);
+                    });
+                }}
+              >
+                Delete note
+              </button>
+            )}
+          </div>
+        </details>
+      </div>
+    );
+  };
 
-  const renderFolder = (folder: ExplorerFolder, depth: number): React.ReactNode => {
+  const renderFolder = (folder: ExplorerFolder, depth: number): ReactNode => {
     const isExpanded = expanded.has(folder.id);
     const children = byParent.get(folder.id) ?? [];
     const childDocs = docsByFolder.get(folder.id) ?? [];
@@ -195,7 +217,7 @@ export function WorkspaceExplorer({
         {isExpanded && (
           <div>
             {children.map((child) => renderFolder(child, depth + 1))}
-            {childDocs.map((doc) => renderDocument(doc, depth + 1))}
+            {childDocs.map((document) => renderDocument(document, depth + 1))}
           </div>
         )}
       </div>
@@ -217,7 +239,7 @@ export function WorkspaceExplorer({
       {error && <div className="border-b border-red-900/60 bg-red-950/30 px-3 py-2 text-xs text-red-300">{error}</div>}
       <div className="min-h-0 flex-1 overflow-y-auto p-2">
         {rootFolders.map((folder) => renderFolder(folder, 0))}
-        {rootDocs.map((doc) => renderDocument(doc, 0))}
+        {rootDocs.map((document) => renderDocument(document, 0))}
         {!folders.length && !documents.length && <p className="px-2 py-8 text-center text-sm text-slate-500">No files yet.</p>}
       </div>
     </aside>
