@@ -9,11 +9,25 @@ export function EvidenceSourceRedirect({ projectId }: { projectId: string }) {
   const router = useRouter();
 
   useEffect(() => {
-    if (
-      pathname === `/projects/${projectId}` &&
-      searchParams.get("tab") === "evidence" &&
-      searchParams.get("view") === "sources"
-    ) {
+    if (pathname !== `/projects/${projectId}`) return;
+
+    const tab = searchParams.get("tab");
+    if (tab === "notes") {
+      const note = searchParams.get("note");
+      router.replace(
+        note
+          ? `/projects/${projectId}/notes?note=${encodeURIComponent(note)}`
+          : `/projects/${projectId}/notes`,
+      );
+      return;
+    }
+
+    if (tab === "reports") {
+      router.replace(`/projects/${projectId}/reports`);
+      return;
+    }
+
+    if (tab === "evidence" && searchParams.get("view") === "sources") {
       router.replace(`/projects/${projectId}/sources`);
     }
   }, [pathname, projectId, router, searchParams]);
