@@ -23,7 +23,7 @@ export default async function NotesPage({
     .single();
   if (projectError || !project || project.owner_id !== user.id) notFound();
 
-  const [{ data: folders, error: foldersError }, { data: notes, error: notesError }] =
+  const [{ data: folders, error: foldersError }, { data: noteMetadata, error: notesError }] =
     await Promise.all([
       supabase
         .from("workspace_folders")
@@ -33,7 +33,7 @@ export default async function NotesPage({
         .order("name"),
       supabase
         .from("research_notes")
-        .select("id,folder_id,title,content_doc,edit_revision,updated_at")
+        .select("id,folder_id,title,edit_revision,updated_at")
         .eq("project_id", id)
         .order("title"),
     ]);
@@ -48,9 +48,23 @@ export default async function NotesPage({
       </section>
     );
 
-  const noteRows = (notes ?? []) as unknown as NoteWorkspaceRow[];
-  const requested = sp.note && noteRows.some((note) => note.id === sp.note) ? sp.note : null;
-  const activeNoteId = requested ?? noteRows[0]?.id ?? null;
+  const metadata = (noteMetadata ?? []) as unknown as NoteWorkspaceRow[];
+  const requested = sp.note && metadata.some((note) => note.id === sp.note) ? sp.note : null;
+  const activeNoteId = requested ?? metadata[0]?.id ?? null;
+  let noteRows = metadata;
+
+  if (activeNoteId) {
+    const { data: activeNote, error: activeError } = await supabase
+      .from("research_notes")
+      .select("id,content_doc")
+      .eq("project_id", id)
+      .eq("id", activeNoteId)
+      .single();
+    if (activeError || !activeNote) notFound();
+    noteRows = metadata.map((note) =>
+      note.id === activeNoteId ? { ...note, content_doc: activeNote.content_doc } : note,
+    );
+  }
 
   return (
     <section className="mx-auto max-w-[1500px] px-2">
