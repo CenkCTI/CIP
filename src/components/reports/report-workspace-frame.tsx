@@ -1,3 +1,5 @@
+"use client";
+
 import type { ReactNode } from "react";
 import { WorkspaceExplorer, type ExplorerFolder } from "@/components/document-workspace/workspace-explorer";
 
