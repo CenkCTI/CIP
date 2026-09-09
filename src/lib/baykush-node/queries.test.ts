@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { nodeGet } = vi.hoisted(() => ({ nodeGet: vi.fn() }));
 vi.mock("./client", () => ({ nodeGet }));
 
-import { CORE_GLOBAL_MEASUREMENTS, getNodeMeasurements, getNodeRoutingMeasurements, getNodeRoutingStatus, getNodeSourceStatus } from "./queries";
+import { CORE_GLOBAL_MEASUREMENTS, getNodeComparisons, getNodeMeasurements, getNodeRoutingMeasurements, getNodeRoutingStatus, getNodeSourceStatus } from "./queries";
 import { ROUTING_MEASUREMENTS } from "./routing";
 
 describe("BAYKUSH Node global query ownership boundary", () => {
@@ -32,4 +32,12 @@ describe("BAYKUSH Node global query ownership boundary", () => {
   });
 
   it("reads routing operational status through the existing server-only Node client",async()=>{await getNodeRoutingStatus();expect(nodeGet).toHaveBeenCalledWith("/v1/techint/routing/status",expect.anything(),{revalidate:15});});
+
+  it("preserves partial comparisons while marking failures unknown",async()=>{
+    nodeGet.mockResolvedValue({data:{measurementKey:"ok"}}).mockRejectedValueOnce(new Error("unavailable"));
+    const result=await getNodeComparisons("24h",new Date("2026-08-13T12:00:00.000Z"));
+    expect(result.data.length).toBeGreaterThan(0);
+    expect(result.unavailableMeasurementKeys.length).toBe(1);
+    expect(result).not.toEqual({data:[]});
+  });
 });
