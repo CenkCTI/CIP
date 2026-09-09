@@ -2,19 +2,26 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ReportEditor } from "@/components/reports/report-editor";
-let actionResult: { success?: string; error?: string } = {
-  success: "Report saved.",
-};
-vi.mock("@/app/actions", () => ({
-  updateReport: vi.fn(async () => actionResult),
-}));
+
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+
+let fetchOk = true;
+let fetchError = "Unable to save report.";
+const fetchMock = vi.fn(async () => ({
+  ok: fetchOk,
+  json: async () =>
+    fetchOk
+      ? { ok: true, revision: 1, savedAt: "2026-08-22T14:00:00Z" }
+      : { error: fetchError },
+}));
+
 const report = {
   id: "00000000-0000-4000-8000-000000000001",
   title: "R1",
   type: "CTI",
   status: "DRAFT",
+  draft_revision: 0,
   content: {
     type: "doc",
     attrs: { version: 1 },
@@ -22,10 +29,14 @@ const report = {
   },
 };
 
-describe("ReportEditor dirty and insertion behavior", () => {
+describe("ReportEditor autosave and insertion behavior", () => {
   beforeEach(() => {
-    actionResult = { success: "Report saved." };
     push.mockClear();
+    fetchOk = true;
+    fetchError = "Unable to save report.";
+    fetchMock.mockClear();
+    vi.stubGlobal("fetch", fetchMock);
+
     const rects = [
       {
         width: 0,
@@ -43,7 +54,8 @@ describe("ReportEditor dirty and insertion behavior", () => {
     Range.prototype.getClientRects = vi.fn(() => rects);
     Range.prototype.getBoundingClientRect = vi.fn(() => rects[0] as DOMRect);
   });
-  it("marks metadata changes dirty and blocks exports until saved", async () => {
+
+  it("marks metadata changes unsaved and blocks exports until autosave completes", async () => {
     render(
       <ReportEditor
         projectId="p1"
@@ -51,15 +63,18 @@ describe("ReportEditor dirty and insertion behavior", () => {
         insertables={{ evidence: [] }}
       />,
     );
-    await userEvent.type(screen.getByLabelText(/title/i), " updated");
-    expect(screen.getByText(/Unsaved changes/i)).toBeInTheDocument();
-    expect(screen.getByText("Save before PDF")).toHaveAttribute(
+
+    await userEvent.type(screen.getByLabelText(/report title/i), " updated");
+
+    expect(screen.getByText(/^Unsaved$/i)).toBeInTheDocument();
+    expect(screen.getByText("Saving before PDF")).toHaveAttribute(
       "aria-disabled",
       "true",
     );
   });
-  it("keeps dirty on failed save", async () => {
-    actionResult = { error: "Unable to save report." };
+
+  it("keeps navigation blocked when autosave fails", async () => {
+    fetchOk = false;
     render(
       <ReportEditor
         projectId="p1"
@@ -67,20 +82,21 @@ describe("ReportEditor dirty and insertion behavior", () => {
         insertables={{ evidence: [] }}
       />,
     );
-    await userEvent.type(screen.getByLabelText(/title/i), " fail");
-    await userEvent.click(screen.getByRole("button", { name: /save report/i }));
+
+    await userEvent.type(screen.getByLabelText(/report title/i), " fail");
+    await userEvent.click(screen.getByRole("button", { name: /reports/i }));
+
     await waitFor(() =>
-      expect(
-        screen.getByText(/Error: Unable to save report/i),
-      ).toBeInTheDocument(),
+      expect(screen.getByRole("button", { name: /save failed.*retry/i })).toBeInTheDocument(),
     );
-    expect(screen.getByText("Save before HTML")).toHaveAttribute(
+    expect(push).not.toHaveBeenCalled();
+    expect(screen.getByText("Saving before HTML")).toHaveAttribute(
       "aria-disabled",
       "true",
     );
   });
-  it("normal back control asks for confirmation when dirty", async () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+  it("flushes pending autosave before returning to reports", async () => {
     render(
       <ReportEditor
         projectId="p1"
@@ -88,14 +104,19 @@ describe("ReportEditor dirty and insertion behavior", () => {
         insertables={{ evidence: [] }}
       />,
     );
-    await userEvent.type(screen.getByLabelText(/title/i), " changed");
-    await userEvent.click(
-      screen.getByRole("button", { name: /back to reports/i }),
-    );
-    expect(confirm).toHaveBeenCalledWith("Discard unsaved report changes?");
-    expect(push).not.toHaveBeenCalled();
-    confirm.mockRestore();
+
+    await userEvent.type(screen.getByLabelText(/report title/i), " changed");
+    await userEvent.click(screen.getByRole("button", { name: /reports/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/projects/p1/reports"));
+
+    const [, request] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(String(request.body));
+    expect(body.title).toBe("R1 changed");
+    expect(body.baseRevision).toBe(0);
   });
+
   it("inserts only displayed safe current-project metadata", async () => {
     render(
       <ReportEditor
@@ -114,11 +135,13 @@ describe("ReportEditor dirty and insertion behavior", () => {
         }}
       />,
     );
+
     expect(screen.getByText("Safe evidence")).toBeInTheDocument();
     expect(screen.queryByText(/secret/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByText("Safe evidence"));
-    expect(screen.getByText(/Unsaved changes/i)).toBeInTheDocument();
+    expect(screen.getByText(/^Unsaved$/i)).toBeInTheDocument();
   });
+
   it("inserts Research Note content and CTI identifying fields", async () => {
     render(
       <ReportEditor
@@ -147,12 +170,14 @@ describe("ReportEditor dirty and insertion behavior", () => {
         }}
       />,
     );
+
     await userEvent.click(screen.getByText("Note title"));
     await userEvent.click(screen.getByText("1.2.3.4"));
+
     expect(
       screen.getByText(/content: Observed behavior details/i),
     ).toBeInTheDocument();
     expect(screen.getByText(/value: 1\.2\.3\.4/i)).toBeInTheDocument();
-    expect(screen.getByText(/Unsaved changes/i)).toBeInTheDocument();
+    expect(screen.getByText(/^Unsaved$/i)).toBeInTheDocument();
   });
 });
