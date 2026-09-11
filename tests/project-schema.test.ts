@@ -27,20 +27,17 @@ describe("Investigation project schemas", () => {
     );
   });
 
-  it("requires a primary intelligence question for new Investigations", () => {
-    const result = createInvestigationSchema.safeParse({
-      ...valid,
-      research_question: "",
-    });
-    expect(result.success).toBe(false);
+  it("requires a meaningful primary intelligence question for new Investigations", () => {
+    expect(
+      createInvestigationSchema.safeParse({ ...valid, research_question: "short" })
+        .success,
+    ).toBe(false);
   });
 
   it("requires purpose for new Investigations", () => {
-    const result = createInvestigationSchema.safeParse({
-      ...valid,
-      purpose: "",
-    });
-    expect(result.success).toBe(false);
+    expect(
+      createInvestigationSchema.safeParse({ ...valid, purpose: "" }).success,
+    ).toBe(false);
   });
 
   it("keeps legacy rows compatible when direction fields are empty", () => {
@@ -56,8 +53,9 @@ describe("Investigation project schemas", () => {
       expect(result.data.research_question).toBeNull();
       expect(result.data.purpose).toBeNull();
       expect(result.data.assessment_confidence).toBeNull();
-      expect(result.data.supporting_questions).toEqual([]);
-      expect(result.data.information_gaps).toEqual([]);
+      expect(result.data.scope_geography).toEqual([]);
+      expect(result.data.scope_sectors).toEqual([]);
+      expect(result.data.due_at).toBeNull();
     }
   });
 
@@ -96,20 +94,14 @@ describe("Investigation project schemas", () => {
     expect(result.tags).toEqual(["x", "y"]);
   });
 
-  it("normalizes line-based direction lists", () => {
+  it("normalizes line-based scope lists and removes case-insensitive duplicates", () => {
     const result = projectSchema.parse({
       ...valid,
-      supporting_questions: "When did access begin?\nDoes it recur?\n",
-      current_knowledge: "CERT Polska published reporting.\nAttack affected energy targets.",
-      information_gaps: "Initial access date unknown.\nInfrastructure history unknown.",
+      scope_geography: "Poland\npoland\nBelarus\n",
+      scope_sectors: "Energy\nCritical Infrastructure",
     });
-
-    expect(result.supporting_questions).toEqual([
-      "When did access begin?",
-      "Does it recur?",
-    ]);
-    expect(result.current_knowledge).toHaveLength(2);
-    expect(result.information_gaps).toHaveLength(2);
+    expect(result.scope_geography).toEqual(["Poland", "Belarus"]);
+    expect(result.scope_sectors).toEqual(["Energy", "Critical Infrastructure"]);
   });
 
   it("rejects an inverted scope date range", () => {
@@ -122,7 +114,11 @@ describe("Investigation project schemas", () => {
     ).toBe(false);
   });
 
-  it("normalizes a valid closed date and permits clearing it", () => {
+  it("normalizes valid due and closed dates and permits clearing them", () => {
+    expect(
+      projectSchema.parse({ ...valid, due_at: "2026-09-15T10:30" }).due_at,
+    ).toMatch(/^2026-09-15T/);
+    expect(projectSchema.parse({ ...valid, due_at: "" }).due_at).toBeNull();
     expect(
       projectSchema.parse({ ...valid, closed_at: "2026-07-28" }).closed_at,
     ).toMatch(/^2026-07-28T/);
