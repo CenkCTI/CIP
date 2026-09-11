@@ -2,63 +2,140 @@
 
 ## Purpose
 
-Stage 1 of the CİTEM intelligence-production workflow is **Direction**. It gives the analyst enough structure to keep an Investigation tied to an intelligence need without turning the workflow into a mandatory wizard.
+Stage 1 of the CİTEM intelligence-production model is **Direction**. It keeps an Investigation tied to an intelligence need without turning the intelligence cycle into a wizard, checklist, or unlock sequence.
 
 The existing `projects` row remains the Investigation root. No new top-level workfile object is introduced.
 
-## UI model
+The design principle is:
 
-There are still only two Investigation interaction surfaces plus the existing registry:
+> CİTEM structures the intelligence need and preserves analytical context; it does not decide what the analyst should conclude.
+
+## User surfaces
+
+There are still only three user-facing Investigation surfaces:
 
 1. `/projects` — Investigation registry.
 2. `/projects/new` — lightweight creation flow.
-3. `/projects/[id]?tab=overview` — Investigation detail / direction workspace.
+3. `/projects/[id]?tab=overview` — Investigation detail / Stage 1 direction workspace.
 
-No separate pages are introduced for scope, questions, information gaps, or decision context.
+Scope, questions, information gaps, working knowledge, and decision context do **not** get separate pages.
 
-### Create Investigation
+## Create Investigation
 
-Creation intentionally asks only for:
+Creation deliberately asks only for:
 
 - title,
 - primary intelligence question,
 - purpose / objective,
 - priority.
 
-The Investigation starts as `DRAFT` and `CTI`. Scope, supporting questions, gaps, consumer, product type, and lifecycle metadata are refined from the Investigation overview after creation.
+The Investigation starts as `DRAFT` and `CTI`. Owner comes from the authenticated user. No actor, campaign, IOC, assessment, scope, Collection plan, or Evidence record is required before the Investigation can exist.
 
-### Investigation overview
+## Investigation Overview
 
-The existing overview becomes the Stage 1 direction workspace. It presents:
+The Overview is ordered by analytical importance rather than record counts:
 
-- **Intelligence requirement** — primary question and purpose.
-- **Decision context** — intended consumer, intended use, expected product.
-- **Scope** — geography, time range, sector, activity type, actors/clusters, technologies, and explicit exclusions.
-- **Supporting intelligence questions** — lightweight analyst-authored questions used to decompose the primary question.
-- **Current understanding** — working knowledge carried into the Investigation.
-- **Information gaps** — unknowns that can later drive collection.
-- **Workspace counts** — existing Notes, Evidence, Timeline, Indicators, and other owned records remain visible but subordinate to the intelligence direction.
+1. **Intelligence Requirement** — primary question and purpose.
+2. **Decision Context + Scope** — intended consumer, intelligence use, expected product, geography, time, sectors, activity types, actor/cluster scope, technologies, and explicit exclusions.
+3. **Supporting Intelligence Questions** — decomposed analytical questions with their own status and order.
+4. **Current Understanding** — active working knowledge beside explicit information gaps.
+5. **Related Intelligence** — deterministic, read-only previous-Investigation suggestions.
+6. **Investigation Content** — existing workspace record counts, subordinate to Direction.
 
-Editing is kept behind one expandable **Direction, scope & lifecycle** editor so the overview reads as an intelligence workspace rather than a permanent form.
+Lifecycle metadata (`status`, `priority`, optional intelligence deadline) is available without being conflated with intelligence-production stages.
 
 ## Analyst-control rules
 
 - Direction fields are analyst-authored.
-- Nothing in Stage 1 automatically creates Evidence, entities, relationships, Campaigns, Threat Actors, Indicators, or assessments.
-- Supporting questions and information gaps are not workflow gates.
-- Scope guides collection but does not block the analyst from following relevant leads.
-- `current_knowledge` is explicitly working context, not automatically promoted to a verified fact or Evidence item.
-- `expected_product_type` remains free text at this stage to avoid prematurely constraining the production model.
+- Stage 1 is not a workflow gate. There is no `Complete Stage 1` action.
+- Investigation lifecycle status is not the same thing as intelligence-cycle stage.
+- Nothing automatically creates Evidence, entities, relationships, Campaigns, Threat Actors, Indicators, hypotheses, or assessments.
+- Scope guides collection and relevance; it never prevents an analyst from following a relevant lead.
+- Supporting questions are questions, not tasks.
+- Information gaps are unknowns, not tasks. A later Collection stage may explicitly promote a gap into a Collection requirement.
+- Working knowledge is analyst context, not automatically a fact, assessment, or verified Evidence item.
+- Linking a Source or Evidence record to working knowledge provides provenance only; it does not mark the statement verified.
+- `expected_product_type` remains free text with UI suggestions so Direction does not prematurely constrain product design.
 
-## Persistence
+## Persistence model
 
-Migration `202609110053_investigation_direction_stage1.sql` adds direction metadata to `public.projects`. Existing ownership and RLS boundaries continue to apply because no new owner-scoped root table is introduced.
+Migration `202609110053_investigation_direction_stage1.sql` is additive over the existing Investigation foundation.
 
-Line-based working lists are stored as bounded `text[]` columns:
+### `projects` root metadata
 
-- `supporting_questions`
-- `current_knowledge`
-- `information_gaps`
-- scope list fields
+Direction metadata that belongs to the Investigation itself remains on `projects`:
 
-This is deliberately lightweight for Stage 1. Later workflow stages may promote individual gaps or questions into richer collection or analytical objects without changing their Stage 1 role.
+- `purpose`
+- `intended_consumer`
+- `decision_context`
+- `expected_product_type`
+- `due_at`
+- `scope_geography[]`
+- `scope_sectors[]`
+- `scope_activity_types[]`
+- `scope_actors[]`
+- `scope_technologies[]`
+- `scope_time_start`
+- `scope_time_end`
+- `out_of_scope`
+
+Existing `research_question`, `priority`, and `investigation_status` remain authoritative.
+
+### First-class working records
+
+Analyst working objects that need lifecycle, order, provenance, or later Collection handoff are normalized rather than stored as `text[]`:
+
+- `investigation_questions`
+  - `OPEN`
+  - `PARTIALLY_ANSWERED`
+  - `ANSWERED`
+  - `DROPPED`
+- `investigation_information_gaps`
+  - `OPEN`
+  - `PARTIALLY_RESOLVED`
+  - `RESOLVED`
+  - `DEFERRED`
+- `investigation_working_knowledge`
+  - `ACTIVE`
+  - `SUPERSEDED`
+  - `WITHDRAWN`
+- `investigation_working_knowledge_support`
+  - exactly one same-Investigation Source or Evidence target per link
+
+Every new child table is owner-isolated through `project_id`, `project_is_owned(project_id)`, RLS, and same-Investigation foreign-key constraints.
+
+## Working knowledge provenance
+
+A working knowledge statement may have zero or more support links. Support can point to an existing Investigation Source or Evidence record. The UI labels those links as support/provenance, never as truth or verification.
+
+Cross-Investigation support links are rejected by composite foreign keys.
+
+## Related Intelligence
+
+The first implementation intentionally suggests only previous Investigations. It uses deterministic overlap from:
+
+- geography,
+- sector,
+- actor/activity-cluster scope,
+- activity type,
+- tags,
+- title/question terms.
+
+The score is internal. The analyst sees only why a candidate may be relevant. No relationship is created automatically.
+
+## Stage 2 handoff boundary
+
+Stage 1 ends conceptually with a directed Investigation, not with a completed form. Later Collection work can use:
+
+`Primary / Supporting Question → Information Gap → Collection Requirement → Collection Task`
+
+The Direction implementation does not create those Collection objects yet.
+
+## Validation
+
+Stage 1 ships with:
+
+- Zod validation for root direction metadata and first-class records,
+- schema tests for requirement, scope, lifecycle, working-record statuses, and provenance cardinality,
+- PostgreSQL migration acceptance for date constraints, same-Investigation provenance, and owner RLS,
+- the existing CI lint, typecheck, unit-test, build, and migration suite.
