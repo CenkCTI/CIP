@@ -33,6 +33,20 @@ const tagsSchema = z
   )
   .default([]);
 
+const lineListSchema = (maxItems: number, maxLength: number) =>
+  z
+    .preprocess(
+      (value) =>
+        typeof value === "string"
+          ? value
+              .split(/\r?\n/)
+              .map((item) => item.trim())
+              .filter(Boolean)
+          : value,
+      z.array(z.string().trim().min(1).max(maxLength)).max(maxItems),
+    )
+    .default([]);
+
 const nullableText = (max: number) =>
   z
     .string()
@@ -63,22 +77,59 @@ const nullableDate = z
     "Use a valid closed date.",
   );
 
-export const projectSchema = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(2, "Investigation title must be at least 2 characters.")
-    .max(120),
-  research_question: nullableText(2000),
-  description: z.string().trim().max(2000).optional().default(""),
-  research_type: z.enum(researchTypes),
-  priority: z.enum(priorities),
-  investigation_status: z.enum(investigationStatuses).default("DRAFT"),
-  current_assessment: nullableText(10000),
-  assessment_confidence: nullableConfidence.default(null),
-  tags: tagsSchema,
-  closed_at: nullableDate.default(null),
-});
+const nullableDateOnly = z.preprocess(
+  (value) => (value === "" || value == null ? null : value),
+  z.union([
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a valid scope date."),
+    z.null(),
+  ]),
+);
+
+export const projectSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(2, "Investigation title must be at least 2 characters.")
+      .max(120),
+    research_question: nullableText(2000),
+    purpose: nullableText(2000),
+    description: z.string().trim().max(2000).optional().default(""),
+    research_type: z.enum(researchTypes),
+    priority: z.enum(priorities),
+    investigation_status: z.enum(investigationStatuses).default("DRAFT"),
+    intended_consumer: nullableText(500),
+    decision_context: nullableText(3000),
+    expected_product_type: nullableText(200),
+    scope_geography: lineListSchema(20, 120),
+    scope_sectors: lineListSchema(20, 120),
+    scope_activity_types: lineListSchema(20, 120),
+    scope_actors: lineListSchema(20, 160),
+    scope_technologies: lineListSchema(20, 160),
+    scope_time_start: nullableDateOnly.default(null),
+    scope_time_end: nullableDateOnly.default(null),
+    out_of_scope: nullableText(2000),
+    supporting_questions: lineListSchema(24, 500),
+    current_knowledge: lineListSchema(36, 1000),
+    information_gaps: lineListSchema(36, 1000),
+    current_assessment: nullableText(10000),
+    assessment_confidence: nullableConfidence.default(null),
+    tags: tagsSchema,
+    closed_at: nullableDate.default(null),
+  })
+  .superRefine((value, context) => {
+    if (
+      value.scope_time_start &&
+      value.scope_time_end &&
+      value.scope_time_start > value.scope_time_end
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["scope_time_end"],
+        message: "Scope end date must be on or after the start date.",
+      });
+    }
+  });
 
 export const createInvestigationSchema = projectSchema.superRefine(
   (value, context) => {
@@ -86,7 +137,14 @@ export const createInvestigationSchema = projectSchema.superRefine(
       context.addIssue({
         code: "custom",
         path: ["research_question"],
-        message: "Research question is required for a new Investigation.",
+        message: "Primary intelligence question is required for a new Investigation.",
+      });
+    }
+    if (!value.purpose) {
+      context.addIssue({
+        code: "custom",
+        path: ["purpose"],
+        message: "Purpose is required for a new Investigation.",
       });
     }
   },
@@ -104,10 +162,25 @@ export function parseProjectForm(formData: FormData) {
   const input = {
     name: formData.get("name"),
     research_question: formData.get("research_question") ?? "",
+    purpose: formData.get("purpose") ?? "",
     description: formData.get("description") ?? "",
     research_type: formData.get("research_type"),
     priority: formData.get("priority"),
     investigation_status: formData.get("investigation_status") ?? "DRAFT",
+    intended_consumer: formData.get("intended_consumer") ?? "",
+    decision_context: formData.get("decision_context") ?? "",
+    expected_product_type: formData.get("expected_product_type") ?? "",
+    scope_geography: formData.get("scope_geography") ?? "",
+    scope_sectors: formData.get("scope_sectors") ?? "",
+    scope_activity_types: formData.get("scope_activity_types") ?? "",
+    scope_actors: formData.get("scope_actors") ?? "",
+    scope_technologies: formData.get("scope_technologies") ?? "",
+    scope_time_start: formData.get("scope_time_start") ?? "",
+    scope_time_end: formData.get("scope_time_end") ?? "",
+    out_of_scope: formData.get("out_of_scope") ?? "",
+    supporting_questions: formData.get("supporting_questions") ?? "",
+    current_knowledge: formData.get("current_knowledge") ?? "",
+    information_gaps: formData.get("information_gaps") ?? "",
     current_assessment: formData.get("current_assessment") ?? "",
     assessment_confidence: formData.get("assessment_confidence") ?? "",
     tags: formData.get("tags") ?? "",
@@ -124,4 +197,8 @@ export function formatProjectDateInput(value: string | null | undefined) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return date.toISOString().slice(0, 10);
+}
+
+export function formatLineList(value: string[] | null | undefined) {
+  return value?.join("\n") ?? "";
 }
