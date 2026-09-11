@@ -45,6 +45,15 @@ const lineListSchema = (maxItems: number, maxLength: number) =>
           : value,
       z.array(z.string().trim().min(1).max(maxLength)).max(maxItems),
     )
+    .transform((items) => {
+      const seen = new Set<string>();
+      return items.filter((item) => {
+        const key = item.toLocaleLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    })
     .default([]);
 
 const nullableText = (max: number) =>
@@ -60,7 +69,7 @@ const nullableConfidence = z.preprocess(
   z.union([z.enum(assessmentConfidenceLevels), z.null()]),
 );
 
-const nullableDate = z
+const nullableDateTime = z
   .preprocess(
     (value) => {
       if (value === "" || value == null) return null;
@@ -74,7 +83,7 @@ const nullableDate = z
     (value) =>
       value === null ||
       (typeof value === "string" && !Number.isNaN(new Date(value).getTime())),
-    "Use a valid closed date.",
+    "Use a valid date.",
   );
 
 const nullableDateOnly = z.preprocess(
@@ -99,23 +108,21 @@ export const projectSchema = z
     priority: z.enum(priorities),
     investigation_status: z.enum(investigationStatuses).default("DRAFT"),
     intended_consumer: nullableText(500),
-    decision_context: nullableText(3000),
-    expected_product_type: nullableText(200),
-    scope_geography: lineListSchema(20, 120),
-    scope_sectors: lineListSchema(20, 120),
-    scope_activity_types: lineListSchema(20, 120),
+    decision_context: nullableText(4000),
+    expected_product_type: nullableText(160),
+    due_at: nullableDateTime.default(null),
+    scope_geography: lineListSchema(20, 160),
+    scope_sectors: lineListSchema(20, 160),
+    scope_activity_types: lineListSchema(20, 160),
     scope_actors: lineListSchema(20, 160),
     scope_technologies: lineListSchema(20, 160),
     scope_time_start: nullableDateOnly.default(null),
     scope_time_end: nullableDateOnly.default(null),
     out_of_scope: nullableText(2000),
-    supporting_questions: lineListSchema(24, 500),
-    current_knowledge: lineListSchema(36, 1000),
-    information_gaps: lineListSchema(36, 1000),
     current_assessment: nullableText(10000),
     assessment_confidence: nullableConfidence.default(null),
     tags: tagsSchema,
-    closed_at: nullableDate.default(null),
+    closed_at: nullableDateTime.default(null),
   })
   .superRefine((value, context) => {
     if (
@@ -133,18 +140,18 @@ export const projectSchema = z
 
 export const createInvestigationSchema = projectSchema.superRefine(
   (value, context) => {
-    if (!value.research_question) {
+    if (!value.research_question || value.research_question.length < 10) {
       context.addIssue({
         code: "custom",
         path: ["research_question"],
-        message: "Primary intelligence question is required for a new Investigation.",
+        message: "Primary intelligence question must be at least 10 characters.",
       });
     }
-    if (!value.purpose) {
+    if (!value.purpose || value.purpose.length < 5) {
       context.addIssue({
         code: "custom",
         path: ["purpose"],
-        message: "Purpose is required for a new Investigation.",
+        message: "Purpose must be at least 5 characters.",
       });
     }
   },
@@ -164,12 +171,13 @@ export function parseProjectForm(formData: FormData) {
     research_question: formData.get("research_question") ?? "",
     purpose: formData.get("purpose") ?? "",
     description: formData.get("description") ?? "",
-    research_type: formData.get("research_type"),
-    priority: formData.get("priority"),
+    research_type: formData.get("research_type") ?? "CTI",
+    priority: formData.get("priority") ?? "MEDIUM",
     investigation_status: formData.get("investigation_status") ?? "DRAFT",
     intended_consumer: formData.get("intended_consumer") ?? "",
     decision_context: formData.get("decision_context") ?? "",
     expected_product_type: formData.get("expected_product_type") ?? "",
+    due_at: formData.get("due_at") ?? "",
     scope_geography: formData.get("scope_geography") ?? "",
     scope_sectors: formData.get("scope_sectors") ?? "",
     scope_activity_types: formData.get("scope_activity_types") ?? "",
@@ -178,9 +186,6 @@ export function parseProjectForm(formData: FormData) {
     scope_time_start: formData.get("scope_time_start") ?? "",
     scope_time_end: formData.get("scope_time_end") ?? "",
     out_of_scope: formData.get("out_of_scope") ?? "",
-    supporting_questions: formData.get("supporting_questions") ?? "",
-    current_knowledge: formData.get("current_knowledge") ?? "",
-    information_gaps: formData.get("information_gaps") ?? "",
     current_assessment: formData.get("current_assessment") ?? "",
     assessment_confidence: formData.get("assessment_confidence") ?? "",
     tags: formData.get("tags") ?? "",
