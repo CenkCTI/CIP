@@ -4,6 +4,7 @@ import type { NodeMeasurementSeries } from "@/lib/baykush-node/measurement-schem
 import type { NodeRoutingStatus } from "@/lib/baykush-node/routing-schema";
 import type { GlobalRange } from "@/lib/baykush-node/range";
 import type { NodeComparison } from "@/lib/baykush-node/schemas";
+import { NodeDegradedState } from "./node-degraded-state";
 
 export interface NodeSourceStatusView {
   sourceKey: string;
@@ -64,6 +65,9 @@ export function NodeGlobalView(input: {
   routingStatus?: NodeRoutingStatus;
   routingStatusUnavailable?: boolean;
   routingMeasurementsUnavailable?: boolean;
+  sourcesUnavailable?: boolean;
+  coreMeasurementsUnavailable?: boolean;
+  comparisonsUnavailable?: boolean;
   comparisons: readonly NodeComparison[];
 }) {
   return (
@@ -76,6 +80,10 @@ export function NodeGlobalView(input: {
           <p className="mt-2 text-xs text-stone-500">Generated {new Date(input.generatedAt).toLocaleString()} · range {input.range.toUpperCase()} · source status {input.sources.length}</p>
         </div>
       </header>
+
+      {input.sourcesUnavailable ? <NodeDegradedState context="SOURCE STATUS" detail="Current Node source health is unavailable. This is not healthy collection, no coverage, or no activity." /> : null}
+      {input.coreMeasurementsUnavailable ? <NodeDegradedState context="CORE MEASUREMENTS" /> : null}
+      {input.comparisonsUnavailable ? <NodeDegradedState context="COMPARISONS" detail="One or more Node comparisons are unavailable. Available comparisons remain visible; missing comparisons are not zero change." /> : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {input.sources.map((source) => (

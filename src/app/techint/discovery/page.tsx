@@ -20,6 +20,7 @@ export default async function Page({searchParams}:{searchParams:Promise<{range?:
     convergenceUnavailable={convergence.status==='rejected'}
     newEntitiesUnavailable={newEntities.status==='rejected'}
     compositionUnavailable={composition.status==='rejected'}
+    topMoversUnavailable={topMovers.status==='rejected'}
     geographyUnavailable={geography.status==='rejected'}
   />;
 }
