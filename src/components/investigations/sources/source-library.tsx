@@ -255,6 +255,12 @@ function FileSourceForm({
     });
     setPending(false);
     if (final.error) {
+      await cancelCollectionFileSource(projectId, {
+        source_id: prepared.sourceId,
+        asset_id: prepared.assetId,
+        storage_path: prepared.path,
+      });
+      setProgress(0);
       setStatus({ error: final.error });
       return;
     }
