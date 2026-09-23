@@ -19,12 +19,15 @@ const nullableUuid = z.preprocess(
 );
 
 const optionalText = (max: number) =>
-  z
-    .string()
-    .trim()
-    .max(max)
-    .optional()
-    .transform((value) => value || null);
+  z.preprocess(
+    (value) => (value == null ? "" : value),
+    z
+      .string()
+      .trim()
+      .max(max)
+      .optional()
+      .transform((value) => value || null),
+  );
 
 const nullableDate = z.preprocess(
   (value) => (value === "" || value == null ? null : value),
