@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+      - feat/investigation-direction-stage1-v2
 
 permissions:
   contents: read
@@ -86,6 +87,7 @@ jobs:
           run_check phase2-3f-d-migration bash scripts/test-phase2-3f-d-migration.sh
           run_check workspace-v2-migration bash scripts/test-workspace-v2-migration.sh
           run_check investigation-direction-stage1-migration bash scripts/test-investigation-direction-stage1-migration.sh
+          run_check investigation-collection-stage2-migration bash scripts/test-investigation-collection-stage2-migration.sh
 
           cat validation-logs/summary.txt
           echo "failed=${failed}" >> "$GITHUB_OUTPUT"

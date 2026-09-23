@@ -1,18 +1,10 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 
+import { SourceReaderWorkspace } from "@/components/investigations/source-reader/source-reader-workspace";
 import { requireOwnedProject } from "@/lib/projects/ownership";
 
-type SourceRow = Record<string, unknown>;
 const uuidSchema = z.string().uuid();
-const text = (value: unknown) => String(value ?? "");
-
-function formatDate(value: unknown) {
-  if (!value) return "Not recorded";
-  const parsed = new Date(String(value));
-  return Number.isNaN(parsed.getTime()) ? "Not recorded" : parsed.toLocaleString();
-}
 
 export default async function SourceDetailPage({
   params,
@@ -22,21 +14,88 @@ export default async function SourceDetailPage({
   const { id, sourceId } = await params;
   if (!uuidSchema.safeParse(sourceId).success) notFound();
   const context = await requireOwnedProject(id).catch(() => notFound());
-  const { data: source, error } = await context.supabase
-    .from("sources")
-    .select("*")
-    .eq("project_id", context.projectId)
-    .eq("id", sourceId)
-    .single();
-  if (error || !source) notFound();
+
+  const [
+    sourceResult,
+    assetResult,
+    gapsResult,
+    requirementsResult,
+    sourceGapLinksResult,
+    sourceRequirementLinksResult,
+    notesResult,
+    annotationsResult,
+    annotationGapLinksResult,
+    annotationRequirementLinksResult,
+  ] = await Promise.all([
+    context.supabase
+      .from("sources")
+      .select("*")
+      .eq("project_id", context.projectId)
+      .eq("id", sourceId)
+      .single(),
+    context.supabase
+      .from("source_assets")
+      .select("*")
+      .eq("project_id", context.projectId)
+      .eq("source_id", sourceId)
+      .eq("asset_role", "ORIGINAL")
+      .eq("state", "READY")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    context.supabase
+      .from("investigation_information_gaps")
+      .select("id,description,status")
+      .eq("project_id", context.projectId)
+      .order("sort_order", { ascending: true }),
+    context.supabase
+      .from("collection_requirements")
+      .select("id,requirement,status,priority")
+      .eq("project_id", context.projectId)
+      .order("sort_order", { ascending: true }),
+    context.supabase
+      .from("source_gap_links")
+      .select("gap_id")
+      .eq("project_id", context.projectId)
+      .eq("source_id", sourceId),
+    context.supabase
+      .from("source_requirement_links")
+      .select("requirement_id")
+      .eq("project_id", context.projectId)
+      .eq("source_id", sourceId),
+    context.supabase
+      .from("source_notes")
+      .select("*")
+      .eq("project_id", context.projectId)
+      .eq("source_id", sourceId)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true }),
+    context.supabase
+      .from("source_annotations")
+      .select("*")
+      .eq("project_id", context.projectId)
+      .eq("source_id", sourceId)
+      .order("page_number", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: true }),
+    context.supabase
+      .from("source_annotation_gap_links")
+      .select("annotation_id,gap_id")
+      .eq("project_id", context.projectId),
+    context.supabase
+      .from("source_annotation_requirement_links")
+      .select("annotation_id,requirement_id")
+      .eq("project_id", context.projectId),
+  ]);
+
+  if (sourceResult.error || !sourceResult.data) notFound();
 
   const [evidenceResult, observationCount, enrichmentCount] = await Promise.all([
-    source.evidence_id
+    sourceResult.data.evidence_id
       ? context.supabase
           .from("evidence")
           .select("id,title,type")
           .eq("project_id", context.projectId)
-          .eq("id", source.evidence_id)
+          .eq("id", sourceResult.data.evidence_id)
           .single()
       : Promise.resolve({ data: null, error: null }),
     context.supabase
@@ -50,103 +109,65 @@ export default async function SourceDetailPage({
       .eq("project_id", context.projectId)
       .eq("source_id", sourceId),
   ]);
+  const legacyReferenceError =
+    evidenceResult.error || observationCount.error || enrichmentCount.error;
 
-  const row = source as SourceRow;
-  return (
-    <section className="mx-auto max-w-4xl space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link className="text-sm text-amber-300" href={`/projects/${id}/sources`}>
-          ← Back to Source Registry
-        </Link>
-        <span className="text-xs text-stone-600">
-          {observationCount.count ?? 0} observation · {enrichmentCount.count ?? 0}{" "}
-          enrichment result
-        </span>
-      </div>
+  const failed = [
+    assetResult,
+    gapsResult,
+    requirementsResult,
+    sourceGapLinksResult,
+    sourceRequirementLinksResult,
+    notesResult,
+    annotationsResult,
+    annotationGapLinksResult,
+    annotationRequirementLinksResult,
+  ].some((result) => result.error) || Boolean(legacyReferenceError);
 
-      <article className="card">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="citem-label">Structured Source</p>
-            <h1 className="mt-2 text-3xl font-semibold text-stone-100">
-              {text(row.title)}
-            </h1>
-            <p className="mt-2 text-sm text-stone-400">
-              {text(row.publisher) || "No publisher"}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <span className="citem-badge">{text(row.source_type)}</span>
-            <span className="citem-badge">{text(row.reliability)}</span>
-            <span className="citem-badge">{text(row.verification_state)}</span>
-            {row.archived_at ? (
-              <span className="citem-badge" data-tone="attention">
-                ARCHIVED
-              </span>
-            ) : null}
-          </div>
+  if (failed) {
+    return (
+      <section className="mx-auto max-w-6xl">
+        <div className="card text-red-300">
+          Source Reader yüklenemedi. Stage 2 migration 054'ün uygulanmış olduğunu
+          doğrulayın.
         </div>
+      </section>
+    );
+  }
 
-        {row.url ? (
-          <a
-            className="mt-4 block break-all text-sm text-amber-300 hover:underline"
-            href={text(row.url)}
-            rel="noreferrer"
-            target="_blank"
-          >
-            {text(row.url)}
-          </a>
-        ) : null}
+  const asset = assetResult.data ?? null;
+  let signedUrl: string | null = null;
+  if (asset?.storage_path) {
+    const { data } = await context.supabase.storage
+      .from("source-assets")
+      .createSignedUrl(String(asset.storage_path), 15 * 60);
+    signedUrl = data?.signedUrl ?? null;
+  }
 
-        <dl className="mt-6 grid gap-4 md:grid-cols-2">
-          <div>
-            <dt className="citem-label">Published</dt>
-            <dd className="mt-1 text-sm text-stone-300">
-              {formatDate(row.published_at)}
-            </dd>
-          </div>
-          <div>
-            <dt className="citem-label">Accessed</dt>
-            <dd className="mt-1 text-sm text-stone-300">
-              {formatDate(row.accessed_at)}
-            </dd>
-          </div>
-          <div>
-            <dt className="citem-label">Origin</dt>
-            <dd className="mt-1 text-sm text-stone-300">{text(row.origin_kind)}</dd>
-          </div>
-          <div>
-            <dt className="citem-label">Archived</dt>
-            <dd className="mt-1 text-sm text-stone-300">
-              {formatDate(row.archived_at)}
-            </dd>
-          </div>
-          <div className="md:col-span-2">
-            <dt className="citem-label">Description</dt>
-            <dd className="mt-1 whitespace-pre-wrap text-sm text-stone-300">
-              {text(row.description) || "No description"}
-            </dd>
-          </div>
-          <div className="md:col-span-2">
-            <dt className="citem-label">Analyst notes</dt>
-            <dd className="mt-1 whitespace-pre-wrap text-sm text-stone-300">
-              {text(row.analyst_notes) || "No analyst notes"}
-            </dd>
-          </div>
-        </dl>
+  const annotationIds = new Set(
+    (annotationsResult.data ?? []).map((annotation) => annotation.id),
+  );
 
-        {evidenceResult.data ? (
-          <div className="mt-6 rounded border border-stone-800/80 bg-black/10 p-3">
-            <p className="citem-label">Linked Evidence</p>
-            <Link
-              className="mt-2 block text-sm text-amber-300 hover:underline"
-              href={`/projects/${id}?tab=evidence#evidence-${evidenceResult.data.id}`}
-            >
-              {evidenceResult.data.title} · {evidenceResult.data.type}
-            </Link>
-          </div>
-        ) : null}
-      </article>
-    </section>
+  return (
+    <SourceReaderWorkspace
+      projectId={context.projectId}
+      source={sourceResult.data}
+      asset={asset}
+      signedUrl={signedUrl}
+      gaps={gapsResult.data ?? []}
+      requirements={requirementsResult.data ?? []}
+      sourceGapIds={(sourceGapLinksResult.data ?? []).map((link) => link.gap_id)}
+      sourceRequirementIds={(sourceRequirementLinksResult.data ?? []).map(
+        (link) => link.requirement_id,
+      )}
+      notes={notesResult.data ?? []}
+      annotations={annotationsResult.data ?? []}
+      annotationGapLinks={(annotationGapLinksResult.data ?? []).filter((link) =>
+        annotationIds.has(link.annotation_id),
+      )}
+      annotationRequirementLinks={(annotationRequirementLinksResult.data ?? []).filter(
+        (link) => annotationIds.has(link.annotation_id),
+      )}
+    />
   );
 }
