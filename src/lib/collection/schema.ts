@@ -243,11 +243,13 @@ export function isPreviewableMime(mime: string, fileName: string) {
   const ext = safeSourceExtension(fileName);
   return (
     normalized === "application/pdf" ||
+    normalized ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
     normalized.startsWith("image/png") ||
     normalized.startsWith("image/jpeg") ||
     normalized.startsWith("text/") ||
     ["application/json"].includes(normalized) ||
-    [".pdf", ".png", ".jpg", ".jpeg", ".txt", ".md", ".json", ".csv", ".log"].includes(ext)
+    [".pdf", ".png", ".jpg", ".jpeg", ".txt", ".md", ".json", ".csv", ".log", ".docx"].includes(ext)
   );
 }
 
