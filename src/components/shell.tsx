@@ -3,6 +3,7 @@ import Link from "next/link";
 import { signOut } from "@/app/actions";
 import { CitemLogo } from "@/components/citem-logo";
 import { ShellNav } from "@/components/shell-nav";
+import { SidebarToggle } from "@/components/sidebar-toggle";
 
 export function AppShell({
   children,
@@ -13,7 +14,7 @@ export function AppShell({
 }) {
   return (
     <div className="citem-shell">
-      <aside className="citem-sidebar">
+      <aside id="citem-primary-sidebar" className="citem-sidebar">
         <Link href="/dashboard" className="citem-brand gap-3" aria-label="CİTEM dashboard">
           <CitemLogo variant="compact" priority />
           <span className="citem-wordmark">CİTEM</span>
@@ -44,6 +45,8 @@ export function AppShell({
 
       <div className="citem-main">
         <header className="citem-topbar">
+          <SidebarToggle />
+
           <p className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[1.08rem] font-semibold tracking-[0.72em] text-[#c9963e] drop-shadow-[0_0_7px_rgba(198,150,62,0.26)] sm:text-[1.2rem] md:text-[1.34rem] lg:text-[1.48rem] max-[460px]:relative max-[460px]:left-auto max-[460px]:mx-auto max-[460px]:translate-x-0 max-[460px]:text-[0.9rem] max-[460px]:tracking-[0.46em] max-[460px]:drop-shadow-[0_0_5px_rgba(198,150,62,0.2)]">
             B A Y K U S H
           </p>

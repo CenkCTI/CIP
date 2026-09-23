@@ -216,10 +216,24 @@ button:disabled {
   flex-direction: column;
   width: 17.25rem;
   min-width: 17.25rem;
+  overflow: hidden;
   border-right: 1px solid var(--line-neutral);
   background:
     radial-gradient(circle at 48% 3%, rgba(185, 130, 47, 0.055), transparent 17rem),
     var(--sidebar);
+  transition:
+    width 180ms ease,
+    min-width 180ms ease,
+    opacity 140ms ease;
+}
+
+html[data-citem-sidebar="collapsed"] .citem-sidebar {
+  width: 0;
+  min-width: 0;
+  border-right: 0;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .citem-sidebar::after {
@@ -426,6 +440,29 @@ button:disabled {
   padding: 0.7rem 1.35rem;
   background: var(--header);
   backdrop-filter: blur(12px);
+}
+
+.citem-sidebar-toggle {
+  display: inline-grid;
+  width: 2.55rem;
+  height: 2.55rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--line-neutral);
+  border-radius: 0.34rem;
+  color: #9ba0a2;
+  background: #12171a;
+}
+
+.citem-sidebar-toggle:hover {
+  color: var(--amber-soft);
+  border-color: var(--line-hover);
+  background: #171c20;
+}
+
+.citem-sidebar-toggle svg {
+  width: 1.15rem;
+  height: 1.15rem;
 }
 
 .citem-topbar-copy {
@@ -1047,6 +1084,10 @@ button:disabled {
     min-width: 0;
     border-right: 0;
     border-bottom: 1px solid var(--line-neutral);
+  }
+
+  html[data-citem-sidebar="collapsed"] .citem-sidebar {
+    display: none;
   }
 
   .citem-brand {
