@@ -23,9 +23,9 @@ const eslintConfig = [
   },
   {
     files: [
-      "src/app/projects/[id]/collection/page.tsx",
-      "src/app/projects/[id]/sources/page.tsx",
-      "src/app/projects/[id]/sources/[sourceId]/page.tsx",
+      "src/app/projects/**/collection/page.tsx",
+      "src/app/projects/**/sources/page.tsx",
+      "src/app/projects/**/sources/**/page.tsx",
       "src/components/investigations/collection/**/*.tsx",
       "src/components/investigations/sources/**/*.tsx",
       "src/components/investigations/source-reader/**/*.tsx",
