@@ -64,9 +64,16 @@ export default async function SourcesPage({
     context.supabase.from("source_annotations").select("source_id").eq("project_id", id),
   ]);
 
+  const evidenceResult = await context.supabase
+    .from("evidence")
+    .select("id,title")
+    .eq("project_id", id)
+    .order("title", { ascending: true });
+
   if (projectResult.error || !projectResult.data) notFound();
   const failed = [
     sourcesResult,
+    evidenceResult,
     gapsResult,
     requirementsResult,
     sourceGapLinksResult,

@@ -119,6 +119,7 @@ export function SourcePrintPacket({
     mime.startsWith("text/") ||
     mime === "application/json" ||
     /.(txt|md|csv|json|log)$/.test(fileName);
+  const isDocx = isDocxFile(mime, fileName);
 
   function printPacket() {
     start(async () => {

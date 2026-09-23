@@ -8,8 +8,9 @@ vi.mock("@/components/sources/source-registry", () => ({ SourceRegistry: () => n
 
 function query(result: Record<string, unknown>) {
   const chain: Record<string, unknown> = {};
-  for (const method of ["select", "eq", "order", "not"]) chain[method] = vi.fn(() => chain);
+  for (const method of ["select", "eq", "order", "not", "limit"]) chain[method] = vi.fn(() => chain);
   chain.single = vi.fn(async () => result);
+  chain.maybeSingle = chain.single;
   chain.then = (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve);
   return chain;
 }

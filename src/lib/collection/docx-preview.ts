@@ -15,7 +15,9 @@ async function inflateRaw(bytes: Uint8Array) {
   if (typeof DecompressionStream === "undefined") {
     throw new Error("This browser cannot decompress DOCX content.");
   }
-  const stream = new Blob([bytes]).stream().pipeThrough(
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  const stream = new Blob([copy.buffer]).stream().pipeThrough(
     new DecompressionStream("deflate-raw"),
   );
   return new Uint8Array(await new Response(stream).arrayBuffer());

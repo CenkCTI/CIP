@@ -21,6 +21,22 @@ const eslintConfig = [
       "react-hooks/set-state-in-effect": "off",
     },
   },
+  {
+    files: [
+      "src/app/projects/[id]/collection/page.tsx",
+      "src/app/projects/[id]/sources/page.tsx",
+      "src/app/projects/[id]/sources/[sourceId]/page.tsx",
+      "src/components/investigations/collection/**/*.tsx",
+      "src/components/investigations/sources/**/*.tsx",
+      "src/components/investigations/source-reader/**/*.tsx",
+    ],
+    rules: {
+      // Turkish analyst-facing copy frequently uses apostrophes for suffixes.
+      // Keep this exception scoped to the Stage 2 collection workspace rather
+      // than weakening the rule for the rest of the application.
+      "react/no-unescaped-entities": "off",
+    },
+  },
 ];
 
 export default eslintConfig;

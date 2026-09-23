@@ -89,6 +89,29 @@ export default async function SourceDetailPage({
 
   if (sourceResult.error || !sourceResult.data) notFound();
 
+  const [evidenceResult, observationCount, enrichmentCount] = await Promise.all([
+    sourceResult.data.evidence_id
+      ? context.supabase
+          .from("evidence")
+          .select("id,title,type")
+          .eq("project_id", context.projectId)
+          .eq("id", sourceResult.data.evidence_id)
+          .single()
+      : Promise.resolve({ data: null, error: null }),
+    context.supabase
+      .from("indicator_observations")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", context.projectId)
+      .eq("source_id", sourceId),
+    context.supabase
+      .from("enrichment_results")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", context.projectId)
+      .eq("source_id", sourceId),
+  ]);
+  const legacyReferenceError =
+    evidenceResult.error || observationCount.error || enrichmentCount.error;
+
   const failed = [
     assetResult,
     gapsResult,
@@ -99,7 +122,7 @@ export default async function SourceDetailPage({
     annotationsResult,
     annotationGapLinksResult,
     annotationRequirementLinksResult,
-  ].some((result) => result.error);
+  ].some((result) => result.error) || Boolean(legacyReferenceError);
 
   if (failed) {
     return (
