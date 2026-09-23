@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
+import { extractDocxPlainText, isDocxFile } from "@/lib/collection/docx-preview";
+
 import {
   createSourceAnnotation,
   createSourceNote,
@@ -140,6 +142,33 @@ function RegionCapture({
   );
 }
 
+function DocxDocument({ url }: { url: string }) {
+  const [content, setContent] = useState("DOCX yükleniyor…");
+  useEffect(() => {
+    let cancelled = false;
+    fetch(url)
+      .then((response) => {
+        if (!response.ok) throw new Error();
+        return response.arrayBuffer();
+      })
+      .then(extractDocxPlainText)
+      .then((value) => {
+        if (!cancelled) setContent(value || "DOCX içinde görüntülenebilir metin bulunamadı.");
+      })
+      .catch(() => {
+        if (!cancelled) setContent("DOCX preview oluşturulamadı. Orijinal dosya korunmaktadır.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+  return (
+    <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-6 text-stone-300">
+      {content}
+    </pre>
+  );
+}
+
 function DocumentSurface({
   asset,
   signedUrl,
@@ -171,6 +200,7 @@ function DocumentSurface({
     mime.startsWith("text/") ||
     mime === "application/json" ||
     [".txt", ".md", ".csv", ".json", ".log"].some((ext) => file.endsWith(ext));
+  const isDocx = isDocxFile(mime, file);
 
   useEffect(() => {
     if (!signedUrl || !isText) return;
@@ -261,6 +291,14 @@ function DocumentSurface({
         <pre className="whitespace-pre-wrap break-words font-mono text-sm leading-6 text-stone-300">
           {textContent || "Metin yükleniyor…"}
         </pre>
+      </div>
+    );
+  }
+
+  if (isDocx) {
+    return (
+      <div className="relative min-h-[620px] overflow-auto rounded border border-stone-800 bg-black/20 p-5">
+        <DocxDocument url={signedUrl} />
       </div>
     );
   }
