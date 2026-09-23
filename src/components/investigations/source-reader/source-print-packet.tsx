@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 
 import { recordSourcePrintExport } from "@/app/projects/[id]/source-collection-actions";
 import { CitemLogo } from "@/components/citem-logo";
+import { extractDocxPlainText, isDocxFile } from "@/lib/collection/docx-preview";
 
 type Row = Record<string, unknown>;
 const s = (value: unknown) => String(value ?? "");
@@ -12,6 +13,29 @@ function date(value: unknown) {
   if (!value) return "Belirtilmedi";
   const parsed = new Date(String(value));
   return Number.isNaN(parsed.getTime()) ? "Belirtilmedi" : parsed.toLocaleString();
+}
+
+function DocxDocument({ url }: { url: string }) {
+  const [text, setText] = useState("DOCX yükleniyor…");
+  useEffect(() => {
+    let cancelled = false;
+    fetch(url)
+      .then((response) => {
+        if (!response.ok) throw new Error();
+        return response.arrayBuffer();
+      })
+      .then(extractDocxPlainText)
+      .then((value) => {
+        if (!cancelled) setText(value || "DOCX içinde görüntülenebilir metin bulunamadı.");
+      })
+      .catch(() => {
+        if (!cancelled) setText("DOCX preview oluşturulamadı.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+  return <pre className="packet-text">{text}</pre>;
 }
 
 function TextDocument({ url }: { url: string }) {
@@ -268,6 +292,7 @@ export function SourcePrintPacket({
         ) : null}
 
         {signedUrl && isText ? <TextDocument url={signedUrl} /> : null}
+        {signedUrl && isDocx ? <DocxDocument url={signedUrl} /> : null}
 
         {signedUrl && isPdf ? (
           <div className="packet-pdf">
@@ -281,7 +306,7 @@ export function SourcePrintPacket({
           </div>
         ) : null}
 
-        {signedUrl && !isPdf && !isImage && !isText ? (
+        {signedUrl && !isPdf && !isImage && !isText && !isDocx ? (
           <div className="packet-external-source">
             <p>Bu dosya inline preview için güvenli listede değildir.</p>
             <a href={signedUrl}>Orijinal dosyayı aç / indir</a>
