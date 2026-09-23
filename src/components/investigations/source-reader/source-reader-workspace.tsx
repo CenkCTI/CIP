@@ -173,11 +173,7 @@ function DocumentSurface({
     [".txt", ".md", ".csv", ".json", ".log"].some((ext) => file.endsWith(ext));
 
   useEffect(() => {
-    if (!signedUrl || !isText) {
-      setTextContent("");
-      setTextError("");
-      return;
-    }
+    if (!signedUrl || !isText) return;
     let cancelled = false;
     fetch(signedUrl)
       .then((response) => {
@@ -249,6 +245,8 @@ function DocumentSurface({
   if (isImage) {
     return (
       <div className="relative overflow-hidden rounded border border-stone-800 bg-black/20">
+        {/* Signed private Source assets cannot use Next/Image without widening remote-image policy. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={signedUrl} alt="" className="mx-auto max-h-[76vh] w-auto max-w-full object-contain" />
         <AnnotationOverlay annotations={annotations} page={1} />
         <RegionCapture active={Boolean(annotationMode)} onRect={onRect} />
