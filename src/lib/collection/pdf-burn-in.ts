@@ -27,6 +27,18 @@ function validQuad(value: PdfQuad) {
   ].every(Number.isFinite);
 }
 
+function quadHighlightLine(quad: PdfQuad) {
+  const start = { x: (quad.x1 + quad.x4) / 2, y: (quad.y1 + quad.y4) / 2 };
+  const end = { x: (quad.x2 + quad.x3) / 2, y: (quad.y2 + quad.y3) / 2 };
+  const leftHeight = Math.hypot(quad.x1 - quad.x4, quad.y1 - quad.y4);
+  const rightHeight = Math.hypot(quad.x2 - quad.x3, quad.y2 - quad.y3);
+  return {
+    start,
+    end,
+    thickness: Math.max(0.5, (leftHeight + rightHeight) / 2),
+  };
+}
+
 export function orderAnnotations(annotations: Row[], fragments: Row[]) {
   const first = new Map<string, Row>();
   for (const fragment of fragments) {
@@ -96,14 +108,13 @@ export async function burnAnnotationsIntoPdf(
     for (const quad of quads) {
       const bounds = quadBounds(quad);
       if (annotation.annotation_type === "HIGHLIGHT") {
-        page.drawRectangle({
-          x: bounds.minX,
-          y: bounds.minY,
-          width: bounds.maxX - bounds.minX,
-          height: bounds.maxY - bounds.minY,
+        const highlight = quadHighlightLine(quad);
+        page.drawLine({
+          start: highlight.start,
+          end: highlight.end,
+          thickness: highlight.thickness,
           color: rgb(0.96, 0.67, 0.18),
           opacity: 0.24,
-          borderOpacity: 0,
         });
       } else if (annotation.annotation_type === "UNDERLINE") {
         page.drawLine({
