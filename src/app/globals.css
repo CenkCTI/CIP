@@ -1229,9 +1229,14 @@ button:disabled {
 .citem-pdf-page{position:relative;overflow:hidden;background:white;box-shadow:0 8px 30px rgba(0,0,0,.35);user-select:text}
 .citem-pdf-canvas{position:absolute;inset:0;display:block}
 .citem-pdf-placeholder,.citem-pdf-state{display:grid;min-height:18rem;place-items:center;color:#78716c;background:#111518}
-.citem-pdf-text-layer{position:absolute;inset:0;overflow:hidden;line-height:1;text-align:initial;text-size-adjust:none;transform-origin:0 0;z-index:3}
-.citem-pdf-text-layer span,.citem-pdf-text-layer br{position:absolute;color:transparent;white-space:pre;cursor:text;transform-origin:0 0}
+.citem-pdf-text-layer{position:absolute;inset:0;overflow:clip;line-height:1;text-align:initial;letter-spacing:normal;word-spacing:normal;text-size-adjust:none;forced-color-adjust:none;transform-origin:0 0;caret-color:CanvasText;color-scheme:only light;z-index:3;--min-font-size:1;--text-scale-factor:calc(var(--total-scale-factor,1) * var(--min-font-size));--min-font-size-inv:calc(1 / var(--min-font-size))}
+.citem-pdf-text-layer :is(span,br){position:absolute;color:transparent;white-space:pre;cursor:text;transform-origin:0 0;user-select:text}
+.citem-pdf-text-layer>:not(.markedContent),.citem-pdf-text-layer .markedContent span:not(.markedContent){z-index:1;--font-height:0;font-size:calc(var(--text-scale-factor) * var(--font-height));--scale-x:1;--rotate:0deg;transform:rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv))}
+.citem-pdf-text-layer .markedContent{display:contents}
+.citem-pdf-text-layer span[role="img"]{user-select:none;cursor:default}
 .citem-pdf-text-layer ::selection{background:rgba(222,166,70,.38);color:transparent}
+.citem-pdf-text-layer br::selection{background:transparent}
+.citem-pdf-text-layer .endOfContent{display:block;position:absolute;inset:100% 0 0;z-index:0;cursor:default;user-select:none}
 .citem-pdf-annotation-layer{position:absolute;inset:0;z-index:2;pointer-events:none}
 .citem-pdf-highlight{fill:#f0b94f;fill-opacity:.28}
 .citem-pdf-underline{stroke:#d5922d;stroke-width:2}
