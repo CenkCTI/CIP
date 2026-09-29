@@ -191,10 +191,10 @@ function PdfPage({
 }
 
 export function PdfSourceViewer({
-  projectId,sourceId,assetId,signedUrl,annotations,fragments,gaps,requirements,defaultGapIds,defaultRequirementIds,onAnnotationSelect,
+  projectId,sourceId,assetId,signedUrl,annotations,fragments,gaps,requirements,defaultGapIds,defaultRequirementIds,focusedAnnotationId,onAnnotationSelect,
 }:{
   projectId:string;sourceId:string;assetId:string;signedUrl:string;annotations:Row[];fragments:Row[];gaps:Row[];requirements:Row[];
-  defaultGapIds:string[];defaultRequirementIds:string[];
+  defaultGapIds:string[];defaultRequirementIds:string[];focusedAnnotationId?:string|null;
   onAnnotationSelect?:(annotationId:string)=>void;
 }){
   const router=useRouter();
@@ -230,6 +230,18 @@ export function PdfSourceViewer({
     })();
     return()=>{cancelled=true;try{task?.destroy?.();}catch{}void loadedPdf?.destroy?.();};
   },[signedUrl]);
+
+  useEffect(()=>{
+    if(!focusedAnnotationId||!rootRef.current)return;
+    const first=fragments
+      .filter(fragment=>s(fragment.annotation_id)===focusedAnnotationId)
+      .sort((a,b)=>Number(a.page_number)-Number(b.page_number))[0];
+    if(!first)return;
+    const pageNumber=Number(first.page_number);
+    const pageNode=rootRef.current.querySelector<HTMLElement>(`[data-pdf-page-number="${pageNumber}"]`);
+    if(!pageNode)return;
+    pageNode.scrollIntoView({behavior:"smooth",block:"center"});
+  },[focusedAnnotationId,fragments]);
 
   function captureSelection(){
     if(regionMode||!rootRef.current)return;

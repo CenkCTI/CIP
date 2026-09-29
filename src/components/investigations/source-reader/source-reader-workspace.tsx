@@ -661,6 +661,7 @@ export function SourceReaderWorkspace({
               requirements={requirements}
               defaultGapIds={sourceGapIds}
               defaultRequirementIds={sourceRequirementIds}
+              focusedAnnotationId={focusedAnnotationId}
               onAnnotationSelect={(annotationId) => {
                 setPanel("annotations");
                 setFocusedAnnotationId(annotationId);
