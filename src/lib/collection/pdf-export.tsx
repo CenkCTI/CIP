@@ -16,6 +16,10 @@ import {
   mergePdfBytes,
   orderAnnotations,
 } from "@/lib/collection/pdf-burn-in";
+import {
+  CITEM_PDF_FONT_FAMILY,
+  ensureCitemPdfFonts,
+} from "@/lib/collection/pdf-fonts";
 import { requireOwnedProject } from "@/lib/projects/ownership";
 
 type Row = Record<string, unknown>;
@@ -29,7 +33,7 @@ const styles = StyleSheet.create({
     fontSize: 9.5,
     lineHeight: 1.45,
     color: "#1c1917",
-    fontFamily: "Helvetica",
+    fontFamily: CITEM_PDF_FONT_FAMILY,
   },
   brand: { fontSize: 10, letterSpacing: 3, color: "#9a651f", marginBottom: 18 },
   title: { fontSize: 24, fontWeight: 700, marginBottom: 8 },
@@ -281,6 +285,7 @@ function uniqueStrings(values: unknown[]) {
 }
 
 export async function generateAnnotatedSourcePdf(projectId: string, sourceId: string) {
+  ensureCitemPdfFonts();
   const context = await requireOwnedProject(projectId);
   const [
     projectResult,
