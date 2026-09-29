@@ -62,7 +62,7 @@ function PdfPage({
   const shellRef=useRef<HTMLDivElement>(null);
   const canvasRef=useRef<HTMLCanvasElement>(null);
   const textRef=useRef<HTMLDivElement>(null);
-  const pageRef=useRef<PdfPageLike|null>(null);
+  const [pdfPage,setPdfPage]=useState<PdfPageLike|null>(null);
   const viewportRef=useRef<PdfViewportLike|null>(null);
   const baseViewportRef=useRef<PdfViewportLike|null>(null);
   const [displayViewport,setDisplayViewport]=useState<PdfViewportLike|null>(null);
@@ -82,22 +82,31 @@ function PdfPage({
 
   useEffect(()=>{
     let cancelled=false;
+    setPdfPage(null);
+    setDisplayViewport(null);
+    setError("");
     pdf.getPage(pageNumber).then((page)=>{
       if(cancelled)return;
-      pageRef.current=page;
-      const viewport=page.getViewport({scale});
-      const base=page.getViewport({scale:1});
-      viewportRef.current=viewport;baseViewportRef.current=base;
-      setDisplayViewport(viewport);
-      setSize({width:viewport.width,height:viewport.height});
-      onViewport(pageNumber,viewport,base);
+      setPdfPage(page);
+      baseViewportRef.current=page.getViewport({scale:1});
     }).catch(()=>!cancelled&&setError("PDF sayfası hazırlanamadı."));
     return()=>{cancelled=true;};
-  },[pdf,pageNumber,scale,onViewport]);
+  },[pdf,pageNumber]);
 
   useEffect(()=>{
-    if(!near||!pageRef.current||!viewportRef.current||!canvasRef.current||!textRef.current)return;
-    const page=pageRef.current,viewport=viewportRef.current,canvas=canvasRef.current,textLayer=textRef.current;
+    if(!pdfPage)return;
+    const viewport=pdfPage.getViewport({scale});
+    const base=baseViewportRef.current??pdfPage.getViewport({scale:1});
+    viewportRef.current=viewport;
+    baseViewportRef.current=base;
+    setDisplayViewport(viewport);
+    setSize({width:viewport.width,height:viewport.height});
+    onViewport(pageNumber,viewport,base);
+  },[pdfPage,pageNumber,scale,onViewport]);
+
+  useEffect(()=>{
+    if(!near||!pdfPage||!displayViewport||!canvasRef.current||!textRef.current)return;
+    const page=pdfPage,viewport=displayViewport,canvas=canvasRef.current,textLayer=textRef.current;
     const ratio=Math.max(1,window.devicePixelRatio||1);
     canvas.width=Math.floor(viewport.width*ratio);canvas.height=Math.floor(viewport.height*ratio);
     canvas.style.width=`${viewport.width}px`;canvas.style.height=`${viewport.height}px`;
@@ -109,7 +118,7 @@ function PdfPage({
     let stopped=false;
     Promise.all([renderTask.promise,layer.render()]).catch(()=>{if(!stopped)setError("PDF sayfası görüntülenemedi.");});
     return()=>{stopped=true;try{renderTask.cancel?.();}catch{}try{layer.cancel();}catch{}};
-  },[near,pdfjs,scale,pageNumber]);
+  },[near,pdfjs,pdfPage,displayViewport]);
 
   const annotationById=useMemo(()=>new Map(annotations.map(a=>[s(a.id),a])),[annotations]);
   const pageFragments=fragments.filter(f=>Number(f.page_number)===pageNumber);
