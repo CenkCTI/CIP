@@ -1,8 +1,41 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 const STORAGE_KEY = "citem.sidebar.collapsed";
+const CHANGE_EVENT = "citem:sidebar-preference-change";
+
+function readCollapsedPreference() {
+  if (typeof window === "undefined") return false;
+
+  try {
+    return window.localStorage.getItem(STORAGE_KEY) === "true";
+  } catch {
+    return document.documentElement.dataset.citemSidebar === "collapsed";
+  }
+}
+
+function subscribeToPreference(onStoreChange: () => void) {
+  window.addEventListener("storage", onStoreChange);
+  window.addEventListener(CHANGE_EVENT, onStoreChange);
+
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener(CHANGE_EVENT, onStoreChange);
+  };
+}
+
+function persistCollapsedPreference(collapsed: boolean) {
+  document.documentElement.dataset.citemSidebar = collapsed ? "collapsed" : "expanded";
+
+  try {
+    window.localStorage.setItem(STORAGE_KEY, collapsed ? "true" : "false");
+  } catch {
+    // The toggle still works for the current page when persistence is unavailable.
+  }
+
+  window.dispatchEvent(new Event(CHANGE_EVENT));
+}
 
 function SidebarIcon({ collapsed }: { collapsed: boolean }) {
   return (
@@ -21,34 +54,15 @@ function SidebarIcon({ collapsed }: { collapsed: boolean }) {
 }
 
 export function SidebarToggle() {
-  const [collapsed, setCollapsed] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
+  const collapsed = useSyncExternalStore(
+    subscribeToPreference,
+    readCollapsedPreference,
+    () => false,
+  );
 
   useEffect(() => {
-    let storedCollapsed = false;
-
-    try {
-      storedCollapsed = window.localStorage.getItem(STORAGE_KEY) === "true";
-    } catch {
-      // Storage can be unavailable in hardened/private browser contexts.
-    }
-
-    setCollapsed(storedCollapsed);
-    document.documentElement.dataset.citemSidebar = storedCollapsed ? "collapsed" : "expanded";
-    setHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
-
     document.documentElement.dataset.citemSidebar = collapsed ? "collapsed" : "expanded";
-
-    try {
-      window.localStorage.setItem(STORAGE_KEY, collapsed ? "true" : "false");
-    } catch {
-      // The toggle still works for the current page when persistence is unavailable.
-    }
-  }, [collapsed, hydrated]);
+  }, [collapsed]);
 
   const label = collapsed ? "Show sidebar" : "Hide sidebar";
 
@@ -60,7 +74,7 @@ export function SidebarToggle() {
       aria-controls="citem-primary-sidebar"
       aria-expanded={!collapsed}
       title={label}
-      onClick={() => setCollapsed((current) => !current)}
+      onClick={() => persistCollapsedPreference(!collapsed)}
     >
       <SidebarIcon collapsed={collapsed} />
     </button>
