@@ -88,6 +88,7 @@ jobs:
           run_check workspace-v2-migration bash scripts/test-workspace-v2-migration.sh
           run_check investigation-direction-stage1-migration bash scripts/test-investigation-direction-stage1-migration.sh
           run_check investigation-collection-stage2-migration bash scripts/test-investigation-collection-stage2-migration.sh
+          run_check source-reader-pdf-v2-migration bash scripts/test-source-reader-pdf-v2-migration.sh
 
           cat validation-logs/summary.txt
           echo "failed=${failed}" >> "$GITHUB_OUTPUT"

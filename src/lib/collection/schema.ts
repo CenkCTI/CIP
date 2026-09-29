@@ -11,12 +11,28 @@ export const collectionRequirementStatuses = [
 
 export const collectionPriorities = ["LOW", "MEDIUM", "HIGH"] as const;
 export const sourceAnnotationTypes = ["HIGHLIGHT", "UNDERLINE", "REGION"] as const;
+export const sourceAnnotationAnchorKinds = ["TEXT", "REGION"] as const;
 
 const uuid = z.string().uuid();
 const nullableUuid = z.preprocess(
   (value) => (value === "" || value == null ? null : value),
   z.union([uuid, z.null()]),
 );
+
+const optionalHttpUrl = z
+  .preprocess(
+    (value) => (value === "" || value == null ? null : value),
+    z.union([z.string().trim().max(2048), z.null()]),
+  )
+  .refine((value) => {
+    if (!value) return true;
+    try {
+      const parsed = new URL(value);
+      return ["http:", "https:"].includes(parsed.protocol) && !parsed.username && !parsed.password;
+    } catch {
+      return false;
+    }
+  }, "Geçerli bir HTTP/HTTPS URL kullanın.");
 
 const optionalText = (max: number) =>
   z.preprocess(
@@ -114,6 +130,7 @@ export const sourceFileDraftSchema = z
     source_type: z.enum(sourceTypes),
     publisher: optionalText(240),
     published_at: nullableDate.default(null),
+    url: optionalHttpUrl.default(null),
     collection_rationale: z
       .string()
       .trim()
@@ -147,6 +164,44 @@ export const sourceFileCancelSchema = z
     storage_path: z.string().min(1).max(1200),
   })
   .strict();
+
+export const pdfQuadSchema = z.object({
+  x1: z.number().finite(), y1: z.number().finite(),
+  x2: z.number().finite(), y2: z.number().finite(),
+  x3: z.number().finite(), y3: z.number().finite(),
+  x4: z.number().finite(), y4: z.number().finite(),
+}).strict();
+
+export const pdfAnnotationFragmentSchema = z.object({
+  page_number: z.number().int().min(1),
+  page_width: z.number().finite().positive().max(100000),
+  page_height: z.number().finite().positive().max(100000),
+  page_rotation: z.number().int().min(0).max(359).default(0),
+  quads: z.array(pdfQuadSchema).min(1).max(500),
+  selected_text: optionalText(20000),
+}).strict();
+
+export const sourceAnnotationCreateV2Schema = z.object({
+  source_id: uuid,
+  asset_id: uuid,
+  annotation_type: z.enum(sourceAnnotationTypes),
+  anchor_kind: z.enum(sourceAnnotationAnchorKinds),
+  selected_text: optionalText(20000),
+  comment: optionalText(10000),
+  fragments: z.array(pdfAnnotationFragmentSchema).min(1).max(10),
+  gap_ids: z.array(uuid).max(50).default([]),
+  requirement_ids: z.array(uuid).max(50).default([]),
+}).strict().superRefine((value, ctx) => {
+  if (value.anchor_kind === "TEXT" && !value.selected_text) {
+    ctx.addIssue({ code: "custom", message: "Metin işaretlemesi seçili metin içermelidir." });
+  }
+  if (value.anchor_kind === "TEXT" && value.annotation_type === "REGION") {
+    ctx.addIssue({ code: "custom", message: "Metin işaretlemesi REGION türünde olamaz." });
+  }
+  if (value.anchor_kind === "REGION" && value.annotation_type !== "REGION") {
+    ctx.addIssue({ code: "custom", message: "Bölge işaretlemesi REGION türünde olmalıdır." });
+  }
+});
 
 export const annotationRectSchema = z
   .object({
@@ -255,3 +310,5 @@ export function isPreviewableMime(mime: string, fileName: string) {
 
 export type CollectionRequirementInput = z.infer<typeof collectionRequirementSchema>;
 export type SourceAnnotationInput = z.infer<typeof sourceAnnotationCreateSchema>;
+export type SourceAnnotationV2Input = z.infer<typeof sourceAnnotationCreateV2Schema>;
+export type PdfAnnotationFragmentInput = z.infer<typeof pdfAnnotationFragmentSchema>;

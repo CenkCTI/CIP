@@ -8,6 +8,7 @@ import {
   idSchema,
   safeSourceExtension,
   sourceAnnotationCreateSchema,
+  sourceAnnotationCreateV2Schema,
   sourceFileCancelSchema,
   sourceFileDraftSchema,
   sourceFileFinalizeSchema,
@@ -563,6 +564,48 @@ export async function createSourceAnnotation(
   }
 }
 
+export async function createSourceAnnotationV2(
+  projectId: string,
+  input: unknown,
+): Promise<SourceCollectionActionState> {
+  try {
+    const context = await requireOwnedProject(projectId);
+    const parsed = sourceAnnotationCreateV2Schema.safeParse(input);
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Geçersiz PDF işaretlemesi." };
+    }
+    const { data: asset, error: assetError } = await context.supabase
+      .from("source_assets")
+      .select("id,source_id,state,mime_type,original_filename")
+      .eq("project_id", context.projectId)
+      .eq("id", parsed.data.asset_id)
+      .eq("source_id", parsed.data.source_id)
+      .single();
+    const isPdf =
+      String(asset?.mime_type ?? "").toLowerCase() === "application/pdf" ||
+      String(asset?.original_filename ?? "").toLowerCase().endsWith(".pdf");
+    if (assetError || !asset || asset.state !== "READY" || !isPdf) {
+      return { error: "PDF işaretlemesi için hazır bir PDF kaynak dosyası bulunamadı." };
+    }
+    const { data, error } = await context.supabase.rpc("record_source_annotation_v2", {
+      p_source_id: parsed.data.source_id,
+      p_asset_id: parsed.data.asset_id,
+      p_annotation_type: parsed.data.annotation_type,
+      p_anchor_kind: parsed.data.anchor_kind,
+      p_selected_text: parsed.data.selected_text,
+      p_comment: parsed.data.comment,
+      p_fragments: parsed.data.fragments,
+      p_gap_ids: parsed.data.gap_ids,
+      p_requirement_ids: parsed.data.requirement_ids,
+    });
+    if (error || !data) return { error: "PDF işaretlemesi kaydedilemedi." };
+    refresh(context.projectId, parsed.data.source_id);
+    return { success: "PDF işaretlemesi kaydedildi." };
+  } catch {
+    return { error: "Investigation bulunamadı." };
+  }
+}
+
 export async function updateSourceAnnotationContext(
   projectId: string,
   sourceId: string,
@@ -644,7 +687,7 @@ export async function getSourceAssetSignedUrl(
     if (error || !row || row.state !== "READY") return { error: "Source asset hazır değil." };
     const { data, error: signError } = await context.supabase.storage
       .from("source-assets")
-      .createSignedUrl(row.storage_path, 15 * 60);
+      .createSignedUrl(row.storage_path, 60 * 60);
     if (signError || !data?.signedUrl) return { error: "Source asset URL'si üretilemedi." };
     return { url: data.signedUrl };
   } catch {

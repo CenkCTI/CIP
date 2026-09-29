@@ -163,6 +163,7 @@ function formValues(form: HTMLFormElement) {
     source_type: data.get("source_type"),
     publisher: data.get("publisher"),
     published_at: data.get("published_at"),
+    url: data.get("url"),
     collection_rationale: data.get("collection_rationale"),
     description: data.get("description"),
     gap_ids: data.getAll("gap_ids").map(String),
@@ -273,6 +274,13 @@ function FileSourceForm({
   return (
     <form onSubmit={submit} className="space-y-4">
       <SourceMetadataFields />
+      <label className="block text-sm text-stone-300">
+        Orijinal Kaynak URL'si
+        <input className="field mt-1" name="url" type="url" maxLength={2048} placeholder="https://... (isteğe bağlı)" />
+        <span className="mt-1 block text-xs text-stone-600">
+          Dosyayı internetten indirdiyseniz yayımlandığı özgün adresi provenance için saklayın.
+        </span>
+      </label>
       <label className="block text-sm text-stone-300">
         Dosya
         <input className="field mt-1" name="file" type="file" required />

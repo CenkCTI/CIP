@@ -14,7 +14,8 @@
     "ai:smoke": "node scripts/ai-smoke.mjs",
     "guest:cleanup": "node scripts/guest-cleanup.mjs",
     "techint:collector": "node scripts/techint-collector.mjs",
-    "node2g:shadow-export": "node scripts/node2g-shadow-export-current.mjs"
+    "node2g:shadow-export": "node scripts/node2g-shadow-export-current.mjs",
+    "postinstall": "node scripts/copy-pdfjs-assets.mjs"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",
@@ -38,7 +39,9 @@
     "server-only": "^0.0.1",
     "tailwindcss": "latest",
     "undici": "^7.29.0",
-    "zod": "^4.2.1"
+    "zod": "^4.2.1",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^5.4.296"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",

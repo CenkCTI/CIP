@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   collectionRequirementSchema,
   sourceAnnotationCreateSchema,
+  sourceAnnotationCreateV2Schema,
   sourceFileDraftSchema,
   sourceUrlCreateSchema,
 } from "@/lib/collection/schema";
@@ -98,6 +99,32 @@ describe("Investigation Collection Stage 2 schemas", () => {
       requirement_ids: [req],
     });
     expect(parsed.success).toBe(true);
+  });
+
+  it("accepts PDF-space multi-line text annotation fragments", () => {
+    const parsed = sourceAnnotationCreateV2Schema.safeParse({
+      source_id: source, asset_id: asset, annotation_type: "HIGHLIGHT", anchor_kind: "TEXT",
+      selected_text: "APT28 targeted diplomatic organisations.", comment: "Hedefleme için ilgili pasaj.",
+      fragments: [{ page_number: 7, page_width: 612, page_height: 792, page_rotation: 0,
+        selected_text: "APT28 targeted diplomatic organisations.",
+        quads: [
+          { x1:72,y1:700,x2:260,y2:700,x3:260,y3:686,x4:72,y4:686 },
+          { x1:72,y1:682,x2:190,y2:682,x3:190,y3:668,x4:72,y4:668 },
+        ] }],
+      gap_ids: [gap], requirement_ids: [req],
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("rejects a text annotation without selected text", () => {
+    const parsed = sourceAnnotationCreateV2Schema.safeParse({
+      source_id: source, asset_id: asset, annotation_type: "UNDERLINE", anchor_kind: "TEXT",
+      selected_text: null, comment: "No selection",
+      fragments: [{ page_number:1,page_width:612,page_height:792,page_rotation:0,
+        quads:[{x1:1,y1:2,x2:3,y2:2,x3:3,y3:1,x4:1,y4:1}] }],
+      gap_ids: [], requirement_ids: [],
+    });
+    expect(parsed.success).toBe(false);
   });
 
   it("rejects annotation rectangles outside normalized page bounds", () => {

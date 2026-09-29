@@ -106,17 +106,29 @@ annotation never modifies the Source file.
 Annotation rectangles use normalized page coordinates from 0 to 1 rather than display
 pixels so the stored geometry is independent from the analyst's screen resolution.
 
-### PDF annotation limitation in v1
+### Native PDF Reader v2
 
-The current PDF viewer deliberately uses the browser's native PDF renderer and a CİTEM
-overlay rather than introducing a new PDF-processing dependency in this stacked PR.
-Region annotations are therefore analyst-drawn overlays and are not yet bound to a
-PDF text layer. Exact text-selection highlighting and deterministic burn-in of
-annotations across every original PDF page should move to a dedicated document
-processing worker in a later hardening iteration.
+Stage 2.1 replaces the browser-native PDF iframe with a CİTEM-owned PDF.js reader.
+PDF pages are rendered from immutable Source bytes with a selectable text layer and a
+separate CİTEM annotation layer. New text annotations are stored in PDF user-space
+coordinates, so zoom level, browser size and display density do not define provenance.
 
-This limitation does not affect original-file immutability, Source provenance, or the
-Gap/Requirement traceability model.
+The v2 anchor model keeps logical annotations separate from page fragments. A single
+annotation may contain multiple line quads and may cross page boundaries. TEXT
+annotations retain selected text; REGION annotations remain available for diagrams,
+tables, scans and other non-text material.
+
+Legacy v1 screen-overlay annotations are explicitly marked `LEGACY_SCREEN` and are
+not silently converted to PDF coordinates.
+
+Deterministic PDF export creates a derived working copy: CİTEM front matter is real
+PDF pages, v2 annotations are burned into copied original pages, and all pages are
+merged into one PDF. The original Source and SHA-256 remain unchanged. The derived
+export receives its own asset identity, SHA-256 and audit event. Browser printing is
+not the authoritative PDF export path.
+
+Scanned PDFs without a usable text layer remain annotatable with REGION anchors. OCR
+is deliberately outside Stage 2.1.
 
 ## Collection packet
 
