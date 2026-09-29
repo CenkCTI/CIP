@@ -106,7 +106,6 @@ export async function burnAnnotationsIntoPdf(
       : [];
 
     for (const quad of quads) {
-      const bounds = quadBounds(quad);
       if (annotation.annotation_type === "HIGHLIGHT") {
         const highlight = quadHighlightLine(quad);
         page.drawLine({

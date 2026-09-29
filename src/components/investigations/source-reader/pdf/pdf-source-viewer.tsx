@@ -65,12 +65,12 @@ function PdfPage({
   const [pdfPage,setPdfPage]=useState<PdfPageLike|null>(null);
   const viewportRef=useRef<PdfViewportLike|null>(null);
   const baseViewportRef=useRef<PdfViewportLike|null>(null);
-  const [displayViewport,setDisplayViewport]=useState<PdfViewportLike|null>(null);
-  const [size,setSize]=useState({width:612,height:792});
   const [near,setNear]=useState(pageNumber<=3);
   const [error,setError]=useState("");
   const [regionStart,setRegionStart]=useState<{x:number;y:number}|null>(null);
   const [regionBox,setRegionBox]=useState<{left:number;top:number;width:number;height:number}|null>(null);
+  const displayViewport=useMemo(()=>pdfPage?pdfPage.getViewport({scale}):null,[pdfPage,scale]);
+  const size=displayViewport?{width:displayViewport.width,height:displayViewport.height}:{width:612,height:792};
 
   useEffect(()=>{
     const node=shellRef.current;
@@ -81,32 +81,23 @@ function PdfPage({
   },[]);
 
   useEffect(()=>{
-    if(!near){
-      setPdfPage(null);
-      setDisplayViewport(null);
-      viewportRef.current=null;
-      return;
-    }
+    if(!near)return;
     let cancelled=false;
-    setError("");
     pdf.getPage(pageNumber).then((page)=>{
       if(cancelled)return;
-      setPdfPage(page);
       baseViewportRef.current=page.getViewport({scale:1});
+      setPdfPage(page);
     }).catch(()=>!cancelled&&setError("PDF sayfası hazırlanamadı."));
     return()=>{cancelled=true;};
   },[pdf,pageNumber,near]);
 
   useEffect(()=>{
-    if(!pdfPage)return;
-    const viewport=pdfPage.getViewport({scale});
+    if(!pdfPage||!displayViewport)return;
     const base=baseViewportRef.current??pdfPage.getViewport({scale:1});
-    viewportRef.current=viewport;
+    viewportRef.current=displayViewport;
     baseViewportRef.current=base;
-    setDisplayViewport(viewport);
-    setSize({width:viewport.width,height:viewport.height});
-    onViewport(pageNumber,viewport,base);
-  },[pdfPage,pageNumber,scale,onViewport]);
+    onViewport(pageNumber,displayViewport,base);
+  },[pdfPage,displayViewport,pageNumber,onViewport]);
 
   useEffect(()=>{
     if(!near||!pdfPage||!displayViewport||!canvasRef.current||!textRef.current)return;

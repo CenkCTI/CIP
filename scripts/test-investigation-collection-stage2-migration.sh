@@ -47,7 +47,7 @@ create function storage.filename(name text)returns text language sql immutable a
 $$;
 SQL
 
-find "$ROOT/supabase/migrations" -maxdepth 1 -name '*.sql'   ! -name '202609110053_investigation_direction_stage1.sql'   ! -name '202609230054_investigation_collection_stage2.sql'   ! -name '202609290055_source_reader_pdf_v2.sql'   | sort | while read -r migration; do
+find "$ROOT/supabase/migrations" -maxdepth 1 -name '*.sql'   ! -name '202609110053_investigation_direction_stage1.sql'   ! -name '202609230054_investigation_collection_stage2.sql'   ! -name '202609290055_source_reader_pdf_v2.sql'   ! -name '202609290056_source_reader_pdf_v2_hardening.sql'   | sort | while read -r migration; do
     printf "\\i '%s'\n" "$migration"
   done > "$PRE_SQL"
 "${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" -f "$PRE_SQL" >/dev/null
