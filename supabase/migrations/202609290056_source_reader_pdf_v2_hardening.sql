@@ -51,6 +51,9 @@ alter table public.source_annotations
     unique(project_id, source_id, asset_id, id);
 
 alter table public.source_annotation_fragments
+  drop constraint if exists source_annotation_fragments_page_rotation_check,
+  add constraint source_annotation_fragments_page_rotation_check
+    check(page_rotation in (0, 90, 180, 270)),
   add constraint source_annotation_fragments_anchor_kind_check
     check(anchor_kind in ('TEXT', 'REGION')),
   add constraint source_annotation_fragments_annotation_scope_fk
