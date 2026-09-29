@@ -533,7 +533,7 @@ export function SourceReaderWorkspace({
         source_id: s(source.id),
         asset_id: s(asset.id),
         annotation_type: mode,
-        page_number: s(asset.mime_type) === "application/pdf" ? page : 1,
+        page_number: 1,
         rects: [draftRect],
         selected_text: null,
         comment,
