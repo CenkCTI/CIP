@@ -9,6 +9,34 @@ alter table public.source_assets
       or (asset_role = 'ANNOTATED_EXPORT' and derived_from_asset_id is not null)
     );
 
+alter table public.source_assets
+  drop constraint if exists source_assets_size_bytes_check,
+  add constraint source_assets_size_bytes_check
+    check (
+      size_bytes is null
+      or (
+        size_bytes >= 0
+        and (
+          (asset_role = 'ORIGINAL' and size_bytes <= 52428800)
+          or (asset_role <> 'ORIGINAL' and size_bytes <= 104857600)
+        )
+      )
+    ),
+  add constraint source_assets_derived_same_source_fk
+    foreign key(project_id, source_id, derived_from_asset_id)
+    references public.source_assets(project_id, source_id, id)
+    on delete restrict;
+
+alter table public.source_export_events
+  add constraint source_export_events_original_asset_scope_fk
+    foreign key(project_id, source_id, asset_id)
+    references public.source_assets(project_id, source_id, id)
+    on delete restrict,
+  add constraint source_export_events_export_asset_scope_fk
+    foreign key(project_id, source_id, export_asset_id)
+    references public.source_assets(project_id, source_id, id)
+    on delete restrict;
+
 alter table public.source_annotations
   drop constraint if exists source_annotations_geometry_anchor_check,
   add constraint source_annotations_geometry_anchor_check
