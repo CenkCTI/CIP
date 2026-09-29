@@ -40,22 +40,22 @@ insert into public.source_assets(id,project_id,source_id,asset_role,state,origin
 end$$;
 grant usage on schema public to authenticated;grant select,insert,update,delete on public.projects,public.sources,public.source_assets,public.source_annotations,public.investigation_information_gaps,public.collection_requirements to authenticated;grant select,insert,delete on public.source_annotation_fragments,public.source_annotation_gap_links,public.source_annotation_requirement_links to authenticated;
 set role authenticated;select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
-do $declare a uuid;begin
+do $$declare a uuid;begin
 a:=public.record_source_annotation_v2('40000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000001','UNDERLINE','TEXT','APT28 targeted a diplomatic entity.','Relevant','[{"page_number":2,"page_width":612,"page_height":792,"page_rotation":0,"selected_text":"APT28 targeted a diplomatic entity.","quads":[{"x1":72,"y1":700,"x2":280,"y2":700,"x3":280,"y3":684,"x4":72,"y4":684}]}]'::jsonb,array['30000000-0000-4000-8000-000000000001']::uuid[],'{}'::uuid[]);
 if not exists(select 1 from public.source_annotations where id=a and geometry_version=2 and anchor_kind='TEXT')then raise exception 'v2 annotation';end if;
 if not exists(select 1 from public.source_annotation_fragments where annotation_id=a and anchor_kind='TEXT')then raise exception 'v2 fragment';end if;
 perform public.update_source_annotation_context_v2('40000000-0000-4000-8000-000000000001',a,'Updated analyst note',array['30000000-0000-4000-8000-000000000001']::uuid[],'{}'::uuid[]);
 if (select comment from public.source_annotations where id=a)<>'Updated analyst note' then raise exception 'atomic annotation update';end if;
 if not exists(select 1 from public.source_annotation_gap_links where annotation_id=a and gap_id='30000000-0000-4000-8000-000000000001')then raise exception 'atomic annotation gap link';end if;
-end$;
-do $begin
+end$$;
+do $$begin
 begin
   insert into public.source_assets(id,project_id,source_id,asset_role,state,original_filename,mime_type,size_bytes,sha256,storage_path,created_by,ready_at)
   values('71000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001','ANNOTATED_EXPORT','READY','orphan.pdf','application/pdf',10,repeat('c',64),'10000000-0000-4000-8000-000000000001/20000000-0000-4000-8000-000000000001/40000000-0000-4000-8000-000000000001/71000000-0000-4000-8000-000000000001.pdf','10000000-0000-4000-8000-000000000001',now());
   raise exception 'orphan export unexpectedly accepted';
 exception when check_violation then null;
 end;
-end$;
+end$$;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000002',false);do $$begin if exists(select 1 from public.source_annotation_fragments where project_id='20000000-0000-4000-8000-000000000001')then raise exception 'RLS';end if;end$$;reset role;
 SQL
 echo 'Source Reader PDF v2 migration acceptance passed.'
