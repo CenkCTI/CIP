@@ -114,7 +114,6 @@ export default async function Page({
     .eq("id", id)
     .single<Project>();
   if (error || !project) notFound();
-  const mk = (t: string) => `/projects/${id}?tab=${t}`;
   if (tab === "infrastructure") {
     const { data: clusters, error: clusterError } = await supabase
       .from("infrastructure_clusters")
