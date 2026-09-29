@@ -176,7 +176,7 @@ export const pdfAnnotationFragmentSchema = z.object({
   page_number: z.number().int().min(1),
   page_width: z.number().finite().positive().max(100000),
   page_height: z.number().finite().positive().max(100000),
-  page_rotation: z.number().int().min(0).max(359).default(0),
+  page_rotation: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]).default(0),
   quads: z.array(pdfQuadSchema).min(1).max(500),
   selected_text: optionalText(20000),
 }).strict();
@@ -200,6 +200,14 @@ export const sourceAnnotationCreateV2Schema = z.object({
   }
   if (value.anchor_kind === "REGION" && value.annotation_type !== "REGION") {
     ctx.addIssue({ code: "custom", message: "Bölge işaretlemesi REGION türünde olmalıdır." });
+  }
+  const totalQuads = value.fragments.reduce((sum, fragment) => sum + fragment.quads.length, 0);
+  if (totalQuads > 500) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Bir işaretleme toplamda en fazla 500 PDF quad içerebilir.",
+      path: ["fragments"],
+    });
   }
 });
 
