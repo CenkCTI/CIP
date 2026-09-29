@@ -48,7 +48,13 @@ if not exists(select 1 from public.source_annotation_fragments where annotation_
 perform public.update_source_annotation_context_v2('40000000-0000-4000-8000-000000000001',a,'Updated analyst note',array['30000000-0000-4000-8000-000000000001']::uuid[],'{}'::uuid[]);
 if (select comment from public.source_annotations where id=a)<>'Updated analyst note' then raise exception 'atomic annotation update';end if;
 if not exists(select 1 from public.source_annotation_gap_links where annotation_id=a and gap_id='30000000-0000-4000-8000-000000000001')then raise exception 'atomic annotation gap link';end if;
-end$$;
+begin
+  insert into public.source_annotation_fragments(project_id,source_id,asset_id,annotation_id,page_number,anchor_kind,quads,page_width,page_height,page_rotation,created_by)
+  values('20000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000001',a,3,'TEXT','[{"x1":1,"y1":2,"x2":3,"y2":2,"x3":3,"y3":1,"x4":1,"y4":1}]'::jsonb,612,792,45,'10000000-0000-4000-8000-000000000001');
+  raise exception 'non-quarter-turn rotation unexpectedly accepted';
+exception when check_violation then null;
+end;
+end$;
 do $begin
 begin
   insert into public.source_assets(id,project_id,source_id,asset_role,state,original_filename,mime_type,size_bytes,sha256,storage_path,created_by,ready_at)
