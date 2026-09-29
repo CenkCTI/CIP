@@ -617,27 +617,27 @@ export async function updateSourceAnnotationContext(
     const annotation = idSchema.safeParse(annotationId);
     const parsed = sourceAnnotationUpdateSchema.safeParse(input);
     if (!source.success || !annotation.success || !parsed.success) {
-      return { error: "Geçersiz annotation güncellemesi." };
+      return { error: "Geçersiz işaretleme güncellemesi." };
     }
+
     const context = await requireOwnedProject(projectId);
-    const { data, error } = await context.supabase
-      .from("source_annotations")
-      .update({ comment: parsed.data.comment })
-      .eq("project_id", context.projectId)
-      .eq("source_id", source.data)
-      .eq("id", annotation.data)
-      .select("id")
-      .single();
-    if (error || !data) return { error: "Annotation bulunamadı." };
-    const linked = await replaceAnnotationLinks(
-      context,
-      annotation.data,
-      parsed.data.gap_ids,
-      parsed.data.requirement_ids,
+    const { data, error } = await context.supabase.rpc(
+      "update_source_annotation_context_v2",
+      {
+        p_source_id: source.data,
+        p_annotation_id: annotation.data,
+        p_comment: parsed.data.comment,
+        p_gap_ids: parsed.data.gap_ids,
+        p_requirement_ids: parsed.data.requirement_ids,
+      },
     );
-    if (linked.error) return linked;
+
+    if (error || !data) {
+      return { error: "İşaretleme notu veya bağlam bağlantıları güncellenemedi." };
+    }
+
     refresh(context.projectId, source.data);
-    return { success: "Annotation context'i güncellendi." };
+    return { success: "İşaretleme notu ve bağlam bağlantıları güncellendi." };
   } catch {
     return { error: "Investigation bulunamadı." };
   }
