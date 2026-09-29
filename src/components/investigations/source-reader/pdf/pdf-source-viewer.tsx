@@ -103,7 +103,7 @@ function PdfPage({
     canvas.style.width=`${viewport.width}px`;canvas.style.height=`${viewport.height}px`;
     textLayer.replaceChildren();
     textLayer.style.width=`${viewport.width}px`;textLayer.style.height=`${viewport.height}px`;
-    textLayer.style.setProperty("--scale-factor",String(viewport.scale));
+    textLayer.style.setProperty("--total-scale-factor",String(viewport.scale));
     const renderTask=page.render({canvas,viewport,transform:ratio===1?undefined:[ratio,0,0,ratio,0,0]});
     const layer=new pdfjs.TextLayer({container:textLayer,textContentSource:page.streamTextContent({includeMarkedContent:true}),viewport});
     let stopped=false;
