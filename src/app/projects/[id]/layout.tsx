@@ -18,7 +18,20 @@ export default async function InvestigationLayout({
         className="mx-auto mb-4 flex max-w-6xl flex-wrap items-center gap-2 rounded border border-stone-800/80 bg-black/10 px-3 py-2 text-xs"
         aria-label="Investigation workspace navigation"
       >
-        <span className="citem-label mr-1">Research artefacts</span>
+        <span className="citem-label mr-1">Production</span>
+        <Link
+          className="rounded px-3 py-1.5 text-stone-400 hover:bg-stone-900 hover:text-amber-300"
+          href={`/projects/${id}`}
+        >
+          Direction
+        </Link>
+        <Link
+          className="rounded px-3 py-1.5 text-stone-400 hover:bg-stone-900 hover:text-amber-300"
+          href={`/projects/${id}/collection`}
+        >
+          Collection
+        </Link>
+        <span className="citem-label ml-2 mr-1">Research artefacts</span>
         <Link
           className="rounded px-3 py-1.5 text-stone-400 hover:bg-stone-900 hover:text-amber-300"
           href={`/projects/${id}?tab=evidence&view=evidence`}
@@ -27,7 +40,7 @@ export default async function InvestigationLayout({
         </Link>
         <Link
           className="rounded px-3 py-1.5 text-stone-400 hover:bg-stone-900 hover:text-amber-300"
-          href={`/projects/${id}?tab=evidence&view=sources`}
+          href={`/projects/${id}/sources`}
         >
           Sources
         </Link>

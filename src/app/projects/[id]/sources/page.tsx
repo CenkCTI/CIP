@@ -1,10 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { SourceRegistry } from "@/components/sources/source-registry";
+import { SourceLibrary } from "@/components/investigations/sources/source-library";
 import { requireOwnedProject } from "@/lib/projects/ownership";
 
-type RefRow = { source_id: string | null };
+type CountRow = { source_id: string };
+
+function counts(rows: CountRow[]) {
+  const out: Record<string, number> = {};
+  for (const row of rows) out[row.source_id] = (out[row.source_id] ?? 0) + 1;
+  return out;
+}
 
 export default async function SourcesPage({
   params,
@@ -13,79 +19,107 @@ export default async function SourcesPage({
 }) {
   const { id } = await params;
   const context = await requireOwnedProject(id).catch(() => notFound());
-  const [projectResult, sourcesResult, evidenceResult, observationRefs, enrichmentRefs] =
-    await Promise.all([
-      context.supabase.from("projects").select("id,name").eq("id", id).single(),
-      context.supabase
-        .from("sources")
-        .select("*")
-        .eq("project_id", id)
-        .order("updated_at", { ascending: false })
-        .order("id", { ascending: true }),
-      context.supabase
-        .from("evidence")
-        .select("id,title")
-        .eq("project_id", id)
-        .order("title", { ascending: true }),
-      context.supabase
-        .from("indicator_observations")
-        .select("source_id")
-        .eq("project_id", id)
-        .not("source_id", "is", null),
-      context.supabase
-        .from("enrichment_results")
-        .select("source_id")
-        .eq("project_id", id),
-    ]);
+  const [
+    projectResult,
+    sourcesResult,
+    gapsResult,
+    requirementsResult,
+    sourceGapLinksResult,
+    sourceRequirementLinksResult,
+    assetsResult,
+    notesResult,
+    annotationsResult,
+  ] = await Promise.all([
+    context.supabase.from("projects").select("id,name,research_question").eq("id", id).single(),
+    context.supabase
+      .from("sources")
+      .select("id,title,source_type,publisher,url,published_at,accessed_at,collection_rationale,description,archived_at,updated_at")
+      .eq("project_id", id)
+      .order("updated_at", { ascending: false })
+      .order("id", { ascending: true }),
+    context.supabase
+      .from("investigation_information_gaps")
+      .select("id,description,status")
+      .eq("project_id", id)
+      .order("sort_order", { ascending: true }),
+    context.supabase
+      .from("collection_requirements")
+      .select("id,requirement,status,priority")
+      .eq("project_id", id)
+      .order("sort_order", { ascending: true }),
+    context.supabase
+      .from("source_gap_links")
+      .select("source_id,gap_id")
+      .eq("project_id", id),
+    context.supabase
+      .from("source_requirement_links")
+      .select("source_id,requirement_id")
+      .eq("project_id", id),
+    context.supabase
+      .from("source_assets")
+      .select("source_id")
+      .eq("project_id", id)
+      .eq("state", "READY"),
+    context.supabase.from("source_notes").select("source_id").eq("project_id", id),
+    context.supabase.from("source_annotations").select("source_id").eq("project_id", id),
+  ]);
+
+  const evidenceResult = await context.supabase
+    .from("evidence")
+    .select("id,title")
+    .eq("project_id", id)
+    .order("title", { ascending: true });
 
   if (projectResult.error || !projectResult.data) notFound();
-  if (
-    sourcesResult.error ||
-    evidenceResult.error ||
-    observationRefs.error ||
-    enrichmentRefs.error
-  ) {
+  const failed = [
+    sourcesResult,
+    evidenceResult,
+    gapsResult,
+    requirementsResult,
+    sourceGapLinksResult,
+    sourceRequirementLinksResult,
+    assetsResult,
+    notesResult,
+    annotationsResult,
+  ].some((result) => result.error);
+  if (failed) {
     return (
       <section className="mx-auto max-w-6xl">
         <div className="card text-red-300">
-          Source Registry could not be loaded. Confirm migration 017 is applied and
-          reload the Supabase API schema cache.
+          Source workspace yüklenemedi. Stage 2 migration 054'ün uygulanmış
+          olduğunu doğrulayın.
         </div>
       </section>
     );
   }
 
-  const counts: Record<string, { observations: number; enrichments: number }> = {};
-  const ensure = (sourceId: string) =>
-    (counts[sourceId] ??= { observations: 0, enrichments: 0 });
-  for (const row of (observationRefs.data ?? []) as RefRow[]) {
-    if (row.source_id) ensure(row.source_id).observations += 1;
-  }
-  for (const row of (enrichmentRefs.data ?? []) as RefRow[]) {
-    if (row.source_id) ensure(row.source_id).enrichments += 1;
-  }
-
   return (
-    <section className="mx-auto max-w-6xl space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <section className="mx-auto max-w-7xl space-y-5">
+      <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="citem-label">Investigation / Sources</p>
           <h1 className="mt-2 text-3xl font-semibold text-stone-100">
             {projectResult.data.name}
           </h1>
+          <p className="mt-2 max-w-3xl text-sm text-stone-500">
+            Kaynağın neden toplandığını, hangi gap/requirement'a hizmet ettiğini ve
+            analyst çalışma izlerini kaybetmeden saklayın.
+          </p>
         </div>
-        <Link className="citem-button-ghost" href={`/projects/${id}?tab=evidence`}>
-          Back to Evidence
+        <Link className="citem-button-ghost" href={`/projects/${id}/collection`}>
+          ← Collection
         </Link>
-      </div>
-      <SourceRegistry
+      </header>
+      <SourceLibrary
         projectId={id}
-        sources={(sourcesResult.data ?? []) as Record<string, unknown>[]}
-        evidence={(evidenceResult.data ?? []).map((item) => ({
-          id: item.id,
-          title: item.title,
-        }))}
-        referenceCounts={counts}
+        sources={sourcesResult.data ?? []}
+        gaps={gapsResult.data ?? []}
+        requirements={requirementsResult.data ?? []}
+        sourceGapLinks={sourceGapLinksResult.data ?? []}
+        sourceRequirementLinks={sourceRequirementLinksResult.data ?? []}
+        assetCounts={counts((assetsResult.data ?? []) as CountRow[])}
+        noteCounts={counts((notesResult.data ?? []) as CountRow[])}
+        annotationCounts={counts((annotationsResult.data ?? []) as CountRow[])}
       />
     </section>
   );

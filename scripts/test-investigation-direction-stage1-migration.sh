@@ -40,8 +40,12 @@ create function storage.foldername(name text)returns text[] language sql immutab
 create function storage.filename(name text)returns text language sql immutable as $$select(string_to_array(name,'/'))[array_length(string_to_array(name,'/'),1)]$$;
 SQL
 
-find "$ROOT/supabase/migrations" -maxdepth 1 -name '*.sql' ! -name '202609110053_investigation_direction_stage1.sql' | sort | while read -r migration; do
-  printf "\\i '%s'\n" "$migration"
+# Validate Stage 1 against the database immediately before migration 053.
+# Downstream Stage 2+ migrations must never be applied before the migration under test.
+find "$ROOT/supabase/migrations" -maxdepth 1 -name '*.sql' | sort | while read -r migration; do
+  if [[ "$(basename "$migration")" < "202609110053_investigation_direction_stage1.sql" ]]; then
+    printf "\\i '%s'\n" "$migration"
+  fi
 done > "$PRE_SQL"
 "${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" -f "$PRE_SQL" >/dev/null
 
