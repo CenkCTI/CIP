@@ -5,8 +5,8 @@ alter table public.source_assets
   add constraint source_assets_derivation_v2_check
     check (
       (asset_role = 'ORIGINAL' and derived_from_asset_id is null)
-      or
-      (asset_role in ('DERIVED_PREVIEW', 'ANNOTATED_EXPORT') and derived_from_asset_id is not null)
+      or asset_role = 'DERIVED_PREVIEW'
+      or (asset_role = 'ANNOTATED_EXPORT' and derived_from_asset_id is not null)
     );
 
 alter table public.source_annotations
