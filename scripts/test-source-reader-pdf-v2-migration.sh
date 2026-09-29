@@ -22,11 +22,12 @@ find "$ROOT/supabase/migrations" -maxdepth 1 -name '*.sql' ! -name '202609110053
 insert into auth.users(id)values('10000000-0000-4000-8000-000000000001'),('10000000-0000-4000-8000-000000000002');
 insert into public.projects(id,owner_id,name,research_type,priority)values('20000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','One','CTI','MEDIUM'),('20000000-0000-4000-8000-000000000002','10000000-0000-4000-8000-000000000002','Two','CTI','MEDIUM');
 insert into public.investigation_information_gaps(id,project_id,description,created_by)values('30000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','One gap','10000000-0000-4000-8000-000000000001'),('30000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000002','Two gap','10000000-0000-4000-8000-000000000002');
-insert into public.sources(id,project_id,title,source_type,created_by)values('40000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','One PDF','TECHNICAL_REPORT','10000000-0000-4000-8000-000000000001'),('40000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000002','Two PDF','TECHNICAL_REPORT','10000000-0000-4000-8000-000000000002');
+insert into public.sources(id,project_id,title,source_type,created_by)values('40000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','One PDF','TECHNICAL_REPORT','10000000-0000-4000-8000-000000000001'),('40000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000002','Two PDF','TECHNICAL_REPORT','10000000-0000-4000-8000-000000000002'),('40000000-0000-4000-8000-000000000003','20000000-0000-4000-8000-000000000001','Other owned PDF','TECHNICAL_REPORT','10000000-0000-4000-8000-000000000001');
 SQL
 "${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" -f "$ROOT/supabase/migrations/202609230054_investigation_collection_stage2.sql" >/dev/null
 "${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" <<'SQL' >/dev/null
 insert into public.source_assets(id,project_id,source_id,asset_role,state,original_filename,mime_type,size_bytes,sha256,storage_path,created_by,ready_at)values('50000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001','ORIGINAL','READY','source.pdf','application/pdf',1024,repeat('a',64),'10000000-0000-4000-8000-000000000001/20000000-0000-4000-8000-000000000001/40000000-0000-4000-8000-000000000001/50000000-0000-4000-8000-000000000001.pdf','10000000-0000-4000-8000-000000000001',now());
+insert into public.source_assets(id,project_id,source_id,asset_role,state,original_filename,mime_type,size_bytes,sha256,storage_path,created_by,ready_at)values('50000000-0000-4000-8000-000000000003','20000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000003','ORIGINAL','READY','other.pdf','application/pdf',1024,repeat('d',64),'10000000-0000-4000-8000-000000000001/20000000-0000-4000-8000-000000000001/40000000-0000-4000-8000-000000000003/50000000-0000-4000-8000-000000000003.pdf','10000000-0000-4000-8000-000000000001',now());
 insert into public.source_annotations(id,project_id,source_id,asset_id,annotation_type,page_number,rects,comment,created_by)values('60000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000001','HIGHLIGHT',1,'[{"x":0.1,"y":0.1,"width":0.2,"height":0.03}]','Legacy','10000000-0000-4000-8000-000000000001');
 SQL
 "${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" -f "$ROOT/supabase/migrations/202609290055_source_reader_pdf_v2.sql" >/dev/null
@@ -48,14 +49,28 @@ perform public.update_source_annotation_context_v2('40000000-0000-4000-8000-0000
 if (select comment from public.source_annotations where id=a)<>'Updated analyst note' then raise exception 'atomic annotation update';end if;
 if not exists(select 1 from public.source_annotation_gap_links where annotation_id=a and gap_id='30000000-0000-4000-8000-000000000001')then raise exception 'atomic annotation gap link';end if;
 end$$;
-do $$begin
+do $begin
 begin
   insert into public.source_assets(id,project_id,source_id,asset_role,state,original_filename,mime_type,size_bytes,sha256,storage_path,created_by,ready_at)
   values('71000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001','ANNOTATED_EXPORT','READY','orphan.pdf','application/pdf',10,repeat('c',64),'10000000-0000-4000-8000-000000000001/20000000-0000-4000-8000-000000000001/40000000-0000-4000-8000-000000000001/71000000-0000-4000-8000-000000000001.pdf','10000000-0000-4000-8000-000000000001',now());
   raise exception 'orphan export unexpectedly accepted';
 exception when check_violation then null;
 end;
-end$$;
+end$;
+do $begin
+begin
+  insert into public.source_assets(id,project_id,source_id,asset_role,state,original_filename,mime_type,size_bytes,sha256,storage_path,derived_from_asset_id,created_by,ready_at)
+  values('71000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001','ANNOTATED_EXPORT','READY','wrong-parent.pdf','application/pdf',10,repeat('e',64),'10000000-0000-4000-8000-000000000001/20000000-0000-4000-8000-000000000001/40000000-0000-4000-8000-000000000001/71000000-0000-4000-8000-000000000002.pdf','50000000-0000-4000-8000-000000000003','10000000-0000-4000-8000-000000000001',now());
+  raise exception 'cross-source derivation unexpectedly accepted';
+exception when foreign_key_violation then null;
+end;
+begin
+  insert into public.source_assets(id,project_id,source_id,asset_role,state,original_filename,mime_type,size_bytes,sha256,storage_path,created_by,ready_at)
+  values('71000000-0000-4000-8000-000000000003','20000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001','ORIGINAL','READY','too-large.pdf','application/pdf',62914560,repeat('f',64),'10000000-0000-4000-8000-000000000001/20000000-0000-4000-8000-000000000001/40000000-0000-4000-8000-000000000001/71000000-0000-4000-8000-000000000003.pdf','10000000-0000-4000-8000-000000000001',now());
+  raise exception 'oversized original unexpectedly accepted';
+exception when check_violation then null;
+end;
+end$;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000002',false);do $$begin if exists(select 1 from public.source_annotation_fragments where project_id='20000000-0000-4000-8000-000000000001')then raise exception 'RLS';end if;end$$;reset role;
 SQL
 echo 'Source Reader PDF v2 migration acceptance passed.'
