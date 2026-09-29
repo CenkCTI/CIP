@@ -31,6 +31,15 @@ const provenance = {
 };
 
 describe("Node measurement provenance page", () => {
+  it("renders an explicit unknown state when current Node provenance fails", async () => {
+    requireUser.mockResolvedValueOnce({ user: { id: "local-test-user" } });
+    getNodeProvenance.mockRejectedValueOnce(new Error("unavailable"));
+    const Page = (await import("@/app/techint/global/provenance/[revisionId]/page")).default;
+    render(await Page({params:Promise.resolve({revisionId:provenance.revision.id}),searchParams:Promise.resolve({})}));
+    expect(screen.getByRole("status")).toHaveTextContent("DEGRADED · provenance UNKNOWN");
+    expect(screen.getByRole("status")).not.toHaveTextContent("0");
+  });
+
   it("validates forward-compatible Node semantics and renders Node-returned contract truth", async () => {
     const parsed = provenanceSchema.parse(provenance);
     expect(parsed.measurement.futureMeasurementField).toBe("preserved by passthrough");
