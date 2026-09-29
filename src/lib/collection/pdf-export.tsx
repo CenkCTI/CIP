@@ -27,35 +27,290 @@ type Row = Record<string, unknown>;
 const s = (value: unknown) => String(value ?? "");
 const STABLE_PDF_DATE = new Date("2000-01-01T00:00:00.000Z");
 
+const PDF_COLORS = {
+  background: "#0B0F12",
+  panel: "#11171C",
+  panelRaised: "#151C22",
+  border: "#28323A",
+  borderSoft: "#202930",
+  text: "#F4F1EA",
+  body: "#D5D1C8",
+  muted: "#918B80",
+  mutedBright: "#B5AFA4",
+  accent: "#C58A3A",
+  accentBright: "#E4B66D",
+  accentSoft: "#2B2115",
+  quote: "#10151A",
+};
+
 const styles = StyleSheet.create({
   page: {
-    padding: 38,
-    fontSize: 9.5,
+    paddingTop: 34,
+    paddingBottom: 42,
+    paddingHorizontal: 34,
+    fontSize: 9.2,
     lineHeight: 1.45,
-    color: "#1c1917",
+    color: PDF_COLORS.body,
+    backgroundColor: PDF_COLORS.background,
     fontFamily: CITEM_PDF_FONT_FAMILY,
   },
-  brand: { fontSize: 10, letterSpacing: 3, color: "#9a651f", marginBottom: 18 },
-  title: { fontSize: 24, fontWeight: 700, marginBottom: 8 },
-  subtitle: { fontSize: 11, color: "#57534e", marginBottom: 22 },
-  heading: { fontSize: 12, fontWeight: 700, marginTop: 14, marginBottom: 6, color: "#7c4a12" },
-  box: { borderWidth: 1, borderColor: "#d6d3d1", padding: 10, marginBottom: 9 },
-  label: { fontSize: 7.5, color: "#78716c", textTransform: "uppercase", letterSpacing: 1 },
-  value: { fontSize: 9.5, marginTop: 2 },
-  note: { fontSize: 9, marginBottom: 6 },
-  link: { fontSize: 8, color: "#57534e", marginTop: 3 },
-  disclaimer: { fontSize: 7.5, color: "#78716c", marginTop: 18 },
-  pageNo: { position: "absolute", right: 38, bottom: 22, fontSize: 7, color: "#a8a29e" },
+  brandRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  brand: {
+    fontSize: 8.5,
+    letterSpacing: 2.7,
+    color: PDF_COLORS.accentBright,
+  },
+  documentType: {
+    fontSize: 7,
+    letterSpacing: 1.1,
+    color: PDF_COLORS.muted,
+  },
+  hero: {
+    backgroundColor: PDF_COLORS.panelRaised,
+    borderWidth: 1,
+    borderColor: PDF_COLORS.border,
+    borderLeftWidth: 3,
+    borderLeftColor: PDF_COLORS.accent,
+    borderRadius: 8,
+    paddingTop: 17,
+    paddingBottom: 16,
+    paddingHorizontal: 17,
+    marginBottom: 13,
+  },
+  eyebrow: {
+    fontSize: 7.2,
+    letterSpacing: 1.4,
+    color: PDF_COLORS.accentBright,
+    marginBottom: 7,
+  },
+  title: {
+    fontSize: 23,
+    fontWeight: 700,
+    lineHeight: 1.08,
+    color: PDF_COLORS.text,
+    marginBottom: 7,
+  },
+  subtitle: {
+    fontSize: 9.2,
+    color: PDF_COLORS.mutedBright,
+  },
+  sectionRow: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    marginBottom: 10,
+  },
+  halfLeft: {
+    width: "49%",
+    marginRight: "2%",
+  },
+  halfRight: {
+    width: "49%",
+  },
+  card: {
+    backgroundColor: PDF_COLORS.panel,
+    borderWidth: 1,
+    borderColor: PDF_COLORS.borderSoft,
+    borderRadius: 7,
+    padding: 11,
+    marginBottom: 10,
+  },
+  cardLast: {
+    backgroundColor: PDF_COLORS.panel,
+    borderWidth: 1,
+    borderColor: PDF_COLORS.borderSoft,
+    borderRadius: 7,
+    padding: 11,
+  },
+  cardLabel: {
+    fontSize: 6.8,
+    letterSpacing: 1.15,
+    color: PDF_COLORS.accentBright,
+    marginBottom: 5,
+  },
+  cardTitle: {
+    fontSize: 10.4,
+    fontWeight: 700,
+    color: PDF_COLORS.text,
+    lineHeight: 1.3,
+    marginBottom: 4,
+  },
+  body: {
+    fontSize: 8.8,
+    color: PDF_COLORS.body,
+    lineHeight: 1.45,
+  },
+  bodyMuted: {
+    fontSize: 8.1,
+    color: PDF_COLORS.mutedBright,
+    lineHeight: 1.4,
+  },
+  question: {
+    fontSize: 8.6,
+    color: PDF_COLORS.body,
+    lineHeight: 1.46,
+    paddingTop: 6,
+    marginTop: 5,
+    borderTopWidth: 1,
+    borderTopColor: PDF_COLORS.borderSoft,
+  },
+  listItem: {
+    fontSize: 8.2,
+    color: PDF_COLORS.body,
+    lineHeight: 1.42,
+    marginBottom: 5,
+  },
+  bullet: {
+    color: PDF_COLORS.accentBright,
+  },
+  provenanceRow: {
+    marginBottom: 6,
+  },
+  provenanceLabel: {
+    fontSize: 6.3,
+    letterSpacing: 0.75,
+    color: PDF_COLORS.muted,
+    marginBottom: 1,
+  },
+  provenanceValue: {
+    fontSize: 7.6,
+    color: PDF_COLORS.body,
+    lineHeight: 1.35,
+  },
+  disclaimer: {
+    fontSize: 6.8,
+    color: PDF_COLORS.muted,
+    lineHeight: 1.4,
+    marginTop: 4,
+  },
+  secondPageIntro: {
+    fontSize: 8.7,
+    color: PDF_COLORS.mutedBright,
+    lineHeight: 1.45,
+    marginBottom: 14,
+  },
+  heading: {
+    fontSize: 8,
+    fontWeight: 700,
+    letterSpacing: 1,
+    color: PDF_COLORS.accentBright,
+    marginTop: 4,
+    marginBottom: 7,
+  },
+  noteCard: {
+    backgroundColor: PDF_COLORS.panel,
+    borderWidth: 1,
+    borderColor: PDF_COLORS.borderSoft,
+    borderRadius: 7,
+    padding: 11,
+    marginBottom: 8,
+  },
+  annotationCard: {
+    backgroundColor: PDF_COLORS.panel,
+    borderWidth: 1,
+    borderColor: PDF_COLORS.borderSoft,
+    borderLeftWidth: 3,
+    borderLeftColor: PDF_COLORS.accent,
+    borderRadius: 7,
+    padding: 11,
+    marginBottom: 8,
+  },
+  annotationHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 7,
+  },
+  annotationIndex: {
+    fontSize: 7,
+    letterSpacing: 0.9,
+    color: PDF_COLORS.accentBright,
+  },
+  badge: {
+    fontSize: 6.5,
+    color: PDF_COLORS.accentBright,
+    backgroundColor: PDF_COLORS.accentSoft,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
+  quoteBox: {
+    backgroundColor: PDF_COLORS.quote,
+    borderLeftWidth: 2,
+    borderLeftColor: PDF_COLORS.accent,
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    marginBottom: 7,
+  },
+  quoteLabel: {
+    fontSize: 6.2,
+    letterSpacing: 0.7,
+    color: PDF_COLORS.muted,
+    marginBottom: 3,
+  },
+  quoteText: {
+    fontSize: 8,
+    color: PDF_COLORS.body,
+    lineHeight: 1.45,
+  },
+  analystLabel: {
+    fontSize: 6.2,
+    letterSpacing: 0.7,
+    color: PDF_COLORS.muted,
+    marginBottom: 3,
+  },
+  analystText: {
+    fontSize: 8.2,
+    color: PDF_COLORS.text,
+    lineHeight: 1.45,
+    marginBottom: 7,
+  },
+  linkedContext: {
+    fontSize: 7.3,
+    color: PDF_COLORS.mutedBright,
+    lineHeight: 1.4,
+    marginTop: 3,
+  },
+  legacy: {
+    fontSize: 6.8,
+    color: PDF_COLORS.accentBright,
+    marginTop: 7,
+  },
+  footer: {
+    position: "absolute",
+    left: 34,
+    bottom: 18,
+    fontSize: 6.4,
+    color: PDF_COLORS.muted,
+  },
+  pageNo: {
+    position: "absolute",
+    right: 34,
+    bottom: 18,
+    fontSize: 6.4,
+    color: PDF_COLORS.muted,
+  },
 });
 
 function date(value: unknown) {
-  if (!value) return "Belirtilmedi";
+  if (!value) return "Not specified";
   const parsed = new Date(String(value));
-  return Number.isNaN(parsed.getTime()) ? "Belirtilmedi" : parsed.toISOString().slice(0, 10);
+  return Number.isNaN(parsed.getTime()) ? "Not specified" : parsed.toISOString().slice(0, 10);
 }
 
-function truncate(value: string, max = 450) {
+function truncate(value: string, max = 430) {
   return value.length <= max ? value : `${value.slice(0, max)}…`;
+}
+
+function wrapTechnicalValue(value: unknown, chunk = 42) {
+  const text = s(value);
+  if (!text) return "—";
+  if (text.length <= chunk) return text;
+  return text.match(new RegExp(`.{1,${chunk}}`, "g"))?.join("\n") ?? text;
 }
 
 function safeFilename(title: string) {
@@ -66,15 +321,30 @@ function safeFilename(title: string) {
       .replace(/[^a-zA-Z0-9._-]+/g, "-")
       .replace(/-+/g, "-")
       .replace(/^-|-$/g, "")
-      .slice(0, 90) || "kaynak";
-  return `CITEM_${stem}_isaretli.pdf`;
+      .slice(0, 90) || "source";
+  return `CITEM_${stem}_annotated.pdf`;
 }
 
 function annotationTypeLabel(value: unknown) {
-  if (value === "HIGHLIGHT") return "Vurgulama";
-  if (value === "UNDERLINE") return "Altını çizme";
-  if (value === "REGION") return "Bölge";
+  if (value === "HIGHLIGHT") return "Highlight";
+  if (value === "UNDERLINE") return "Underline";
+  if (value === "REGION") return "Region";
   return s(value);
+}
+
+function sourcePageLabel(annotation: Row, annotationFragments: Row[]) {
+  const pages = [
+    ...new Set(
+      annotationFragments
+        .map((fragment) => Number(fragment.page_number))
+        .filter((page) => Number.isInteger(page) && page > 0),
+    ),
+  ].sort((a, b) => a - b);
+  if (!pages.length) {
+    const fallback = Number(annotation.page_number);
+    return Number.isInteger(fallback) && fallback > 0 ? `Page ${fallback}` : "Page —";
+  }
+  return pages.length === 1 ? `Page ${pages[0]}` : `Pages ${pages.join(", ")}`;
 }
 
 function FrontMatter({
@@ -103,7 +373,9 @@ function FrontMatter({
   const ordered = orderAnnotations(annotations, fragments);
   const fragmentsByAnnotation = new Map<string, Row[]>();
   const gapById = new Map(gaps.map((gap) => [s(gap.id), gap]));
-  const requirementById = new Map(requirements.map((requirement) => [s(requirement.id), requirement]));
+  const requirementById = new Map(
+    requirements.map((requirement) => [s(requirement.id), requirement]),
+  );
   const gapIdsByAnnotation = new Map<string, string[]>();
   const requirementIdsByAnnotation = new Map<string, string[]>();
 
@@ -123,69 +395,133 @@ function FrontMatter({
     ]);
   }
 
+  const publisherLine = `${s(source.publisher) || "Publisher not specified"} · ${date(
+    source.published_at,
+  )}`;
+
   return (
     <Document
-      title={`CİTEM - ${s(source.title)}`}
-      creator="BAYKUSH / CİTEM"
-      producer="BAYKUSH / CİTEM"
+      title={`CITEM - ${s(source.title)}`}
+      creator="BAYKUSH / CITEM"
+      producer="BAYKUSH / CITEM"
       creationDate={STABLE_PDF_DATE}
       modificationDate={STABLE_PDF_DATE}
     >
       <Page size="A4" style={styles.page} wrap>
-        <Text style={styles.brand}>BAYKUSH / CİTEM</Text>
-        <Text style={styles.title}>KAYNAK ÇALIŞMA KOPYASI</Text>
-        <Text style={styles.subtitle}>İşaretli ve izlenebilir analist çalışma çıktısı</Text>
-
-        <View style={styles.box}>
-          <Text style={styles.label}>Araştırma</Text>
-          <Text style={styles.value}>{s(project.name)}</Text>
-          <Text style={styles.value}>{s(project.research_question)}</Text>
+        <View style={styles.brandRow}>
+          <Text style={styles.brand}>BAYKUSH / CITEM</Text>
+          <Text style={styles.documentType}>ANNOTATED SOURCE EXPORT</Text>
         </View>
 
-        <View style={styles.box}>
-          <Text style={styles.label}>Kaynak</Text>
-          <Text style={styles.value}>{s(source.title)}</Text>
-          <Text style={styles.value}>
-            {s(source.publisher) || "Yayıncı belirtilmedi"} · {date(source.published_at)}
+        <View style={styles.hero} wrap={false}>
+          <Text style={styles.eyebrow}>COLLECTION / SOURCE PROVENANCE</Text>
+          <Text style={styles.title}>WORKING SOURCE COPY</Text>
+          <Text style={styles.subtitle}>
+            Traceable analyst research output with immutable-source provenance
           </Text>
         </View>
 
-        <Text style={styles.heading}>Toplama Bağlamı</Text>
-        <Text>{s(source.collection_rationale) || "Toplama nedeni kaydedilmemiş."}</Text>
+        <View style={styles.sectionRow}>
+          <View style={styles.halfLeft}>
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>INVESTIGATION</Text>
+              <Text style={styles.cardTitle}>{s(project.name) || "Untitled investigation"}</Text>
+              <Text style={styles.provenanceLabel}>PRIMARY INTELLIGENCE QUESTION</Text>
+              <Text style={styles.question}>
+                {s(project.research_question) || "No primary intelligence question recorded."}
+              </Text>
+            </View>
 
-        <Text style={styles.heading}>Bilgi Açıkları</Text>
-        {gaps.length ? (
-          gaps.map((gap) => (
-            <Text key={s(gap.id)} style={styles.note}>
-              - {s(gap.description)}
-            </Text>
-          ))
-        ) : (
-          <Text>Bağlı bilgi açığı yok.</Text>
-        )}
+            <View style={styles.cardLast}>
+              <Text style={styles.cardLabel}>SOURCE</Text>
+              <Text style={styles.cardTitle}>{s(source.title) || "Untitled source"}</Text>
+              <Text style={styles.bodyMuted}>{publisherLine}</Text>
+            </View>
+          </View>
 
-        <Text style={styles.heading}>Toplama Gereksinimleri</Text>
-        {requirements.length ? (
-          requirements.map((requirement) => (
-            <Text key={s(requirement.id)} style={styles.note}>
-              - {s(requirement.requirement)}
-            </Text>
-          ))
-        ) : (
-          <Text>Bağlı toplama gereksinimi yok.</Text>
-        )}
+          <View style={styles.halfRight}>
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>COLLECTION CONTEXT</Text>
+              <Text style={styles.body}>
+                {s(source.collection_rationale) || "No collection rationale recorded."}
+              </Text>
+            </View>
 
-        <Text style={styles.heading}>Kaynak Köken Bilgisi</Text>
-        <Text style={styles.note}>Kaynak Kimliği: {s(source.id)}</Text>
-        <Text style={styles.note}>Dosya Kimliği: {s(asset.id)}</Text>
-        <Text style={styles.note}>Orijinal dosya: {s(asset.original_filename)}</Text>
-        <Text style={styles.note}>SHA-256: {s(asset.sha256) || "—"}</Text>
-        <Text style={styles.note}>Orijinal URL: {s(source.url) || "—"}</Text>
+            <View style={styles.cardLast}>
+              <Text style={styles.cardLabel}>SOURCE PROVENANCE</Text>
+
+              <View style={styles.provenanceRow}>
+                <Text style={styles.provenanceLabel}>SOURCE ID</Text>
+                <Text style={styles.provenanceValue}>{wrapTechnicalValue(source.id)}</Text>
+              </View>
+              <View style={styles.provenanceRow}>
+                <Text style={styles.provenanceLabel}>ASSET ID</Text>
+                <Text style={styles.provenanceValue}>{wrapTechnicalValue(asset.id)}</Text>
+              </View>
+              <View style={styles.provenanceRow}>
+                <Text style={styles.provenanceLabel}>ORIGINAL FILE</Text>
+                <Text style={styles.provenanceValue}>
+                  {s(asset.original_filename) || "Not specified"}
+                </Text>
+              </View>
+              <View style={styles.provenanceRow}>
+                <Text style={styles.provenanceLabel}>SHA-256</Text>
+                <Text style={styles.provenanceValue}>
+                  {wrapTechnicalValue(asset.sha256, 32)}
+                </Text>
+              </View>
+              <View>
+                <Text style={styles.provenanceLabel}>ORIGINAL SOURCE URL</Text>
+                <Text style={styles.provenanceValue}>
+                  {wrapTechnicalValue(source.url, 46)}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.sectionRow}>
+          <View style={styles.halfLeft}>
+            <View style={styles.cardLast}>
+              <Text style={styles.cardLabel}>INFORMATION GAPS</Text>
+              {gaps.length ? (
+                gaps.map((gap) => (
+                  <Text key={s(gap.id)} style={styles.listItem}>
+                    <Text style={styles.bullet}>• </Text>
+                    {s(gap.description)}
+                  </Text>
+                ))
+              ) : (
+                <Text style={styles.bodyMuted}>No linked information gaps.</Text>
+              )}
+            </View>
+          </View>
+
+          <View style={styles.halfRight}>
+            <View style={styles.cardLast}>
+              <Text style={styles.cardLabel}>COLLECTION REQUIREMENTS</Text>
+              {requirements.length ? (
+                requirements.map((requirement) => (
+                  <Text key={s(requirement.id)} style={styles.listItem}>
+                    <Text style={styles.bullet}>• </Text>
+                    {s(requirement.requirement)}
+                  </Text>
+                ))
+              ) : (
+                <Text style={styles.bodyMuted}>No linked collection requirements.</Text>
+              )}
+            </View>
+          </View>
+        </View>
 
         <Text style={styles.disclaimer}>
-          Bu belge CİTEM içinde analist tarafından oluşturulan işaretlemeler ve notlar
-          içeren türetilmiş çalışma kopyasıdır. Orijinal kaynak değiştirilmeden ayrıca
-          muhafaza edilmektedir.
+          This file is a derived CITEM analyst working copy. Analyst-created notes and
+          annotations are separate from the source itself. The immutable original source is
+          retained independently and is not overwritten by this export.
+        </Text>
+
+        <Text fixed style={styles.footer}>
+          BAYKUSH / CITEM · WORKING COPY · IMMUTABLE ORIGINAL PRESERVED
         </Text>
         <Text
           fixed
@@ -196,16 +532,26 @@ function FrontMatter({
 
       {notes.length || ordered.length ? (
         <Page size="A4" style={styles.page} wrap>
-          <Text style={styles.brand}>BAYKUSH / CİTEM</Text>
-          <Text style={styles.title}>ANALİST NOTLARI VE İŞARETLEME DİZİNİ</Text>
+          <View style={styles.brandRow}>
+            <Text style={styles.brand}>BAYKUSH / CITEM</Text>
+            <Text style={styles.documentType}>ANALYST WORKING LAYER</Text>
+          </View>
+
+          <View style={styles.hero} wrap={false}>
+            <Text style={styles.eyebrow}>SOURCE REVIEW / ANNOTATION INDEX</Text>
+            <Text style={styles.title}>ANALYST NOTES &amp; ANNOTATION SUMMARY</Text>
+            <Text style={styles.subtitle}>
+              Structured analyst-created context linked back to the immutable source
+            </Text>
+          </View>
 
           {notes.length ? (
             <>
-              <Text style={styles.heading}>Kaynak Notları</Text>
+              <Text style={styles.heading}>SOURCE NOTES</Text>
               {notes.map((note, index) => (
-                <View key={s(note.id)} style={styles.box}>
-                  <Text style={styles.label}>Not {index + 1}</Text>
-                  <Text style={styles.value}>{s(note.body)}</Text>
+                <View key={s(note.id)} style={styles.noteCard} wrap={false}>
+                  <Text style={styles.cardLabel}>SOURCE NOTE {index + 1}</Text>
+                  <Text style={styles.body}>{s(note.body)}</Text>
                 </View>
               ))}
             </>
@@ -213,45 +559,55 @@ function FrontMatter({
 
           {ordered.length ? (
             <>
-              <Text style={styles.heading}>İşaretleme Dizini</Text>
+              <Text style={styles.heading}>ANNOTATION INDEX</Text>
               {ordered.map((annotation, index) => {
                 const annotationId = s(annotation.id);
                 const annotationFragments = fragmentsByAnnotation.get(annotationId) ?? [];
-                const sourcePage = Number(
-                  annotationFragments[0]?.page_number ?? annotation.page_number ?? 0,
-                );
                 const legacy = Number(annotation.geometry_version) !== 2;
                 const linkedGapIds = gapIdsByAnnotation.get(annotationId) ?? [];
                 const linkedRequirementIds = requirementIdsByAnnotation.get(annotationId) ?? [];
+                const pageLabel = sourcePageLabel(annotation, annotationFragments);
 
                 return (
-                  <View key={annotationId} style={styles.box}>
-                    <Text style={styles.label}>
-                      {index + 1}. işaretleme · Kaynak s. {sourcePage || "—"} ·{" "}
-                      {annotationTypeLabel(annotation.annotation_type)}
-                    </Text>
-                    {annotation.selected_text ? (
-                      <Text style={styles.value}>
-                        Seçilen metin: {truncate(s(annotation.selected_text))}
+                  <View key={annotationId} style={styles.annotationCard} wrap={false}>
+                    <View style={styles.annotationHeader}>
+                      <Text style={styles.annotationIndex}>
+                        {String(index + 1).padStart(2, "0")} · {pageLabel.toUpperCase()}
                       </Text>
+                      <Text style={styles.badge}>
+                        {annotationTypeLabel(annotation.annotation_type).toUpperCase()}
+                      </Text>
+                    </View>
+
+                    {annotation.selected_text ? (
+                      <View style={styles.quoteBox}>
+                        <Text style={styles.quoteLabel}>SELECTED SOURCE TEXT</Text>
+                        <Text style={styles.quoteText}>
+                          {truncate(s(annotation.selected_text))}
+                        </Text>
+                      </View>
                     ) : null}
-                    {annotation.comment ? (
-                      <Text style={styles.value}>Analist notu: {s(annotation.comment)}</Text>
-                    ) : null}
+
+                    <Text style={styles.analystLabel}>ANALYST NOTE</Text>
+                    <Text style={styles.analystText}>
+                      {s(annotation.comment) || "No analyst comment recorded."}
+                    </Text>
+
                     {linkedGapIds.map((gapId) => (
-                      <Text key={gapId} style={styles.link}>
-                        Bilgi Açığı: {s(gapById.get(gapId)?.description) || gapId}
+                      <Text key={gapId} style={styles.linkedContext}>
+                        Information Gap: {s(gapById.get(gapId)?.description) || gapId}
                       </Text>
                     ))}
                     {linkedRequirementIds.map((requirementId) => (
-                      <Text key={requirementId} style={styles.link}>
-                        Toplama Gereksinimi:{" "}
+                      <Text key={requirementId} style={styles.linkedContext}>
+                        Collection Requirement:{" "}
                         {s(requirementById.get(requirementId)?.requirement) || requirementId}
                       </Text>
                     ))}
+
                     {legacy ? (
-                      <Text style={styles.disclaimer}>
-                        Eski ekran-koordinatı işaretlemesi: kaynak PDF üzerine işlenmedi.
+                      <Text style={styles.legacy}>
+                        Legacy screen-coordinate annotation: not burned into the source PDF.
                       </Text>
                     ) : null}
                   </View>
@@ -260,6 +616,14 @@ function FrontMatter({
             </>
           ) : null}
 
+          <Text style={styles.secondPageIntro}>
+            Notes and annotations on this page are analyst-created working context. They are
+            not part of the original publication.
+          </Text>
+
+          <Text fixed style={styles.footer}>
+            BAYKUSH / CITEM · ANALYST WORKING LAYER · SOURCE PROVENANCE RETAINED
+          </Text>
           <Text
             fixed
             render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}

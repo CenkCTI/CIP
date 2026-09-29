@@ -11,7 +11,7 @@ const styles = StyleSheet.create({
   page: { fontFamily: CITEM_PDF_FONT_FAMILY },
 });
 
-describe("CİTEM PDF Turkish text", () => {
+describe("CITEM PDF Unicode text", () => {
   it("renders Turkish analyst-facing text without font encoding errors", async () => {
     ensureCitemPdfFonts();
 

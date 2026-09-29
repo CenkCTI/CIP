@@ -44,9 +44,17 @@ saklanabilir.
 ## Deterministik export
 
 Export route ownership doğrular, immutable PDF bytes'ını private Storage'dan okur,
-v2 annotationları kaynak sayfalarına burn-in eder, CİTEM ön sayfalarını gerçek PDF
+v2 annotationları kaynak sayfalarına burn-in eder, CITEM ön sayfalarını gerçek PDF
 olarak üretir, sayfaları tek dosyada birleştirir, export SHA-256/input SHA-256 üretir,
 private Storage'a derived asset olarak yazar ve audit event oluşturur.
+
+Authoritative PDF front matter uses an English-only presentation layer and ASCII
+`BAYKUSH / CITEM` branding. The first pages use the same dark charcoal / amber visual
+language as the analyst workspace and separate Investigation, Source, Collection Context,
+Information Gaps, Collection Requirements and Source Provenance into structured cards.
+The annotation summary uses source-page references, type badges, selected-text excerpts,
+analyst notes and linked collection context. User-entered source titles, questions and
+analyst notes are preserved verbatim; only the export chrome/labels are standardized.
 
 Highlight/underline/region final PDF bytes'ının parçasıdır. Orijinal sayfalar rasterize
 edilmez; metin/vector yapı korunur. Analist yorumları kaynak metni kapatmamak için ön
