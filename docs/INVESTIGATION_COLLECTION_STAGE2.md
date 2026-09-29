@@ -148,10 +148,12 @@ The packet contains, in order:
 The print action records a `source_export_events` audit row before opening the browser
 print dialog.
 
-The packet is analyst working material, not an authoritative Intelligence Product.
-For PDF Sources, browser printing cannot guarantee byte-perfect merging of the embedded
-original PDF and the cover pages. A future document worker can replace this print
-surface with deterministic PDF merge/burn-in while preserving the same data model.
+The legacy print page remains available for non-PDF working material, but PDF Sources
+use the deterministic annotated-PDF export path. The export generator creates real
+front-matter pages, burns v2 PDF-space annotations into copied source pages, merges them
+into one searchable PDF, stores the result as an `ANNOTATED_EXPORT` derived asset,
+computes a new SHA-256 and writes an `ANNOTATED_PDF` audit event. Browser chrome is
+never part of this authoritative working-copy export.
 
 ## Data model
 

@@ -24,6 +24,7 @@ export default async function SourceDetailPage({
     sourceRequirementLinksResult,
     notesResult,
     annotationsResult,
+    annotationFragmentsResult,
     annotationGapLinksResult,
     annotationRequirementLinksResult,
   ] = await Promise.all([
@@ -78,6 +79,13 @@ export default async function SourceDetailPage({
       .order("page_number", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: true }),
     context.supabase
+      .from("source_annotation_fragments")
+      .select("*")
+      .eq("project_id", context.projectId)
+      .eq("source_id", sourceId)
+      .order("page_number", { ascending: true })
+      .order("created_at", { ascending: true }),
+    context.supabase
       .from("source_annotation_gap_links")
       .select("annotation_id,gap_id")
       .eq("project_id", context.projectId),
@@ -120,6 +128,7 @@ export default async function SourceDetailPage({
     sourceRequirementLinksResult,
     notesResult,
     annotationsResult,
+    annotationFragmentsResult,
     annotationGapLinksResult,
     annotationRequirementLinksResult,
   ].some((result) => result.error) || Boolean(legacyReferenceError);
@@ -140,7 +149,7 @@ export default async function SourceDetailPage({
   if (asset?.storage_path) {
     const { data } = await context.supabase.storage
       .from("source-assets")
-      .createSignedUrl(String(asset.storage_path), 15 * 60);
+      .createSignedUrl(String(asset.storage_path), 60 * 60);
     signedUrl = data?.signedUrl ?? null;
   }
 
@@ -162,6 +171,7 @@ export default async function SourceDetailPage({
       )}
       notes={notesResult.data ?? []}
       annotations={annotationsResult.data ?? []}
+      annotationFragments={annotationFragmentsResult.data ?? []}
       annotationGapLinks={(annotationGapLinksResult.data ?? []).filter((link) =>
         annotationIds.has(link.annotation_id),
       )}

@@ -5,6 +5,7 @@ import { useActionState, useEffect, useMemo, useRef, useState, useTransition } f
 import { useRouter } from "next/navigation";
 
 import { extractDocxPlainText, isDocxFile } from "@/lib/collection/docx-preview";
+import { PdfSourceViewer } from "@/components/investigations/source-reader/pdf/pdf-source-viewer";
 
 import {
   createSourceAnnotation,
@@ -191,7 +192,6 @@ function DocumentSurface({
   const [textContent, setTextContent] = useState<string>("");
   const [textError, setTextError] = useState("");
 
-  const isPdf = mime === "application/pdf" || file.endsWith(".pdf");
   const isImage =
     mime.startsWith("image/png") ||
     mime.startsWith("image/jpeg") ||
@@ -226,48 +226,6 @@ function DocumentSurface({
       <div className="flex min-h-[520px] items-center justify-center rounded border border-stone-800 bg-black/20 p-8 text-center text-sm text-stone-500">
         Bu Source için CİTEM içinde görüntülenebilir bir dosya yok. URL kaynağını
         Context panelinden açabilirsiniz.
-      </div>
-    );
-  }
-
-  if (isPdf) {
-    return (
-      <div>
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <button className="citem-button-ghost" type="button" onClick={() => onPage(Math.max(1, page - 1))}>
-            ← Sayfa
-          </button>
-          <label className="text-xs text-stone-500">
-            Sayfa
-            <input
-              className="ml-2 w-20 rounded border border-stone-800 bg-black px-2 py-1 text-stone-200"
-              type="number"
-              min={1}
-              value={page}
-              onChange={(event) => onPage(Math.max(1, Number(event.currentTarget.value) || 1))}
-            />
-          </label>
-          <button className="citem-button-ghost" type="button" onClick={() => onPage(page + 1)}>
-            Sonraki →
-          </button>
-          <span className="text-xs text-stone-600">
-            PDF sayfa sayısı browser viewer tarafından yönetilir; geçersiz sayfa girilirse son sayfa gösterilebilir.
-          </span>
-        </div>
-        <div className="relative h-[72vh] min-h-[620px] overflow-hidden rounded border border-stone-800 bg-stone-950">
-          <iframe
-            key={page}
-            title="Source PDF"
-            className="h-full w-full"
-            src={`${signedUrl}#page=${page}&toolbar=0&navpanes=0&view=FitH`}
-          />
-          <AnnotationOverlay annotations={annotations} page={page} />
-          <RegionCapture active={Boolean(annotationMode)} onRect={onRect} />
-        </div>
-        <p className="mt-2 text-xs text-stone-600">
-          Annotation modu açıkken sayfa üzerinde bir bölge sürükleyin. Orijinal PDF değiştirilmez;
-          işaretler ayrı CİTEM annotation kayıtlarıdır.
-        </p>
       </div>
     );
   }
@@ -348,7 +306,7 @@ function ContextEditor({
         </p>
       </div>
       <fieldset>
-        <legend className="citem-label">Information Gaps</legend>
+        <legend className="citem-label">Bilgi Açıkları</legend>
         <div className="mt-2 max-h-44 space-y-2 overflow-auto">
           {gaps.map((gap) => {
             const id = s(gap.id);
@@ -366,7 +324,7 @@ function ContextEditor({
         </div>
       </fieldset>
       <fieldset>
-        <legend className="citem-label">Collection Requirements</legend>
+        <legend className="citem-label">Toplama Gereksinimleri</legend>
         <div className="mt-2 max-h-44 space-y-2 overflow-auto">
           {requirements.map((requirement) => {
             const id = s(requirement.id);
@@ -399,7 +357,7 @@ function ContextEditor({
           })
         }
       >
-        {pending ? "Kaydediliyor…" : "Collection context'i kaydet"}
+        {pending ? "Kaydediliyor…" : "Toplama bağlamını kaydet"}
       </button>
       {message.error ? <p className="text-xs text-red-300">{message.error}</p> : null}
       {message.success ? <p className="text-xs text-emerald-300">{message.success}</p> : null}
@@ -465,6 +423,49 @@ function SourceNotes({
   );
 }
 
+function AnnotatedPdfDownloadButton({ projectId, sourceId }: { projectId: string; sourceId: string }) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  return (
+    <div>
+      <button
+        className="citem-button"
+        type="button"
+        disabled={pending}
+        onClick={async () => {
+          setPending(true);
+          setError("");
+          try {
+            const response = await fetch(`/api/projects/${projectId}/sources/${sourceId}/exports/annotated-pdf`, { method: "POST" });
+            if (!response.ok) {
+              const body = (await response.json().catch(() => ({}))) as { error?: string };
+              throw new Error(body.error || "İşaretli PDF üretilemedi.");
+            }
+            const blob = await response.blob();
+            const disposition = response.headers.get("Content-Disposition") || "";
+            const match = disposition.match(/filename="([^"]+)"/);
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = match?.[1] || "CITEM_isaretli_kaynak.pdf";
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            URL.revokeObjectURL(url);
+          } catch (cause) {
+            setError(cause instanceof Error ? cause.message : "İşaretli PDF üretilemedi.");
+          } finally {
+            setPending(false);
+          }
+        }}
+      >
+        {pending ? "PDF hazırlanıyor…" : "İşaretli PDF'yi indir"}
+      </button>
+      {error ? <p className="mt-1 max-w-64 text-xs text-red-300">{error}</p> : null}
+    </div>
+  );
+}
+
 export function SourceReaderWorkspace({
   projectId,
   source,
@@ -476,6 +477,7 @@ export function SourceReaderWorkspace({
   sourceRequirementIds,
   notes,
   annotations,
+  annotationFragments,
   annotationGapLinks,
   annotationRequirementLinks,
 }: {
@@ -489,10 +491,14 @@ export function SourceReaderWorkspace({
   sourceRequirementIds: string[];
   notes: Row[];
   annotations: Row[];
+  annotationFragments: Row[];
   annotationGapLinks: Row[];
   annotationRequirementLinks: Row[];
 }) {
   const router = useRouter();
+  const isPdf =
+    s(asset?.mime_type).toLowerCase() === "application/pdf" ||
+    s(asset?.original_filename).toLowerCase().endsWith(".pdf");
   const [page, setPage] = useState(1);
   const [mode, setMode] = useState<"HIGHLIGHT" | "UNDERLINE" | "REGION" | null>(null);
   const [draftRect, setDraftRect] = useState<Rect | null>(null);
@@ -554,9 +560,9 @@ export function SourceReaderWorkspace({
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <Link className="text-sm text-amber-300" href={`/projects/${projectId}/sources`}>
-            ← Sources
+            ← Kaynaklar
           </Link>
-          <p className="citem-label mt-3">Source Reader</p>
+          <p className="citem-label mt-3">Kaynak Okuyucu</p>
           <h1 className="mt-1 text-2xl font-semibold text-stone-100">{s(source.title)}</h1>
           <p className="mt-1 text-sm text-stone-500">
             {s(source.publisher) || "Yayıncı belirtilmedi"} · {s(source.source_type)}
@@ -572,19 +578,13 @@ export function SourceReaderWorkspace({
               Kaynak URL'si
             </a>
           ) : null}
-          <Link
-            className="citem-button"
-            href={`/projects/${projectId}/sources/${s(source.id)}/print`}
-            target="_blank"
-          >
-            Collection packet
-          </Link>
+          {isPdf && asset ? <AnnotatedPdfDownloadButton projectId={projectId} sourceId={s(source.id)} /> : null}
         </div>
       </header>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <main className="card min-w-0">
-          {asset ? (
+          {asset && !isPdf ? (
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="citem-label">Annotation</p>
@@ -610,20 +610,35 @@ export function SourceReaderWorkspace({
             </div>
           ) : null}
 
-          <DocumentSurface
-            asset={asset}
-            signedUrl={signedUrl}
-            annotations={annotations}
-            page={page}
-            onPage={setPage}
-            annotationMode={mode}
-            onRect={(rect) => {
-              setDraftRect(rect);
-              setPanel("annotations");
-            }}
-          />
+          {isPdf && asset && signedUrl ? (
+            <PdfSourceViewer
+              projectId={projectId}
+              sourceId={s(source.id)}
+              assetId={s(asset.id)}
+              signedUrl={signedUrl}
+              annotations={annotations}
+              fragments={annotationFragments}
+              gaps={gaps}
+              requirements={requirements}
+              defaultGapIds={sourceGapIds}
+              defaultRequirementIds={sourceRequirementIds}
+            />
+          ) : (
+            <DocumentSurface
+              asset={asset}
+              signedUrl={signedUrl}
+              annotations={annotations}
+              page={page}
+              onPage={setPage}
+              annotationMode={mode}
+              onRect={(rect) => {
+                setDraftRect(rect);
+                setPanel("annotations");
+              }}
+            />
+          )}
 
-          {draftRect && mode ? (
+          {!isPdf && draftRect && mode ? (
             <div className="mt-4 rounded border border-amber-900/70 bg-amber-950/10 p-4">
               <p className="citem-label">Yeni {mode} annotation</p>
               <textarea
@@ -709,7 +724,7 @@ export function SourceReaderWorkspace({
                 }`}
                 onClick={() => setPanel(value)}
               >
-                {value}
+                {value === "context" ? "Bağlam" : value === "notes" ? "Notlar" : "İşaretlemeler"}
               </button>
             ))}
           </div>
@@ -748,10 +763,12 @@ export function SourceReaderWorkspace({
                   const id = s(annotation.id);
                   const linkedGaps = annGaps.get(id) ?? [];
                   const linkedReqs = annReqs.get(id) ?? [];
+                  const legacy = Number(annotation.geometry_version ?? 1) !== 2;
                   return (
                     <article
                       className="rounded border border-stone-800 bg-black/10 p-3"
                       key={id}
+                      data-annotation-card={id}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="citem-badge">{s(annotation.annotation_type)}</span>
@@ -759,10 +776,25 @@ export function SourceReaderWorkspace({
                           {annotation.page_number ? `p. ${s(annotation.page_number)}` : "text"}
                         </span>
                       </div>
+                      {annotation.selected_text ? (
+                        <blockquote className="mt-2 max-h-28 overflow-auto border-l-2 border-amber-700 pl-2 text-xs text-stone-500">
+                          {s(annotation.selected_text)}
+                        </blockquote>
+                      ) : null}
                       {annotation.comment ? (
                         <p className="mt-2 whitespace-pre-wrap text-sm text-stone-300">
                           {s(annotation.comment)}
                         </p>
+                      ) : null}
+                      {legacy ? <p className="mt-2 text-[11px] text-amber-400">Eski ekran-koordinatı işaretlemesi; PDF üzerine otomatik taşınmadı.</p> : null}
+                      {!legacy && annotation.page_number ? (
+                        <button
+                          type="button"
+                          className="mt-2 text-xs text-amber-300"
+                          onClick={() => document.querySelector<HTMLElement>(`[data-pdf-page-number="${s(annotation.page_number)}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                        >
+                          PDF'de göster
+                        </button>
                       ) : null}
                       <div className="mt-2 space-y-1 text-[11px] text-stone-600">
                         {linkedGaps.map((gapId) => (
@@ -790,7 +822,7 @@ export function SourceReaderWorkspace({
                   );
                 })}
                 {!annotations.length ? (
-                  <p className="text-xs text-stone-600">Henüz annotation yok.</p>
+                  <p className="text-xs text-stone-600">Henüz işaretleme yok.</p>
                 ) : null}
               </div>
             ) : null}
