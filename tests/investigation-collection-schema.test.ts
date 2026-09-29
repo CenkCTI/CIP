@@ -127,6 +127,91 @@ describe("Investigation Collection Stage 2 schemas", () => {
     expect(parsed.success).toBe(false);
   });
 
+  it("rejects non-quarter-turn PDF page rotations", () => {
+    const parsed = sourceAnnotationCreateV2Schema.safeParse({
+      source_id: source,
+      asset_id: asset,
+      annotation_type: "HIGHLIGHT",
+      anchor_kind: "TEXT",
+      selected_text: "APT28",
+      comment: "",
+      fragments: [{
+        page_number: 1,
+        page_width: 612,
+        page_height: 792,
+        page_rotation: 45,
+        selected_text: "APT28",
+        quads: [{ x1: 1, y1: 2, x2: 3, y2: 2, x3: 3, y3: 1, x4: 1, y4: 1 }],
+      }],
+      gap_ids: [],
+      requirement_ids: [],
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it("rejects more than 500 PDF quads across one logical annotation", () => {
+    const quad = { x1: 1, y1: 2, x2: 3, y2: 2, x3: 3, y3: 1, x4: 1, y4: 1 };
+    const parsed = sourceAnnotationCreateV2Schema.safeParse({
+      source_id: source,
+      asset_id: asset,
+      annotation_type: "HIGHLIGHT",
+      anchor_kind: "TEXT",
+      selected_text: "Large selection",
+      comment: "",
+      fragments: [
+        {
+          page_number: 1,
+          page_width: 612,
+          page_height: 792,
+          page_rotation: 0,
+          selected_text: "Large selection",
+          quads: Array.from({ length: 300 }, () => quad),
+        },
+        {
+          page_number: 2,
+          page_width: 612,
+          page_height: 792,
+          page_rotation: 0,
+          selected_text: null,
+          quads: Array.from({ length: 201 }, () => quad),
+        },
+      ],
+      gap_ids: [],
+      requirement_ids: [],
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it("rejects TEXT/REGION annotation type mismatches", () => {
+    const base = {
+      source_id: source,
+      asset_id: asset,
+      comment: "",
+      fragments: [{
+        page_number: 1,
+        page_width: 612,
+        page_height: 792,
+        page_rotation: 0,
+        selected_text: null,
+        quads: [{ x1: 1, y1: 2, x2: 3, y2: 2, x3: 3, y3: 1, x4: 1, y4: 1 }],
+      }],
+      gap_ids: [],
+      requirement_ids: [],
+    };
+    expect(sourceAnnotationCreateV2Schema.safeParse({
+      ...base,
+      annotation_type: "REGION",
+      anchor_kind: "TEXT",
+      selected_text: "APT28",
+    }).success).toBe(false);
+    expect(sourceAnnotationCreateV2Schema.safeParse({
+      ...base,
+      annotation_type: "HIGHLIGHT",
+      anchor_kind: "REGION",
+      selected_text: null,
+    }).success).toBe(false);
+  });
+
   it("rejects annotation rectangles outside normalized page bounds", () => {
     const parsed = sourceAnnotationCreateSchema.safeParse({
       source_id: source,
