@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { createSourceAnnotationV2 } from "@/app/projects/[id]/source-collection-actions";
@@ -81,9 +81,13 @@ function PdfPage({
   },[]);
 
   useEffect(()=>{
+    if(!near){
+      setPdfPage(null);
+      setDisplayViewport(null);
+      viewportRef.current=null;
+      return;
+    }
     let cancelled=false;
-    setPdfPage(null);
-    setDisplayViewport(null);
     setError("");
     pdf.getPage(pageNumber).then((page)=>{
       if(cancelled)return;
@@ -91,7 +95,7 @@ function PdfPage({
       baseViewportRef.current=page.getViewport({scale:1});
     }).catch(()=>!cancelled&&setError("PDF sayfası hazırlanamadı."));
     return()=>{cancelled=true;};
-  },[pdf,pageNumber]);
+  },[pdf,pageNumber,near]);
 
   useEffect(()=>{
     if(!pdfPage)return;
@@ -294,6 +298,9 @@ export function PdfSourceViewer({
   }
 
   const toggle=(items:string[],id:string)=>items.includes(id)?items.filter(x=>x!==id):[...items,id];
+  const handleViewport=useCallback((page:number,viewport:PdfViewportLike,base:PdfViewportLike)=>{
+    viewports.current.set(page,{viewport,base});
+  },[]);
 
   return <div ref={rootRef} className="citem-pdf-reader" onMouseUp={()=>requestAnimationFrame(captureSelection)}>
     <div className="citem-pdf-toolbar">
@@ -314,7 +321,7 @@ export function PdfSourceViewer({
       {Array.from({length:pdf.numPages},(_,index)=><PdfPage
         key={index+1} pdf={pdf} pdfjs={pdfjs} pageNumber={index+1} scale={scale}
         annotations={annotations} fragments={fragments} regionMode={regionMode}
-        onViewport={(page,viewport,base)=>viewports.current.set(page,{viewport,base})}
+        onViewport={handleViewport}
         onRegion={(fragment,left,top)=>{
           setRegionMode(false);setGapIds(defaultGapIds);setRequirementIds(defaultRequirementIds);setComment("");
           setEditor({text:"",fragments:[fragment],left:Math.min(window.innerWidth-340,left+10),top:Math.min(window.innerHeight-420,top+10),annotationType:"REGION",anchorKind:"REGION",focusNote:true});
@@ -329,13 +336,13 @@ export function PdfSourceViewer({
       />)}
     </div>:null}
 
-    {selection?<div className="citem-pdf-selection-toolbar" style={{left:selection.left,top:selection.top}} onMouseDown={e=>e.preventDefault()}>
+    {selection?<div className="citem-pdf-selection-toolbar" style={{left:selection.left,top:selection.top}} onMouseDown={e=>e.preventDefault()} onMouseUp={e=>e.stopPropagation()}>
       <button type="button" onClick={()=>openEditor("HIGHLIGHT")}>Vurgula</button>
       <button type="button" onClick={()=>openEditor("UNDERLINE")}>Altını Çiz</button>
       <button type="button" onClick={()=>openEditor("HIGHLIGHT",true)}>Not Ekle</button>
     </div>:null}
 
-    {editor?<div className="citem-pdf-annotation-editor" style={{left:Math.min(editor.left,window.innerWidth-380),top:Math.min(editor.top,window.innerHeight-520)}} onMouseDown={e=>e.stopPropagation()}>
+    {editor?<div className="citem-pdf-annotation-editor" style={{left:Math.min(editor.left,window.innerWidth-380),top:Math.min(editor.top,window.innerHeight-520)}} onMouseDown={e=>e.stopPropagation()} onMouseUp={e=>e.stopPropagation()}>
       <div className="flex items-center justify-between gap-3">
         <strong className="text-sm text-stone-100">{annotationLabel(editor.annotationType)}</strong>
         <button type="button" className="text-xs text-stone-500" onClick={()=>setEditor(null)}>Kapat</button>
