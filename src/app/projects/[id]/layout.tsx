@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
-
+import { InvestigationWorkspaceNav } from "@/components/investigations/workspace-nav";
 import { EvidenceSourceRedirect } from "@/components/sources/evidence-source-redirect";
 
 export default async function InvestigationLayout({
@@ -14,50 +13,7 @@ export default async function InvestigationLayout({
   return (
     <>
       <EvidenceSourceRedirect projectId={id} />
-      <nav
-        className="mx-auto mb-4 flex max-w-6xl flex-wrap items-center gap-2 rounded border border-stone-800/80 bg-black/10 px-3 py-2 text-xs"
-        aria-label="Investigation workspace navigation"
-      >
-        <span className="citem-label mr-1">Production</span>
-        <Link
-          className="rounded px-3 py-1.5 text-stone-400 hover:bg-stone-900 hover:text-amber-300"
-          href={`/projects/${id}`}
-        >
-          Direction
-        </Link>
-        <Link
-          className="rounded px-3 py-1.5 text-stone-400 hover:bg-stone-900 hover:text-amber-300"
-          href={`/projects/${id}/collection`}
-        >
-          Collection
-        </Link>
-        <span className="citem-label ml-2 mr-1">Research artefacts</span>
-        <Link
-          className="rounded px-3 py-1.5 text-stone-400 hover:bg-stone-900 hover:text-amber-300"
-          href={`/projects/${id}?tab=evidence&view=evidence`}
-        >
-          Evidence
-        </Link>
-        <Link
-          className="rounded px-3 py-1.5 text-stone-400 hover:bg-stone-900 hover:text-amber-300"
-          href={`/projects/${id}/sources`}
-        >
-          Sources
-        </Link>
-        <Link
-          className="rounded px-3 py-1.5 text-stone-400 hover:bg-stone-900 hover:text-amber-300"
-          href={`/projects/${id}/intel-profile`}
-        >
-          Intel Profile
-        </Link>
-        <span className="citem-label ml-2 mr-1">Analysis</span>
-        <Link
-          className="rounded px-3 py-1.5 text-stone-400 hover:bg-stone-900 hover:text-amber-300"
-          href={`/projects/${id}/attribution`}
-        >
-          Attribution
-        </Link>
-      </nav>
+      <InvestigationWorkspaceNav projectId={id} />
       {children}
     </>
   );
