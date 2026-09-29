@@ -187,10 +187,11 @@ function PdfPage({
 }
 
 export function PdfSourceViewer({
-  projectId,sourceId,assetId,signedUrl,annotations,fragments,gaps,requirements,defaultGapIds,defaultRequirementIds,
+  projectId,sourceId,assetId,signedUrl,annotations,fragments,gaps,requirements,defaultGapIds,defaultRequirementIds,onAnnotationSelect,
 }:{
   projectId:string;sourceId:string;assetId:string;signedUrl:string;annotations:Row[];fragments:Row[];gaps:Row[];requirements:Row[];
   defaultGapIds:string[];defaultRequirementIds:string[];
+  onAnnotationSelect?:(annotationId:string)=>void;
 }){
   const router=useRouter();
   const rootRef=useRef<HTMLDivElement>(null);
@@ -310,6 +311,10 @@ export function PdfSourceViewer({
           setEditor({text:"",fragments:[fragment],left:Math.min(window.innerWidth-340,left+10),top:Math.min(window.innerHeight-420,top+10),annotationType:"REGION",anchorKind:"REGION",focusNote:true});
         }}
         onAnnotationClick={(id)=>{
+          if(onAnnotationSelect){
+            onAnnotationSelect(id);
+            return;
+          }
           document.querySelector<HTMLElement>(`[data-annotation-card="${id}"]`)?.scrollIntoView({behavior:"smooth",block:"center"});
         }}
       />)}
