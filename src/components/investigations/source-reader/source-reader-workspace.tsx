@@ -174,16 +174,12 @@ function DocumentSurface({
   asset,
   signedUrl,
   annotations,
-  page,
-  onPage,
   annotationMode,
   onRect,
 }: {
   asset: Row | null;
   signedUrl: string | null;
   annotations: Row[];
-  page: number;
-  onPage: (page: number) => void;
   annotationMode: string | null;
   onRect: (rect: Rect) => void;
 }) {
@@ -499,7 +495,6 @@ export function SourceReaderWorkspace({
   const isPdf =
     s(asset?.mime_type).toLowerCase() === "application/pdf" ||
     s(asset?.original_filename).toLowerCase().endsWith(".pdf");
-  const [page, setPage] = useState(1);
   const [mode, setMode] = useState<"HIGHLIGHT" | "UNDERLINE" | "REGION" | null>(null);
   const [draftRect, setDraftRect] = useState<Rect | null>(null);
   const [comment, setComment] = useState("");
@@ -587,7 +582,7 @@ export function SourceReaderWorkspace({
           {asset && !isPdf ? (
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="citem-label">Annotation</p>
+                <p className="citem-label">İşaretleme</p>
                 <p className="mt-1 text-xs text-stone-600">
                   Orijinal dosya değişmez. İşaretlemeler CİTEM overlay katmanında saklanır.
                 </p>
@@ -628,8 +623,6 @@ export function SourceReaderWorkspace({
               asset={asset}
               signedUrl={signedUrl}
               annotations={annotations}
-              page={page}
-              onPage={setPage}
               annotationMode={mode}
               onRect={(rect) => {
                 setDraftRect(rect);
@@ -640,7 +633,7 @@ export function SourceReaderWorkspace({
 
           {!isPdf && draftRect && mode ? (
             <div className="mt-4 rounded border border-amber-900/70 bg-amber-950/10 p-4">
-              <p className="citem-label">Yeni {mode} annotation</p>
+              <p className="citem-label">Yeni {mode} işaretleme</p>
               <textarea
                 className="field mt-3 min-h-20"
                 value={comment}
@@ -649,7 +642,7 @@ export function SourceReaderWorkspace({
               />
               <div className="mt-3 grid gap-3 md:grid-cols-2">
                 <fieldset className="rounded border border-stone-800 p-3">
-                  <legend className="px-1 text-xs text-stone-500">Information Gaps</legend>
+                  <legend className="px-1 text-xs text-stone-500">Bilgi Açıkları</legend>
                   {gaps.map((gap) => {
                     const id = s(gap.id);
                     return (
@@ -671,7 +664,7 @@ export function SourceReaderWorkspace({
                   })}
                 </fieldset>
                 <fieldset className="rounded border border-stone-800 p-3">
-                  <legend className="px-1 text-xs text-stone-500">Collection Requirements</legend>
+                  <legend className="px-1 text-xs text-stone-500">Toplama Gereksinimleri</legend>
                   {requirements.map((requirement) => {
                     const id = s(requirement.id);
                     return (
@@ -695,7 +688,7 @@ export function SourceReaderWorkspace({
               </div>
               <div className="mt-3 flex gap-2">
                 <button className="citem-button" disabled={saving} type="button" onClick={saveAnnotation}>
-                  {saving ? "Kaydediliyor…" : "Annotation'ı kaydet"}
+                  {saving ? "Kaydediliyor…" : "İşaretlemeyi kaydet"}
                 </button>
                 <button
                   className="citem-button-ghost"

@@ -137,7 +137,7 @@ export default async function SourceDetailPage({
     return (
       <section className="mx-auto max-w-6xl">
         <div className="card text-red-300">
-          Source Reader yüklenemedi. Stage 2 migration 054'ün uygulanmış olduğunu
+          Kaynak Okuyucu yüklenemedi. Stage 2.1 migration 055'in uygulanmış olduğunu
           doğrulayın.
         </div>
       </section>

@@ -27,9 +27,10 @@ type PdfPageLike={
   streamTextContent(options?:Record<string,unknown>):unknown;
 };
 type PdfDocumentLike={numPages:number;getPage(page:number):Promise<PdfPageLike>;destroy?:()=>Promise<void>};
+type PdfLoadingTask={promise:Promise<PdfDocumentLike>;destroy?:()=>void};
 type PdfJsLike={
   GlobalWorkerOptions:{workerSrc:string};
-  getDocument(options:Record<string,unknown>):{promise:Promise<PdfDocumentLike>;destroy?:()=>void};
+  getDocument(options:Record<string,unknown>):PdfLoadingTask;
   TextLayer:new(options:{container:HTMLDivElement;textContentSource:unknown;viewport:PdfViewportLike})=>{render():Promise<void>;cancel():void};
 };
 
@@ -64,6 +65,7 @@ function PdfPage({
   const pageRef=useRef<PdfPageLike|null>(null);
   const viewportRef=useRef<PdfViewportLike|null>(null);
   const baseViewportRef=useRef<PdfViewportLike|null>(null);
+  const [displayViewport,setDisplayViewport]=useState<PdfViewportLike|null>(null);
   const [size,setSize]=useState({width:612,height:792});
   const [near,setNear]=useState(pageNumber<=3);
   const [error,setError]=useState("");
@@ -86,6 +88,7 @@ function PdfPage({
       const viewport=page.getViewport({scale});
       const base=page.getViewport({scale:1});
       viewportRef.current=viewport;baseViewportRef.current=base;
+      setDisplayViewport(viewport);
       setSize({width:viewport.width,height:viewport.height});
       onViewport(pageNumber,viewport,base);
     }).catch(()=>!cancelled&&setError("PDF sayfası hazırlanamadı."));
@@ -111,7 +114,7 @@ function PdfPage({
   const annotationById=useMemo(()=>new Map(annotations.map(a=>[s(a.id),a])),[annotations]);
   const pageFragments=fragments.filter(f=>Number(f.page_number)===pageNumber);
 
-  function pointerPoint(event:React.PointerEvent){
+  function pointerPoint(event:React.MouseEvent|React.PointerEvent){
     const box=shellRef.current?.getBoundingClientRect();
     if(!box)return null;
     return {x:event.clientX-box.left,y:event.clientY-box.top,box};
@@ -136,12 +139,12 @@ function PdfPage({
     >
       {near?<canvas ref={canvasRef} className="citem-pdf-canvas" />:<div className="citem-pdf-placeholder">Sayfa {pageNumber}</div>}
       {near?<div ref={textRef} className="citem-pdf-text-layer" />:null}
-      {near&&viewportRef.current?<svg className="citem-pdf-annotation-layer" width={size.width} height={size.height} viewBox={`0 0 ${size.width} ${size.height}`} aria-hidden>
+      {near&&displayViewport?<svg className="citem-pdf-annotation-layer" width={size.width} height={size.height} viewBox={`0 0 ${size.width} ${size.height}`} aria-hidden>
         {pageFragments.flatMap((fragment)=>{
           const annotation=annotationById.get(s(fragment.annotation_id));if(!annotation)return[];
           const quads=Array.isArray(fragment.quads)?fragment.quads as PdfQuad[]:[];
           return quads.map((quad,index)=>{
-            const points=pdfQuadToViewportPoints(quad,viewportRef.current!);
+            const points=pdfQuadToViewportPoints(quad,displayViewport!);
             const poly=points.map(p=>`${p.x},${p.y}`).join(" ");
             const key=`${s(fragment.id)}-${index}`;
             if(annotation.annotation_type==="UNDERLINE"){
@@ -207,20 +210,20 @@ export function PdfSourceViewer({
   const [saving,startSaving]=useTransition();
 
   useEffect(()=>{
-    let cancelled=false;let task:{destroy?:()=>void}|null=null;let loaded:PdfDocumentLike|null=null;
+    let cancelled=false;let task:PdfLoadingTask|null=null;let loadedPdf:PdfDocumentLike|null=null;
     (async()=>{
       try{
         setLoading(true);setError("");
-        const module=(await import("pdfjs-dist/build/pdf.mjs")) as unknown as PdfJsLike;
-        module.GlobalWorkerOptions.workerSrc="/vendor/pdfjs/pdf.worker.min.mjs";
-        task=module.getDocument({url:signedUrl,cMapUrl:"/vendor/pdfjs/cmaps/",cMapPacked:true,standardFontDataUrl:"/vendor/pdfjs/standard_fonts/",isEvalSupported:false});
-        loaded=await task.promise;
-        if(cancelled){await loaded.destroy?.();return;}
-        setPdfjs(module);setPdf(loaded);
+        const pdfModule=(await import("pdfjs-dist/build/pdf.mjs")) as unknown as PdfJsLike;
+        pdfModule.GlobalWorkerOptions.workerSrc="/vendor/pdfjs/pdf.worker.min.mjs";
+        task=pdfModule.getDocument({url:signedUrl,cMapUrl:"/vendor/pdfjs/cmaps/",cMapPacked:true,standardFontDataUrl:"/vendor/pdfjs/standard_fonts/",isEvalSupported:false});
+        loadedPdf=await task.promise;
+        if(cancelled){await loadedPdf.destroy?.();return;}
+        setPdfjs(pdfModule);setPdf(loadedPdf);
       }catch{if(!cancelled)setError("PDF CİTEM okuyucusunda açılamadı. Dosya bozuk veya şifreli olabilir.");}
       finally{if(!cancelled)setLoading(false);}
     })();
-    return()=>{cancelled=true;try{task?.destroy?.();}catch{}void loaded?.destroy?.();};
+    return()=>{cancelled=true;try{task?.destroy?.();}catch{}void loadedPdf?.destroy?.();};
   },[signedUrl]);
 
   function captureSelection(){
