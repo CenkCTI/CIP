@@ -12,6 +12,7 @@ import {
   createSourceNote,
   deleteSourceAnnotation,
   deleteSourceNote,
+  updateSourceAnnotationContext,
   updateSourceCollectionLinks,
   type SourceCollectionActionState,
 } from "@/app/projects/[id]/source-collection-actions";
@@ -503,6 +504,10 @@ export function SourceReaderWorkspace({
   const [saving, startSaving] = useTransition();
   const [message, setMessage] = useState<SourceCollectionActionState>({});
   const [panel, setPanel] = useState<"context" | "notes" | "annotations">("context");
+  const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null);
+  const [editingComment, setEditingComment] = useState("");
+  const [editingGapIds, setEditingGapIds] = useState<string[]>([]);
+  const [editingRequirementIds, setEditingRequirementIds] = useState<string[]>([]);
 
   const gapById = useMemo(() => new Map(gaps.map((gap) => [s(gap.id), gap])), [gaps]);
   const requirementById = useMemo(
@@ -525,6 +530,33 @@ export function SourceReaderWorkspace({
     }
     return map;
   }, [annotationRequirementLinks]);
+
+  function beginAnnotationEdit(annotation: Row, linkedGaps: string[], linkedRequirements: string[]) {
+    setEditingAnnotationId(s(annotation.id));
+    setEditingComment(s(annotation.comment));
+    setEditingGapIds(linkedGaps);
+    setEditingRequirementIds(linkedRequirements);
+  }
+
+  function saveAnnotationEdit(annotationId: string) {
+    startSaving(async () => {
+      const result = await updateSourceAnnotationContext(
+        projectId,
+        s(source.id),
+        annotationId,
+        {
+          comment: editingComment,
+          gap_ids: editingGapIds,
+          requirement_ids: editingRequirementIds,
+        },
+      );
+      setMessage(result);
+      if (result.success) {
+        setEditingAnnotationId(null);
+        router.refresh();
+      }
+    });
+  }
 
   function saveAnnotation() {
     if (!asset || !draftRect || !mode) return;
@@ -774,43 +806,155 @@ export function SourceReaderWorkspace({
                           {s(annotation.selected_text)}
                         </blockquote>
                       ) : null}
-                      {annotation.comment ? (
-                        <p className="mt-2 whitespace-pre-wrap text-sm text-stone-300">
-                          {s(annotation.comment)}
+                      {editingAnnotationId === id ? (
+                        <div className="mt-3 space-y-3 rounded border border-stone-800 bg-stone-950/40 p-3">
+                          <label className="block text-xs text-stone-400">
+                            Analist Notu
+                            <textarea
+                              className="field mt-1 min-h-20"
+                              maxLength={10000}
+                              value={editingComment}
+                              onChange={(event) => setEditingComment(event.currentTarget.value)}
+                            />
+                          </label>
+                          <fieldset>
+                            <legend className="citem-label">Bilgi Açıkları</legend>
+                            <div className="mt-2 max-h-28 space-y-1 overflow-auto">
+                              {gaps.map((gap) => {
+                                const gapId = s(gap.id);
+                                return (
+                                  <label key={gapId} className="flex items-start gap-2 text-xs text-stone-400">
+                                    <input
+                                      type="checkbox"
+                                      checked={editingGapIds.includes(gapId)}
+                                      onChange={() =>
+                                        setEditingGapIds((current) =>
+                                          current.includes(gapId)
+                                            ? current.filter((value) => value !== gapId)
+                                            : [...current, gapId],
+                                        )
+                                      }
+                                    />
+                                    <span>{s(gap.description)}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </fieldset>
+                          <fieldset>
+                            <legend className="citem-label">Toplama Gereksinimleri</legend>
+                            <div className="mt-2 max-h-28 space-y-1 overflow-auto">
+                              {requirements.map((requirement) => {
+                                const requirementId = s(requirement.id);
+                                return (
+                                  <label
+                                    key={requirementId}
+                                    className="flex items-start gap-2 text-xs text-stone-400"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={editingRequirementIds.includes(requirementId)}
+                                      onChange={() =>
+                                        setEditingRequirementIds((current) =>
+                                          current.includes(requirementId)
+                                            ? current.filter((value) => value !== requirementId)
+                                            : [...current, requirementId],
+                                        )
+                                      }
+                                    />
+                                    <span>{s(requirement.requirement)}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </fieldset>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              className="citem-button"
+                              type="button"
+                              disabled={saving}
+                              onClick={() => saveAnnotationEdit(id)}
+                            >
+                              {saving ? "Kaydediliyor…" : "Değişiklikleri kaydet"}
+                            </button>
+                            <button
+                              className="citem-button-ghost"
+                              type="button"
+                              onClick={() => setEditingAnnotationId(null)}
+                            >
+                              İptal
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {annotation.comment ? (
+                            <p className="mt-2 whitespace-pre-wrap text-sm text-stone-300">
+                              {s(annotation.comment)}
+                            </p>
+                          ) : (
+                            <p className="mt-2 text-xs text-stone-600">Bu işaretlemeye analist notu eklenmemiş.</p>
+                          )}
+                          <div className="mt-2 space-y-1 text-[11px] text-stone-600">
+                            {linkedGaps.map((gapId) => (
+                              <p key={gapId}>Bilgi Açığı: {s(gapById.get(gapId)?.description)}</p>
+                            ))}
+                            {linkedReqs.map((requirementId) => (
+                              <p key={requirementId}>
+                                Toplama Gereksinimi: {s(requirementById.get(requirementId)?.requirement)}
+                              </p>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                      {legacy ? (
+                        <p className="mt-2 text-[11px] text-amber-400">
+                          Eski ekran-koordinatı işaretlemesi; PDF üzerine otomatik taşınmadı.
                         </p>
                       ) : null}
-                      {legacy ? <p className="mt-2 text-[11px] text-amber-400">Eski ekran-koordinatı işaretlemesi; PDF üzerine otomatik taşınmadı.</p> : null}
-                      {!legacy && annotation.page_number ? (
+                      <div className="mt-2 flex flex-wrap gap-3">
+                        {!legacy && annotation.page_number ? (
+                          <button
+                            type="button"
+                            className="text-xs text-amber-300"
+                            onClick={() =>
+                              document
+                                .querySelector<HTMLElement>(
+                                  `[data-pdf-page-number="${s(annotation.page_number)}"]`,
+                                )
+                                ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                            }
+                          >
+                            PDF'de göster
+                          </button>
+                        ) : null}
+                        {editingAnnotationId !== id ? (
+                          <button
+                            className="text-xs text-stone-300"
+                            type="button"
+                            onClick={() => beginAnnotationEdit(annotation, linkedGaps, linkedReqs)}
+                          >
+                            Düzenle
+                          </button>
+                        ) : null}
                         <button
+                          className="text-xs text-red-400"
                           type="button"
-                          className="mt-2 text-xs text-amber-300"
-                          onClick={() => document.querySelector<HTMLElement>(`[data-pdf-page-number="${s(annotation.page_number)}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                          disabled={saving}
+                          onClick={() =>
+                            startSaving(async () => {
+                              const result = await deleteSourceAnnotation(projectId, s(source.id), id);
+                              setMessage(result);
+                              if (result.success) {
+                                if (editingAnnotationId === id) setEditingAnnotationId(null);
+                                router.refresh();
+                              }
+                            })
+                          }
                         >
-                          PDF'de göster
+                          Sil
                         </button>
-                      ) : null}
-                      <div className="mt-2 space-y-1 text-[11px] text-stone-600">
-                        {linkedGaps.map((gapId) => (
-                          <p key={gapId}>Gap: {s(gapById.get(gapId)?.description)}</p>
-                        ))}
-                        {linkedReqs.map((requirementId) => (
-                          <p key={requirementId}>
-                            Req: {s(requirementById.get(requirementId)?.requirement)}
-                          </p>
-                        ))}
                       </div>
-                      <button
-                        className="mt-2 text-xs text-red-400"
-                        type="button"
-                        onClick={() =>
-                          startSaving(async () => {
-                            await deleteSourceAnnotation(projectId, s(source.id), id);
-                            router.refresh();
-                          })
-                        }
-                      >
-                        Sil
-                      </button>
                     </article>
                   );
                 })}
