@@ -505,6 +505,7 @@ export function SourceReaderWorkspace({
   const [message, setMessage] = useState<SourceCollectionActionState>({});
   const [panel, setPanel] = useState<"context" | "notes" | "annotations">("context");
   const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null);
+  const [focusedAnnotationId, setFocusedAnnotationId] = useState<string | null>(null);
   const [editingComment, setEditingComment] = useState("");
   const [editingGapIds, setEditingGapIds] = useState<string[]>([]);
   const [editingRequirementIds, setEditingRequirementIds] = useState<string[]>([]);
@@ -531,7 +532,18 @@ export function SourceReaderWorkspace({
     return map;
   }, [annotationRequirementLinks]);
 
+  useEffect(() => {
+    if (panel !== "annotations" || !focusedAnnotationId) return;
+    const frame = window.requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLElement>(`[data-annotation-card="${focusedAnnotationId}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusedAnnotationId, panel]);
+
   function beginAnnotationEdit(annotation: Row, linkedGaps: string[], linkedRequirements: string[]) {
+    setFocusedAnnotationId(s(annotation.id));
     setEditingAnnotationId(s(annotation.id));
     setEditingComment(s(annotation.comment));
     setEditingGapIds(linkedGaps);
@@ -649,6 +661,10 @@ export function SourceReaderWorkspace({
               requirements={requirements}
               defaultGapIds={sourceGapIds}
               defaultRequirementIds={sourceRequirementIds}
+              onAnnotationSelect={(annotationId) => {
+                setPanel("annotations");
+                setFocusedAnnotationId(annotationId);
+              }}
             />
           ) : (
             <DocumentSurface
@@ -791,9 +807,14 @@ export function SourceReaderWorkspace({
                   const legacy = Number(annotation.geometry_version ?? 1) !== 2;
                   return (
                     <article
-                      className="rounded border border-stone-800 bg-black/10 p-3"
+                      className={
+                        focusedAnnotationId === id
+                          ? "rounded border border-amber-700/70 bg-amber-950/10 p-3"
+                          : "rounded border border-stone-800 bg-black/10 p-3"
+                      }
                       key={id}
                       data-annotation-card={id}
+                      onClick={() => setFocusedAnnotationId(id)}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="citem-badge">{s(annotation.annotation_type)}</span>
