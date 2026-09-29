@@ -123,24 +123,14 @@ export default async function Page({
       .order("updated_at", { ascending: false });
     if (clusterError) return <section className="mx-auto max-w-6xl"><div className="card text-red-300">Unable to load Infrastructure Analysis. Apply migration 019 and try again.</div></section>;
     const rows = (clusters ?? []).map((cluster) => ({ ...cluster, member_count: Array.isArray(cluster.infrastructure_cluster_members) ? Number(cluster.infrastructure_cluster_members[0]?.count ?? 0) : 0 }));
-    return <section className="mx-auto max-w-6xl"><h1 className="text-3xl font-bold text-white">{project.name}</h1><nav className="mt-6 flex flex-wrap gap-2 border-b border-slate-800 pb-2">{tabs.map((t)=><Link key={t} className={`rounded-t px-4 py-2 capitalize ${tab===t?"bg-slate-800 text-cyan-200":"text-slate-400 hover:text-white"}`} href={mk(t)}>{t}</Link>)}</nav><InfrastructureWorkspace projectId={id} clusters={rows} sp={sp}/></section>;
+    return <section className="mx-auto max-w-6xl"><h1 className="text-3xl font-bold text-white">{project.name}</h1><InfrastructureWorkspace projectId={id} clusters={rows} sp={sp}/></section>;
   }
 
   if (tab === "graph") {
     return (
       <section className="mx-auto max-w-6xl">
         <h1 className="text-3xl font-bold text-white">{project.name}</h1>
-        <nav className="mt-6 flex flex-wrap gap-2 border-b border-slate-800 pb-2">
-          {tabs.map((t) => (
-            <Link
-              key={t}
-              className={`rounded-t px-4 py-2 capitalize ${tab === t ? "bg-slate-800 text-cyan-200" : "text-slate-400 hover:text-white"}`}
-              href={mk(t)}
-            >
-              {t}
-            </Link>
-          ))}
-        </nav>
+        
         <div className="mt-4">
           <KnowledgeGraph projectId={id} />
         </div>
@@ -158,11 +148,7 @@ export default async function Page({
     return (
       <section className="mx-auto max-w-6xl">
         <h1 className="text-3xl font-bold text-white">{project.name}</h1>
-        <nav className="mt-6 flex flex-wrap gap-2 border-b border-slate-800 pb-2">
-          {tabs.map((t) => (
-            <Link key={t} className={`rounded-t px-4 py-2 capitalize ${tab === t ? "bg-slate-800 text-cyan-200" : "text-slate-400 hover:text-white"}`} href={mk(t)}>{t}</Link>
-          ))}
-        </nav>
+        
         <div className="mt-4"><AiWorkspace projectId={id} notes={(notes ?? []).map((n) => ({ id: n.id, label: n.title }))} evidence={(evidence ?? []).map((e) => ({ id: e.id, label: e.title }))} campaigns={(campaigns ?? []).map((c) => ({ id: c.id, label: c.name }))} malware={(malware ?? []).map((m) => ({ id: m.id, label: m.name }))} /></div>
       </section>
     );
@@ -275,17 +261,7 @@ export default async function Page({
   return (
     <section className="mx-auto max-w-6xl">
       <h1 className="text-3xl font-bold text-white">{project.name}</h1>
-      <nav className="mt-6 flex flex-wrap gap-2 border-b border-slate-800 pb-2">
-        {tabs.map((t) => (
-          <Link
-            key={t}
-            className={`rounded-t px-4 py-2 capitalize ${tab === t ? "bg-slate-800 text-cyan-200" : "text-slate-400 hover:text-white"}`}
-            href={mk(t)}
-          >
-            {t}
-          </Link>
-        ))}
-      </nav>
+      
       {tab !== "overview" && tab !== "graph" && (
         <SearchBar
           id={id}
