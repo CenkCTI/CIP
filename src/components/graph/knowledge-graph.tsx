@@ -72,10 +72,10 @@ const typeCodes: Record<GraphEntityType, string> = {
 function terrainShadow(degree: number, maxDegree: number, selected: boolean) {
   const density = maxDegree > 0 ? degree / maxDegree : 0;
   const contours: string[] = [];
-  if (density >= 0.18) contours.push("0 0 0 12px rgba(137,128,105,.035)");
-  if (density >= 0.38) contours.push("0 0 0 25px rgba(137,128,105,.03)");
-  if (density >= 0.58) contours.push("0 0 0 40px rgba(185,130,47,.026)");
-  if (density >= 0.76) contours.push("0 0 0 58px rgba(185,130,47,.018)");
+  if (degree >= 2 && density >= 0.18) contours.push("0 0 0 12px rgba(137,128,105,.035)");
+  if (degree >= 3 && density >= 0.38) contours.push("0 0 0 25px rgba(137,128,105,.03)");
+  if (degree >= 4 && density >= 0.58) contours.push("0 0 0 40px rgba(185,130,47,.026)");
+  if (degree >= 5 && density >= 0.76) contours.push("0 0 0 58px rgba(185,130,47,.018)");
   if (selected) contours.push("0 0 0 2px rgba(210,163,78,.22)");
   contours.push("0 10px 26px rgba(0,0,0,.22)");
   return contours.join(", ");
@@ -718,7 +718,12 @@ function GraphCanvas({
             fitView
             minZoom={0.28}
             maxZoom={2}
-            onMove={(_, viewport) => setViewportZoom(viewport.zoom)}
+            onMove={(_, viewport) => {
+              const roundedZoom = Math.round(viewport.zoom * 20) / 20;
+              setViewportZoom((current) =>
+                current === roundedZoom ? current : roundedZoom,
+              );
+            }}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onNodeDragStop={saveNodePosition}
