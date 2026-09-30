@@ -77,14 +77,23 @@ insert into public.source_assets(
 
 insert into public.source_annotations(
  id,project_id,source_id,asset_id,annotation_type,page_number,rects,selected_text,created_by
-) values (
+) values
+ (
  '50000000-0000-4000-8000-000000000001',
  '20000000-0000-4000-8000-000000000001',
  '30000000-0000-4000-8000-000000000001',
  '40000000-0000-4000-8000-000000000001',
  'HIGHLIGHT',1,'[]','APT28 used 192.0.2.10.',
  '10000000-0000-4000-8000-000000000001'
-);
+ ),
+ (
+ '50000000-0000-4000-8000-000000000002',
+ '20000000-0000-4000-8000-000000000001',
+ '30000000-0000-4000-8000-000000000001',
+ '40000000-0000-4000-8000-000000000001',
+ 'HIGHLIGHT',2,'[]','A separate source passage.',
+ '10000000-0000-4000-8000-000000000001'
+ );
 
 insert into public.indicators(id,project_id,value,type,confidence) values
  ('60000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','192.0.2.10','IP','MEDIUM');
@@ -152,6 +161,41 @@ begin
     'SOURCE_EXPLICIT',
     '10000000-0000-4000-8000-000000000001'
   );
+
+  insert into public.source_annotation_outputs(
+    project_id,source_annotation_id,output_type,output_action,mapping_origin,
+    target_label,attribution_claim_id,created_by
+  ) values (
+    '20000000-0000-4000-8000-000000000001',
+    '50000000-0000-4000-8000-000000000001',
+    'ATTRIBUTION_CLAIM','CREATED','SOURCE_EXPLICIT',
+    'Source attribution claim · APT28',
+    '80000000-0000-4000-8000-000000000001',
+    '10000000-0000-4000-8000-000000000001'
+  );
+
+  begin
+    insert into public.source_annotation_outputs(
+      project_id,source_annotation_id,output_type,output_action,mapping_origin,
+      target_label,attribution_claim_id,created_by
+    ) values (
+      '20000000-0000-4000-8000-000000000001',
+      '50000000-0000-4000-8000-000000000002',
+      'ATTRIBUTION_CLAIM','LINKED','SOURCE_EXPLICIT',
+      'mismatched claim',
+      '80000000-0000-4000-8000-000000000001',
+      '10000000-0000-4000-8000-000000000001'
+    );
+    raise exception 'cross-annotation attribution claim unexpectedly accepted';
+  exception when foreign_key_violation then null;
+  end;
+
+  begin
+    delete from public.source_annotations
+    where id='50000000-0000-4000-8000-000000000001';
+    raise exception 'provenance-bearing annotation unexpectedly deleted';
+  exception when foreign_key_violation then null;
+  end;
 end
 $test$;
 SQL

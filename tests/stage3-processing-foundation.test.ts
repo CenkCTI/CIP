@@ -53,5 +53,9 @@ describe("Stage 3 processing foundation", () => {
     expect(migration).toContain("grant select,insert,update,delete on public.source_attribution_claims");
     expect(migration).toContain("grant select,insert,delete on public.source_annotation_outputs");
     expect(migration).not.toContain("Immutable provenance ledger");
+    expect(migration).toContain("on delete restrict");
+    expect(migration).toContain(
+      "foreign key(project_id,source_annotation_id,attribution_claim_id)",
+    );
   });
 });

@@ -185,3 +185,12 @@ This provenance display is intentionally not a Source Evaluation score.
 When an Attribution Claim is optionally mapped to a canonical Threat Actor, the Actor detail page shows it in a separate **Source-reported attribution** section.
 
 The section explicitly states that these are reporting statements/evidence inputs and are not CITEM attribution conclusions or preferred hypotheses. This keeps Stage 3 source claims distinct from the later competing-hypothesis and assessment workflows.
+
+
+## Provenance deletion semantics
+
+Once a Source Annotation supports a Timeline Event or a Stage 3 structured output, that annotation is delete-restricted until the provenance link is explicitly removed. Structured output targets are also delete-restricted while the Stage 3 provenance link exists.
+
+For Attribution Claims, the database additionally enforces that the claim and the output ledger row refer to the **same Source Annotation**. A claim from Annotation A cannot be attached to Annotation B merely because both belong to the same Investigation.
+
+Legacy screen-space annotations remain visible as historical annotations but are excluded from the Stage 3 processing queue because they cannot provide the exact PDF-space provenance required by the processing bridge.
