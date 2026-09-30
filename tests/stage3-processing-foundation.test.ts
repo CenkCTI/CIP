@@ -6,6 +6,10 @@ describe("Stage 3 processing foundation", () => {
     "supabase/migrations/202609300058_stage3_processing_foundation.sql",
     "utf8",
   );
+  const hardening = readFileSync(
+    "supabase/migrations/202609300059_stage3_processing_provenance_hardening.sql",
+    "utf8",
+  );
   const actions = readFileSync(
     "src/app/projects/[id]/source-processing-actions.ts",
     "utf8",
@@ -57,5 +61,14 @@ describe("Stage 3 processing foundation", () => {
     expect(migration).toContain(
       "foreign key(project_id,source_annotation_id,attribution_claim_id)",
     );
+    expect(hardening).toContain("STAGE3_PROVENANCE_MISMATCH");
+    expect(hardening).toContain("source_annotation_outputs_attribution_claim_fk");
+    expect(hardening).toContain("on delete cascade");
+  });
+
+  it("deletes annotation-bound attribution claims without orphaning ledger rows", () => {
+    expect(actions).toContain('existing.output_type === "ATTRIBUTION_CLAIM"');
+    expect(actions).toContain('.from("source_attribution_claims")');
+    expect(actions).toContain("Source attribution claim deleted with its provenance link.");
   });
 });
