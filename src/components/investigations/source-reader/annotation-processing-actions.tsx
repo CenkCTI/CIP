@@ -372,6 +372,17 @@ function CreateFields({
             defaultValue={excerpt}
           />
         </label>
+        <label className="grid gap-1">
+          <span className="citem-label">Identity mapping origin</span>
+          <select className="field" name="mapping_origin" defaultValue="ANALYST_MAPPED">
+            {mappingOrigins.map((origin) => (
+              <option key={origin}>{origin}</option>
+            ))}
+          </select>
+          <span className="text-xs leading-5 text-stone-600">
+            Use SOURCE_EXPLICIT only when the canonical tracked identity is explicitly named by the source.
+          </span>
+        </label>
         <p className="text-xs leading-5 text-stone-600">
           This records an identity/profile only. It does not attribute the current
           activity to that actor.
@@ -562,7 +573,16 @@ export function AnnotationProcessingActions({
               <button
                 className="text-stone-700 hover:text-red-300"
                 type="button"
-                aria-label="Unlink annotation output"
+                aria-label={
+                  text(output.output_type) === "ATTRIBUTION_CLAIM"
+                    ? "Delete source attribution claim"
+                    : "Unlink annotation output"
+                }
+                title={
+                  text(output.output_type) === "ATTRIBUTION_CLAIM"
+                    ? "Delete source attribution claim"
+                    : "Unlink annotation provenance"
+                }
                 disabled={pending}
                 onClick={() =>
                   startTransition(async () => {
