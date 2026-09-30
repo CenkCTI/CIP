@@ -237,6 +237,23 @@ export default async function Page({
         </div>
       </section>
     );
+  const actorHypothesisResult =
+    tab === "actors"
+      ? await supabase
+          .from("attribution_hypotheses")
+          .select("id,threat_actor_id")
+          .eq("project_id", id)
+      : { data: [] as Row[], error: null };
+  if (actorHypothesisResult.error) {
+    return (
+      <section className="mx-auto max-w-6xl">
+        <div className="card text-red-300">
+          Unable to load Threat Actor analytical context. Please refresh and try again.
+        </div>
+      </section>
+    );
+  }
+
   const ctiOptions = {
     threat_actor_ids: (actors ?? []) as Row[],
     campaign_ids: (campaigns ?? []) as Row[],
@@ -346,6 +363,7 @@ export default async function Page({
             threatActorMalware: (threatActorMalware ?? []) as Row[],
             threatActorIndicators: (threatActorIndicators ?? []) as Row[],
             threatActorMitre: (threatActorMitre ?? []) as Row[],
+            actorHypotheses: (actorHypothesisResult.data ?? []) as Row[],
           }}
           filters={sp}
         />
