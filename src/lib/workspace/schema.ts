@@ -189,6 +189,182 @@ export const timelineSchema = z
       });
   });
 
+export const timelineTimePrecisions = [
+  "EXACT",
+  "DAY",
+  "MONTH",
+  "YEAR",
+  "APPROXIMATE",
+  "RANGE",
+] as const;
+
+function utcDay(value: string, end = false) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const [, year, month, day] = match;
+  const date = new Date(
+    Date.UTC(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      end ? 23 : 0,
+      end ? 59 : 0,
+      end ? 59 : 0,
+      end ? 999 : 0,
+    ),
+  );
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function utcMonth(value: string) {
+  const match = /^(\d{4})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  if (monthIndex < 0 || monthIndex > 11) return null;
+  const start = new Date(Date.UTC(year, monthIndex, 1));
+  const end = new Date(Date.UTC(year, monthIndex + 1, 1) - 1);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+function utcYear(value: string) {
+  if (!/^\d{4}$/.test(value)) return null;
+  const year = Number(value);
+  if (year < 1900 || year > 2200) return null;
+  return {
+    start: new Date(Date.UTC(year, 0, 1)).toISOString(),
+    end: new Date(Date.UTC(year + 1, 0, 1) - 1).toISOString(),
+  };
+}
+
+export const timelineV2FormSchema = z
+  .object({
+    event_name: z.string().trim().min(1, "Event name is required").max(180),
+    event_date: z.string().trim().min(1, "Event time is required"),
+    occurred_end_at: z.string().trim().optional().default(""),
+    time_precision: z.enum(timelineTimePrecisions).default("DAY"),
+    time_label: z.string().trim().max(240).optional().default(""),
+    description: z.string().max(10000).default(""),
+    basis: z.enum(["OBSERVED", "INFERRED"]).default("OBSERVED"),
+    activity_phase: z
+      .enum([
+        "INFRASTRUCTURE_PREPARATION",
+        "TARGETING",
+        "DELIVERY",
+        "INITIAL_ACCESS",
+        "EXECUTION",
+        "PERSISTENCE",
+        "COMMAND_AND_CONTROL",
+        "COLLECTION",
+        "EXFILTRATION",
+        "IMPACT",
+        "INFRASTRUCTURE_CHANGE",
+        "OTHER",
+        "UNKNOWN",
+      ])
+      .default("UNKNOWN"),
+    assessment_status: z
+      .enum(["RECORDED", "ASSESSED", "DISPUTED", "RETRACTED"])
+      .default("RECORDED"),
+    confidence: z.enum(["LOW", "MEDIUM", "HIGH"]).default("MEDIUM"),
+    analyst_rationale: z.string().max(10000).default(""),
+  })
+  .superRefine((value, ctx) => {
+    if (
+      (value.basis === "INFERRED" ||
+        ["DISPUTED", "RETRACTED"].includes(value.assessment_status)) &&
+      !value.analyst_rationale.trim()
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "Analyst rationale is required for inferred, disputed, or retracted events.",
+        path: ["analyst_rationale"],
+      });
+    }
+    if (value.time_precision === "APPROXIMATE" && !value.time_label.trim()) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Approximate time requires a human-readable time label.",
+        path: ["time_label"],
+      });
+    }
+    if (value.time_precision === "RANGE" && !value.occurred_end_at) {
+      ctx.addIssue({
+        code: "custom",
+        message: "A time range requires an end date.",
+        path: ["occurred_end_at"],
+      });
+    }
+  })
+  .transform((value, ctx) => {
+    let start: string | null = null;
+    let end: string | null = null;
+
+    if (value.time_precision === "EXACT") {
+      const parsed = new Date(value.event_date);
+      start = Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+      if (value.occurred_end_at) {
+        const parsedEnd = new Date(value.occurred_end_at);
+        end = Number.isNaN(parsedEnd.getTime()) ? null : parsedEnd.toISOString();
+      }
+    } else if (value.time_precision === "DAY") {
+      start = utcDay(value.event_date);
+    } else if (value.time_precision === "MONTH") {
+      const normalized = utcMonth(value.event_date);
+      start = normalized?.start ?? null;
+      end = normalized?.end ?? null;
+    } else if (value.time_precision === "YEAR") {
+      const normalized = utcYear(value.event_date);
+      start = normalized?.start ?? null;
+      end = normalized?.end ?? null;
+    } else {
+      start = utcDay(value.event_date);
+      end = value.occurred_end_at ? utcDay(value.occurred_end_at, true) : null;
+    }
+
+    if (!start) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Use a valid event time for the selected precision.",
+        path: ["event_date"],
+      });
+      return z.NEVER;
+    }
+    if (value.occurred_end_at && value.time_precision === "EXACT" && !end) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Use a valid event end time.",
+        path: ["occurred_end_at"],
+      });
+      return z.NEVER;
+    }
+    if (end && new Date(start) > new Date(end)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Event end must not precede its start.",
+        path: ["occurred_end_at"],
+      });
+      return z.NEVER;
+    }
+
+    return {
+      event_name: value.event_name,
+      event_date: start,
+      occurred_end_at: end,
+      time_precision: value.time_precision,
+      time_label: value.time_label,
+      description: value.description,
+      basis: value.basis,
+      activity_phase: value.activity_phase,
+      assessment_status: value.assessment_status,
+      confidence: value.confidence,
+      analyst_rationale: value.analyst_rationale,
+      related_entity_type: null,
+      related_entity_id: null,
+    };
+  });
+
 export const taskSchema = z.object({
   task_name: z.string().trim().min(1, "Task name is required").max(180),
   description: z.string().max(10000).default(""),

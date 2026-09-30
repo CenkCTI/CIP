@@ -8,10 +8,13 @@ const uuidSchema = z.string().uuid();
 
 export default async function SourceDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string; sourceId: string }>;
+  searchParams?: Promise<{ annotation?: string }>;
 }) {
   const { id, sourceId } = await params;
+  const query = (await searchParams) ?? {};
   if (!uuidSchema.safeParse(sourceId).success) notFound();
   const context = await requireOwnedProject(id).catch(() => notFound());
 
@@ -157,6 +160,38 @@ export default async function SourceDetailPage({
     (annotationsResult.data ?? []).map((annotation) => annotation.id),
   );
 
+  const [timelineEventsResult, annotationTimelineLinksResult] = await Promise.all([
+    context.supabase
+      .from("timeline_events")
+      .select("id,event_name,event_date,time_precision,time_label")
+      .eq("project_id", context.projectId)
+      .order("event_date", { ascending: true })
+      .limit(500),
+    annotationIds.size
+      ? context.supabase
+          .from("timeline_event_source_annotations")
+          .select("id,timeline_event_id,source_annotation_id,timeline_events(event_name)")
+          .eq("project_id", context.projectId)
+          .in("source_annotation_id", [...annotationIds])
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (timelineEventsResult.error || annotationTimelineLinksResult.error) {
+    return (
+      <section className="mx-auto max-w-6xl">
+        <div className="card text-red-300">
+          Timeline processing context could not be loaded. Apply Timeline migration 057 and retry.
+        </div>
+      </section>
+    );
+  }
+
+  const requestedAnnotation = uuidSchema.safeParse(query.annotation).success
+    ? String(query.annotation)
+    : null;
+  const initialFocusedAnnotationId =
+    requestedAnnotation && annotationIds.has(requestedAnnotation) ? requestedAnnotation : null;
+
   return (
     <SourceReaderWorkspace
       projectId={context.projectId}
@@ -178,6 +213,9 @@ export default async function SourceDetailPage({
       annotationRequirementLinks={(annotationRequirementLinksResult.data ?? []).filter(
         (link) => annotationIds.has(link.annotation_id),
       )}
+      timelineEvents={timelineEventsResult.data ?? []}
+      annotationTimelineLinks={annotationTimelineLinksResult.data ?? []}
+      initialFocusedAnnotationId={initialFocusedAnnotationId}
     />
   );
 }

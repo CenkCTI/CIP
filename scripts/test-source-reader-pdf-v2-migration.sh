@@ -15,7 +15,7 @@ create schema storage;create table storage.buckets(id text primary key,name text
 create function storage.foldername(name text)returns text[] language sql immutable as $$select case when array_length(string_to_array(name,'/'),1)<=1 then '{}'::text[] else(string_to_array(name,'/'))[1:array_length(string_to_array(name,'/'),1)-1]end$$;
 create function storage.filename(name text)returns text language sql immutable as $$select(string_to_array(name,'/'))[array_length(string_to_array(name,'/'),1)]$$;
 SQL
-find "$ROOT/supabase/migrations" -maxdepth 1 -name '*.sql' ! -name '202609110053_investigation_direction_stage1.sql' ! -name '202609230054_investigation_collection_stage2.sql' ! -name '202609290055_source_reader_pdf_v2.sql' ! -name '202609290056_source_reader_pdf_v2_hardening.sql' | sort | while read -r f;do printf "\\i '%s'\n" "$f";done >"$PRE_SQL"
+find "$ROOT/supabase/migrations" -maxdepth 1 -name '*.sql' ! -name '202609110053_investigation_direction_stage1.sql' ! -name '202609230054_investigation_collection_stage2.sql' ! -name '202609290055_source_reader_pdf_v2.sql' ! -name '202609290056_source_reader_pdf_v2_hardening.sql' ! -name '202609300057_timeline_stage3_workflow_v2.sql' | sort | while read -r f;do printf "\\i '%s'\n" "$f";done >"$PRE_SQL"
 "${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" -f "$PRE_SQL" >/dev/null
 "${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" -f "$ROOT/supabase/migrations/202609110053_investigation_direction_stage1.sql" >/dev/null
 "${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" <<'SQL' >/dev/null

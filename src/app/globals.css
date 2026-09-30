@@ -545,6 +545,21 @@ html[data-citem-sidebar="collapsed"] .citem-sidebar {
   padding: 1.35rem;
 }
 
+.citem-content:has(> .citem-graph-bleed) {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.citem-graph-bleed {
+  position: relative;
+  width: 100%;
+  padding: 0.9rem 1rem 1rem;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(15, 19, 17, 0.92), rgba(9, 13, 14, 0.98));
+}
+
 .citem-page-header {
   display: flex;
   align-items: flex-end;
@@ -1136,6 +1151,15 @@ html[data-citem-sidebar="collapsed"] .citem-sidebar {
 
   .citem-content {
     padding: 1rem;
+  }
+
+  .citem-content:has(> .citem-graph-bleed) {
+    padding: 0;
+  }
+
+  .citem-graph-bleed {
+    width: 100%;
+    padding: 0.65rem 0.7rem 0.7rem;
   }
 
   .citem-page-header {

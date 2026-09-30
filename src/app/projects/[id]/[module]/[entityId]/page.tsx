@@ -3,6 +3,18 @@ import { notFound } from "next/navigation";
 
 import { CtiDelete, CtiForm } from "@/components/cti-forms";
 import {
+  ActorProfileHeader,
+  ActorRelationshipManager,
+} from "@/components/actors/actor-workspace";
+import {
+  CampaignProfileHeader,
+  CampaignTechnicalContext,
+} from "@/components/campaigns/campaign-workspace";
+import {
+  MalwareProfileHeader,
+  MalwareTechnicalContext,
+} from "@/components/malware/malware-workspace";
+import {
   ClusterMembershipForm,
   ReconstructionForm,
 } from "@/components/reconstruction/forms";
@@ -421,18 +433,65 @@ export default async function Detail({
           .eq("project_id", id)
           .eq("threat_actor_id", entityId)
       : { data: [] };
+  const actorCampaigns =
+    tab === "actors"
+      ? await supabase
+          .from("campaign_threat_actors")
+          .select("campaign_id,campaigns(id,name)")
+          .eq("project_id", id)
+          .eq("threat_actor_id", entityId)
+      : { data: [] };
+  const actorMalware = tab === "actors"
+    ? related.find((group) => group.target === "malware")?.items ?? []
+    : [];
+  const actorIndicators = tab === "actors"
+    ? related.find((group) => group.target === "indicators")?.items ?? []
+    : [];
+  const actorTechniques = tab === "actors"
+    ? related.find((group) => group.target === "mitre")?.items ?? []
+    : [];
+  const malwareTimeline =
+    tab === "malware"
+      ? await supabase
+          .from("timeline_event_entities")
+          .select("id,timeline_event_id,role,analyst_note,timeline_events(id,event_name,event_date,activity_phase,assessment_status)")
+          .eq("project_id", id)
+          .eq("malware_id", entityId)
+      : { data: [] as Row[], error: null };
+  if (malwareTimeline.error) {
+    return (
+      <section className="mx-auto max-w-5xl">
+        <div className="card text-red-300">
+          Unable to load Malware Timeline context. Please refresh and try again.
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="mx-auto max-w-5xl space-y-6">
       <Link
-        className="text-sm text-cyan-200"
+        className={["actors", "campaigns", "malware"].includes(tab) ? "text-sm text-amber-300 hover:text-amber-200" : "text-sm text-cyan-200"}
         href={`/projects/${id}?tab=${tab}`}
       >
         ← Back to {moduleLabel}
       </Link>
 
-      {tab === "indicators" ? (
+      {tab === "actors" ? (
+        <ActorProfileHeader
+          projectId={id}
+          actor={row as Row}
+          campaignCount={(actorCampaigns.data ?? []).length}
+          techniqueCount={actorTechniques.length}
+          malwareCount={actorMalware.length}
+          indicatorCount={actorIndicators.length}
+        />
+      ) : tab === "indicators" ? (
         <IndicatorSummary row={row as Row} />
+      ) : tab === "campaigns" ? (
+        <CampaignProfileHeader projectId={id} campaign={row as Row} />
+      ) : tab === "malware" ? (
+        <MalwareProfileHeader projectId={id} malware={row as Row} />
       ) : (
         <article className="card">
           <p className="text-sm text-slate-400">{ctiModuleLabels[tab]}</p>
@@ -470,7 +529,7 @@ export default async function Detail({
         <>
           <div className="flex justify-end">
             <Link
-              className="rounded border border-stone-700 px-3 py-2 text-sm text-cyan-200"
+              className="citem-button-ghost"
               href={`/projects/${id}/campaigns/${entityId}${showHistorical ? "" : "?historical=1"}`}
             >
               {showHistorical
@@ -478,21 +537,54 @@ export default async function Detail({
                 : "Show historical relationships"}
             </Link>
           </div>
-          <section className="card">
-            <p className="citem-label">Reconstruction Summary</p>
-            <h2 className="text-xl font-semibold">
-              Current Campaign Reconstruction
-            </h2>
-            <p className="mt-2 text-sm text-stone-500">
-              Campaign Reconstruction organises observed and inferred Timeline
-              events into an analyst-controlled operational sequence.
-              Reconstruction is not Threat Actor attribution.
-            </p>
-            <ReconstructionForm
-              projectId={id}
-              campaignId={entityId}
-              row={(campaignReconstruction.data ?? {}) as Row}
-            />
+          <section className="rounded-lg border border-stone-800/80 bg-[#0f1417] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="citem-label">Reconstruction</p>
+                <h2 className="mt-1 text-lg font-semibold text-stone-100">
+                  Current operational assessment
+                </h2>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-stone-500">
+                  Organise Timeline events into an analyst-controlled sequence. Reconstruction is not Threat Actor attribution.
+                </p>
+              </div>
+              {campaignReconstruction.data ? (
+                <div className="flex flex-wrap gap-2">
+                  <span className="citem-badge" data-tone="attention">{ss(campaignReconstruction.data.activity_status)}</span>
+                  <span className="citem-badge">{ss(campaignReconstruction.data.reconstruction_status)}</span>
+                </div>
+              ) : null}
+            </div>
+            {campaignReconstruction.data ? (
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <div className="rounded border border-stone-800 bg-black/15 p-3">
+                  <p className="citem-label">Operational objective</p>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-stone-300">
+                    {ss(campaignReconstruction.data.operational_objective) || "Not recorded"}
+                  </p>
+                </div>
+                <div className="rounded border border-stone-800 bg-black/15 p-3">
+                  <p className="citem-label">Current assessment</p>
+                  <p className="mt-2 line-clamp-5 whitespace-pre-wrap text-sm leading-6 text-stone-300">
+                    {ss(campaignReconstruction.data.current_assessment) || "Not recorded"}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-stone-600">No Campaign reconstruction has been recorded yet.</p>
+            )}
+            <details className="mt-4 rounded border border-stone-800 bg-black/10">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-amber-300">
+                Edit reconstruction
+              </summary>
+              <div className="border-t border-stone-800 p-4">
+                <ReconstructionForm
+                  projectId={id}
+                  campaignId={entityId}
+                  row={(campaignReconstruction.data ?? {}) as Row}
+                />
+              </div>
+            </details>
           </section>
           <section className="card">
             <h2 className="text-xl font-semibold">Ordered Activity</h2>
@@ -513,7 +605,7 @@ export default async function Detail({
                     key={ss(m.id)}
                   >
                     <Link
-                      className="font-semibold text-cyan-200"
+                      className="font-semibold text-amber-300 hover:text-amber-200"
                       href={`/projects/${id}/timeline/${ss(m.timeline_event_id)}`}
                     >
                       {ss(e?.event_name)}
@@ -557,7 +649,7 @@ export default async function Detail({
                 return (
                   <li key={ss(m.id)}>
                     <Link
-                      className="text-cyan-200"
+                      className="text-amber-300 hover:text-amber-200"
                       href={`/projects/${id}/infrastructure/${ss(m.infrastructure_cluster_id)}`}
                     >
                       {ss(c?.name)}
@@ -571,92 +663,328 @@ export default async function Detail({
                 );
               })}
             </ul>
-            <ClusterMembershipForm
-              projectId={id}
-              campaignId={entityId}
-              clusters={(availableClusters.data ?? []) as Row[]}
-            />
-          </section>
-          <section className="card">
-            <h2 className="text-xl font-semibold">
-              Supporting Events & Current Assessment
-            </h2>
-            <p>
-              Supporting Sources, Evidence, and enrichment results remain
-              authoritative at event level. Assess the coherent sequence,
-              observed versus inferred activity, objective, infrastructure,
-              activity status, disputes, likely next activity, and data still
-              required. AI does not write this assessment.
-            </p>
+            <details className="mt-4 rounded border border-stone-800 bg-black/10">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-amber-300">
+                Link infrastructure cluster
+              </summary>
+              <div className="border-t border-stone-800 p-4">
+                <ClusterMembershipForm
+                  projectId={id}
+                  campaignId={entityId}
+                  clusters={(availableClusters.data ?? []) as Row[]}
+                />
+              </div>
+            </details>
           </section>
         </>
       ) : null}
 
       {tab === "actors" ? (
-        <section className="card">
-          <h2 className="text-xl font-semibold">Attribution Hypotheses</h2>
-          <p className="text-sm text-amber-200">
-            Analytical hypothesis — not a confirmed Campaign relationship.
-          </p>
-          <ul className="mt-3 grid gap-2">
-            {((actorHypotheses.data ?? []) as Row[]).map((h) => {
-              const c = h.campaigns as Row;
-              const preferred =
-                Array.isArray(h.campaign_attribution_assessments) &&
-                h.campaign_attribution_assessments.length > 0;
-              return (
-                <li key={ss(h.id)}>
-                  <Link
-                    className="text-cyan-200"
-                    href={`/projects/${id}/campaigns/${ss(h.campaign_id)}/attribution/${ss(h.id)}`}
-                  >
-                    {ss(c?.name)} — {ss(h.title)}
-                  </Link>{" "}
-                  · {ss(h.status)} · {ss(h.confidence)}{" "}
-                  {preferred ? "· CURRENTLY PREFERRED" : ""}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ) : null}
-
-      <section className="card">
-        <h2 className="font-semibold text-white">Related entities</h2>
-        {related.map((group) => (
-          <div key={group.target} className="mt-3">
-            <h3 className="text-sm font-semibold text-cyan-200">
-              {ctiModuleLabels[group.target]}
-            </h3>
-            {group.items.length ? (
-              <ul className="list-disc pl-5 text-sm">
-                {group.items.map((item) => (
-                  <li key={ss(item.id)}>
+        <>
+          <section className="rounded-lg border border-stone-800/80 bg-[#0f1417] p-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="citem-label">Operational relationships</p>
+                <h2 className="mt-1 text-lg font-semibold text-stone-100">Campaigns</h2>
+                <p className="mt-1 text-sm text-stone-500">
+                  Existing semantic Campaign relationships. Attribution reasoning remains in the dedicated analysis workspace.
+                </p>
+              </div>
+            </div>
+            {(actorCampaigns.data ?? []).length ? (
+              <div className="mt-4 grid gap-2 md:grid-cols-2">
+                {((actorCampaigns.data ?? []) as Row[]).map((membership) => {
+                  const campaign = membership.campaigns as Row;
+                  return (
                     <Link
-                      className="text-slate-200 hover:text-cyan-200"
-                      href={ctiDetailPath(id, group.target, ss(item.id))}
+                      key={ss(membership.campaign_id)}
+                      className="rounded border border-stone-800 bg-black/15 p-3 text-sm text-stone-300 hover:border-amber-900/60 hover:text-amber-200"
+                      href={`/projects/${id}/campaigns/${ss(membership.campaign_id)}`}
+                    >
+                      {ss(campaign?.name) || "Campaign"}
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-stone-600">No Campaign relationships recorded.</p>
+            )}
+          </section>
+
+          <section className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-lg border border-stone-800/80 bg-[#0f1417] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="citem-label">Tradecraft</p>
+                  <h2 className="mt-1 text-lg font-semibold text-stone-100">Techniques</h2>
+                </div>
+                <span className="text-xs text-stone-600">{actorTechniques.length} linked</span>
+              </div>
+              {actorTechniques.length ? (
+                <div className="mt-3 grid gap-2">
+                  {actorTechniques.map((item) => (
+                    <Link
+                      key={ss(item.id)}
+                      className="rounded border border-stone-800 bg-black/15 px-3 py-2 text-sm text-stone-300 hover:border-amber-900/60 hover:text-amber-200"
+                      href={ctiDetailPath(id, "mitre", ss(item.id))}
+                    >
+                      <span className="font-mono text-amber-300">{ss(item.technique_id)}</span>
+                      {" · "}
+                      {ss(item.technique_name)}
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-stone-600">No MITRE Techniques linked.</p>
+              )}
+            </div>
+
+            <div className="rounded-lg border border-stone-800/80 bg-[#0f1417] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="citem-label">Technical profile</p>
+                  <h2 className="mt-1 text-lg font-semibold text-stone-100">Malware</h2>
+                </div>
+                <span className="text-xs text-stone-600">{actorMalware.length} linked</span>
+              </div>
+              {actorMalware.length ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {actorMalware.map((item) => (
+                    <Link
+                      key={ss(item.id)}
+                      className="rounded border border-stone-800 bg-black/15 px-2.5 py-1.5 text-xs text-stone-300 hover:border-amber-900/60 hover:text-amber-200"
+                      href={ctiDetailPath(id, "malware", ss(item.id))}
                     >
                       {ctiRecordTitle(item)}
                     </Link>
-                  </li>
-                ))}
-              </ul>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-stone-600">No Malware linked.</p>
+              )}
+            </div>
+          </section>
+
+          <details className="rounded-lg border border-stone-800/80 bg-[#0f1417]">
+            <summary className="cursor-pointer px-4 py-4 text-sm font-medium text-stone-300">
+              Linked indicators <span className="ml-2 text-xs text-stone-600">({actorIndicators.length})</span>
+            </summary>
+            <div className="max-h-72 overflow-y-auto border-t border-stone-800 p-4">
+              {actorIndicators.length ? (
+                <div className="grid gap-2">
+                  {actorIndicators.map((item) => (
+                    <Link
+                      key={ss(item.id)}
+                      className="break-all rounded border border-stone-800 bg-black/15 px-3 py-2 font-mono text-xs text-stone-400 hover:text-amber-200"
+                      href={ctiDetailPath(id, "indicators", ss(item.id))}
+                    >
+                      {ctiRecordTitle(item)}
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-stone-600">No Indicators linked.</p>
+              )}
+            </div>
+          </details>
+
+          <section className="rounded-lg border border-stone-800/80 bg-[#0f1417] p-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="citem-label">Analytical context</p>
+                <h2 className="mt-1 text-lg font-semibold text-stone-100">Attribution hypotheses</h2>
+                <p className="mt-1 text-sm text-stone-500">
+                  These are analytical hypotheses, not automatic or confirmed actor relationships.
+                </p>
+              </div>
+              <Link className="text-sm font-medium text-amber-300 hover:text-amber-200" href={`/projects/${id}/attribution`}>
+                Open Attribution Analysis →
+              </Link>
+            </div>
+            {(actorHypotheses.data ?? []).length ? (
+              <div className="mt-4 grid gap-2">
+                {((actorHypotheses.data ?? []) as Row[]).map((hypothesis) => {
+                  const campaign = hypothesis.campaigns as Row;
+                  const preferred =
+                    Array.isArray(hypothesis.campaign_attribution_assessments) &&
+                    hypothesis.campaign_attribution_assessments.length > 0;
+                  return (
+                    <Link
+                      key={ss(hypothesis.id)}
+                      className="rounded border border-stone-800 bg-black/15 p-3 hover:border-amber-900/60"
+                      href={`/projects/${id}/campaigns/${ss(hypothesis.campaign_id)}/attribution/${ss(hypothesis.id)}`}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-stone-200">{ss(campaign?.name)} · {ss(hypothesis.title)}</p>
+                          <p className="mt-1 text-xs text-stone-600">{ss(hypothesis.status)} · {ss(hypothesis.confidence)}</p>
+                        </div>
+                        {preferred ? <span className="citem-badge" data-tone="attention">Preferred</span> : null}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
             ) : (
-              <p className="text-sm text-slate-500">No linked records.</p>
+              <p className="mt-4 text-sm text-stone-600">No attribution hypotheses currently reference this actor.</p>
             )}
-          </div>
-        ))}
-      </section>
-      <section className="card">
-        <CtiForm
-          tab={tab}
-          projectId={id}
-          row={row as Row}
-          options={options}
-          selected={selected}
-        />
-        <CtiDelete tab={tab} projectId={id} row={row as Row} />
-      </section>
+          </section>
+
+          <ActorRelationshipManager
+            projectId={id}
+            actorId={entityId}
+            linked={{
+              malware: actorMalware as Row[],
+              indicator: actorIndicators as Row[],
+              mitre: actorTechniques as Row[],
+            }}
+            options={{
+              malware: optionRows.malware as Row[],
+              indicator: optionRows.indicators as Row[],
+              mitre: optionRows.mitre as Row[],
+            }}
+          />
+
+          {(ss(row.known_ttps) || aa(row.references).length) ? (
+            <details className="rounded-lg border border-stone-800/70 bg-black/10">
+              <summary className="cursor-pointer px-4 py-3 text-xs uppercase tracking-[0.12em] text-stone-600">
+                Legacy profile fields
+              </summary>
+              <div className="grid gap-4 border-t border-stone-800 p-4 text-sm">
+                {ss(row.known_ttps) ? (
+                  <div>
+                    <p className="citem-label">Legacy known TTP notes</p>
+                    <p className="mt-2 whitespace-pre-wrap text-stone-500">{ss(row.known_ttps)}</p>
+                  </div>
+                ) : null}
+                {aa(row.references).length ? (
+                  <div>
+                    <p className="citem-label">Legacy references</p>
+                    <p className="mt-2 break-all text-stone-500">{aa(row.references).join(" · ")}</p>
+                  </div>
+                ) : null}
+              </div>
+            </details>
+          ) : null}
+
+          <details className="rounded-lg border border-red-950/60 bg-red-950/5">
+            <summary className="cursor-pointer px-4 py-3 text-xs uppercase tracking-[0.12em] text-red-300/70">
+              Danger zone
+            </summary>
+            <div className="border-t border-red-950/60 p-4">
+              <CtiDelete tab="actors" projectId={id} row={row as Row} />
+            </div>
+          </details>
+        </>
+      ) : tab === "campaigns" ? (
+        <>
+          <CampaignTechnicalContext
+            projectId={id}
+            actors={related.find((group) => group.target === "actors")?.items ?? []}
+            malware={related.find((group) => group.target === "malware")?.items ?? []}
+            indicators={related.find((group) => group.target === "indicators")?.items ?? []}
+            techniques={related.find((group) => group.target === "mitre")?.items ?? []}
+          />
+
+          <section className="rounded-lg border border-stone-800/80 bg-[#0f1417] p-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="citem-label">Analytical handoff</p>
+                <h2 className="mt-1 text-lg font-semibold text-stone-100">Attribution Analysis</h2>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-stone-500">
+                  Compare competing actor hypotheses separately from Campaign identity and reconstruction.
+                </p>
+              </div>
+              <Link
+                className="text-sm font-medium text-amber-300 hover:text-amber-200"
+                href={`/projects/${id}/campaigns/${entityId}/attribution`}
+              >
+                Open Attribution Analysis →
+              </Link>
+            </div>
+          </section>
+
+          <details className="rounded-lg border border-red-950/60 bg-red-950/5">
+            <summary className="cursor-pointer px-4 py-3 text-xs uppercase tracking-[0.12em] text-red-300/70">
+              Danger zone
+            </summary>
+            <div className="border-t border-red-950/60 p-4">
+              <CtiDelete tab="campaigns" projectId={id} row={row as Row} />
+            </div>
+          </details>
+        </>
+      ) : tab === "malware" ? (
+        <>
+          <MalwareTechnicalContext
+            projectId={id}
+            malwareId={entityId}
+            behavior={ss(row.behavior)}
+            hashes={(row.hashes ?? {}) as Record<string, unknown>}
+            timelineOccurrences={(malwareTimeline.data ?? []) as Row[]}
+            linked={{
+              actor: related.find((group) => group.target === "actors")?.items ?? [],
+              campaign: related.find((group) => group.target === "campaigns")?.items ?? [],
+              indicator: related.find((group) => group.target === "indicators")?.items ?? [],
+              cve: related.find((group) => group.target === "cves")?.items ?? [],
+              mitre: related.find((group) => group.target === "mitre")?.items ?? [],
+            }}
+            options={{
+              campaign: optionRows.campaigns as Row[],
+              indicator: optionRows.indicators as Row[],
+              cve: optionRows.cves as Row[],
+              mitre: optionRows.mitre as Row[],
+            }}
+          />
+
+          <details className="rounded-lg border border-red-950/60 bg-red-950/5">
+            <summary className="cursor-pointer px-4 py-3 text-xs uppercase tracking-[0.12em] text-red-300/70">
+              Danger zone
+            </summary>
+            <div className="border-t border-red-950/60 p-4">
+              <CtiDelete tab="malware" projectId={id} row={row as Row} />
+            </div>
+          </details>
+        </>
+      ) : (
+        <>
+          <section className="card">
+            <h2 className="font-semibold text-white">Related entities</h2>
+            {related.map((group) => (
+              <div key={group.target} className="mt-3">
+                <h3 className="text-sm font-semibold text-cyan-200">
+                  {ctiModuleLabels[group.target]}
+                </h3>
+                {group.items.length ? (
+                  <ul className="list-disc pl-5 text-sm">
+                    {group.items.map((item) => (
+                      <li key={ss(item.id)}>
+                        <Link
+                          className="text-slate-200 hover:text-cyan-200"
+                          href={ctiDetailPath(id, group.target, ss(item.id))}
+                        >
+                          {ctiRecordTitle(item)}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-slate-500">No linked records.</p>
+                )}
+              </div>
+            ))}
+          </section>
+          <section className="card">
+            <CtiForm
+              tab={tab}
+              projectId={id}
+              row={row as Row}
+              options={options}
+              selected={selected}
+            />
+            <CtiDelete tab={tab} projectId={id} row={row as Row} />
+          </section>
+        </>
+      )}
     </section>
   );
 }

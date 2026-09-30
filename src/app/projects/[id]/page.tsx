@@ -12,7 +12,6 @@ import {
   DeleteEvidence,
   DeleteNote,
   DeleteTask,
-  DeleteTimeline,
   EvidenceDownload,
   EvidenceEdit,
   EvidenceUpload,
@@ -22,8 +21,6 @@ import {
   TaskCreate,
   TaskEdit,
   TaskMove,
-  TimelineCreate,
-  TimelineEdit,
 } from "@/components/workspace-forms";
 import { requireUser } from "@/lib/auth";
 import { ctiDetailPath } from "@/lib/cti-schema";
@@ -44,6 +41,11 @@ import {
 } from "@/lib/workspace/schema";
 import { validTimelineDate } from "@/lib/reconstruction/presentation";
 import { LinkedOsint } from "@/components/osint/linked-osint";
+import { TimelineEventModal } from "@/components/timeline/timeline-event-modal";
+import { ActorDirectory } from "@/components/actors/actor-workspace";
+import { CampaignDirectory } from "@/components/campaigns/campaign-workspace";
+import { MalwareDirectory } from "@/components/malware/malware-workspace";
+import { timelinePhaseLabel, timelineTimeLabel } from "@/lib/timeline/presentation";
 
 type SP = CtiSearchParams & {
   tab?: string;
@@ -127,12 +129,8 @@ export default async function Page({
 
   if (tab === "graph") {
     return (
-      <section className="mx-auto max-w-6xl">
-        <h1 className="text-3xl font-bold text-white">{project.name}</h1>
-        
-        <div className="mt-4">
-          <KnowledgeGraph projectId={id} />
-        </div>
+      <section className="citem-graph-bleed">
+        <KnowledgeGraph projectId={id} />
       </section>
     );
   }
@@ -177,7 +175,7 @@ export default async function Page({
   ] = await Promise.all([
     supabase.from("research_notes").select("*").eq("project_id", id),
     supabase.from("evidence").select("*").eq("project_id", id),
-    supabase.from("timeline_events").select("*,campaign_timeline_events(id,campaign_id,status,campaigns(name)),timeline_event_entities(id,indicator_id,infrastructure_cluster_id),timeline_event_support(id)").eq("project_id", id).order("event_date", { ascending: sp.order !== "desc" }).order("id", { ascending: true }),
+    supabase.from("timeline_events").select("*,campaign_timeline_events(id,campaign_id,status,campaigns(name)),timeline_event_entities(id,indicator_id,infrastructure_cluster_id),timeline_event_support(id),timeline_event_source_annotations(id)").eq("project_id", id).order("event_date", { ascending: sp.order !== "desc" }).order("id", { ascending: true }),
     supabase.from("project_tasks").select("*").eq("project_id", id),
     supabase.from("threat_actors").select("*").eq("project_id", id),
     supabase.from("campaigns").select("*").eq("project_id", id),
@@ -237,6 +235,40 @@ export default async function Page({
         </div>
       </section>
     );
+  const actorHypothesisResult =
+    tab === "actors"
+      ? await supabase
+          .from("attribution_hypotheses")
+          .select("id,threat_actor_id")
+          .eq("project_id", id)
+      : { data: [] as Row[], error: null };
+  if (actorHypothesisResult.error) {
+    return (
+      <section className="mx-auto max-w-6xl">
+        <div className="card text-red-300">
+          Unable to load Threat Actor analytical context. Please refresh and try again.
+        </div>
+      </section>
+    );
+  }
+
+  const campaignReconstructionResult =
+    tab === "campaigns"
+      ? await supabase
+          .from("campaign_reconstructions")
+          .select("campaign_id,activity_status,reconstruction_status,confidence")
+          .eq("project_id", id)
+      : { data: [] as Row[], error: null };
+  if (campaignReconstructionResult.error) {
+    return (
+      <section className="mx-auto max-w-6xl">
+        <div className="card text-red-300">
+          Unable to load Campaign reconstruction context. Please refresh and try again.
+        </div>
+      </section>
+    );
+  }
+
   const ctiOptions = {
     threat_actor_ids: (actors ?? []) as Row[],
     campaign_ids: (campaigns ?? []) as Row[],
@@ -258,10 +290,18 @@ export default async function Page({
     malwareMitre,
   } as Record<string, Row[] | null>;
   return (
-    <section className="mx-auto max-w-6xl">
-      <h1 className="text-3xl font-bold text-white">{project.name}</h1>
+    <section
+      className={
+        tab === "graph"
+          ? "-mx-4 -mb-4 md:-mx-[1.35rem] md:-mb-[1.35rem]"
+          : "mx-auto max-w-6xl"
+      }
+    >
+      {tab !== "graph" ? (
+        <h1 className="text-3xl font-bold text-white">{project.name}</h1>
+      ) : null}
       
-      {tab !== "overview" && tab !== "graph" && (
+      {tab !== "overview" && tab !== "graph" && tab !== "timeline" && tab !== "actors" && tab !== "campaigns" && tab !== "malware" && (
         <SearchBar
           id={id}
           tab={tab}
@@ -314,7 +354,6 @@ export default async function Page({
             return (!sp.basis || event.basis === sp.basis)
               && (!sp.activity_phase || event.activity_phase === sp.activity_phase)
               && (!sp.assessment_status || event.assessment_status === sp.assessment_status)
-              && (!sp.confidence || event.confidence === sp.confidence)
               && (!sp.campaign_id || memberships.some((membership) => membership.campaign_id === sp.campaign_id))
               && (!start || ss(event.event_date).slice(0, 10) >= start)
               && (!end || ss(event.event_date).slice(0, 10) <= end);
@@ -338,21 +377,33 @@ export default async function Page({
         />
       )}{" "}
       {tab === "actors" && (
-        <CtiList
-          tab="actors"
-          id={id}
+        <ActorDirectory
+          projectId={id}
           rows={filterActors((actors ?? []) as Row[], sp)}
-          options={ctiOptions}
-          rels={rels}
+          allRows={(actors ?? []) as Row[]}
+          relations={{
+            campaignThreatActors: (campaignThreatActors ?? []) as Row[],
+            threatActorMalware: (threatActorMalware ?? []) as Row[],
+            threatActorIndicators: (threatActorIndicators ?? []) as Row[],
+            threatActorMitre: (threatActorMitre ?? []) as Row[],
+            actorHypotheses: (actorHypothesisResult.data ?? []) as Row[],
+          }}
+          filters={sp}
         />
       )}{" "}
       {tab === "campaigns" && (
-        <CtiList
-          tab="campaigns"
-          id={id}
+        <CampaignDirectory
+          projectId={id}
           rows={filterCampaigns((campaigns ?? []) as Row[], sp, rels)}
-          options={ctiOptions}
-          rels={rels}
+          events={(events ?? []) as Row[]}
+          reconstructions={(campaignReconstructionResult.data ?? []) as Row[]}
+          relations={{
+            campaignThreatActors: (campaignThreatActors ?? []) as Row[],
+            campaignMalware: (campaignMalware ?? []) as Row[],
+            campaignIndicators: (campaignIndicators ?? []) as Row[],
+            campaignMitre: (campaignMitre ?? []) as Row[],
+          }}
+          filters={sp}
         />
       )}{" "}
       {tab === "indicators" && (
@@ -365,12 +416,19 @@ export default async function Page({
         />
       )}{" "}
       {tab === "malware" && (
-        <CtiList
-          tab="malware"
-          id={id}
+        <MalwareDirectory
+          projectId={id}
           rows={filterMalware((malware ?? []) as Row[], sp, rels)}
-          options={ctiOptions}
-          rels={rels}
+          allRows={(malware ?? []) as Row[]}
+          campaigns={(campaigns ?? []) as Row[]}
+          relations={{
+            threatActorMalware: (threatActorMalware ?? []) as Row[],
+            campaignMalware: (campaignMalware ?? []) as Row[],
+            malwareIndicators: (malwareIndicators ?? []) as Row[],
+            cveMalware: (cveMalware ?? []) as Row[],
+            malwareMitre: (malwareMitre ?? []) as Row[],
+          }}
+          filters={sp}
         />
       )}{" "}
       {tab === "cves" && (
@@ -768,43 +826,114 @@ function Evidence({ id, rows }: { id: string; rows: Row[] }) {
 function Timeline({ id, rows, campaigns, filters }: { id: string; rows: Row[]; campaigns: Row[]; filters: SP }) {
   return (
     <div className="grid gap-4">
-      <div className="card">
-        <h2 className="mb-3 font-semibold text-white">New timeline event</h2>
-        <TimelineCreate projectId={id} />
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="citem-label">Temporal reconstruction</p>
+          <h2 className="mt-1 text-xl font-semibold text-stone-100">Timeline</h2>
+          <p className="mt-1 max-w-2xl text-sm text-stone-500">
+            Record what happened and when. Campaign, technical and source relationships stay available without crowding the event log.
+          </p>
+        </div>
+        <TimelineEventModal projectId={id} />
       </div>
-      <form className="card grid gap-2 md:grid-cols-4">
+
+      <form className="card grid gap-2 lg:grid-cols-[minmax(220px,1.3fr)_minmax(180px,1fr)_150px_150px_auto]">
         <input type="hidden" name="tab" value="timeline"/>
-        <select className="field" aria-label="Event basis" name="basis" defaultValue={filters.basis ?? ""}><option value="">All bases</option><option>OBSERVED</option><option>INFERRED</option></select>
-        <select className="field" aria-label="Activity phase" name="activity_phase" defaultValue={filters.activity_phase ?? ""}><option value="">All phases</option>{["UNKNOWN","INFRASTRUCTURE_PREPARATION","TARGETING","DELIVERY","INITIAL_ACCESS","EXECUTION","PERSISTENCE","COMMAND_AND_CONTROL","COLLECTION","EXFILTRATION","IMPACT","INFRASTRUCTURE_CHANGE","OTHER"].map(x=><option key={x}>{x}</option>)}</select>
-        <select className="field" aria-label="Assessment status" name="assessment_status" defaultValue={filters.assessment_status ?? ""}><option value="">All statuses</option>{["RECORDED","ASSESSED","DISPUTED","RETRACTED"].map(x=><option key={x}>{x}</option>)}</select>
-        <select className="field" aria-label="Confidence" name="confidence" defaultValue={filters.confidence ?? ""}><option value="">All confidence</option>{["LOW","MEDIUM","HIGH"].map(x=><option key={x}>{x}</option>)}</select>
-        <select className="field" aria-label="Campaign" name="campaign_id" defaultValue={filters.campaign_id ?? ""}><option value="">All Campaigns</option>{campaigns.map(campaign=><option key={ss(campaign.id)} value={ss(campaign.id)}>{ss(campaign.name)}</option>)}</select>
+        <input
+          className="field"
+          aria-label="Search Timeline"
+          name="q"
+          defaultValue={filters.q ?? ""}
+          placeholder="Search events…"
+        />
+        <select className="field" aria-label="Campaign" name="campaign_id" defaultValue={filters.campaign_id ?? ""}>
+          <option value="">All Campaigns</option>
+          {campaigns.map((campaign)=><option key={ss(campaign.id)} value={ss(campaign.id)}>{ss(campaign.name)}</option>)}
+        </select>
         <input className="field" aria-label="Timeline start date" name="start_date" type="date" defaultValue={validTimelineDate(filters.start_date) ?? ""}/>
         <input className="field" aria-label="Timeline end date" name="end_date" type="date" defaultValue={validTimelineDate(filters.end_date) ?? ""}/>
-        <select className="field" aria-label="Chronological direction" name="order" defaultValue={filters.order ?? "asc"}><option value="asc">Oldest first</option><option value="desc">Newest first</option></select>
-        <button className="rounded bg-stone-800 px-3 py-2">Filter timeline</button>
+        <div className="flex gap-2">
+          <select className="field" aria-label="Chronological direction" name="order" defaultValue={filters.order ?? "asc"}>
+            <option value="asc">Oldest first</option>
+            <option value="desc">Newest first</option>
+          </select>
+          <button className="citem-button px-4" type="submit">Apply</button>
+        </div>
+
+        <details className="lg:col-span-5 rounded border border-stone-800 bg-black/10 p-3">
+          <summary className="cursor-pointer text-sm text-amber-300">Advanced filters</summary>
+          <div className="mt-3 grid gap-2 md:grid-cols-3">
+            <select className="field" aria-label="Event basis" name="basis" defaultValue={filters.basis ?? ""}>
+              <option value="">All bases</option>
+              <option value="OBSERVED">Observed</option>
+              <option value="INFERRED">Inferred</option>
+            </select>
+            <select className="field" aria-label="Activity phase" name="activity_phase" defaultValue={filters.activity_phase ?? ""}>
+              <option value="">All phases</option>
+              {["UNKNOWN","INFRASTRUCTURE_PREPARATION","TARGETING","DELIVERY","INITIAL_ACCESS","EXECUTION","PERSISTENCE","COMMAND_AND_CONTROL","COLLECTION","EXFILTRATION","IMPACT","INFRASTRUCTURE_CHANGE","OTHER"].map((x)=><option key={x} value={x}>{timelinePhaseLabel(x)}</option>)}
+            </select>
+            <select className="field" aria-label="Assessment status" name="assessment_status" defaultValue={filters.assessment_status ?? ""}>
+              <option value="">All assessment states</option>
+              {["RECORDED","ASSESSED","DISPUTED","RETRACTED"].map((x)=><option key={x} value={x}>{timelinePhaseLabel(x)}</option>)}
+            </select>
+          </div>
+        </details>
       </form>
-      <ol className="border-l border-cyan-900 pl-4">
+
+      <ol className="relative ml-2 border-l border-amber-900/40 pl-6">
         {rows.length ? (
-          rows.map((e) => (
-            <li className="card mb-4" key={ss(e.id)}>
-              <time className="text-cyan-200">
-                {new Date(ss(e.event_date)).toLocaleString()}
-                {e.occurred_end_at ? ` → ${new Date(ss(e.occurred_end_at)).toLocaleString()}` : ""}
-              </time>
-              <h3 className="font-semibold text-white"><Link className="hover:text-cyan-200" href={`/projects/${id}/timeline/${ss(e.id)}`}>{ss(e.event_name)}</Link></h3>
-              <div className="my-2 flex flex-wrap gap-2"><span className="citem-badge">{ss(e.basis||"OBSERVED")}</span><span className="citem-badge">{ss(e.activity_phase||"UNKNOWN")}</span><span className="citem-badge">{ss(e.assessment_status||"RECORDED")}</span><span className="citem-badge">{ss(e.confidence||"MEDIUM")}</span></div>
-              <p>{ss(e.description)}</p>
-              {e.analyst_rationale ? <p className="mt-2 text-sm text-stone-400"><strong>Rationale:</strong> {ss(e.analyst_rationale)}</p> : null}
-              <p className="mt-2 text-xs text-stone-500">{Array.isArray(e.timeline_event_entities)?e.timeline_event_entities.length:0} technical entities · {Array.isArray(e.timeline_event_support)?e.timeline_event_support.length:0} supporting records · {Array.isArray(e.campaign_timeline_events)?e.campaign_timeline_events.length:0} Campaign assessments</p>
-              <TimelineEdit projectId={id} event={e} />
-              <DeleteTimeline projectId={id} id={ss(e.id)} />
-            </li>
-          ))
+          rows.map((event) => {
+            const memberships = Array.isArray(event.campaign_timeline_events) ? event.campaign_timeline_events as Row[] : [];
+            const entityCount = Array.isArray(event.timeline_event_entities) ? event.timeline_event_entities.length : 0;
+            const supportCount = (Array.isArray(event.timeline_event_support) ? event.timeline_event_support.length : 0)
+              + (Array.isArray(event.timeline_event_source_annotations) ? event.timeline_event_source_annotations.length : 0);
+            return (
+              <li className="relative mb-4" key={ss(event.id)}>
+                <span className="absolute -left-[1.92rem] top-5 h-2.5 w-2.5 rounded-full border border-amber-500/70 bg-[#111619] shadow-[0_0_0_4px_rgba(185,130,47,0.06)]" />
+                <article className="card">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <time className="font-mono text-xs uppercase tracking-[0.12em] text-amber-300">
+                        {timelineTimeLabel(event)}
+                      </time>
+                      <h3 className="mt-1 text-base font-semibold text-stone-100">
+                        <Link className="hover:text-amber-200" href={`/projects/${id}/timeline/${ss(event.id)}`}>
+                          {ss(event.event_name)}
+                        </Link>
+                      </h3>
+                    </div>
+                    <Link className="text-xs text-stone-500 hover:text-amber-300" href={`/projects/${id}/timeline/${ss(event.id)}`}>
+                      Open event →
+                    </Link>
+                  </div>
+
+                  {event.description ? (
+                    <p className="mt-2 max-h-16 overflow-hidden whitespace-pre-wrap text-sm leading-6 text-stone-400">
+                      {ss(event.description)}
+                    </p>
+                  ) : null}
+
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {event.activity_phase && event.activity_phase !== "UNKNOWN" ? (
+                      <span className="citem-badge" data-tone="attention">{timelinePhaseLabel(event.activity_phase)}</span>
+                    ) : null}
+                    {event.basis === "INFERRED" ? <span className="citem-badge">Inferred</span> : null}
+                    {memberships.slice(0, 3).map((membership) => (
+                      <span className="citem-badge" key={ss(membership.id)}>
+                        {ss((membership.campaigns as Row)?.name) || "Campaign"} · {timelinePhaseLabel(membership.status)}
+                      </span>
+                    ))}
+                  </div>
+
+                  <p className="mt-3 text-[11px] text-stone-600">
+                    {supportCount} source link{supportCount === 1 ? "" : "s"} · {entityCount} technical link{entityCount === 1 ? "" : "s"}
+                  </p>
+                </article>
+              </li>
+            );
+          })
         ) : (
-          <li className="card text-slate-400">
-            No timeline events match this view.
-          </li>
+          <li className="card text-stone-500">No Timeline events match this view.</li>
         )}
       </ol>
     </div>

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  filterActors,
   filterCampaigns,
   filterIndicators,
   filterMalware,
@@ -14,6 +15,29 @@ const rels = {
   campaignMalware: [{ malware_id: "m1", campaign_id: "c1" }],
 };
 describe("cti filter helpers", () => {
+  it("searches Threat Actors by aliases and reported motivations", () => {
+    const rows = [
+      {
+        id: "a1",
+        name: "APT28",
+        aliases: ["Fancy Bear", "Forest Blizzard"],
+        country: "Russia",
+        motivations: ["Espionage"],
+        description: "Tracked intrusion set",
+      },
+      {
+        id: "a2",
+        name: "Other Actor",
+        aliases: ["Unrelated"],
+        country: "Unknown",
+        motivations: ["Financial"],
+        description: "",
+      },
+    ];
+    expect(filterActors(rows, { q: "forest blizzard" }).map((r) => r.id)).toEqual(["a1"]);
+    expect(filterActors(rows, { q: "espionage" }).map((r) => r.id)).toEqual(["a1"]);
+    expect(filterActors(rows, { country: "Russia", motivation: "Espionage" }).map((r) => r.id)).toEqual(["a1"]);
+  });
   it("filters active campaigns by date and linked actor", () => {
     const rows = [
       { id: "c1", name: "one", start_date: "2026-01-01", end_date: null },
