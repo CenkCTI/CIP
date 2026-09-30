@@ -64,7 +64,7 @@ export function AnnotationTimelineActions({
               className="citem-badge hover:border-amber-700 hover:text-amber-200"
               href={`/projects/${projectId}/timeline/${text(link.timeline_event_id)}`}
             >
-              {text(link.timeline_events?.event_name) || "Timeline event"}
+              {text((link.timeline_events as Row)?.event_name) || "Timeline event"}
             </Link>
           ))}
         </div>
@@ -77,7 +77,8 @@ export function AnnotationTimelineActions({
           className="mt-3 space-y-2 rounded border border-amber-900/40 bg-amber-950/10 p-3"
           onSubmit={(e) => {
             e.preventDefault();
-            const fd = new FormData(e.currentTarget);
+            const form = e.currentTarget;
+            const fd = new FormData(form);
             fd.set("description", text(annotation.selected_text) || text(annotation.comment));
             fd.set("basis", "OBSERVED");
             fd.set("activity_phase", "UNKNOWN");
@@ -119,7 +120,8 @@ export function AnnotationTimelineActions({
           className="mt-3 flex gap-2"
           onSubmit={(e) => {
             e.preventDefault();
-            const fd = new FormData(e.currentTarget);
+            const form = e.currentTarget;
+            const fd = new FormData(form);
             const eventId = text(fd.get("event_id"));
             startTransition(async () => {
               const result = await linkAnnotationToTimelineEvent(
