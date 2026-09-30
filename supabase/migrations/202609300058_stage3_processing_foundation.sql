@@ -46,9 +46,16 @@ alter table public.source_annotations
   drop constraint if exists source_annotations_processing_state_consistency,
   add constraint source_annotations_processing_state_consistency
     check(
-      (processing_state='UNPROCESSED' and processed_at is null and processed_by is null)
-      or
-      (processing_state in ('PROCESSED','IGNORED') and processed_at is not null and processed_by is not null)
+      (
+        (processing_state='UNPROCESSED' and processed_at is null and processed_by is null)
+        or
+        (processing_state in ('PROCESSED','IGNORED') and processed_at is not null and processed_by is not null)
+      )
+      and
+      (
+        processing_state <> 'IGNORED'
+        or char_length(trim(coalesce(processing_note,''))) > 0
+      )
     );
 
 create index if not exists source_annotations_processing_queue_idx
@@ -168,6 +175,9 @@ create unique index if not exists source_annotation_outputs_claim_unique
   on public.source_annotation_outputs(project_id,source_annotation_id,attribution_claim_id)
   where attribution_claim_id is not null;
 
+grant select,insert,update,delete on public.source_attribution_claims to authenticated;
+grant select,insert,delete on public.source_annotation_outputs to authenticated;
+
 alter table public.source_attribution_claims enable row level security;
 alter table public.source_annotation_outputs enable row level security;
 
@@ -205,7 +215,7 @@ create policy source_annotation_outputs_delete_owned
 comment on column public.source_annotations.processing_state is
   'Stage 3 analyst work state only. It is not a percentage-complete metric and is never inferred from output count.';
 comment on table public.source_annotation_outputs is
-  'Immutable provenance ledger from one source annotation to analyst-created or analyst-linked structured CITEM records. It is not an analytical relationship graph.';
+  'Analyst-controlled provenance ledger from one source annotation to analyst-created or analyst-linked structured CITEM records. Links may be removed without deleting the structured record. It is not an analytical relationship graph.';
 comment on column public.source_annotation_outputs.mapping_origin is
   'Origin of the normalization/mapping decision. AI_SUGGESTED means analyst accepted a suggestion; it never means autonomous analytical judgement.';
 comment on table public.source_attribution_claims is
