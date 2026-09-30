@@ -3,6 +3,10 @@ import { notFound } from "next/navigation";
 
 import { CtiDelete, CtiForm } from "@/components/cti-forms";
 import {
+  ActorProfileHeader,
+  ActorRelationshipManager,
+} from "@/components/actors/actor-workspace";
+import {
   ClusterMembershipForm,
   ReconstructionForm,
 } from "@/components/reconstruction/forms";
@@ -421,6 +425,23 @@ export default async function Detail({
           .eq("project_id", id)
           .eq("threat_actor_id", entityId)
       : { data: [] };
+  const actorCampaigns =
+    tab === "actors"
+      ? await supabase
+          .from("campaign_threat_actors")
+          .select("campaign_id,campaigns(id,name)")
+          .eq("project_id", id)
+          .eq("threat_actor_id", entityId)
+      : { data: [] };
+  const actorMalware = tab === "actors"
+    ? related.find((group) => group.target === "malware")?.items ?? []
+    : [];
+  const actorIndicators = tab === "actors"
+    ? related.find((group) => group.target === "indicators")?.items ?? []
+    : [];
+  const actorTechniques = tab === "actors"
+    ? related.find((group) => group.target === "mitre")?.items ?? []
+    : [];
 
   return (
     <section className="mx-auto max-w-5xl space-y-6">
@@ -431,7 +452,16 @@ export default async function Detail({
         ← Back to {moduleLabel}
       </Link>
 
-      {tab === "indicators" ? (
+      {tab === "actors" ? (
+        <ActorProfileHeader
+          projectId={id}
+          actor={row as Row}
+          campaignCount={(actorCampaigns.data ?? []).length}
+          techniqueCount={actorTechniques.length}
+          malwareCount={actorMalware.length}
+          indicatorCount={actorIndicators.length}
+        />
+      ) : tab === "indicators" ? (
         <IndicatorSummary row={row as Row} />
       ) : (
         <article className="card">
@@ -593,70 +623,242 @@ export default async function Detail({
       ) : null}
 
       {tab === "actors" ? (
-        <section className="card">
-          <h2 className="text-xl font-semibold">Attribution Hypotheses</h2>
-          <p className="text-sm text-amber-200">
-            Analytical hypothesis — not a confirmed Campaign relationship.
-          </p>
-          <ul className="mt-3 grid gap-2">
-            {((actorHypotheses.data ?? []) as Row[]).map((h) => {
-              const c = h.campaigns as Row;
-              const preferred =
-                Array.isArray(h.campaign_attribution_assessments) &&
-                h.campaign_attribution_assessments.length > 0;
-              return (
-                <li key={ss(h.id)}>
-                  <Link
-                    className="text-cyan-200"
-                    href={`/projects/${id}/campaigns/${ss(h.campaign_id)}/attribution/${ss(h.id)}`}
-                  >
-                    {ss(c?.name)} — {ss(h.title)}
-                  </Link>{" "}
-                  · {ss(h.status)} · {ss(h.confidence)}{" "}
-                  {preferred ? "· CURRENTLY PREFERRED" : ""}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ) : null}
-
-      <section className="card">
-        <h2 className="font-semibold text-white">Related entities</h2>
-        {related.map((group) => (
-          <div key={group.target} className="mt-3">
-            <h3 className="text-sm font-semibold text-cyan-200">
-              {ctiModuleLabels[group.target]}
-            </h3>
-            {group.items.length ? (
-              <ul className="list-disc pl-5 text-sm">
-                {group.items.map((item) => (
-                  <li key={ss(item.id)}>
+        <>
+          <section className="rounded-lg border border-stone-800/80 bg-[#0f1417] p-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="citem-label">Operational relationships</p>
+                <h2 className="mt-1 text-lg font-semibold text-stone-100">Campaigns</h2>
+                <p className="mt-1 text-sm text-stone-500">
+                  Existing semantic Campaign relationships. Attribution reasoning remains in the dedicated analysis workspace.
+                </p>
+              </div>
+            </div>
+            {(actorCampaigns.data ?? []).length ? (
+              <div className="mt-4 grid gap-2 md:grid-cols-2">
+                {((actorCampaigns.data ?? []) as Row[]).map((membership) => {
+                  const campaign = membership.campaigns as Row;
+                  return (
                     <Link
-                      className="text-slate-200 hover:text-cyan-200"
-                      href={ctiDetailPath(id, group.target, ss(item.id))}
+                      key={ss(membership.campaign_id)}
+                      className="rounded border border-stone-800 bg-black/15 p-3 text-sm text-stone-300 hover:border-amber-900/60 hover:text-amber-200"
+                      href={`/projects/${id}/campaigns/${ss(membership.campaign_id)}`}
+                    >
+                      {ss(campaign?.name) || "Campaign"}
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-stone-600">No Campaign relationships recorded.</p>
+            )}
+          </section>
+
+          <section className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-lg border border-stone-800/80 bg-[#0f1417] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="citem-label">Tradecraft</p>
+                  <h2 className="mt-1 text-lg font-semibold text-stone-100">Techniques</h2>
+                </div>
+                <span className="text-xs text-stone-600">{actorTechniques.length} linked</span>
+              </div>
+              {actorTechniques.length ? (
+                <div className="mt-3 grid gap-2">
+                  {actorTechniques.map((item) => (
+                    <Link
+                      key={ss(item.id)}
+                      className="rounded border border-stone-800 bg-black/15 px-3 py-2 text-sm text-stone-300 hover:border-amber-900/60 hover:text-amber-200"
+                      href={ctiDetailPath(id, "mitre", ss(item.id))}
+                    >
+                      <span className="font-mono text-amber-300">{ss(item.technique_id)}</span>
+                      {" · "}
+                      {ss(item.technique_name)}
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-stone-600">No MITRE Techniques linked.</p>
+              )}
+            </div>
+
+            <div className="rounded-lg border border-stone-800/80 bg-[#0f1417] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="citem-label">Technical profile</p>
+                  <h2 className="mt-1 text-lg font-semibold text-stone-100">Malware</h2>
+                </div>
+                <span className="text-xs text-stone-600">{actorMalware.length} linked</span>
+              </div>
+              {actorMalware.length ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {actorMalware.map((item) => (
+                    <Link
+                      key={ss(item.id)}
+                      className="rounded border border-stone-800 bg-black/15 px-2.5 py-1.5 text-xs text-stone-300 hover:border-amber-900/60 hover:text-amber-200"
+                      href={ctiDetailPath(id, "malware", ss(item.id))}
                     >
                       {ctiRecordTitle(item)}
                     </Link>
-                  </li>
-                ))}
-              </ul>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-stone-600">No Malware linked.</p>
+              )}
+            </div>
+          </section>
+
+          <details className="rounded-lg border border-stone-800/80 bg-[#0f1417]">
+            <summary className="cursor-pointer px-4 py-4 text-sm font-medium text-stone-300">
+              Linked indicators <span className="ml-2 text-xs text-stone-600">({actorIndicators.length})</span>
+            </summary>
+            <div className="max-h-72 overflow-y-auto border-t border-stone-800 p-4">
+              {actorIndicators.length ? (
+                <div className="grid gap-2">
+                  {actorIndicators.map((item) => (
+                    <Link
+                      key={ss(item.id)}
+                      className="break-all rounded border border-stone-800 bg-black/15 px-3 py-2 font-mono text-xs text-stone-400 hover:text-amber-200"
+                      href={ctiDetailPath(id, "indicators", ss(item.id))}
+                    >
+                      {ctiRecordTitle(item)}
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-stone-600">No Indicators linked.</p>
+              )}
+            </div>
+          </details>
+
+          <section className="rounded-lg border border-stone-800/80 bg-[#0f1417] p-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="citem-label">Analytical context</p>
+                <h2 className="mt-1 text-lg font-semibold text-stone-100">Attribution hypotheses</h2>
+                <p className="mt-1 text-sm text-stone-500">
+                  These are analytical hypotheses, not automatic or confirmed actor relationships.
+                </p>
+              </div>
+              <Link className="text-sm font-medium text-amber-300 hover:text-amber-200" href={`/projects/${id}/attribution`}>
+                Open Attribution Analysis →
+              </Link>
+            </div>
+            {(actorHypotheses.data ?? []).length ? (
+              <div className="mt-4 grid gap-2">
+                {((actorHypotheses.data ?? []) as Row[]).map((hypothesis) => {
+                  const campaign = hypothesis.campaigns as Row;
+                  const preferred =
+                    Array.isArray(hypothesis.campaign_attribution_assessments) &&
+                    hypothesis.campaign_attribution_assessments.length > 0;
+                  return (
+                    <Link
+                      key={ss(hypothesis.id)}
+                      className="rounded border border-stone-800 bg-black/15 p-3 hover:border-amber-900/60"
+                      href={`/projects/${id}/campaigns/${ss(hypothesis.campaign_id)}/attribution/${ss(hypothesis.id)}`}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-stone-200">{ss(campaign?.name)} · {ss(hypothesis.title)}</p>
+                          <p className="mt-1 text-xs text-stone-600">{ss(hypothesis.status)} · {ss(hypothesis.confidence)}</p>
+                        </div>
+                        {preferred ? <span className="citem-badge" data-tone="attention">Preferred</span> : null}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
             ) : (
-              <p className="text-sm text-slate-500">No linked records.</p>
+              <p className="mt-4 text-sm text-stone-600">No attribution hypotheses currently reference this actor.</p>
             )}
-          </div>
-        ))}
-      </section>
-      <section className="card">
-        <CtiForm
-          tab={tab}
-          projectId={id}
-          row={row as Row}
-          options={options}
-          selected={selected}
-        />
-        <CtiDelete tab={tab} projectId={id} row={row as Row} />
-      </section>
+          </section>
+
+          <ActorRelationshipManager
+            projectId={id}
+            actorId={entityId}
+            linked={{
+              malware: actorMalware as Row[],
+              indicator: actorIndicators as Row[],
+              mitre: actorTechniques as Row[],
+            }}
+            options={{
+              malware: optionRows.malware as Row[],
+              indicator: optionRows.indicators as Row[],
+              mitre: optionRows.mitre as Row[],
+            }}
+          />
+
+          {(ss(row.known_ttps) || aa(row.references).length) ? (
+            <details className="rounded-lg border border-stone-800/70 bg-black/10">
+              <summary className="cursor-pointer px-4 py-3 text-xs uppercase tracking-[0.12em] text-stone-600">
+                Legacy profile fields
+              </summary>
+              <div className="grid gap-4 border-t border-stone-800 p-4 text-sm">
+                {ss(row.known_ttps) ? (
+                  <div>
+                    <p className="citem-label">Legacy known TTP notes</p>
+                    <p className="mt-2 whitespace-pre-wrap text-stone-500">{ss(row.known_ttps)}</p>
+                  </div>
+                ) : null}
+                {aa(row.references).length ? (
+                  <div>
+                    <p className="citem-label">Legacy references</p>
+                    <p className="mt-2 break-all text-stone-500">{aa(row.references).join(" · ")}</p>
+                  </div>
+                ) : null}
+              </div>
+            </details>
+          ) : null}
+
+          <details className="rounded-lg border border-red-950/60 bg-red-950/5">
+            <summary className="cursor-pointer px-4 py-3 text-xs uppercase tracking-[0.12em] text-red-300/70">
+              Danger zone
+            </summary>
+            <div className="border-t border-red-950/60 p-4">
+              <CtiDelete tab="actors" projectId={id} row={row as Row} />
+            </div>
+          </details>
+        </>
+      ) : (
+        <>
+          <section className="card">
+            <h2 className="font-semibold text-white">Related entities</h2>
+            {related.map((group) => (
+              <div key={group.target} className="mt-3">
+                <h3 className="text-sm font-semibold text-cyan-200">
+                  {ctiModuleLabels[group.target]}
+                </h3>
+                {group.items.length ? (
+                  <ul className="list-disc pl-5 text-sm">
+                    {group.items.map((item) => (
+                      <li key={ss(item.id)}>
+                        <Link
+                          className="text-slate-200 hover:text-cyan-200"
+                          href={ctiDetailPath(id, group.target, ss(item.id))}
+                        >
+                          {ctiRecordTitle(item)}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-slate-500">No linked records.</p>
+                )}
+              </div>
+            ))}
+          </section>
+          <section className="card">
+            <CtiForm
+              tab={tab}
+              projectId={id}
+              row={row as Row}
+              options={options}
+              selected={selected}
+            />
+            <CtiDelete tab={tab} projectId={id} row={row as Row} />
+          </section>
+        </>
+      )}
     </section>
   );
 }
