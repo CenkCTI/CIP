@@ -71,7 +71,8 @@ describe("Stage 3 Source Reader processing bridge", () => {
 
   it("keeps analytical-stage warnings in the processing UI", () => {
     expect(component).toContain("Reliability, corroboration");
-    expect(component).toContain("does not attribute the current activity");
+    expect(component).toContain("does not attribute the current");
+    expect(component).toContain("activity to that actor");
     expect(component).toContain("Operational Picture analysis");
     expect(component).toContain("Suggestions only");
   });
