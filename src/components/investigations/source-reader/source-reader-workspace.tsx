@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { extractDocxPlainText, isDocxFile } from "@/lib/collection/docx-preview";
 import { PdfSourceViewer } from "@/components/investigations/source-reader/pdf/pdf-source-viewer";
+import { AnnotationTimelineActions } from "@/components/investigations/source-reader/annotation-timeline-actions";
 
 import {
   createSourceAnnotation,
@@ -477,6 +478,9 @@ export function SourceReaderWorkspace({
   annotationFragments,
   annotationGapLinks,
   annotationRequirementLinks,
+  timelineEvents,
+  annotationTimelineLinks,
+  initialFocusedAnnotationId,
 }: {
   projectId: string;
   source: Row;
@@ -491,6 +495,9 @@ export function SourceReaderWorkspace({
   annotationFragments: Row[];
   annotationGapLinks: Row[];
   annotationRequirementLinks: Row[];
+  timelineEvents: Row[];
+  annotationTimelineLinks: Row[];
+  initialFocusedAnnotationId?: string | null;
 }) {
   const router = useRouter();
   const isPdf =
@@ -503,9 +510,13 @@ export function SourceReaderWorkspace({
   const [requirementIds, setRequirementIds] = useState<string[]>(sourceRequirementIds);
   const [saving, startSaving] = useTransition();
   const [message, setMessage] = useState<SourceCollectionActionState>({});
-  const [panel, setPanel] = useState<"context" | "notes" | "annotations">("context");
+  const [panel, setPanel] = useState<"context" | "notes" | "annotations">(
+    initialFocusedAnnotationId ? "annotations" : "context",
+  );
   const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null);
-  const [focusedAnnotationId, setFocusedAnnotationId] = useState<string | null>(null);
+  const [focusedAnnotationId, setFocusedAnnotationId] = useState<string | null>(
+    initialFocusedAnnotationId ?? null,
+  );
   const [editingComment, setEditingComment] = useState("");
   const [editingGapIds, setEditingGapIds] = useState<string[]>([]);
   const [editingRequirementIds, setEditingRequirementIds] = useState<string[]>([]);
@@ -531,6 +542,14 @@ export function SourceReaderWorkspace({
     }
     return map;
   }, [annotationRequirementLinks]);
+  const annTimelineLinks = useMemo(() => {
+    const map = new Map<string, Row[]>();
+    for (const link of annotationTimelineLinks) {
+      const id = s(link.source_annotation_id);
+      map.set(id, [...(map.get(id) ?? []), link]);
+    }
+    return map;
+  }, [annotationTimelineLinks]);
 
   useEffect(() => {
     if (panel !== "annotations" || !focusedAnnotationId) return;
@@ -933,6 +952,15 @@ export function SourceReaderWorkspace({
                         <p className="mt-2 text-[11px] text-amber-400">
                           Eski ekran-koordinatı işaretlemesi; PDF üzerine otomatik taşınmadı.
                         </p>
+                      ) : null}
+                      {!legacy ? (
+                        <AnnotationTimelineActions
+                          projectId={projectId}
+                          sourceId={s(source.id)}
+                          annotation={annotation}
+                          events={timelineEvents}
+                          links={annTimelineLinks.get(id) ?? []}
+                        />
                       ) : null}
                       <div className="mt-2 flex flex-wrap gap-3">
                         {!legacy && annotation.page_number ? (
