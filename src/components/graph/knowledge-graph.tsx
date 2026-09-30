@@ -81,6 +81,13 @@ function terrainShadow(degree: number, maxDegree: number, selected: boolean) {
   return contours.join(", ");
 }
 
+function compactGraphLabel(value: string, max = 34) {
+  if (value.length <= max) return value;
+  const denseToken = !value.includes(" ") && value.length > max;
+  if (denseToken) return value.slice(0, Math.ceil(max * 0.58)) + "…" + value.slice(-Math.floor(max * 0.28));
+  return value.slice(0, max - 1).trimEnd() + "…";
+}
+
 function graphError(payload: unknown, fallback: string) {
   return payload && typeof payload === "object" && "error" in payload
     ? String((payload as { error?: unknown }).error ?? fallback)
@@ -95,6 +102,8 @@ function GraphCanvas({
   onLayoutReset,
   onPositionSaved,
   layoutWarning,
+  showHistoricalInfrastructure,
+  onHistoricalInfrastructureChange,
 }: {
   data: GraphResponse;
   projectId: string;
@@ -103,6 +112,8 @@ function GraphCanvas({
   onLayoutReset: () => Promise<void>;
   onPositionSaved: (id: string, position: { x: number; y: number }) => void;
   layoutWarning: string;
+  showHistoricalInfrastructure: boolean;
+  onHistoricalInfrastructureChange: (checked: boolean) => void;
 }) {
   const { fitView } = useReactFlow();
   const [query, setQuery] = useState("");
@@ -114,12 +125,14 @@ function GraphCanvas({
   const [relationships, setRelationships] = useState<string[]>(relationshipOptions);
   const knownRelationshipTypes = useRef(new Set(relationshipOptions));
   const [selected, setSelected] = useState<string[]>([]);
-  const [drawer, setDrawer] = useState<GraphNode | null>(null);
   const [message, setMessage] = useState("");
   const [label, setLabel] = useState("related_to");
   const [description, setDescription] = useState("");
   const [editing, setEditing] = useState<GraphEdge | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [viewportZoom, setViewportZoom] = useState(1);
+  const terrainFarRef = useRef<HTMLDivElement | null>(null);
+  const terrainMidRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const newlyDiscovered = relationshipOptions.filter(
@@ -193,11 +206,14 @@ function GraphCanvas({
           (node.label.toLowerCase().includes(query.toLowerCase()) ||
             node.subtitle?.toLowerCase().includes(query.toLowerCase()));
         const degree = degreeMap.get(node.id) ?? 0;
-        const overviewMode = viewportZoom < 0.62;
-        const labelScale =
-          viewportZoom < 0.82
-            ? Math.min(2.9, 0.86 / Math.max(viewportZoom, 0.28))
-            : 1;
+        const overviewMode = viewportZoom < 0.68;
+        const overviewScale = overviewMode
+          ? Math.min(2.45, Math.max(1.15, 0.72 / Math.max(viewportZoom, 0.28)))
+          : 1;
+        const displayLabel = compactGraphLabel(
+          node.label,
+          overviewMode ? 28 : 42,
+        );
 
         return {
           id: node.id,
@@ -210,66 +226,90 @@ function GraphCanvas({
           ),
           data: {
             label: (
-              <button
-                className="grid w-full gap-2 text-left"
-                type="button"
+              <Link
+                href={node.detailUrl}
+                title={node.label}
+                onClick={(event) => event.stopPropagation()}
+                className={
+                  overviewMode
+                    ? "inline-flex max-w-[190px] items-center gap-2 whitespace-nowrap rounded-sm bg-[#091012]/80 px-2 py-1 text-left shadow-[0_3px_12px_rgba(0,0,0,.38)] backdrop-blur-[2px]"
+                    : "grid w-full min-w-0 gap-2 overflow-hidden text-left"
+                }
                 style={{
-                  transform: `scale(${labelScale})`,
+                  transform: overviewMode
+                    ? `scale(${overviewScale})`
+                    : undefined,
                   transformOrigin: "center center",
                 }}
-                onClick={() => {
-                  setEditing(null);
-                  setDrawer(node);
-                }}
               >
-                {!overviewMode ? (
-                  <span className="flex items-center justify-between gap-2">
+                {overviewMode ? (
+                  <>
                     <span
-                      className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em]"
-                      style={{ color: colors[node.type] }}
-                    >
-                      {typeCodes[node.type]}
+                      className="h-1.5 w-1.5 shrink-0 rounded-full"
+                      style={{ background: colors[node.type] }}
+                      aria-hidden
+                    />
+                    <span className="min-w-0 truncate text-[12px] font-semibold text-stone-100 [text-shadow:0_1px_3px_#000]">
+                      {displayLabel}
                     </span>
-                    {isSelected ? (
-                      <span className="text-[10px] uppercase tracking-[0.12em] text-amber-300">
-                        selected
+                  </>
+                ) : (
+                  <>
+                    <span className="flex min-w-0 items-center justify-between gap-2">
+                      <span
+                        className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em]"
+                        style={{ color: colors[node.type] }}
+                      >
+                        {typeCodes[node.type]}
+                      </span>
+                      {isSelected ? (
+                        <span className="shrink-0 text-[10px] uppercase tracking-[0.12em] text-amber-300">
+                          selected
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="block min-w-0 truncate text-sm font-semibold text-stone-100">
+                      {displayLabel}
+                    </span>
+                    {node.subtitle ? (
+                      <span className="block min-w-0 truncate text-[11px] leading-4 text-stone-500">
+                        {node.subtitle}
                       </span>
                     ) : null}
-                  </span>
-                ) : null}
-                <span
-                  className={
-                    overviewMode
-                      ? "truncate text-[13px] font-semibold text-stone-100 [text-shadow:0_1px_3px_#000]"
-                      : "truncate text-sm font-semibold text-stone-100"
-                  }
-                >
-                  {node.label}
-                </span>
-                {!overviewMode && node.subtitle ? (
-                  <span className="line-clamp-2 text-[11px] leading-4 text-stone-500">
-                    {node.subtitle}
-                  </span>
-                ) : null}
-              </button>
+                  </>
+                )}
+              </Link>
             ),
           },
-          style: {
-            border: isSelected
-              ? "2px solid #d2a34e"
-              : "1px solid " + colors[node.type],
-            borderRadius: 8,
-            background: isMatch
-              ? "rgba(185, 130, 47, 0.14)"
-              : isSelected
-                ? "#171b1d"
-                : "#101518",
-            boxShadow: terrainShadow(degree, maxDegree, isSelected),
-            color: "#e7e5e4",
-            width: 210,
-            padding: overviewMode ? 9 : 12,
-            zIndex: isSelected ? 60 : 10 + Math.min(degree, 30),
-          },
+          style: overviewMode
+            ? {
+                border: "0",
+                borderRadius: 999,
+                background: "transparent",
+                boxShadow: terrainShadow(degree, maxDegree, isSelected),
+                color: "#e7e5e4",
+                width: 190,
+                padding: 0,
+                overflow: "visible",
+                zIndex: isSelected ? 60 : 10 + Math.min(degree, 30),
+              }
+            : {
+                border: isSelected
+                  ? "2px solid #d2a34e"
+                  : "1px solid " + colors[node.type],
+                borderRadius: 8,
+                background: isMatch
+                  ? "rgba(185, 130, 47, 0.14)"
+                  : isSelected
+                    ? "#171b1d"
+                    : "#101518",
+                boxShadow: terrainShadow(degree, maxDegree, isSelected),
+                color: "#e7e5e4",
+                width: 230,
+                padding: 12,
+                overflow: "hidden",
+                zIndex: isSelected ? 60 : 10 + Math.min(degree, 30),
+              },
         };
       }),
     [
@@ -348,7 +388,6 @@ function GraphCanvas({
     setTypes([...graphEntityTypes]);
     setRelationships(relationshipOptions);
     setSelected([]);
-    setDrawer(null);
     setEditing(null);
     const resetNodes = data.nodes.map<Node>((node, index) => ({
       id: node.id,
@@ -468,6 +507,20 @@ function GraphCanvas({
     }
   }
 
+  function moveTerrain(viewport: { x: number; y: number; zoom: number }) {
+    const zoom = Math.max(0.28, viewport.zoom);
+    const farScale = Math.pow(zoom, 0.34);
+    const midScale = Math.pow(zoom, 0.58);
+    if (terrainFarRef.current) {
+      terrainFarRef.current.style.transform =
+        `translate3d(${viewport.x * 0.09}px, ${viewport.y * 0.09}px, 0) scale(${farScale})`;
+    }
+    if (terrainMidRef.current) {
+      terrainMidRef.current.style.transform =
+        `translate3d(${viewport.x * 0.18}px, ${viewport.y * 0.18}px, 0) scale(${midScale})`;
+    }
+  }
+
   function toggleType(type: GraphEntityType) {
     setTypes((current) =>
       current.includes(type)
@@ -489,33 +542,96 @@ function GraphCanvas({
   }
 
   return (
-    <div className="space-y-4">
-      <section className="rounded-lg border border-stone-800/80 bg-[#0f1417] p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            className="field min-w-64 flex-1"
-            aria-label="Search graph"
-            placeholder="Search entities…"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          <button className="citem-button-ghost" type="button" onClick={fitGraph}>
-            Fit view
+    <div className="relative">
+      <div className="relative h-[calc(100dvh-7rem)] min-h-[780px] overflow-hidden bg-[#070c0e]">
+        <div
+          ref={terrainFarRef}
+          className="pointer-events-none absolute -inset-[42%] z-0 will-change-transform"
+          aria-hidden
+          style={{
+            transformOrigin: "center center",
+            backgroundImage: [
+              "radial-gradient(ellipse at 18% 18%, rgba(200,151,66,.14), transparent 28%)",
+              "radial-gradient(ellipse at 76% 31%, rgba(68,130,111,.12), transparent 25%)",
+              "radial-gradient(ellipse at 55% 82%, rgba(82,103,112,.09), transparent 31%)",
+              "linear-gradient(145deg, #0b1113 0%, #081012 46%, #060a0c 100%)",
+            ].join(", "),
+          }}
+        />
+        <div
+          ref={terrainMidRef}
+          className="pointer-events-none absolute -inset-[34%] z-[1] opacity-95 will-change-transform"
+          aria-hidden
+          style={{
+            transformOrigin: "center center",
+            backgroundImage: [
+              "repeating-radial-gradient(ellipse at 24% 28%, transparent 0 78px, rgba(206,160,78,.07) 79px, transparent 82px)",
+              "repeating-radial-gradient(ellipse at 73% 64%, transparent 0 96px, rgba(76,141,121,.065) 97px, transparent 101px)",
+              "repeating-radial-gradient(ellipse at 48% 88%, transparent 0 130px, rgba(124,138,128,.038) 131px, transparent 135px)",
+              "linear-gradient(rgba(229,210,169,.018) 1px, transparent 1px)",
+              "linear-gradient(90deg, rgba(118,160,146,.018) 1px, transparent 1px)",
+            ].join(", "),
+            backgroundSize:
+              "1500px 1050px, 1750px 1200px, 2100px 1400px, 72px 72px, 72px 72px",
+            backgroundPosition:
+              "-140px -100px, 380px 120px, -220px 260px, 0 0, 0 0",
+          }}
+        />
+
+        <div className="pointer-events-none absolute left-4 top-4 z-30 rounded border border-stone-800/70 bg-[#0c1214]/82 px-3 py-2 shadow-lg backdrop-blur-md">
+          <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-amber-300/80">
+            Graph
+          </p>
+          <p className="mt-1 text-sm text-stone-300">
+            {filtered.nodes.length} entities · {filtered.edges.length} relationships
+          </p>
+        </div>
+
+        <div className="absolute right-4 top-4 z-30 flex flex-wrap justify-end gap-2">
+          <button className="citem-button-ghost bg-[#0c1214]/88 backdrop-blur-md" type="button" onClick={fitGraph}>
+            Fit
           </button>
-          <button className="citem-button-ghost" type="button" onClick={resetLayout}>
-            Reset view
+          <button className="citem-button-ghost bg-[#0c1214]/88 backdrop-blur-md" type="button" onClick={resetLayout}>
+            Reset
+          </button>
+          <button
+            className="citem-button-ghost bg-[#0c1214]/88 backdrop-blur-md"
+            type="button"
+            aria-expanded={filtersOpen}
+            onClick={() => setFiltersOpen((current) => !current)}
+          >
+            Filters
+            {(query || types.length !== graphEntityTypes.length || relationships.length !== relationshipOptions.length || showHistoricalInfrastructure) ? (
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-300" aria-label="Filters active" />
+            ) : null}
           </button>
         </div>
 
-        <details className="mt-3 rounded border border-stone-800/70 bg-black/10">
-          <summary className="cursor-pointer px-3 py-3 text-xs font-medium uppercase tracking-[0.14em] text-stone-500">
-            Filters
-            <span className="ml-2 font-mono normal-case tracking-normal text-stone-600">
-              {filtered.nodes.length}/{data.nodes.length} nodes · {filtered.edges.length}/{data.edges.length} links
-            </span>
-          </summary>
-          <div className="space-y-4 border-t border-stone-800 p-3">
-            <div>
+        {filtersOpen ? (
+          <section className="absolute right-4 top-[4.5rem] z-40 w-[min(390px,calc(100%-2rem))] rounded-lg border border-stone-800/80 bg-[#0c1214]/96 p-4 shadow-2xl backdrop-blur-xl">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="citem-label">Map controls</p>
+                <h2 className="mt-1 text-base font-semibold text-stone-100">Filters</h2>
+              </div>
+              <button
+                className="text-xs text-stone-500 hover:text-stone-200"
+                type="button"
+                onClick={() => setFiltersOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+
+            <input
+              className="field mt-4 w-full"
+              aria-label="Search graph"
+              placeholder="Search entities…"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+
+            <div className="mt-4 border-t border-stone-800 pt-4">
               <div className="flex items-center justify-between gap-3">
                 <p className="citem-label">Entity types</p>
                 <button
@@ -557,7 +673,7 @@ function GraphCanvas({
               </div>
             </div>
 
-            <div>
+            <div className="mt-4 border-t border-stone-800 pt-4">
               <div className="flex items-center justify-between gap-3">
                 <p className="citem-label">Relationship types</p>
                 <button
@@ -569,7 +685,7 @@ function GraphCanvas({
                 </button>
               </div>
               {relationshipOptions.length ? (
-                <div className="mt-2 flex flex-wrap gap-2" aria-label="Relationship filters">
+                <div className="mt-2 flex max-h-40 flex-wrap gap-2 overflow-y-auto" aria-label="Relationship filters">
                   {relationshipOptions.map((relationship) => {
                     const active = relationships.includes(relationship);
                     return (
@@ -594,325 +710,166 @@ function GraphCanvas({
                 <p className="mt-2 text-xs text-stone-600">No relationship types are available.</p>
               )}
             </div>
-          </div>
-        </details>
+
+            <label className="mt-4 flex cursor-pointer items-start gap-3 border-t border-stone-800 pt-4 text-xs text-stone-400">
+              <input
+                className="mt-0.5"
+                type="checkbox"
+                checked={showHistoricalInfrastructure}
+                onChange={(event) => onHistoricalInfrastructureChange(event.target.checked)}
+              />
+              <span>
+                <span className="block font-medium text-stone-300">Historical infrastructure</span>
+                <span className="mt-1 block leading-5 text-stone-600">
+                  Include rejected and removed infrastructure memberships.
+                </span>
+              </span>
+            </label>
+          </section>
+        ) : null}
 
         {selectedNodes.length ? (
-          <div className="mt-3 rounded border border-amber-900/30 bg-amber-950/5 p-3">
+          <section className="absolute bottom-5 left-1/2 z-40 w-[min(860px,calc(100%-2rem))] -translate-x-1/2 rounded-lg border border-amber-900/35 bg-[#0c1214]/96 p-4 shadow-2xl backdrop-blur-xl">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="citem-label">Relationship selection</p>
                 <p className="mt-1 text-sm text-stone-300">
                   {selectedNodes.length === 1
                     ? "Select one more entity to create a manual relationship."
-                    : "Two entities selected. Confirm direction and relationship semantics before saving."}
+                    : "Confirm source, target and relationship semantics before saving."}
                 </p>
               </div>
-              <button
-                className="text-xs text-stone-500 hover:text-stone-300"
-                type="button"
-                onClick={() => setSelected([])}
-              >
-                Clear selection
+              <button className="text-xs text-stone-500 hover:text-stone-200" type="button" onClick={() => setSelected([])}>
+                Clear
               </button>
             </div>
-
-            <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
-              <div className="rounded border border-stone-800 bg-black/15 p-3">
-                <p className="citem-label">Source</p>
-                <p className="mt-1 truncate text-sm font-medium text-stone-200">
-                  {selectedNodes[0]?.label ?? "Not selected"}
-                </p>
-                <p className="mt-1 text-xs text-stone-600">
-                  {selectedNodes[0] ? typeLabels[selectedNodes[0].type] : "—"}
-                </p>
-              </div>
-              <button
-                className="citem-button-ghost self-center"
-                type="button"
-                disabled={selectedNodes.length !== 2}
-                onClick={swapSelection}
-              >
-                Swap
-              </button>
-              <div className="rounded border border-stone-800 bg-black/15 p-3">
-                <p className="citem-label">Target</p>
-                <p className="mt-1 truncate text-sm font-medium text-stone-200">
-                  {selectedNodes[1]?.label ?? "Not selected"}
-                </p>
-                <p className="mt-1 text-xs text-stone-600">
-                  {selectedNodes[1] ? typeLabels[selectedNodes[1].type] : "—"}
-                </p>
-              </div>
-            </div>
-
             {selectedNodes.length === 2 ? (
-              <div className="mt-3 grid gap-2 md:grid-cols-[220px_minmax(0,1fr)_auto]">
-                <input
-                  className="field font-mono"
-                  aria-label="Relationship label"
-                  value={label}
-                  onChange={(event) => setLabel(event.target.value)}
-                />
-                <input
-                  className="field"
-                  aria-label="Relationship description"
-                  placeholder="Optional analyst description"
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                />
-                <button className="citem-button" type="button" onClick={createLink}>
-                  Create link
-                </button>
+              <>
+                <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+                  <div className="min-w-0 rounded border border-stone-800 bg-black/15 p-3">
+                    <p className="citem-label">Source</p>
+                    <p className="mt-1 truncate text-sm text-stone-200">{selectedNodes[0].label}</p>
+                  </div>
+                  <button className="citem-button-ghost self-center" type="button" onClick={swapSelection}>Swap</button>
+                  <div className="min-w-0 rounded border border-stone-800 bg-black/15 p-3">
+                    <p className="citem-label">Target</p>
+                    <p className="mt-1 truncate text-sm text-stone-200">{selectedNodes[1].label}</p>
+                  </div>
+                </div>
+                <div className="mt-3 grid gap-2 md:grid-cols-[210px_minmax(0,1fr)_auto]">
+                  <input
+                    className="field font-mono"
+                    aria-label="Relationship label"
+                    value={label}
+                    onChange={(event) => setLabel(event.target.value)}
+                  />
+                  <input
+                    className="field"
+                    aria-label="Relationship description"
+                    placeholder="Optional analyst description"
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                  />
+                  <button className="citem-button" type="button" onClick={createLink}>Create link</button>
+                </div>
+              </>
+            ) : null}
+          </section>
+        ) : null}
+
+        {editing && editing.sourceKind === "manual" ? (
+          <section className="absolute bottom-5 right-4 z-40 w-[min(390px,calc(100%-2rem))] rounded-lg border border-amber-900/35 bg-[#0c1214]/96 p-4 shadow-2xl backdrop-blur-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="citem-label">Manual relationship</p>
+                <h2 className="mt-1 text-base font-semibold text-stone-100">Edit link</h2>
               </div>
+              <button className="text-xs text-stone-500 hover:text-stone-200" type="button" onClick={() => setEditing(null)}>Close</button>
+            </div>
+            <div className="mt-3 grid gap-2">
+              <input className="field font-mono" value={label} onChange={(event) => setLabel(event.target.value)} />
+              <textarea className="field min-h-20" value={description} onChange={(event) => setDescription(event.target.value)} />
+            </div>
+            <div className="mt-3 flex gap-2">
+              <button className="citem-button" type="button" onClick={() => updateEdge(false)}>Save</button>
+              <button className="citem-button-ghost text-red-300" type="button" onClick={() => updateEdge(true)}>Delete</button>
+            </div>
+          </section>
+        ) : null}
+
+        {(layoutWarning || message || data.meta.truncated) ? (
+          <div className="pointer-events-none absolute bottom-5 left-4 z-30 max-w-[min(520px,calc(100%-2rem))] space-y-2">
+            {layoutWarning ? <p className="rounded border border-amber-900/30 bg-[#0c1214]/90 px-3 py-2 text-xs text-amber-300 backdrop-blur-md">{layoutWarning}</p> : null}
+            {message ? <p className="rounded border border-stone-800/70 bg-[#0c1214]/90 px-3 py-2 text-xs text-stone-400 backdrop-blur-md">{message}</p> : null}
+            {data.meta.truncated ? (
+              <p className="rounded border border-amber-900/30 bg-[#0c1214]/90 px-3 py-2 text-xs text-amber-200 backdrop-blur-md">
+                Large graph: omitted {data.meta.omittedNodes} nodes and {data.meta.omittedEdges} links.
+              </p>
             ) : null}
           </div>
         ) : null}
 
-        {layoutWarning ? (
-          <p className="mt-3 text-sm text-amber-300">{layoutWarning}</p>
-        ) : null}
-        {message ? (
-          <p className="mt-3 text-sm text-stone-400">{message}</p>
-        ) : null}
-        {data.meta.truncated ? (
-          <p className="mt-3 rounded border border-amber-900/30 bg-amber-950/5 p-3 text-sm text-amber-200">
-            Large graph: showing up to {data.meta.nodeLimit} nodes and {data.meta.edgeLimit} links.
-            Omitted {data.meta.omittedNodes} nodes and {data.meta.omittedEdges} links.
-          </p>
-        ) : null}
-      </section>
-
-      <div className="relative">
-        <div className="relative h-[calc(100vh-11.5rem)] min-h-[760px] max-h-[1180px] overflow-hidden rounded-lg border border-stone-800/80 bg-[#090d0f]">
-          <div
-            className="pointer-events-none absolute inset-0 z-0 opacity-90"
-            aria-hidden
+        <ReactFlow
+          className="absolute inset-0 z-10"
+          nodes={nodes}
+          edges={edges}
+          fitView
+          minZoom={0.28}
+          maxZoom={2}
+          onMove={(_, viewport) => {
+            moveTerrain(viewport);
+            const roundedZoom = Math.round(viewport.zoom * 20) / 20;
+            setViewportZoom((current) =>
+              current === roundedZoom ? current : roundedZoom,
+            );
+          }}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodeDragStop={saveNodePosition}
+          onNodeClick={(_, node) => {
+            setEditing(null);
+            setSelected((current) =>
+              current.includes(node.id)
+                ? current.filter((id) => id !== node.id)
+                : current.length < 2
+                  ? [...current, node.id]
+                  : [current[1], node.id],
+            );
+          }}
+          onEdgeClick={(_, edge) => {
+            const graphEdge = data.edges.find((item) => item.id === edge.id);
+            if (!graphEdge) return;
+            if (graphEdge.sourceKind === "manual") {
+              setSelected([]);
+              setEditing(graphEdge);
+              setLabel(graphEdge.relationshipType);
+              setDescription(graphEdge.description ?? "");
+            } else {
+              setEditing(null);
+              setMessage("Semantic relationships are managed from their owning CTI workspace.");
+              if (graphEdge.detailUrl) window.location.href = graphEdge.detailUrl;
+            }
+          }}
+        >
+          <Background color="#33403d" gap={38} size={1} />
+          <Controls position="bottom-left" />
+          <MiniMap
+            pannable
+            zoomable
+            position="bottom-right"
+            nodeColor={(node) =>
+              colors[
+                (data.nodes.find((item) => item.id === node.id)?.type ??
+                  "EVIDENCE") as GraphEntityType
+              ]
+            }
+            maskColor="rgba(6,10,11,0.70)"
             style={{
-              backgroundImage: [
-                "radial-gradient(ellipse at 18% 24%, rgba(185,130,47,.055), transparent 28%)",
-                "radial-gradient(ellipse at 76% 68%, rgba(93,142,143,.045), transparent 24%)",
-                "repeating-radial-gradient(ellipse at 18% 24%, transparent 0 58px, rgba(154,144,117,.045) 59px, transparent 62px)",
-                "repeating-radial-gradient(ellipse at 76% 68%, transparent 0 72px, rgba(105,128,130,.035) 73px, transparent 76px)",
-                "linear-gradient(rgba(255,255,255,.012) 1px, transparent 1px)",
-                "linear-gradient(90deg, rgba(255,255,255,.012) 1px, transparent 1px)",
-              ].join(", "),
-              backgroundSize: "auto, auto, auto, auto, 48px 48px, 48px 48px",
+              background: "rgba(10,16,18,.88)",
+              border: "1px solid rgba(87,83,78,.72)",
             }}
           />
-          <div className="pointer-events-none absolute left-3 top-3 z-10 rounded border border-stone-800/80 bg-[#0f1417]/90 px-3 py-2 backdrop-blur-sm">
-            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-stone-600">
-              Visible
-            </p>
-            <p className="mt-1 text-sm text-stone-300">
-              {filtered.nodes.length} entities · {filtered.edges.length} relationships
-            </p>
-            <p className="mt-1 text-[10px] uppercase tracking-[0.1em] text-stone-600">
-              contour depth = connection density
-            </p>
-          </div>
-          <ReactFlow
-            className="relative z-[1]"
-            nodes={nodes}
-            edges={edges}
-            fitView
-            minZoom={0.28}
-            maxZoom={2}
-            onMove={(_, viewport) => {
-              const roundedZoom = Math.round(viewport.zoom * 20) / 20;
-              setViewportZoom((current) =>
-                current === roundedZoom ? current : roundedZoom,
-              );
-            }}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onNodeDragStop={saveNodePosition}
-            onNodeClick={(_, node) => {
-              setEditing(null);
-              setSelected((current) =>
-                current.includes(node.id)
-                  ? current.filter((id) => id !== node.id)
-                  : current.length < 2
-                    ? [...current, node.id]
-                    : [current[1], node.id],
-              );
-            }}
-            onEdgeClick={(_, edge) => {
-              const graphEdge = data.edges.find((item) => item.id === edge.id);
-              if (!graphEdge) return;
-              setDrawer(null);
-              if (graphEdge.sourceKind === "manual") {
-                setEditing(graphEdge);
-                setLabel(graphEdge.relationshipType);
-                setDescription(graphEdge.description ?? "");
-              } else {
-                setEditing(null);
-                setMessage("Semantic relationships are managed from their owning CTI workspace.");
-                if (graphEdge.detailUrl) window.location.href = graphEdge.detailUrl;
-              }
-            }}
-          >
-            <Background color="#2b3134" gap={32} size={1} />
-            <Controls />
-            <MiniMap
-              nodeColor={(node) =>
-                colors[
-                  (data.nodes.find((item) => item.id === node.id)?.type ??
-                    "EVIDENCE") as GraphEntityType
-                ]
-              }
-              maskColor="rgba(7,10,12,0.72)"
-              style={{ background: "#101518", border: "1px solid #292524" }}
-            />
-          </ReactFlow>
-        </div>
-
-        <aside className="mt-4 min-h-[220px] rounded-lg border border-stone-800/80 bg-[#0f1417]/95 p-4 shadow-2xl backdrop-blur-md xl:absolute xl:right-4 xl:top-4 xl:z-20 xl:mt-0 xl:max-h-[calc(100%-2rem)] xl:w-[340px] xl:overflow-y-auto">
-          {editing && editing.sourceKind === "manual" ? (
-            <div>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="citem-label">Manual relationship</p>
-                  <h2 className="mt-1 text-lg font-semibold text-stone-100">
-                    Edit relationship
-                  </h2>
-                </div>
-                <button
-                  className="text-xs text-stone-500 hover:text-stone-300"
-                  type="button"
-                  onClick={() => setEditing(null)}
-                >
-                  Close
-                </button>
-              </div>
-              <p className="mt-3 font-mono text-xs text-amber-300">
-                {editing.relationshipType}
-              </p>
-              <div className="mt-4 grid gap-3">
-                <label className="grid gap-1">
-                  <span className="citem-label">Relationship type</span>
-                  <input
-                    className="field font-mono"
-                    value={label}
-                    onChange={(event) => setLabel(event.target.value)}
-                  />
-                </label>
-                <label className="grid gap-1">
-                  <span className="citem-label">Description</span>
-                  <textarea
-                    className="field min-h-24"
-                    value={description}
-                    onChange={(event) => setDescription(event.target.value)}
-                  />
-                </label>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2 border-t border-stone-800 pt-4">
-                <button className="citem-button" type="button" onClick={() => updateEdge(false)}>
-                  Save relationship
-                </button>
-                <button
-                  className="citem-button-ghost text-red-300"
-                  type="button"
-                  onClick={() => updateEdge(true)}
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          ) : drawer ? (
-            <div>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="citem-label">Entity inspector</p>
-                  <h2 className="mt-1 break-words text-xl font-semibold text-stone-100">
-                    {drawer.label}
-                  </h2>
-                </div>
-                <button
-                  className="text-xs text-stone-500 hover:text-stone-300"
-                  type="button"
-                  onClick={() => setDrawer(null)}
-                >
-                  Close
-                </button>
-              </div>
-              <div className="mt-3 flex items-center gap-2">
-                <span
-                  className="h-2 w-2 rounded-full"
-                  style={{ background: colors[drawer.type] }}
-                  aria-hidden
-                />
-                <span className="font-mono text-xs uppercase tracking-[0.12em] text-stone-500">
-                  {typeLabels[drawer.type]}
-                </span>
-              </div>
-              {drawer.subtitle ? (
-                <p className="mt-3 text-sm leading-6 text-stone-400">{drawer.subtitle}</p>
-              ) : null}
-
-              {Object.keys(drawer.metadata).length ? (
-                <dl className="mt-4 grid gap-3 border-t border-stone-800 pt-4">
-                  {Object.entries(drawer.metadata).map(([key, value]) => (
-                    <div key={key}>
-                      <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-stone-600">
-                        {key.replaceAll("_", " ")}
-                      </dt>
-                      <dd className="mt-1 break-words text-sm text-stone-300">
-                        {String(value ?? "—")}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              ) : (
-                <p className="mt-4 text-sm text-stone-600">No additional metadata is exposed for this node.</p>
-              )}
-
-              <Link
-                className="mt-5 inline-flex text-sm font-medium text-amber-300 hover:text-amber-200"
-                href={drawer.detailUrl}
-              >
-                Open entity workspace →
-              </Link>
-            </div>
-          ) : (
-            <div>
-              <p className="citem-label">Graph inspector</p>
-              <h2 className="mt-1 text-lg font-semibold text-stone-100">
-                Explore relationships
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-stone-500">
-                Click an entity label to inspect it. Select two nodes to create an analyst-defined relationship.
-              </p>
-
-              <div className="mt-5 grid gap-3 border-t border-stone-800 pt-4">
-                <div>
-                  <p className="citem-label">Semantic links</p>
-                  <p className="mt-1 text-xs leading-5 text-stone-600">
-                    Existing CITEM relationships. Open the owning workspace to change them.
-                  </p>
-                </div>
-                <div>
-                  <p className="citem-label">Manual links</p>
-                  <p className="mt-1 text-xs leading-5 text-stone-600">
-                    Amber animated links are explicit analyst-created graph relationships.
-                  </p>
-                </div>
-                <div>
-                  <p className="citem-label">Terrain depth</p>
-                  <p className="mt-1 text-xs leading-5 text-stone-600">
-                    Concentric contour halos grow around highly connected entities, giving dense graph regions a topographic reading.
-                  </p>
-                </div>
-                <div>
-                  <p className="citem-label">Layout</p>
-                  <p className="mt-1 text-xs leading-5 text-stone-600">
-                    Dragged entity positions are saved for this Investigation.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-        </aside>
+        </ReactFlow>
       </div>
     </div>
   );
@@ -1023,44 +980,17 @@ export function KnowledgeGraph({ projectId }: { projectId: string }) {
 
   return (
     <ReactFlowProvider>
-      <div className="mt-5 space-y-4">
-        <header className="rounded-lg border border-stone-800/80 bg-[#0f1417] p-4">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="citem-label">Analytical map</p>
-              <h2 className="mt-1 text-xl font-semibold text-stone-100">Knowledge Graph</h2>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-stone-500">
-                Explore Investigation entities, inspect context, and create explicit analyst-defined relationships without changing semantic CTI records.
-              </p>
-            </div>
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded border border-stone-800 bg-black/10 px-3 py-2 text-xs text-stone-500">
-              <input
-                type="checkbox"
-                checked={showHistoricalInfrastructure}
-                onChange={(event) => setShowHistoricalInfrastructure(event.target.checked)}
-              />
-              Historical infrastructure
-            </label>
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 border-t border-stone-800/80 pt-3 text-xs text-stone-500">
-            <span>{data.meta.nodeCount} entities</span>
-            <span>{data.meta.edgeCount} relationships</span>
-            <span>{semanticEdges} semantic</span>
-            <span className="text-amber-300">{manualEdges} analyst-defined</span>
-          </div>
-        </header>
-
-        <GraphCanvas
-          data={data}
-          projectId={projectId}
-          savedPositions={savedPositions}
-          onReload={load}
-          onLayoutReset={resetServerLayout}
-          onPositionSaved={updateSavedPosition}
-          layoutWarning={layoutWarning}
-        />
-      </div>
+      <GraphCanvas
+        data={data}
+        projectId={projectId}
+        savedPositions={savedPositions}
+        onReload={load}
+        onLayoutReset={resetServerLayout}
+        onPositionSaved={updateSavedPosition}
+        layoutWarning={layoutWarning}
+        showHistoricalInfrastructure={showHistoricalInfrastructure}
+        onHistoricalInfrastructureChange={setShowHistoricalInfrastructure}
+      />
     </ReactFlowProvider>
   );
 }

@@ -1,76 +1,69 @@
 # Knowledge Graph Workspace v2
 
-The Knowledge Graph keeps the existing graph data and relationship APIs but adopts the same CITEM visual and interaction hierarchy used by Timeline, Threat Actors, Campaigns, and Malware.
+The Knowledge Graph is a full-surface analytical map inside the Investigation workspace. It keeps the existing graph data, saved-layout API and manual-relationship API while using CITEM's charcoal / stone / amber visual language.
 
-## Visual hierarchy
+## Full-bleed map surface
 
-The graph now uses the CITEM charcoal / stone / amber system.
+When the Graph tab is active, the normal Investigation page width and project-title treatment are removed from the content body. The Graph consumes the available horizontal surface and a viewport-height map area. Tabs / application navigation remain outside the map.
 
-Entity categories retain muted type accents so nodes remain distinguishable without turning the workspace into a rainbow dashboard. Analyst-defined manual relationships use amber; semantic CITEM relationships use neutral stone.
+There is no persistent Graph Inspector. The previous right-side inspector was removed so it cannot cover or permanently reduce the analytical map.
 
-Emoji node icons and the previous bright cyan / purple interaction language are removed.
+## Progressive map labels
 
-## Default workspace
+Normal zoom renders framed entity cards.
 
-The default surface provides:
+At broad overview zoom, framed cards switch to compact map labels:
 
-- an analytical-map header with entity and relationship counts;
-- a compact search bar;
-- **Fit view** and **Reset view** controls;
-- entity and relationship filters behind a collapsed **Filters** surface;
-- a large graph canvas;
-- a persistent right-side inspector on wide screens.
+- the frame disappears instead of shrinking into a tiny unreadable rectangle;
+- entity names are counter-scaled within a bounded range;
+- long hashes, IOC values and names are compacted with ellipsis;
+- subtitles and secondary metadata disappear;
+- entity type remains visible as a small color marker;
+- clicking the map label opens the entity's owning CITEM workspace.
 
-Historical rejected / removed infrastructure memberships remain opt-in.
+Relationship labels hide at broad zoom and return as the analyst zooms closer.
 
-## Entity inspection
+## Filters and controls
 
-Clicking an entity label opens an **Entity inspector** with:
+The default map remains visually clean. Search and filter controls are hidden until the analyst opens **Filters**.
 
-- entity type;
-- subtitle/context;
-- exposed graph metadata;
-- a direct link to the owning CITEM entity workspace.
+The overlay contains:
 
-The inspector does not pretend graph metadata is an independent analytical assessment.
+- entity search;
+- entity-type filters;
+- relationship-type filters;
+- historical infrastructure membership toggle.
+
+Fit and reset controls remain immediately available. Active filtering is indicated on the Filters button.
+
+## Depth-aware terrain
+
+The Graph background is no longer a fixed screen texture.
+
+Two vector/CSS terrain layers use large amber, jade and desaturated survey-map gradients. The layers follow the React Flow viewport with different parallax factors:
+
+- the far terrain uses reduced translation and `zoom^0.34`;
+- the mid terrain uses a stronger, but still reduced, translation and `zoom^0.58`;
+- entities continue to use the normal React Flow transform.
+
+This makes the terrain pan and zoom with the map while moving more slowly than foreground entities, producing a restrained depth / distant-map effect. CSS gradients remain resolution-independent at high display resolution.
+
+Visible node degree still contributes subtle local contour depth around highly connected entities. This is a visualization of **connection density only** and does not mean confidence, severity, attribution strength or analytical importance.
 
 ## Manual relationships
 
-Manual graph relationships remain explicit analyst actions.
+Selecting two nodes opens a temporary bottom relationship panel. Source and Target remain explicit, direction can be swapped, and relationship type / description are analyst-controlled.
 
-Selecting two nodes opens a dedicated relationship-selection surface showing:
+Clicking an analyst-defined edge opens a temporary edit panel. Semantic CITEM relationships continue to be managed from their owning workspaces.
 
-- Source;
-- Target;
-- a direction swap action;
-- relationship type;
-- optional analyst description;
-- **Create link**.
+## Preserved behavior
 
-Manual relationships remain visually distinct and editable. Semantic CTI relationships are still managed by their owning CITEM workspaces.
+- saved node positions;
+- reset-layout API;
+- graph truncation warning;
+- MiniMap and zoom controls;
+- historical infrastructure opt-in;
+- analyst-defined relationship create / edit / delete;
+- semantic relationship ownership.
 
-## Layout behavior
-
-Dragged node positions continue to persist through the existing graph layout API. **Reset view** clears saved layout positions and active graph filters. **Fit view** only changes the current viewport.
-
-No database migration is required for this redesign.
-
-
-## Wide-map and readability pass
-
-The graph now expands beyond the normal Investigation content width and uses a viewport-height canvas. On wide screens the inspector floats over the map rather than consuming a permanent graph column.
-
-Zoomed-out overview behavior is adaptive:
-
-- node labels are counter-scaled below overview zoom thresholds so names remain readable from a wider perspective;
-- subtitles and secondary node metadata collapse at broad zoom levels to reduce label collisions;
-- relationship labels hide at broad zoom levels and reappear when the analyst moves closer;
-- the minimum zoom remains broad enough for an overview while avoiding effectively unreadable micro-text.
-
-## Topographic connection-density layer
-
-The map background now combines a restrained survey-grid / contour texture with data-driven node contours.
-
-For the currently visible graph, node degree is calculated from visible relationships. Higher-degree entities receive additional concentric contour halos. These halos are deliberately subtle and do not represent confidence, severity, attribution, or importance; they only visualize local **connection density**.
-
-This makes graph hubs read more like elevated terrain on a topographic map while preserving the underlying semantic and analyst-defined relationship model.
+No database migration is required.
