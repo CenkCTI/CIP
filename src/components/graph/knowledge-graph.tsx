@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Background,
   Controls,
   MiniMap,
   ReactFlow,
@@ -851,7 +850,6 @@ function GraphCanvas({
             }
           }}
         >
-          <Background color="#33403d" gap={38} size={1} />
           <Controls position="bottom-left" />
           <MiniMap
             pannable
@@ -974,9 +972,6 @@ export function KnowledgeGraph({ projectId }: { projectId: string }) {
     position: { x: number; y: number },
   ) =>
     setSavedPositions((current) => upsertSavedPosition(current, id, position));
-
-  const semanticEdges = data.edges.filter((edge) => edge.sourceKind === "semantic").length;
-  const manualEdges = data.edges.filter((edge) => edge.sourceKind === "manual").length;
 
   return (
     <ReactFlowProvider>
