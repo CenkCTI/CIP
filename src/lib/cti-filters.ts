@@ -67,12 +67,15 @@ export function filterActors(rows: CtiRow[], sp: CtiSearchParams) {
     .filter((r) => {
       const aliasText = aa(r.aliases).join(" ").toLowerCase();
       const motivationText = aa(r.motivations).join(" ").toLowerCase();
+      const textMatch =
+        !query ||
+        aliasText.includes(query) ||
+        motivationText.includes(query) ||
+        ["name", "country", "description", "known_ttps"].some((field) =>
+          ss(r[field]).toLowerCase().includes(query),
+        );
       return (
-        matchQ(r, sp, ["name", "country", "description", "known_ttps"]) &&
-        (!query || aliasText.includes(query) || motivationText.includes(query) ||
-          ["name", "country", "description", "known_ttps"].some((field) =>
-            ss(r[field]).toLowerCase().includes(query),
-          )) &&
+        textMatch &&
         (!sp.country || ss(r.country) === sp.country) &&
         (!sp.motivation || aa(r.motivations).includes(sp.motivation))
       );
