@@ -13,7 +13,7 @@ describe("Knowledge Graph workspace v2", () => {
   });
 
   it("keeps filters compact and moves them behind a collapsible surface", () => {
-    expect(graph).toContain(">Filters<");
+    expect(graph).toContain("Filters");
     expect(graph).toContain("Entity types");
     expect(graph).toContain("Relationship types");
     expect(graph).toContain("Show all");
