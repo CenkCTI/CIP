@@ -15,6 +15,7 @@ import {
   MalwareTechnicalContext,
 } from "@/components/malware/malware-workspace";
 import { SourceAnnotationSupport } from "@/components/processing/source-annotation-support";
+import { SourceAttributionClaims } from "@/components/processing/source-attribution-claims";
 import {
   ClusterMembershipForm,
   ReconstructionForm,
@@ -497,10 +498,37 @@ export default async function Detail({
     );
   }
 
+  const actorSourceClaims =
+    tab === "actors"
+      ? await supabase
+          .from("source_attribution_claims")
+          .select(
+            "id,source_annotation_id,claim_summary,claimed_actor_text,mapping_origin,created_at",
+          )
+          .eq("project_id", id)
+          .eq("canonical_threat_actor_id", entityId)
+          .order("created_at", { ascending: true })
+      : { data: [] as Row[], error: null };
+
+  if (actorSourceClaims.error) {
+    return (
+      <section className="mx-auto max-w-5xl">
+        <div className="card text-red-300">
+          Unable to load source-reported attribution claims.
+        </div>
+      </section>
+    );
+  }
+
   const supportAnnotationIds = [
-    ...new Set(
-      (sourceSupportOutputs.data ?? []).map((item) => ss(item.source_annotation_id)),
-    ),
+    ...new Set([
+      ...(sourceSupportOutputs.data ?? []).map((item) =>
+        ss(item.source_annotation_id),
+      ),
+      ...(actorSourceClaims.data ?? []).map((item) =>
+        ss(item.source_annotation_id),
+      ),
+    ]),
   ].filter(Boolean);
   const supportAnnotations = supportAnnotationIds.length
     ? await supabase
@@ -565,6 +593,20 @@ export default async function Detail({
       },
     ];
   });
+  const sourceAttributionClaims = (actorSourceClaims.data ?? []).flatMap(
+    (claim) => {
+      const annotation = supportAnnotationById.get(ss(claim.source_annotation_id));
+      if (!annotation) return [];
+      return [
+        {
+          ...(claim as Row),
+          annotation,
+          source: supportSourceById.get(ss(annotation.source_id)) ?? null,
+          asset: supportAssetById.get(ss(annotation.asset_id)) ?? null,
+        },
+      ];
+    },
+  );
 
   return (
     <section className="mx-auto max-w-5xl space-y-6">
@@ -618,6 +660,12 @@ export default async function Detail({
       )}
 
       <SourceAnnotationSupport projectId={id} items={sourceSupport as Row[]} />
+      {tab === "actors" ? (
+        <SourceAttributionClaims
+          projectId={id}
+          items={sourceAttributionClaims as Row[]}
+        />
+      ) : null}
 
       {tab === "indicators" ? (
         <ObservationHistory
