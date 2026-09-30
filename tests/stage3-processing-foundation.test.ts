@@ -1,0 +1,50 @@
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+
+describe("Stage 3 processing foundation", () => {
+  const migration = readFileSync(
+    "supabase/migrations/202609300058_stage3_processing_foundation.sql",
+    "utf8",
+  );
+  const actions = readFileSync(
+    "src/app/projects/[id]/source-processing-actions.ts",
+    "utf8",
+  );
+
+  it("keeps processing state explicit and separate from progress percentages", () => {
+    expect(migration).toContain("'UNPROCESSED','PROCESSED','IGNORED'");
+    expect(migration).toContain("processing_state");
+    expect(migration).not.toContain("completion_percentage");
+    expect(actions).toContain("setAnnotationProcessingState");
+  });
+
+  it("uses a provenance ledger instead of analytical relationship inference", () => {
+    expect(migration).toContain("source_annotation_outputs");
+    expect(migration).toContain("output_action");
+    expect(migration).toContain("mapping_origin");
+    expect(migration).toContain("source_attribution_claims");
+    expect(migration).toContain("Source-reported actor attribution statements");
+  });
+
+  it("records analyst-controlled create/link outputs for existing CTI objects", () => {
+    expect(actions).toContain("createAnnotationOutput");
+    expect(actions).toContain("linkAnnotationOutput");
+    expect(actions).toContain("unlinkAnnotationOutput");
+    expect(actions).toContain("SOURCE_EXPLICIT");
+    expect(actions).toContain("ANALYST_MAPPED");
+  });
+
+  it("does not auto-mark an annotation processed when an output is created", () => {
+    const createBody = actions.slice(
+      actions.indexOf("export async function createAnnotationOutput"),
+      actions.indexOf("async function targetLabel"),
+    );
+    expect(createBody).not.toContain("processing_state");
+  });
+
+  it("keeps exact Indicator and CVE dedup deterministic", () => {
+    expect(actions).toContain('.eq("normalized_value", normalized)');
+    expect(actions).toContain('.eq("cve_id", parsed.data.cve_id)');
+    expect(actions).toContain("linkedExisting: true");
+  });
+});
