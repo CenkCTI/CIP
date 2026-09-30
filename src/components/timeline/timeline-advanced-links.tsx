@@ -40,7 +40,8 @@ export function QuickCampaignLink({
       className="grid gap-2"
       onSubmit={(e) => {
         e.preventDefault();
-        const fd = new FormData(e.currentTarget);
+        const form = e.currentTarget;
+        const fd = new FormData(form);
         fd.set("status", "POSSIBLE");
         fd.set("confidence", "LOW");
         fd.set("sequence_order", "");
@@ -48,7 +49,7 @@ export function QuickCampaignLink({
           const result = await saveEventMembership(projectId, eventId, {}, fd);
           setState(result);
           if (result.success) {
-            e.currentTarget.reset();
+            form.reset();
             router.refresh();
           }
         });
@@ -112,7 +113,8 @@ export function QuickEntityLink({
       className="grid gap-2"
       onSubmit={(e) => {
         e.preventDefault();
-        const fd = new FormData(e.currentTarget);
+        const form = e.currentTarget;
+        const fd = new FormData(form);
         fd.set("entity_type", entityType);
         fd.set("role", defaultTimelineEntityRole(entityType));
         fd.set("analyst_note", "");
@@ -120,7 +122,7 @@ export function QuickEntityLink({
           const result = await linkEventEntity(projectId, eventId, {}, fd);
           setState(result);
           if (result.success) {
-            e.currentTarget.reset();
+            form.reset();
             router.refresh();
           }
         });
@@ -180,13 +182,14 @@ export function QuickSupportLink({
       className="grid gap-2"
       onSubmit={(e) => {
         e.preventDefault();
-        const fd = new FormData(e.currentTarget);
+        const form = e.currentTarget;
+        const fd = new FormData(form);
         fd.set("analyst_note", "");
         startTransition(async () => {
           const result = await linkEventSupport(projectId, eventId, type, {}, fd);
           setState(result);
           if (result.success) {
-            e.currentTarget.reset();
+            form.reset();
             router.refresh();
           }
         });
