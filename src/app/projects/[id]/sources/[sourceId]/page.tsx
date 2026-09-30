@@ -11,10 +11,10 @@ export default async function SourceDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string; sourceId: string }>;
-  searchParams: Promise<{ annotation?: string }>;
+  searchParams?: Promise<{ annotation?: string }>;
 }) {
   const { id, sourceId } = await params;
-  const query = await searchParams;
+  const query = (await searchParams) ?? {};
   if (!uuidSchema.safeParse(sourceId).success) notFound();
   const context = await requireOwnedProject(id).catch(() => notFound());
 
