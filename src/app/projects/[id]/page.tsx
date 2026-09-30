@@ -129,12 +129,8 @@ export default async function Page({
 
   if (tab === "graph") {
     return (
-      <section className="mx-auto max-w-6xl">
-        <h1 className="text-3xl font-bold text-white">{project.name}</h1>
-        
-        <div className="mt-4">
-          <KnowledgeGraph projectId={id} />
-        </div>
+      <section className="citem-graph-bleed">
+        <KnowledgeGraph projectId={id} />
       </section>
     );
   }

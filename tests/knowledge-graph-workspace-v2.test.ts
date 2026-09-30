@@ -7,9 +7,9 @@ describe("Knowledge Graph workspace v2", () => {
 
   it("uses the Graph itself as the full-bleed workspace surface", () => {
     expect(projectPage).toContain('tab === "graph"');
-    expect(projectPage).toContain("-mx-4 -mb-4");
-    expect(projectPage).toContain('tab !== "graph"');
-    expect(graph).toContain("h-[calc(100dvh-7rem)]");
+    expect(projectPage).toContain('className="citem-graph-bleed"');
+    expect(projectPage).not.toContain('<section className="mx-auto max-w-6xl">\n        <h1 className="text-3xl font-bold text-white">{project.name}</h1>\n        \n        <div className="mt-4">\n          <KnowledgeGraph');
+    expect(graph).toContain("h-[calc(100dvh-4.35rem)]");
     expect(graph).not.toContain("Graph inspector");
     expect(graph).not.toContain("Entity inspector");
   });
@@ -32,7 +32,7 @@ describe("Knowledge Graph workspace v2", () => {
     expect(graph).toContain("viewportZoom >= 0.58");
   });
 
-  it("uses multi-depth amber and jade terrain that parallax-zooms with the viewport", () => {
+  it("uses multi-depth amber and jade terrain that parallax-zooms without exposing layer edges", () => {
     expect(graph).toContain("terrainFarRef");
     expect(graph).toContain("terrainMidRef");
     expect(graph).toContain("moveTerrain");
@@ -40,6 +40,9 @@ describe("Knowledge Graph workspace v2", () => {
     expect(graph).toContain("Math.pow(zoom, 0.58)");
     expect(graph).toContain("rgba(200,151,66,.14)");
     expect(graph).toContain("rgba(68,130,111,.12)");
+    expect(graph).toContain("-inset-[85%]");
+    expect(graph).toContain("-inset-[105%]");
+    expect(graph).toContain("ellipse at 50% 8%");
     expect(graph).toContain("repeating-radial-gradient");
   });
 

@@ -67,3 +67,12 @@ Clicking an analyst-defined edge opens a temporary edit panel. Semantic CITEM re
 - semantic relationship ownership.
 
 No database migration is required.
+
+
+## Full-width and terrain-continuity correction
+
+The Graph route had an earlier dedicated return path that still wrapped the map in `max-w-6xl`; that path bypassed the later full-width styling. The active Graph route now renders through `.citem-graph-bleed`, which escapes the global `citem-content` max-width and uses the full available main-shell width. When the sidebar is collapsed it expands to the full viewport width; when the sidebar is open it respects the sidebar's 17.25rem footprint.
+
+The map now starts flush beneath the top bar and uses `calc(100dvh - 4.35rem)` height.
+
+The parallax terrain layers also use substantial overscan (`85%` far layer and `105%` mid layer). This is necessary because the depth effect scales the background more slowly than graph entities: at low graph zoom a smaller terrain transform can otherwise expose the edge of its DOM layer. Additional amber/jade contour origins at the top, left, right and lower field keep the topographic texture continuous across the entire map instead of appearing to begin partway down the canvas.

@@ -542,10 +542,19 @@ function GraphCanvas({
 
   return (
     <div className="relative">
-      <div className="relative h-[calc(100dvh-7rem)] min-h-[780px] overflow-hidden bg-[#070c0e]">
+      <div
+        className="relative h-[calc(100dvh-4.35rem)] min-h-[720px] overflow-hidden bg-[#070c0e]"
+        style={{
+          backgroundImage: [
+            "radial-gradient(ellipse at 12% 14%, rgba(190,143,60,.055), transparent 34%)",
+            "radial-gradient(ellipse at 88% 18%, rgba(69,128,109,.05), transparent 30%)",
+            "linear-gradient(180deg, #091012 0%, #070d0f 58%, #060a0c 100%)",
+          ].join(", "),
+        }}
+      >
         <div
           ref={terrainFarRef}
-          className="pointer-events-none absolute -inset-[42%] z-0 will-change-transform"
+          className="pointer-events-none absolute -inset-[85%] z-0 will-change-transform"
           aria-hidden
           style={{
             transformOrigin: "center center",
@@ -559,21 +568,23 @@ function GraphCanvas({
         />
         <div
           ref={terrainMidRef}
-          className="pointer-events-none absolute -inset-[34%] z-[1] opacity-95 will-change-transform"
+          className="pointer-events-none absolute -inset-[105%] z-[1] opacity-95 will-change-transform"
           aria-hidden
           style={{
             transformOrigin: "center center",
             backgroundImage: [
-              "repeating-radial-gradient(ellipse at 24% 28%, transparent 0 78px, rgba(206,160,78,.07) 79px, transparent 82px)",
-              "repeating-radial-gradient(ellipse at 73% 64%, transparent 0 96px, rgba(76,141,121,.065) 97px, transparent 101px)",
-              "repeating-radial-gradient(ellipse at 48% 88%, transparent 0 130px, rgba(124,138,128,.038) 131px, transparent 135px)",
+              "repeating-radial-gradient(ellipse at 50% 8%, transparent 0 86px, rgba(210,165,82,.062) 87px, transparent 91px)",
+              "repeating-radial-gradient(ellipse at 18% 38%, transparent 0 78px, rgba(206,160,78,.068) 79px, transparent 83px)",
+              "repeating-radial-gradient(ellipse at 82% 34%, transparent 0 94px, rgba(76,141,121,.068) 95px, transparent 100px)",
+              "repeating-radial-gradient(ellipse at 70% 78%, transparent 0 118px, rgba(83,137,122,.052) 119px, transparent 124px)",
+              "repeating-radial-gradient(ellipse at 30% 86%, transparent 0 132px, rgba(154,132,87,.04) 133px, transparent 138px)",
               "linear-gradient(rgba(229,210,169,.018) 1px, transparent 1px)",
               "linear-gradient(90deg, rgba(118,160,146,.018) 1px, transparent 1px)",
             ].join(", "),
             backgroundSize:
-              "1500px 1050px, 1750px 1200px, 2100px 1400px, 72px 72px, 72px 72px",
+              "1700px 1150px, 1450px 1080px, 1700px 1180px, 1900px 1320px, 2200px 1500px, 72px 72px, 72px 72px",
             backgroundPosition:
-              "-140px -100px, 380px 120px, -220px 260px, 0 0, 0 0",
+              "50% -240px, -180px 40px, calc(100% + 260px) -20px, 60% 360px, 8% 480px, 0 0, 0 0",
           }}
         />
 
