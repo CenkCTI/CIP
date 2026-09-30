@@ -144,7 +144,7 @@ These counts are resumability aids. They are not interpreted as a percentage-com
 
 ## Migration acceptance
 
-`scripts/test-stage3-processing-foundation-migration.sh` applies migrations 053–058 in dependency order and checks:
+`scripts/test-stage3-processing-foundation-migration.sh` applies migrations 053–059 in dependency order and checks:
 
 - default `UNPROCESSED` state;
 - processing-state timestamp/analyst consistency;
@@ -152,7 +152,7 @@ These counts are resumability aids. They are not interpreted as a percentage-com
 - Indicator provenance output;
 - source Attribution Claim persistence.
 
-The Stage 2 and PDF migration harnesses explicitly exclude migration 058 from their pre-migration phase so the Stage 3 schema cannot be applied before Source Annotation tables exist.
+The Stage 2 and PDF migration harnesses explicitly exclude migrations 058–059 from their pre-migration phase so the Stage 3 schema cannot be applied before Source Annotation tables exist.
 
 
 ## Bulk IOC review
@@ -189,8 +189,19 @@ The section explicitly states that these are reporting statements/evidence input
 
 ## Provenance deletion semantics
 
-Once a Source Annotation supports a Timeline Event or a Stage 3 structured output, that annotation is delete-restricted until the provenance link is explicitly removed. Structured output targets are also delete-restricted while the Stage 3 provenance link exists.
+Once a Source Annotation supports a Timeline Event or a durable Stage 3 structured output, that annotation is delete-restricted until the provenance link is explicitly removed. Durable CTI targets are also delete-restricted while the Stage 3 provenance link exists.
+
+Source Attribution Claims are different: they are annotation-bound source statements, not standalone CTI entities. Deleting a claim explicitly removes its ledger row atomically; unlinking a claim therefore means deleting that source claim, while unlinking Indicator/Malware/CVE/MITRE/Campaign/Actor provenance preserves the structured target.
 
 For Attribution Claims, the database additionally enforces that the claim and the output ledger row refer to the **same Source Annotation**. A claim from Annotation A cannot be attached to Annotation B merely because both belong to the same Investigation.
 
 Legacy screen-space annotations remain visible as historical annotations but are excluded from the Stage 3 processing queue because they cannot provide the exact PDF-space provenance required by the processing bridge.
+
+
+## Forward hardening migration 059
+
+Migration `202609300059_stage3_processing_provenance_hardening.sql` exists specifically for databases that may already have applied an earlier revision of migration 058 during PR testing.
+
+It re-applies the final ignored-state invariant, upgrades annotation foreign keys to delete-restrict semantics, enforces same-annotation Attribution Claim provenance, and gives Attribution Claim deletion atomic cascade semantics for its ledger row.
+
+It is safe to apply after 058 even when the database already reflects the final 058 schema.
