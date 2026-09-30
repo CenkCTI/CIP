@@ -18,6 +18,22 @@ describe("Stage 3 Source Reader processing bridge", () => {
     "src/components/investigations/sources/source-library.tsx",
     "utf8",
   );
+  const actions = readFileSync(
+    "src/app/projects/[id]/source-processing-actions.ts",
+    "utf8",
+  );
+  const detailPage = readFileSync(
+    "src/app/projects/[id]/[module]/[entityId]/page.tsx",
+    "utf8",
+  );
+  const provenance = readFileSync(
+    "src/components/processing/source-annotation-support.tsx",
+    "utf8",
+  );
+  const claims = readFileSync(
+    "src/components/processing/source-attribution-claims.tsx",
+    "utf8",
+  );
 
   it("uses one Process / Extract surface for structured destinations", () => {
     expect(component).toContain("Process / Extract");
@@ -58,5 +74,25 @@ describe("Stage 3 Source Reader processing bridge", () => {
     expect(component).toContain("does not attribute the current activity");
     expect(component).toContain("Operational Picture analysis");
     expect(component).toContain("Suggestions only");
+  });
+
+  it("supports analyst-reviewed bulk IOC candidate processing", () => {
+    expect(component).toContain("Add selected Indicators");
+    expect(actions).toContain("processAnnotationIndicatorBatch");
+    expect(actions).toContain(".max(100)");
+    expect(actions).toContain("Processed ${created + linked} Indicator candidate(s)");
+  });
+
+  it("surfaces source annotation provenance on structured CTI records", () => {
+    expect(detailPage).toContain("<SourceAnnotationSupport");
+    expect(provenance).toContain("Annotation provenance");
+    expect(provenance).toContain("Open source annotation");
+    expect(provenance).toContain("SHA-256");
+  });
+
+  it("keeps source-reported actor claims separate from attribution conclusions", () => {
+    expect(detailPage).toContain("<SourceAttributionClaims");
+    expect(claims).toContain("Source-reported attribution");
+    expect(claims).toContain("not CITEM attribution conclusions");
   });
 });

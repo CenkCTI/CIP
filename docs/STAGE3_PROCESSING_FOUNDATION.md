@@ -153,3 +153,35 @@ These counts are resumability aids. They are not interpreted as a percentage-com
 - source Attribution Claim persistence.
 
 The Stage 2 and PDF migration harnesses explicitly exclude migration 058 from their pre-migration phase so the Stage 3 schema cannot be applied before Source Annotation tables exist.
+
+
+## Bulk IOC review
+
+When annotation text contains several technical observables, the Source Reader detects conservative IOC candidates and lets the analyst select a subset before pressing **Add selected Indicators**.
+
+The server re-validates every selected candidate. Exact Indicator identity is resolved by `type + normalized_value`; an existing Indicator is linked rather than duplicated. New and existing targets both receive annotation provenance.
+
+Bulk processing remains idempotent at the annotation-target ledger boundary and never marks the annotation processed automatically.
+
+## Record-side provenance
+
+Indicator, Malware, CVE, MITRE, Campaign and Threat Actor detail pages now reconstruct the Stage 3 provenance chain:
+
+```text
+Structured record
+  → source_annotation_outputs
+  → Source Annotation
+  → Source
+  → Original Source Asset
+  → SHA-256
+```
+
+The UI shows source title/publisher, page, source wording, CREATED/LINKED action, mapping origin, normalized value when distinct, asset filename/hash and a deep link back to the exact Source Annotation.
+
+This provenance display is intentionally not a Source Evaluation score.
+
+## Source-reported attribution on Actor profiles
+
+When an Attribution Claim is optionally mapped to a canonical Threat Actor, the Actor detail page shows it in a separate **Source-reported attribution** section.
+
+The section explicitly states that these are reporting statements/evidence inputs and are not CITEM attribution conclusions or preferred hypotheses. This keeps Stage 3 source claims distinct from the later competing-hypothesis and assessment workflows.

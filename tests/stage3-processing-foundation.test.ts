@@ -47,4 +47,11 @@ describe("Stage 3 processing foundation", () => {
     expect(actions).toContain('.eq("cve_id", parsed.data.cve_id)');
     expect(actions).toContain("linkedExisting: true");
   });
+
+  it("hardens ignored-state and authenticated ledger access in the database", () => {
+    expect(migration).toContain("processing_state <> 'IGNORED'");
+    expect(migration).toContain("grant select,insert,update,delete on public.source_attribution_claims");
+    expect(migration).toContain("grant select,insert,delete on public.source_annotation_outputs");
+    expect(migration).not.toContain("Immutable provenance ledger");
+  });
 });
