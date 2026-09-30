@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { extractDocxPlainText, isDocxFile } from "@/lib/collection/docx-preview";
 import { PdfSourceViewer } from "@/components/investigations/source-reader/pdf/pdf-source-viewer";
-import { AnnotationTimelineActions } from "@/components/investigations/source-reader/annotation-timeline-actions";
+import { AnnotationProcessingActions } from "@/components/investigations/source-reader/annotation-processing-actions";
 
 import {
   createSourceAnnotation,
@@ -480,6 +480,8 @@ export function SourceReaderWorkspace({
   annotationRequirementLinks,
   timelineEvents,
   annotationTimelineLinks,
+  processingOutputs,
+  processingOptions,
   initialFocusedAnnotationId,
 }: {
   projectId: string;
@@ -497,6 +499,15 @@ export function SourceReaderWorkspace({
   annotationRequirementLinks: Row[];
   timelineEvents: Row[];
   annotationTimelineLinks: Row[];
+  processingOutputs: Row[];
+  processingOptions: {
+    indicator: Row[];
+    malware: Row[];
+    cve: Row[];
+    mitre: Row[];
+    campaign: Row[];
+    actor: Row[];
+  };
   initialFocusedAnnotationId?: string | null;
 }) {
   const router = useRouter();
@@ -550,6 +561,22 @@ export function SourceReaderWorkspace({
     }
     return map;
   }, [annotationTimelineLinks]);
+  const annProcessingOutputs = useMemo(() => {
+    const map = new Map<string, Row[]>();
+    for (const output of processingOutputs) {
+      const id = s(output.source_annotation_id);
+      map.set(id, [...(map.get(id) ?? []), output]);
+    }
+    return map;
+  }, [processingOutputs]);
+  const processingCounts = useMemo(() => {
+    const counts = { UNPROCESSED: 0, PROCESSED: 0, IGNORED: 0 };
+    for (const annotation of annotations) {
+      const state = s(annotation.processing_state) || "UNPROCESSED";
+      if (state in counts) counts[state as keyof typeof counts] += 1;
+    }
+    return counts;
+  }, [annotations]);
 
   useEffect(() => {
     if (panel !== "annotations" || !focusedAnnotationId) return;
@@ -820,6 +847,17 @@ export function SourceReaderWorkspace({
 
             {panel === "annotations" ? (
               <div className="space-y-3">
+                <div className="rounded border border-stone-800/80 bg-black/10 p-3">
+                  <p className="citem-label">Processing queue</p>
+                  <div className="mt-2 flex flex-wrap gap-3 text-xs text-stone-500">
+                    <span className="text-amber-300">{processingCounts.UNPROCESSED} unprocessed</span>
+                    <span>{processingCounts.PROCESSED} processed</span>
+                    <span>{processingCounts.IGNORED} ignored</span>
+                  </div>
+                  <p className="mt-2 text-[11px] leading-5 text-stone-600">
+                    Resumable analyst work state only; this is not a completion percentage.
+                  </p>
+                </div>
                 {annotations.map((annotation) => {
                   const id = s(annotation.id);
                   const linkedGaps = annGaps.get(id) ?? [];
@@ -954,12 +992,14 @@ export function SourceReaderWorkspace({
                         </p>
                       ) : null}
                       {!legacy ? (
-                        <AnnotationTimelineActions
+                        <AnnotationProcessingActions
                           projectId={projectId}
                           sourceId={s(source.id)}
                           annotation={annotation}
                           events={timelineEvents}
-                          links={annTimelineLinks.get(id) ?? []}
+                          timelineLinks={annTimelineLinks.get(id) ?? []}
+                          outputs={annProcessingOutputs.get(id) ?? []}
+                          options={processingOptions}
                         />
                       ) : null}
                       <div className="mt-2 flex flex-wrap gap-3">
