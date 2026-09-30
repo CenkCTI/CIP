@@ -572,6 +572,7 @@ export function SourceReaderWorkspace({
   const processingCounts = useMemo(() => {
     const counts = { UNPROCESSED: 0, PROCESSED: 0, IGNORED: 0 };
     for (const annotation of annotations) {
+      if (s(annotation.anchor_kind || "LEGACY_SCREEN") === "LEGACY_SCREEN") continue;
       const state = s(annotation.processing_state) || "UNPROCESSED";
       if (state in counts) counts[state as keyof typeof counts] += 1;
     }
