@@ -115,3 +115,41 @@ Stage 3 does not:
 - calculate a Stage 3 completion percentage.
 
 Those boundaries preserve the later Source Evaluation, Operational Picture, Hypothesis and Assessment stages.
+
+
+## Source Reader integration
+
+The annotation sidebar uses one **Process / Extract** surface for structured Stage 3 work. Timeline remains backed by its typed `timeline_event_source_annotations` provenance table; other destinations use the generic, typed-target processing ledger.
+
+The processing drawer exposes:
+
+- Timeline Event;
+- Indicator / IOC;
+- Malware;
+- CVE;
+- MITRE ATT&CK;
+- source-reported Campaign identity;
+- Threat Actor identity/profile;
+- source Attribution Claim.
+
+Every non-Timeline destination supports **Link existing** when appropriate. Linking records annotation provenance only. It does not create an entity-to-entity analytical relationship.
+
+Creating or linking output records never auto-closes the annotation. The analyst explicitly chooses **Mark processed**, **Ignore**, or **Reopen**.
+
+## Processing queue visibility
+
+The Source Reader annotation panel shows unprocessed, processed and ignored counts. The Source Library shows the number of unprocessed annotations per Source.
+
+These counts are resumability aids. They are not interpreted as a percentage-complete metric.
+
+## Migration acceptance
+
+`scripts/test-stage3-processing-foundation-migration.sh` applies migrations 053–058 in dependency order and checks:
+
+- default `UNPROCESSED` state;
+- processing-state timestamp/analyst consistency;
+- typed single-target output enforcement;
+- Indicator provenance output;
+- source Attribution Claim persistence.
+
+The Stage 2 and PDF migration harnesses explicitly exclude migration 058 from their pre-migration phase so the Stage 3 schema cannot be applied before Source Annotation tables exist.
