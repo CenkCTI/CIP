@@ -62,13 +62,21 @@ export function ctiRecordSort(a: CtiRow, b: CtiRow, sort?: string) {
   return title(a).localeCompare(title(b)) || ss(a.id).localeCompare(ss(b.id));
 }
 export function filterActors(rows: CtiRow[], sp: CtiSearchParams) {
+  const query = sp.q?.trim().toLowerCase();
   return rows
-    .filter(
-      (r) =>
+    .filter((r) => {
+      const aliasText = aa(r.aliases).join(" ").toLowerCase();
+      const motivationText = aa(r.motivations).join(" ").toLowerCase();
+      return (
         matchQ(r, sp, ["name", "country", "description", "known_ttps"]) &&
+        (!query || aliasText.includes(query) || motivationText.includes(query) ||
+          ["name", "country", "description", "known_ttps"].some((field) =>
+            ss(r[field]).toLowerCase().includes(query),
+          )) &&
         (!sp.country || ss(r.country) === sp.country) &&
-        (!sp.motivation || aa(r.motivations).includes(sp.motivation)),
-    )
+        (!sp.motivation || aa(r.motivations).includes(sp.motivation))
+      );
+    })
     .sort((a, b) => ctiRecordSort(a, b, sp.sort));
 }
 export function filterCampaigns(
