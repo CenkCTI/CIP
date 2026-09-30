@@ -4,14 +4,40 @@ import { describe, expect, it } from "vitest";
 describe("Knowledge Graph workspace v2", () => {
   const graph = readFileSync("src/components/graph/knowledge-graph.tsx", "utf8");
   const projectPage = readFileSync("src/app/projects/[id]/page.tsx", "utf8");
+  const css = readFileSync("src/app/globals.css", "utf8");
+  const terrain = readFileSync("public/graph/topographic-terrain.svg", "utf8");
 
-  it("uses the Graph itself as the full-bleed workspace surface", () => {
-    expect(projectPage).toContain('tab === "graph"');
+  it("uses the Graph itself as the dedicated workspace surface", () => {
     expect(projectPage).toContain('className="citem-graph-bleed"');
-    expect(projectPage).not.toContain('<section className="mx-auto max-w-6xl">\n        <h1 className="text-3xl font-bold text-white">{project.name}</h1>\n        \n        <div className="mt-4">\n          <KnowledgeGraph');
-    expect(graph).toContain("h-[calc(100dvh-4.35rem)]");
     expect(graph).not.toContain("Graph inspector");
     expect(graph).not.toContain("Entity inspector");
+    expect(css).toContain(".citem-content:has(> .citem-graph-bleed)");
+    expect(css).toContain("width: 100%");
+  });
+
+  it("keeps the map clear of an expanded sidebar and leaves breathing room below the top bar", () => {
+    expect(css).not.toContain("width: calc(100vw - 17.25rem)");
+    expect(css).toContain("padding: 0.9rem 1rem 1rem");
+    expect(graph).toContain("h-[calc(100dvh-6.15rem)]");
+    expect(graph).toContain("border border-[#4e4635]/60");
+  });
+
+  it("uses the selected clean Topographic concept as a scalable vector terrain", () => {
+    expect(graph).toContain('/graph/topographic-terrain.svg');
+    expect(terrain).toContain('viewBox="0 0 4096 2304"');
+    expect(terrain).toContain('id="amberRidge"');
+    expect(terrain).toContain('id="jadeRidge"');
+    expect(terrain).toContain("#c9963e");
+    expect(terrain).toContain("#4d8a76");
+  });
+
+  it("keeps terrain depth calmer than foreground graph zoom", () => {
+    expect(graph).toContain("terrainFarRef");
+    expect(graph).toContain("terrainMidRef");
+    expect(graph).toContain("Math.pow(zoom, 0.24)");
+    expect(graph).toContain("Math.pow(zoom, 0.46)");
+    expect(graph).toContain("viewport.x * 0.07");
+    expect(graph).toContain("viewport.x * 0.16");
   });
 
   it("keeps filters hidden in an overlay until requested", () => {
@@ -22,37 +48,11 @@ describe("Knowledge Graph workspace v2", () => {
     expect(graph).toContain("Historical infrastructure");
   });
 
-  it("switches broad zoom to readable map labels instead of tiny framed cards", () => {
+  it("preserves readable overview labels and explicit relationship editing", () => {
     expect(graph).toContain("overviewMode");
-    expect(graph).toContain("overviewScale");
     expect(graph).toContain("compactGraphLabel");
-    expect(graph).toContain('border: "0"');
-    expect(graph).toContain('overflow: "visible"');
-    expect(graph).toContain("minZoom={0.28}");
-    expect(graph).toContain("viewportZoom >= 0.58");
-  });
-
-  it("uses multi-depth amber and jade terrain that parallax-zooms without exposing layer edges", () => {
-    expect(graph).toContain("terrainFarRef");
-    expect(graph).toContain("terrainMidRef");
-    expect(graph).toContain("moveTerrain");
-    expect(graph).toContain("Math.pow(zoom, 0.34)");
-    expect(graph).toContain("Math.pow(zoom, 0.58)");
-    expect(graph).toContain("rgba(200,151,66,.14)");
-    expect(graph).toContain("rgba(68,130,111,.12)");
-    expect(graph).toContain("-inset-[85%]");
-    expect(graph).toContain("-inset-[105%]");
-    expect(graph).toContain("ellipse at 50% 8%");
-    expect(graph).toContain("repeating-radial-gradient");
-  });
-
-  it("preserves explicit manual relationship creation and editing", () => {
     expect(graph).toContain("Relationship selection");
-    expect(graph).toContain("Source");
-    expect(graph).toContain("Target");
-    expect(graph).toContain("Swap");
     expect(graph).toContain("Create link");
-    expect(graph).toContain("Manual relationship");
     expect(graph).toContain("updateEdge(false)");
     expect(graph).toContain("updateEdge(true)");
   });

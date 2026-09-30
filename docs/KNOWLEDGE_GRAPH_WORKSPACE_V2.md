@@ -76,3 +76,18 @@ The Graph route had an earlier dedicated return path that still wrapped the map 
 The map now starts flush beneath the top bar and uses `calc(100dvh - 4.35rem)` height.
 
 The parallax terrain layers also use substantial overscan (`85%` far layer and `105%` mid layer). This is necessary because the depth effect scales the background more slowly than graph entities: at low graph zoom a smaller terrain transform can otherwise expose the edge of its DOM layer. Additional amber/jade contour origins at the top, left, right and lower field keep the topographic texture continuous across the entire map instead of appearing to begin partway down the canvas.
+
+
+## Topographic concept 01 refinement
+
+The Graph terrain now follows the selected **Topographic** concept direction: a cleaner dark cartographic surface with restrained amber elevation contours and jade secondary contours. The terrain is implemented as a scalable 4096×2304 SVG at `public/graph/topographic-terrain.svg`, so it remains sharp on high-DPI displays and under map scaling.
+
+The earlier dense stack of repeating CSS radial contours has been removed. The new terrain uses a small number of deliberate contour formations, faint survey-grid structure, isolated amber/jade map marks, and lower atmospheric contrast so graph entities remain the primary visual layer.
+
+The terrain still has depth: atmospheric light and the SVG contour surface are transformed independently of React Flow entities. The far field now uses `zoom^0.24` and the topographic field uses `zoom^0.46`, both with reduced pan translation.
+
+## Shell fit and frame
+
+The Graph no longer calculates its width from `100vw - sidebar width`. Instead, the parent `citem-content` detects the Graph surface and removes its normal max-width/padding, while the Graph itself remains `width: 100%` inside `citem-main`. This makes an expanded sidebar automatically reduce Graph width instead of overlapping it.
+
+The Graph is moved slightly below the application top bar with 0.9rem top breathing room and sits inside a thin CITEM-compatible stone/amber frame. The map height is adjusted to `calc(100dvh - 6.15rem)` so the added spacing does not create unnecessary vertical overflow.

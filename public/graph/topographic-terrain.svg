@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4096 2304" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <pattern id="grid" width="128" height="128" patternUnits="userSpaceOnUse">
+      <path d="M128 0H0V128" fill="none" stroke="#8ba59a" stroke-opacity=".055" stroke-width="1"/>
+      <circle cx="0" cy="0" r="1.7" fill="#c9963e" fill-opacity=".10"/>
+    </pattern>
+    <path id="amberRidge" d="M-620 8C-560-286-320-460-40-432C260-404 526-204 604 62C674 300 500 520 212 576C-112 640-432 514-568 292C-620 206-646 104-620 8Z"/>
+    <path id="jadeRidge" d="M-570-18C-508-310-222-474 66-402C356-330 558-66 548 216C536 500 296 694-12 674C-318 654-542 432-588 150C-598 86-592 30-570-18Z"/>
+    <path id="neutralRidge" d="M-700 20C-620-336-278-544 92-480C462-416 708-98 678 238C648 576 334 810-38 778C-410 746-666 486-724 162C-736 98-728 56-700 20Z"/>
+  </defs>
+  <rect width="4096" height="2304" fill="url(#grid)"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(830 1000)" stroke="#c9963e">
+      <use href="#amberRidge" transform="scale(1.48 .94)" stroke-opacity=".16" stroke-width="3"/>
+      <use href="#amberRidge" transform="scale(1.30 .84)" stroke-opacity=".18" stroke-width="2.8"/>
+      <use href="#amberRidge" transform="scale(1.12 .74)" stroke-opacity=".22" stroke-width="2.5"/>
+      <use href="#amberRidge" transform="scale(.95 .64)" stroke-opacity=".26" stroke-width="2.3"/>
+      <use href="#amberRidge" transform="scale(.78 .54)" stroke-opacity=".30" stroke-width="2.1"/>
+      <use href="#amberRidge" transform="scale(.61 .44)" stroke-opacity=".34" stroke-width="1.9"/>
+      <use href="#amberRidge" transform="scale(.45 .34)" stroke-opacity=".38" stroke-width="1.8"/>
+      <use href="#amberRidge" transform="scale(.30 .24)" stroke-opacity=".42" stroke-width="1.7"/>
+    </g>
+    <g transform="translate(3230 1450)" stroke="#4d8a76">
+      <use href="#jadeRidge" transform="scale(1.46 .90)" stroke-opacity=".14" stroke-width="3"/>
+      <use href="#jadeRidge" transform="scale(1.28 .80)" stroke-opacity=".18" stroke-width="2.8"/>
+      <use href="#jadeRidge" transform="scale(1.10 .70)" stroke-opacity=".22" stroke-width="2.5"/>
+      <use href="#jadeRidge" transform="scale(.92 .60)" stroke-opacity=".26" stroke-width="2.3"/>
+      <use href="#jadeRidge" transform="scale(.74 .50)" stroke-opacity=".31" stroke-width="2.1"/>
+      <use href="#jadeRidge" transform="scale(.57 .40)" stroke-opacity=".36" stroke-width="1.9"/>
+      <use href="#jadeRidge" transform="scale(.40 .30)" stroke-opacity=".40" stroke-width="1.8"/>
+      <use href="#jadeRidge" transform="scale(.25 .21)" stroke-opacity=".44" stroke-width="1.7"/>
+    </g>
+    <g transform="translate(2930 430)" stroke="#b58a3b">
+      <use href="#neutralRidge" transform="scale(.78 .34)" stroke-opacity=".10" stroke-width="2.3"/>
+      <use href="#neutralRidge" transform="scale(.62 .28)" stroke-opacity=".13" stroke-width="2.1"/>
+      <use href="#neutralRidge" transform="scale(.46 .22)" stroke-opacity=".16" stroke-width="1.9"/>
+      <use href="#neutralRidge" transform="scale(.31 .16)" stroke-opacity=".20" stroke-width="1.8"/>
+    </g>
+    <g transform="translate(1700 1830)" stroke="#6b9586">
+      <use href="#jadeRidge" transform="scale(.86 .42)" stroke-opacity=".09" stroke-width="2.2"/>
+      <use href="#jadeRidge" transform="scale(.67 .34)" stroke-opacity=".12" stroke-width="2"/>
+      <use href="#jadeRidge" transform="scale(.48 .26)" stroke-opacity=".16" stroke-width="1.8"/>
+    </g>
+    <g stroke="#8e907f" stroke-opacity=".07" stroke-width="2">
+      <path d="M-80 520C460 286 1012 392 1448 650C1898 916 2296 980 2728 764C3208 524 3586 438 4184 614"/>
+      <path d="M-120 642C482 410 1036 498 1480 748C1932 1002 2344 1072 2780 862C3260 632 3656 540 4210 728"/>
+      <path d="M-180 1578C392 1362 1016 1404 1500 1660C1986 1918 2502 1942 2944 1692C3408 1430 3766 1424 4240 1604"/>
+      <path d="M-120 1702C430 1502 1008 1528 1488 1774C1980 2024 2508 2048 2972 1816C3448 1578 3820 1578 4218 1736"/>
+    </g>
+  </g>
+  <g fill="#c9963e">
+    <circle cx="828" cy="1004" r="4" fill-opacity=".62"/>
+    <circle cx="2920" cy="432" r="3.2" fill-opacity=".42"/>
+    <circle cx="2068" cy="1108" r="2.4" fill-opacity=".24"/>
+  </g>
+  <g fill="#5d9784">
+    <circle cx="3230" cy="1450" r="4" fill-opacity=".58"/>
+    <circle cx="1710" cy="1832" r="3" fill-opacity=".34"/>
+  </g>
+  <g stroke-linecap="round" fill="none">
+    <g stroke="#c9963e" stroke-opacity=".32" stroke-width="2">
+      <path d="M420 360h34M437 343v34"/>
+      <path d="M1000 1740h28M1014 1726v28"/>
+      <path d="M2840 808h28M2854 794v28"/>
+    </g>
+    <g stroke="#5d9784" stroke-opacity=".34" stroke-width="2">
+      <path d="M3400 520h34M3417 503v34"/>
+      <path d="M3660 1770h30M3675 1755v30"/>
+      <path d="M2270 1480h28M2284 1466v28"/>
+    </g>
+  </g>
+</svg>

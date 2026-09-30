@@ -545,19 +545,19 @@ html[data-citem-sidebar="collapsed"] .citem-sidebar {
   padding: 1.35rem;
 }
 
-.citem-graph-bleed {
-  position: relative;
-  left: 50%;
-  width: calc(100vw - 17.25rem);
-  margin-top: -1.35rem;
-  margin-bottom: -1.35rem;
-  transform: translateX(-50%);
-  overflow: hidden;
-  background: #070c0e;
+.citem-content:has(> .citem-graph-bleed) {
+  max-width: none;
+  margin: 0;
+  padding: 0;
 }
 
-html[data-citem-sidebar="collapsed"] .citem-graph-bleed {
-  width: 100vw;
+.citem-graph-bleed {
+  position: relative;
+  width: 100%;
+  padding: 0.9rem 1rem 1rem;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(15, 19, 17, 0.92), rgba(9, 13, 14, 0.98));
 }
 
 .citem-page-header {
@@ -1153,11 +1153,13 @@ html[data-citem-sidebar="collapsed"] .citem-graph-bleed {
     padding: 1rem;
   }
 
-  .citem-graph-bleed,
-  html[data-citem-sidebar="collapsed"] .citem-graph-bleed {
-    width: 100vw;
-    margin-top: -1rem;
-    margin-bottom: -1rem;
+  .citem-content:has(> .citem-graph-bleed) {
+    padding: 0;
+  }
+
+  .citem-graph-bleed {
+    width: 100%;
+    padding: 0.65rem 0.7rem 0.7rem;
   }
 
   .citem-page-header {

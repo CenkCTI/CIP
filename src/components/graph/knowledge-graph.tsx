@@ -508,15 +508,15 @@ function GraphCanvas({
 
   function moveTerrain(viewport: { x: number; y: number; zoom: number }) {
     const zoom = Math.max(0.28, viewport.zoom);
-    const farScale = Math.pow(zoom, 0.34);
-    const midScale = Math.pow(zoom, 0.58);
+    const farScale = Math.pow(zoom, 0.24);
+    const midScale = Math.pow(zoom, 0.46);
     if (terrainFarRef.current) {
       terrainFarRef.current.style.transform =
-        `translate3d(${viewport.x * 0.09}px, ${viewport.y * 0.09}px, 0) scale(${farScale})`;
+        `translate3d(${viewport.x * 0.07}px, ${viewport.y * 0.07}px, 0) scale(${farScale})`;
     }
     if (terrainMidRef.current) {
       terrainMidRef.current.style.transform =
-        `translate3d(${viewport.x * 0.18}px, ${viewport.y * 0.18}px, 0) scale(${midScale})`;
+        `translate3d(${viewport.x * 0.16}px, ${viewport.y * 0.16}px, 0) scale(${midScale})`;
     }
   }
 
@@ -543,49 +543,44 @@ function GraphCanvas({
   return (
     <div className="relative">
       <div
-        className="relative h-[calc(100dvh-4.35rem)] min-h-[720px] overflow-hidden bg-[#070c0e]"
+        className="relative h-[calc(100dvh-6.15rem)] min-h-[690px] overflow-hidden rounded-[0.46rem] border border-[#4e4635]/60 bg-[#070c0e] shadow-[0_18px_45px_rgba(0,0,0,.22),inset_0_0_0_1px_rgba(201,150,62,.025)]"
         style={{
           backgroundImage: [
-            "radial-gradient(ellipse at 12% 14%, rgba(190,143,60,.055), transparent 34%)",
-            "radial-gradient(ellipse at 88% 18%, rgba(69,128,109,.05), transparent 30%)",
-            "linear-gradient(180deg, #091012 0%, #070d0f 58%, #060a0c 100%)",
+            "radial-gradient(ellipse at 18% 42%, rgba(201,150,62,.055), transparent 34%)",
+            "radial-gradient(ellipse at 80% 57%, rgba(77,138,118,.045), transparent 31%)",
+            "linear-gradient(180deg, #091012 0%, #071012 54%, #060b0d 100%)",
           ].join(", "),
         }}
       >
         <div
           ref={terrainFarRef}
-          className="pointer-events-none absolute -inset-[85%] z-0 will-change-transform"
+          className="pointer-events-none absolute -inset-[72%] z-0 will-change-transform"
           aria-hidden
           style={{
             transformOrigin: "center center",
             backgroundImage: [
-              "radial-gradient(ellipse at 18% 18%, rgba(200,151,66,.14), transparent 28%)",
-              "radial-gradient(ellipse at 76% 31%, rgba(68,130,111,.12), transparent 25%)",
-              "radial-gradient(ellipse at 55% 82%, rgba(82,103,112,.09), transparent 31%)",
-              "linear-gradient(145deg, #0b1113 0%, #081012 46%, #060a0c 100%)",
+              "radial-gradient(ellipse at 22% 48%, rgba(201,150,62,.11), transparent 31%)",
+              "radial-gradient(ellipse at 78% 55%, rgba(77,138,118,.095), transparent 29%)",
+              "radial-gradient(ellipse at 54% 8%, rgba(113,104,78,.04), transparent 24%)",
+              "linear-gradient(145deg, #0a1113 0%, #071012 47%, #060b0d 100%)",
             ].join(", "),
           }}
         />
         <div
           ref={terrainMidRef}
-          className="pointer-events-none absolute -inset-[105%] z-[1] opacity-95 will-change-transform"
+          className="pointer-events-none absolute -inset-[78%] z-[1] opacity-[0.94] will-change-transform"
           aria-hidden
           style={{
             transformOrigin: "center center",
-            backgroundImage: [
-              "repeating-radial-gradient(ellipse at 50% 8%, transparent 0 86px, rgba(210,165,82,.062) 87px, transparent 91px)",
-              "repeating-radial-gradient(ellipse at 18% 38%, transparent 0 78px, rgba(206,160,78,.068) 79px, transparent 83px)",
-              "repeating-radial-gradient(ellipse at 82% 34%, transparent 0 94px, rgba(76,141,121,.068) 95px, transparent 100px)",
-              "repeating-radial-gradient(ellipse at 70% 78%, transparent 0 118px, rgba(83,137,122,.052) 119px, transparent 124px)",
-              "repeating-radial-gradient(ellipse at 30% 86%, transparent 0 132px, rgba(154,132,87,.04) 133px, transparent 138px)",
-              "linear-gradient(rgba(229,210,169,.018) 1px, transparent 1px)",
-              "linear-gradient(90deg, rgba(118,160,146,.018) 1px, transparent 1px)",
-            ].join(", "),
-            backgroundSize:
-              "1700px 1150px, 1450px 1080px, 1700px 1180px, 1900px 1320px, 2200px 1500px, 72px 72px, 72px 72px",
-            backgroundPosition:
-              "50% -240px, -180px 40px, calc(100% + 260px) -20px, 60% 360px, 8% 480px, 0 0, 0 0",
+            backgroundImage: 'url("/graph/topographic-terrain.svg")',
+            backgroundRepeat: "no-repeat",
+            backgroundPosition: "center",
+            backgroundSize: "100% 100%",
           }}
+        />
+        <div
+          className="pointer-events-none absolute inset-px z-[2] rounded-[0.4rem] border border-white/[0.015]"
+          aria-hidden
         />
 
         <div className="pointer-events-none absolute left-4 top-4 z-30 rounded border border-stone-800/70 bg-[#0c1214]/82 px-3 py-2 shadow-lg backdrop-blur-md">
