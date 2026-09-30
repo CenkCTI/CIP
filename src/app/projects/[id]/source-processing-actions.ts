@@ -8,6 +8,7 @@ import {
   campaignSchema,
   cveSchema,
   indicatorSchema,
+  indicatorTypes,
   malwareSchema,
   mitreSchema,
   normalizeIndicatorValue,
@@ -27,6 +28,16 @@ const uuid = z.string().uuid();
 const destinationSchema = z.enum(processingDestinations);
 const stateSchema = z.enum(annotationProcessingStates);
 const mappingOriginSchema = z.enum(mappingOrigins);
+const batchIndicatorCandidateSchema = z
+  .array(
+    z.object({
+      observedValue: z.string().trim().min(1).max(4096),
+      type: z.enum(indicatorTypes),
+    }),
+  )
+  .min(1)
+  .max(100);
+
 const attributionClaimSchema = z.object({
   claim_summary: z.string().trim().min(1).max(10000),
   claimed_actor_text: z.string().trim().min(1).max(500),
@@ -266,6 +277,107 @@ export async function setAnnotationProcessingState(
         : state.data === "IGNORED"
           ? "Annotation marked ignored."
           : "Annotation marked processed.",
+  };
+}
+
+export async function processAnnotationIndicatorBatch(
+  projectId: string,
+  sourceId: string,
+  annotationId: string,
+  candidateInput: Array<{ observedValue: string; type: string }>,
+): Promise<ProcessingActionState> {
+  const candidates = batchIndicatorCandidateSchema.safeParse(candidateInput);
+  if (!candidates.success) return { error: "Invalid Indicator candidate batch." };
+  const resolved = await annotationContext(projectId, sourceId, annotationId);
+  if (!resolved) return { error: "Source annotation not found." };
+  const { context, annotation } = resolved;
+
+  let created = 0;
+  let linked = 0;
+  let failed = 0;
+
+  for (const candidate of candidates.data) {
+    const parsed = indicatorSchema.safeParse({
+      value: candidate.observedValue,
+      type: candidate.type,
+      confidence: "MEDIUM",
+      status: "UNVERIFIED",
+      source: null,
+      tags: "",
+      first_seen: "",
+      last_seen: "",
+      analyst_rationale: "",
+      current_relevance: "",
+    });
+    if (!parsed.success) {
+      failed += 1;
+      continue;
+    }
+
+    const normalized = normalizeIndicatorValue(parsed.data.value, parsed.data.type);
+    let { data: target } = await context.supabase
+      .from("indicators")
+      .select("id,value,type")
+      .eq("project_id", context.projectId)
+      .eq("type", parsed.data.type)
+      .eq("normalized_value", normalized)
+      .maybeSingle();
+    let action: "CREATED" | "LINKED" = "LINKED";
+
+    if (!target) {
+      const inserted = await context.supabase
+        .from("indicators")
+        .insert({ ...parsed.data, project_id: context.projectId })
+        .select("id,value,type")
+        .single();
+      if (inserted.data) {
+        target = inserted.data;
+        action = "CREATED";
+      } else if (inserted.error?.code === "23505") {
+        const raced = await context.supabase
+          .from("indicators")
+          .select("id,value,type")
+          .eq("project_id", context.projectId)
+          .eq("type", parsed.data.type)
+          .eq("normalized_value", normalized)
+          .maybeSingle();
+        target = raced.data;
+      }
+    }
+
+    if (!target) {
+      failed += 1;
+      continue;
+    }
+
+    const ledgerError = await recordOutput({
+      context,
+      annotation,
+      destination: "indicator",
+      targetId: target.id,
+      targetLabel: `${target.type} · ${target.value}`,
+      action,
+      normalizedValue: normalized,
+    });
+    if (ledgerError) {
+      if (action === "CREATED") {
+        await compensateCreatedTarget(context, "indicator", target.id);
+      }
+      failed += 1;
+      continue;
+    }
+    if (action === "CREATED") created += 1;
+    else linked += 1;
+  }
+
+  revalidateProcessing(context.projectId, sourceId);
+  if (!created && !linked) {
+    return { error: `No Indicator candidates were accepted. ${failed} failed validation or persistence.` };
+  }
+  return {
+    success:
+      `Processed ${created + linked} Indicator candidate(s): ${created} created, ${linked} linked to existing.` +
+      (failed ? ` ${failed} skipped.` : ""),
   };
 }
 

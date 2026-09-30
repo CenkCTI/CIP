@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import {
   createAnnotationOutput,
   linkAnnotationOutput,
+  processAnnotationIndicatorBatch,
   setAnnotationProcessingState,
   unlinkAnnotationOutput,
 } from "@/app/projects/[id]/source-processing-actions";
@@ -439,7 +440,13 @@ export function AnnotationProcessingActions({
     [excerpt],
   );
   const [candidateIndex, setCandidateIndex] = useState(0);
+  const [selectedCandidateKeys, setSelectedCandidateKeys] = useState<Set<string>>(
+    () => new Set(candidates.map((item) => `${item.type}:${item.canonicalValue}`)),
+  );
   const candidate = candidates[candidateIndex] ?? null;
+  const selectedCandidates = candidates.filter((item) =>
+    selectedCandidateKeys.has(`${item.type}:${item.canonicalValue}`),
+  );
 
   const existing =
     destination === "timeline" || destination === "attribution_claim"
@@ -760,22 +767,70 @@ export function AnnotationProcessingActions({
                             {candidates.length}
                           </span>
                         </div>
-                        <div className="mt-3 flex max-h-32 flex-wrap gap-2 overflow-y-auto">
-                          {candidates.map((item, index) => (
-                            <button
-                              className={
-                                "rounded border px-2 py-1 font-mono text-[11px] " +
-                                (candidateIndex === index
-                                  ? "border-amber-800/70 bg-amber-950/10 text-amber-200"
-                                  : "border-stone-800 text-stone-500")
-                              }
-                              type="button"
-                              key={`${item.type}:${item.canonicalValue}`}
-                              onClick={() => setCandidateIndex(index)}
-                            >
-                              {item.type} · {item.observedValue}
-                            </button>
-                          ))}
+                        <div className="mt-3 grid max-h-40 gap-1.5 overflow-y-auto">
+                          {candidates.map((item, index) => {
+                            const key = `${item.type}:${item.canonicalValue}`;
+                            return (
+                              <div
+                                className={
+                                  "flex items-center gap-2 rounded border px-2 py-1.5 " +
+                                  (candidateIndex === index
+                                    ? "border-amber-800/70 bg-amber-950/10"
+                                    : "border-stone-800")
+                                }
+                                key={key}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedCandidateKeys.has(key)}
+                                  onChange={() =>
+                                    setSelectedCandidateKeys((current) => {
+                                      const next = new Set(current);
+                                      if (next.has(key)) next.delete(key);
+                                      else next.add(key);
+                                      return next;
+                                    })
+                                  }
+                                  aria-label={`Select ${item.observedValue}`}
+                                />
+                                <button
+                                  className="min-w-0 flex-1 truncate text-left font-mono text-[11px] text-stone-400 hover:text-amber-200"
+                                  type="button"
+                                  onClick={() => setCandidateIndex(index)}
+                                  title={item.observedValue}
+                                >
+                                  {item.type} · {item.observedValue}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="mt-3 flex items-center justify-between gap-3 border-t border-stone-800 pt-3">
+                          <span className="text-[11px] text-stone-600">
+                            {selectedCandidates.length} selected
+                          </span>
+                          <button
+                            className="citem-button-ghost min-h-0 px-2.5 py-1.5 text-xs"
+                            type="button"
+                            disabled={pending || !selectedCandidates.length}
+                            onClick={() =>
+                              startTransition(async () => {
+                                const result = await processAnnotationIndicatorBatch(
+                                  projectId,
+                                  sourceId,
+                                  text(annotation.id),
+                                  selectedCandidates.map((item) => ({
+                                    observedValue: item.observedValue,
+                                    type: item.type,
+                                  })),
+                                );
+                                setMessage(result);
+                                if (result.success) router.refresh();
+                              })
+                            }
+                          >
+                            Add selected Indicators
+                          </button>
                         </div>
                       </section>
                     ) : null}
