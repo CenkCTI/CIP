@@ -7,6 +7,10 @@ import {
   ActorRelationshipManager,
 } from "@/components/actors/actor-workspace";
 import {
+  CampaignProfileHeader,
+  CampaignTechnicalContext,
+} from "@/components/campaigns/campaign-workspace";
+import {
   ClusterMembershipForm,
   ReconstructionForm,
 } from "@/components/reconstruction/forms";
@@ -463,6 +467,8 @@ export default async function Detail({
         />
       ) : tab === "indicators" ? (
         <IndicatorSummary row={row as Row} />
+      ) : tab === "campaigns" ? (
+        <CampaignProfileHeader projectId={id} campaign={row as Row} />
       ) : (
         <article className="card">
           <p className="text-sm text-slate-400">{ctiModuleLabels[tab]}</p>
@@ -500,7 +506,7 @@ export default async function Detail({
         <>
           <div className="flex justify-end">
             <Link
-              className="rounded border border-stone-700 px-3 py-2 text-sm text-cyan-200"
+              className="citem-button-ghost"
               href={`/projects/${id}/campaigns/${entityId}${showHistorical ? "" : "?historical=1"}`}
             >
               {showHistorical
@@ -508,21 +514,54 @@ export default async function Detail({
                 : "Show historical relationships"}
             </Link>
           </div>
-          <section className="card">
-            <p className="citem-label">Reconstruction Summary</p>
-            <h2 className="text-xl font-semibold">
-              Current Campaign Reconstruction
-            </h2>
-            <p className="mt-2 text-sm text-stone-500">
-              Campaign Reconstruction organises observed and inferred Timeline
-              events into an analyst-controlled operational sequence.
-              Reconstruction is not Threat Actor attribution.
-            </p>
-            <ReconstructionForm
-              projectId={id}
-              campaignId={entityId}
-              row={(campaignReconstruction.data ?? {}) as Row}
-            />
+          <section className="rounded-lg border border-stone-800/80 bg-[#0f1417] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="citem-label">Reconstruction</p>
+                <h2 className="mt-1 text-lg font-semibold text-stone-100">
+                  Current operational assessment
+                </h2>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-stone-500">
+                  Organise Timeline events into an analyst-controlled sequence. Reconstruction is not Threat Actor attribution.
+                </p>
+              </div>
+              {campaignReconstruction.data ? (
+                <div className="flex flex-wrap gap-2">
+                  <span className="citem-badge" data-tone="attention">{ss(campaignReconstruction.data.activity_status)}</span>
+                  <span className="citem-badge">{ss(campaignReconstruction.data.reconstruction_status)}</span>
+                </div>
+              ) : null}
+            </div>
+            {campaignReconstruction.data ? (
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <div className="rounded border border-stone-800 bg-black/15 p-3">
+                  <p className="citem-label">Operational objective</p>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-stone-300">
+                    {ss(campaignReconstruction.data.operational_objective) || "Not recorded"}
+                  </p>
+                </div>
+                <div className="rounded border border-stone-800 bg-black/15 p-3">
+                  <p className="citem-label">Current assessment</p>
+                  <p className="mt-2 line-clamp-5 whitespace-pre-wrap text-sm leading-6 text-stone-300">
+                    {ss(campaignReconstruction.data.current_assessment) || "Not recorded"}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-stone-600">No Campaign reconstruction has been recorded yet.</p>
+            )}
+            <details className="mt-4 rounded border border-stone-800 bg-black/10">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-amber-300">
+                Edit reconstruction
+              </summary>
+              <div className="border-t border-stone-800 p-4">
+                <ReconstructionForm
+                  projectId={id}
+                  campaignId={entityId}
+                  row={(campaignReconstruction.data ?? {}) as Row}
+                />
+              </div>
+            </details>
           </section>
           <section className="card">
             <h2 className="text-xl font-semibold">Ordered Activity</h2>
@@ -543,7 +582,7 @@ export default async function Detail({
                     key={ss(m.id)}
                   >
                     <Link
-                      className="font-semibold text-cyan-200"
+                      className="font-semibold text-amber-300 hover:text-amber-200"
                       href={`/projects/${id}/timeline/${ss(m.timeline_event_id)}`}
                     >
                       {ss(e?.event_name)}
@@ -587,7 +626,7 @@ export default async function Detail({
                 return (
                   <li key={ss(m.id)}>
                     <Link
-                      className="text-cyan-200"
+                      className="text-amber-300 hover:text-amber-200"
                       href={`/projects/${id}/infrastructure/${ss(m.infrastructure_cluster_id)}`}
                     >
                       {ss(c?.name)}
@@ -601,23 +640,18 @@ export default async function Detail({
                 );
               })}
             </ul>
-            <ClusterMembershipForm
-              projectId={id}
-              campaignId={entityId}
-              clusters={(availableClusters.data ?? []) as Row[]}
-            />
-          </section>
-          <section className="card">
-            <h2 className="text-xl font-semibold">
-              Supporting Events & Current Assessment
-            </h2>
-            <p>
-              Supporting Sources, Evidence, and enrichment results remain
-              authoritative at event level. Assess the coherent sequence,
-              observed versus inferred activity, objective, infrastructure,
-              activity status, disputes, likely next activity, and data still
-              required. AI does not write this assessment.
-            </p>
+            <details className="mt-4 rounded border border-stone-800 bg-black/10">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-amber-300">
+                Link infrastructure cluster
+              </summary>
+              <div className="border-t border-stone-800 p-4">
+                <ClusterMembershipForm
+                  projectId={id}
+                  campaignId={entityId}
+                  clusters={(availableClusters.data ?? []) as Row[]}
+                />
+              </div>
+            </details>
           </section>
         </>
       ) : null}
@@ -816,6 +850,43 @@ export default async function Detail({
             </summary>
             <div className="border-t border-red-950/60 p-4">
               <CtiDelete tab="actors" projectId={id} row={row as Row} />
+            </div>
+          </details>
+        </>
+      ) : tab === "campaigns" ? (
+        <>
+          <CampaignTechnicalContext
+            projectId={id}
+            actors={related.find((group) => group.target === "actors")?.items ?? []}
+            malware={related.find((group) => group.target === "malware")?.items ?? []}
+            indicators={related.find((group) => group.target === "indicators")?.items ?? []}
+            techniques={related.find((group) => group.target === "mitre")?.items ?? []}
+          />
+
+          <section className="rounded-lg border border-stone-800/80 bg-[#0f1417] p-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="citem-label">Analytical handoff</p>
+                <h2 className="mt-1 text-lg font-semibold text-stone-100">Attribution Analysis</h2>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-stone-500">
+                  Compare competing actor hypotheses separately from Campaign identity and reconstruction.
+                </p>
+              </div>
+              <Link
+                className="text-sm font-medium text-amber-300 hover:text-amber-200"
+                href={`/projects/${id}/campaigns/${entityId}/attribution`}
+              >
+                Open Attribution Analysis →
+              </Link>
+            </div>
+          </section>
+
+          <details className="rounded-lg border border-red-950/60 bg-red-950/5">
+            <summary className="cursor-pointer px-4 py-3 text-xs uppercase tracking-[0.12em] text-red-300/70">
+              Danger zone
+            </summary>
+            <div className="border-t border-red-950/60 p-4">
+              <CtiDelete tab="campaigns" projectId={id} row={row as Row} />
             </div>
           </details>
         </>

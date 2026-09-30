@@ -43,6 +43,7 @@ import { validTimelineDate } from "@/lib/reconstruction/presentation";
 import { LinkedOsint } from "@/components/osint/linked-osint";
 import { TimelineEventModal } from "@/components/timeline/timeline-event-modal";
 import { ActorDirectory } from "@/components/actors/actor-workspace";
+import { CampaignDirectory } from "@/components/campaigns/campaign-workspace";
 import { timelinePhaseLabel, timelineTimeLabel } from "@/lib/timeline/presentation";
 
 type SP = CtiSearchParams & {
@@ -254,6 +255,23 @@ export default async function Page({
     );
   }
 
+  const campaignReconstructionResult =
+    tab === "campaigns"
+      ? await supabase
+          .from("campaign_reconstructions")
+          .select("campaign_id,activity_status,reconstruction_status,confidence")
+          .eq("project_id", id)
+      : { data: [] as Row[], error: null };
+  if (campaignReconstructionResult.error) {
+    return (
+      <section className="mx-auto max-w-6xl">
+        <div className="card text-red-300">
+          Unable to load Campaign reconstruction context. Please refresh and try again.
+        </div>
+      </section>
+    );
+  }
+
   const ctiOptions = {
     threat_actor_ids: (actors ?? []) as Row[],
     campaign_ids: (campaigns ?? []) as Row[],
@@ -278,7 +296,7 @@ export default async function Page({
     <section className="mx-auto max-w-6xl">
       <h1 className="text-3xl font-bold text-white">{project.name}</h1>
       
-      {tab !== "overview" && tab !== "graph" && tab !== "timeline" && tab !== "actors" && (
+      {tab !== "overview" && tab !== "graph" && tab !== "timeline" && tab !== "actors" && tab !== "campaigns" && (
         <SearchBar
           id={id}
           tab={tab}
@@ -369,12 +387,18 @@ export default async function Page({
         />
       )}{" "}
       {tab === "campaigns" && (
-        <CtiList
-          tab="campaigns"
-          id={id}
+        <CampaignDirectory
+          projectId={id}
           rows={filterCampaigns((campaigns ?? []) as Row[], sp, rels)}
-          options={ctiOptions}
-          rels={rels}
+          events={(events ?? []) as Row[]}
+          reconstructions={(campaignReconstructionResult.data ?? []) as Row[]}
+          relations={{
+            campaignThreatActors: (campaignThreatActors ?? []) as Row[],
+            campaignMalware: (campaignMalware ?? []) as Row[],
+            campaignIndicators: (campaignIndicators ?? []) as Row[],
+            campaignMitre: (campaignMitre ?? []) as Row[],
+          }}
+          filters={sp}
         />
       )}{" "}
       {tab === "indicators" && (
