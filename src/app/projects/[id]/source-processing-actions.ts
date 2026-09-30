@@ -627,6 +627,9 @@ export async function createAnnotationOutput(
   }
 
   if (destination.data === "actor") {
+    const origin = mappingOriginSchema.safeParse(
+      formData.get("mapping_origin") ?? "ANALYST_MAPPED",
+    );
     const parsed = actorSchema.safeParse({
       name: formData.get("name"),
       aliases: formData.get("aliases") ?? "",
@@ -637,6 +640,7 @@ export async function createAnnotationOutput(
       references: "",
     });
     if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid Threat Actor." };
+    if (!origin.success) return { error: "Invalid mapping origin." };
     const { data, error } = await context.supabase
       .from("threat_actors")
       .insert({ ...parsed.data, project_id: context.projectId })
@@ -652,7 +656,7 @@ export async function createAnnotationOutput(
       targetId: data.id,
       targetLabel: data.name,
       normalizedValue: data.name,
-      mappingOrigin: "SOURCE_EXPLICIT",
+      mappingOrigin: origin.data,
     });
   }
 
@@ -823,6 +827,34 @@ export async function unlinkAnnotationOutput(
   if (!output.success) return { error: "Processing output not found." };
   const resolved = await annotationContext(projectId, sourceId, annotationId);
   if (!resolved) return { error: "Source annotation not found." };
+
+  const { data: existing, error: lookupError } = await resolved.context.supabase
+    .from("source_annotation_outputs")
+    .select("id,output_type,attribution_claim_id")
+    .eq("project_id", resolved.context.projectId)
+    .eq("source_annotation_id", resolved.annotation.id)
+    .eq("id", output.data)
+    .maybeSingle();
+  if (lookupError || !existing) return { error: "Processing output not found." };
+
+  if (existing.output_type === "ATTRIBUTION_CLAIM" && existing.attribution_claim_id) {
+    const { data: claim, error: claimError } = await resolved.context.supabase
+      .from("source_attribution_claims")
+      .delete()
+      .eq("project_id", resolved.context.projectId)
+      .eq("source_annotation_id", resolved.annotation.id)
+      .eq("id", existing.attribution_claim_id)
+      .select("id")
+      .maybeSingle();
+    if (claimError || !claim) {
+      return {
+        error:
+          "Unable to delete the source attribution claim. Apply Stage 3 hardening migration 059 and retry.",
+      };
+    }
+    revalidateProcessing(resolved.context.projectId, resolved.sourceId);
+    return { success: "Source attribution claim deleted with its provenance link." };
+  }
 
   const { data, error } = await resolved.context.supabase
     .from("source_annotation_outputs")
