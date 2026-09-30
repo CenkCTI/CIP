@@ -44,6 +44,7 @@ import { LinkedOsint } from "@/components/osint/linked-osint";
 import { TimelineEventModal } from "@/components/timeline/timeline-event-modal";
 import { ActorDirectory } from "@/components/actors/actor-workspace";
 import { CampaignDirectory } from "@/components/campaigns/campaign-workspace";
+import { MalwareDirectory } from "@/components/malware/malware-workspace";
 import { timelinePhaseLabel, timelineTimeLabel } from "@/lib/timeline/presentation";
 
 type SP = CtiSearchParams & {
@@ -296,7 +297,7 @@ export default async function Page({
     <section className="mx-auto max-w-6xl">
       <h1 className="text-3xl font-bold text-white">{project.name}</h1>
       
-      {tab !== "overview" && tab !== "graph" && tab !== "timeline" && tab !== "actors" && tab !== "campaigns" && (
+      {tab !== "overview" && tab !== "graph" && tab !== "timeline" && tab !== "actors" && tab !== "campaigns" && tab !== "malware" && (
         <SearchBar
           id={id}
           tab={tab}
@@ -411,12 +412,19 @@ export default async function Page({
         />
       )}{" "}
       {tab === "malware" && (
-        <CtiList
-          tab="malware"
-          id={id}
+        <MalwareDirectory
+          projectId={id}
           rows={filterMalware((malware ?? []) as Row[], sp, rels)}
-          options={ctiOptions}
-          rels={rels}
+          allRows={(malware ?? []) as Row[]}
+          campaigns={(campaigns ?? []) as Row[]}
+          relations={{
+            threatActorMalware: (threatActorMalware ?? []) as Row[],
+            campaignMalware: (campaignMalware ?? []) as Row[],
+            malwareIndicators: (malwareIndicators ?? []) as Row[],
+            cveMalware: (cveMalware ?? []) as Row[],
+            malwareMitre: (malwareMitre ?? []) as Row[],
+          }}
+          filters={sp}
         />
       )}{" "}
       {tab === "cves" && (

@@ -11,6 +11,10 @@ import {
   CampaignTechnicalContext,
 } from "@/components/campaigns/campaign-workspace";
 import {
+  MalwareProfileHeader,
+  MalwareTechnicalContext,
+} from "@/components/malware/malware-workspace";
+import {
   ClusterMembershipForm,
   ReconstructionForm,
 } from "@/components/reconstruction/forms";
@@ -446,11 +450,28 @@ export default async function Detail({
   const actorTechniques = tab === "actors"
     ? related.find((group) => group.target === "mitre")?.items ?? []
     : [];
+  const malwareTimeline =
+    tab === "malware"
+      ? await supabase
+          .from("timeline_event_entities")
+          .select("id,timeline_event_id,role,analyst_note,timeline_events(id,event_name,event_date,activity_phase,assessment_status)")
+          .eq("project_id", id)
+          .eq("malware_id", entityId)
+      : { data: [] as Row[], error: null };
+  if (malwareTimeline.error) {
+    return (
+      <section className="mx-auto max-w-5xl">
+        <div className="card text-red-300">
+          Unable to load Malware Timeline context. Please refresh and try again.
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="mx-auto max-w-5xl space-y-6">
       <Link
-        className="text-sm text-cyan-200"
+        className={["actors", "campaigns", "malware"].includes(tab) ? "text-sm text-amber-300 hover:text-amber-200" : "text-sm text-cyan-200"}
         href={`/projects/${id}?tab=${tab}`}
       >
         ← Back to {moduleLabel}
@@ -469,6 +490,8 @@ export default async function Detail({
         <IndicatorSummary row={row as Row} />
       ) : tab === "campaigns" ? (
         <CampaignProfileHeader projectId={id} campaign={row as Row} />
+      ) : tab === "malware" ? (
+        <MalwareProfileHeader projectId={id} malware={row as Row} />
       ) : (
         <article className="card">
           <p className="text-sm text-slate-400">{ctiModuleLabels[tab]}</p>
@@ -887,6 +910,38 @@ export default async function Detail({
             </summary>
             <div className="border-t border-red-950/60 p-4">
               <CtiDelete tab="campaigns" projectId={id} row={row as Row} />
+            </div>
+          </details>
+        </>
+      ) : tab === "malware" ? (
+        <>
+          <MalwareTechnicalContext
+            projectId={id}
+            malwareId={entityId}
+            behavior={ss(row.behavior)}
+            hashes={(row.hashes ?? {}) as Record<string, unknown>}
+            timelineOccurrences={(malwareTimeline.data ?? []) as Row[]}
+            linked={{
+              actor: related.find((group) => group.target === "actors")?.items ?? [],
+              campaign: related.find((group) => group.target === "campaigns")?.items ?? [],
+              indicator: related.find((group) => group.target === "indicators")?.items ?? [],
+              cve: related.find((group) => group.target === "cves")?.items ?? [],
+              mitre: related.find((group) => group.target === "mitre")?.items ?? [],
+            }}
+            options={{
+              campaign: optionRows.campaigns as Row[],
+              indicator: optionRows.indicators as Row[],
+              cve: optionRows.cves as Row[],
+              mitre: optionRows.mitre as Row[],
+            }}
+          />
+
+          <details className="rounded-lg border border-red-950/60 bg-red-950/5">
+            <summary className="cursor-pointer px-4 py-3 text-xs uppercase tracking-[0.12em] text-red-300/70">
+              Danger zone
+            </summary>
+            <div className="border-t border-red-950/60 p-4">
+              <CtiDelete tab="malware" projectId={id} row={row as Row} />
             </div>
           </details>
         </>
