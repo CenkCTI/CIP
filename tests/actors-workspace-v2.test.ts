@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
 
 describe("Actors workspace v2", () => {
   const workspace = readFileSync("src/components/actors/actor-workspace.tsx", "utf8");
@@ -13,7 +14,7 @@ describe("Actors workspace v2", () => {
   });
 
   it("uses compact quick links instead of generic relationship checkbox grids", () => {
-    expect(workspace).toContain("Advanced links & context");
+    expect(workspace).toContain("Advanced links &amp; context");
     expect(workspace).toContain("Quick link");
     expect(workspace).toContain("MITRE Technique");
     expect(workspace).not.toContain("Search relationships");
