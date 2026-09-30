@@ -12,7 +12,7 @@ import {
   DeleteEvidence,
   DeleteNote,
   DeleteTask,
-   EvidenceDownload,
+  EvidenceDownload,
   EvidenceEdit,
   EvidenceUpload,
   EvidenceUrlCreate,
@@ -21,7 +21,7 @@ import {
   TaskCreate,
   TaskEdit,
   TaskMove,
- } from "@/components/workspace-forms";
+} from "@/components/workspace-forms";
 import { requireUser } from "@/lib/auth";
 import { ctiDetailPath } from "@/lib/cti-schema";
 import {
