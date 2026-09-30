@@ -77,7 +77,8 @@ create table if not exists public.source_attribution_claims (
   foreign key(project_id,canonical_threat_actor_id)
     references public.threat_actors(project_id,id) on delete restrict,
   unique(project_id,id),
-  unique(project_id,source_annotation_id,id)
+  constraint source_attribution_claims_annotation_identity_uq
+    unique(project_id,source_annotation_id,id)
 );
 
 create index if not exists source_attribution_claims_annotation_idx
@@ -128,7 +129,7 @@ create table if not exists public.source_annotation_outputs (
   foreign key(project_id,threat_actor_id)
     references public.threat_actors(project_id,id) on delete restrict,
   foreign key(project_id,source_annotation_id,attribution_claim_id)
-    references public.source_attribution_claims(project_id,source_annotation_id,id) on delete restrict,
+    references public.source_attribution_claims(project_id,source_annotation_id,id) on delete cascade,
 
   unique(project_id,id),
 
@@ -216,7 +217,7 @@ create policy source_annotation_outputs_delete_owned
 comment on column public.source_annotations.processing_state is
   'Stage 3 analyst work state only. It is not a percentage-complete metric and is never inferred from output count.';
 comment on table public.source_annotation_outputs is
-  'Analyst-controlled provenance ledger from one source annotation to analyst-created or analyst-linked structured CITEM records. Linked annotations and targets are delete-restricted until provenance is explicitly unlinked. It is not an analytical relationship graph.';
+  'Analyst-controlled provenance ledger from one source annotation to analyst-created or analyst-linked structured CITEM records. Durable CTI targets are delete-restricted until provenance is explicitly unlinked; annotation-bound source attribution claims are deleted together with their ledger row. It is not an analytical relationship graph.';
 comment on column public.source_annotation_outputs.mapping_origin is
   'Origin of the normalization/mapping decision. AI_SUGGESTED means analyst accepted a suggestion; it never means autonomous analytical judgement.';
 comment on table public.source_attribution_claims is
