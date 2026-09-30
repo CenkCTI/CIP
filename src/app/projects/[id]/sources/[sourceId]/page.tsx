@@ -160,7 +160,17 @@ export default async function SourceDetailPage({
     (annotationsResult.data ?? []).map((annotation) => annotation.id),
   );
 
-  const [timelineEventsResult, annotationTimelineLinksResult] = await Promise.all([
+  const [
+    timelineEventsResult,
+    annotationTimelineLinksResult,
+    processingOutputsResult,
+    processingIndicatorsResult,
+    processingMalwareResult,
+    processingCvesResult,
+    processingMitreResult,
+    processingCampaignsResult,
+    processingActorsResult,
+  ] = await Promise.all([
     context.supabase
       .from("timeline_events")
       .select("id,event_name,event_date,time_precision,time_label")
@@ -174,13 +184,70 @@ export default async function SourceDetailPage({
           .eq("project_id", context.projectId)
           .in("source_annotation_id", [...annotationIds])
       : Promise.resolve({ data: [], error: null }),
+    annotationIds.size
+      ? context.supabase
+          .from("source_annotation_outputs")
+          .select("*")
+          .eq("project_id", context.projectId)
+          .in("source_annotation_id", [...annotationIds])
+          .order("created_at", { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
+    context.supabase
+      .from("indicators")
+      .select("id,value,normalized_value,type")
+      .eq("project_id", context.projectId)
+      .order("type", { ascending: true })
+      .order("normalized_value", { ascending: true })
+      .limit(500),
+    context.supabase
+      .from("malware")
+      .select("id,name,family")
+      .eq("project_id", context.projectId)
+      .order("name", { ascending: true })
+      .limit(500),
+    context.supabase
+      .from("cves")
+      .select("id,cve_id,severity")
+      .eq("project_id", context.projectId)
+      .order("cve_id", { ascending: true })
+      .limit(500),
+    context.supabase
+      .from("mitre_techniques")
+      .select("id,technique_id,technique_name,tactic")
+      .eq("project_id", context.projectId)
+      .order("technique_id", { ascending: true })
+      .limit(500),
+    context.supabase
+      .from("campaigns")
+      .select("id,name")
+      .eq("project_id", context.projectId)
+      .order("name", { ascending: true })
+      .limit(500),
+    context.supabase
+      .from("threat_actors")
+      .select("id,name,aliases")
+      .eq("project_id", context.projectId)
+      .order("name", { ascending: true })
+      .limit(500),
   ]);
 
-  if (timelineEventsResult.error || annotationTimelineLinksResult.error) {
+  if (
+    [
+      timelineEventsResult,
+      annotationTimelineLinksResult,
+      processingOutputsResult,
+      processingIndicatorsResult,
+      processingMalwareResult,
+      processingCvesResult,
+      processingMitreResult,
+      processingCampaignsResult,
+      processingActorsResult,
+    ].some((result) => result.error)
+  ) {
     return (
       <section className="mx-auto max-w-6xl">
         <div className="card text-red-300">
-          Timeline processing context could not be loaded. Apply Timeline migration 057 and retry.
+          Stage 3 processing context could not be loaded. Apply migrations 057 and 058 and retry.
         </div>
       </section>
     );
@@ -215,6 +282,15 @@ export default async function SourceDetailPage({
       )}
       timelineEvents={timelineEventsResult.data ?? []}
       annotationTimelineLinks={annotationTimelineLinksResult.data ?? []}
+      processingOutputs={processingOutputsResult.data ?? []}
+      processingOptions={{
+        indicator: processingIndicatorsResult.data ?? [],
+        malware: processingMalwareResult.data ?? [],
+        cve: processingCvesResult.data ?? [],
+        mitre: processingMitreResult.data ?? [],
+        campaign: processingCampaignsResult.data ?? [],
+        actor: processingActorsResult.data ?? [],
+      }}
       initialFocusedAnnotationId={initialFocusedAnnotationId}
     />
   );

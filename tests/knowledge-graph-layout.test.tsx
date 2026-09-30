@@ -149,6 +149,7 @@ describe("KnowledgeGraph layout persistence regressions", () => {
       position: { x: 30, y: 40 },
     });
     await screen.findByText("Graph layout saved.");
+    await userEvent.click(screen.getByRole("button", { name: "Filters" }));
     await userEvent.click(screen.getByLabelText("Search graph"));
     await userEvent.keyboard("apt");
     await waitFor(() =>
@@ -212,7 +213,7 @@ describe("KnowledgeGraph layout persistence regressions", () => {
       position: { x: 30, y: 40 },
     });
     await userEvent.click(
-      screen.getByRole("button", { name: "Reset layout/filters" }),
+      screen.getByRole("button", { name: "Reset" }),
     );
     expect(
       await screen.findByText(/current layout preserved/),
