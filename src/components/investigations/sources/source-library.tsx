@@ -28,6 +28,7 @@ type Props = {
   assetCounts: Record<string, number>;
   noteCounts: Record<string, number>;
   annotationCounts: Record<string, number>;
+  unprocessedAnnotationCounts: Record<string, number>;
 };
 
 function ContextChoices({
@@ -315,6 +316,7 @@ export function SourceLibrary({
   assetCounts,
   noteCounts,
   annotationCounts,
+  unprocessedAnnotationCounts,
 }: Props) {
   const [mode, setMode] = useState<"url" | "file">("file");
   const [query, setQuery] = useState("");
@@ -461,6 +463,14 @@ export function SourceLibrary({
                 {assetCounts[id] ?? 0} dosya
                 <br />
                 {noteCounts[id] ?? 0} not · {annotationCounts[id] ?? 0} annotation
+                {(unprocessedAnnotationCounts[id] ?? 0) > 0 ? (
+                  <>
+                    <br />
+                    <span className="text-amber-300">
+                      {unprocessedAnnotationCounts[id]} unprocessed
+                    </span>
+                  </>
+                ) : null}
               </div>
               <Link className="citem-button-ghost text-center" href={`/projects/${projectId}/sources/${id}`}>
                 Aç
