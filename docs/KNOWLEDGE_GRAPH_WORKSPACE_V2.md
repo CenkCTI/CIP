@@ -54,3 +54,23 @@ Manual relationships remain visually distinct and editable. Semantic CTI relatio
 Dragged node positions continue to persist through the existing graph layout API. **Reset view** clears saved layout positions and active graph filters. **Fit view** only changes the current viewport.
 
 No database migration is required for this redesign.
+
+
+## Wide-map and readability pass
+
+The graph now expands beyond the normal Investigation content width and uses a viewport-height canvas. On wide screens the inspector floats over the map rather than consuming a permanent graph column.
+
+Zoomed-out overview behavior is adaptive:
+
+- node labels are counter-scaled below overview zoom thresholds so names remain readable from a wider perspective;
+- subtitles and secondary node metadata collapse at broad zoom levels to reduce label collisions;
+- relationship labels hide at broad zoom levels and reappear when the analyst moves closer;
+- the minimum zoom remains broad enough for an overview while avoiding effectively unreadable micro-text.
+
+## Topographic connection-density layer
+
+The map background now combines a restrained survey-grid / contour texture with data-driven node contours.
+
+For the currently visible graph, node degree is calculated from visible relationships. Higher-degree entities receive additional concentric contour halos. These halos are deliberately subtle and do not represent confidence, severity, attribution, or importance; they only visualize local **connection density**.
+
+This makes graph hubs read more like elevated terrain on a topographic map while preserving the underlying semantic and analyst-defined relationship model.

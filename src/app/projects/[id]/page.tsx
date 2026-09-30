@@ -294,7 +294,7 @@ export default async function Page({
     malwareMitre,
   } as Record<string, Row[] | null>;
   return (
-    <section className="mx-auto max-w-6xl">
+    <section className={tab === "graph" ? "mx-auto max-w-[100rem]" : "mx-auto max-w-6xl"}>
       <h1 className="text-3xl font-bold text-white">{project.name}</h1>
       
       {tab !== "overview" && tab !== "graph" && tab !== "timeline" && tab !== "actors" && tab !== "campaigns" && tab !== "malware" && (

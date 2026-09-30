@@ -69,6 +69,18 @@ const typeCodes: Record<GraphEntityType, string> = {
   INFRASTRUCTURE_CLUSTER: "INFRA",
 };
 
+function terrainShadow(degree: number, maxDegree: number, selected: boolean) {
+  const density = maxDegree > 0 ? degree / maxDegree : 0;
+  const contours: string[] = [];
+  if (density >= 0.18) contours.push("0 0 0 12px rgba(137,128,105,.035)");
+  if (density >= 0.38) contours.push("0 0 0 25px rgba(137,128,105,.03)");
+  if (density >= 0.58) contours.push("0 0 0 40px rgba(185,130,47,.026)");
+  if (density >= 0.76) contours.push("0 0 0 58px rgba(185,130,47,.018)");
+  if (selected) contours.push("0 0 0 2px rgba(210,163,78,.22)");
+  contours.push("0 10px 26px rgba(0,0,0,.22)");
+  return contours.join(", ");
+}
+
 function graphError(payload: unknown, fallback: string) {
   return payload && typeof payload === "object" && "error" in payload
     ? String((payload as { error?: unknown }).error ?? fallback)
@@ -107,6 +119,7 @@ function GraphCanvas({
   const [label, setLabel] = useState("related_to");
   const [description, setDescription] = useState("");
   const [editing, setEditing] = useState<GraphEdge | null>(null);
+  const [viewportZoom, setViewportZoom] = useState(1);
 
   useEffect(() => {
     const newlyDiscovered = relationshipOptions.filter(
@@ -152,6 +165,17 @@ function GraphCanvas({
     [data.nodes],
   );
 
+  const degreeMap = useMemo(() => {
+    const degree = new Map<string, number>();
+    for (const node of filtered.nodes) degree.set(node.id, 0);
+    for (const edge of filtered.edges) {
+      degree.set(edge.source, (degree.get(edge.source) ?? 0) + 1);
+      degree.set(edge.target, (degree.get(edge.target) ?? 0) + 1);
+    }
+    return degree;
+  }, [filtered.edges, filtered.nodes]);
+  const maxDegree = Math.max(1, ...degreeMap.values());
+
   const makeNodes = useCallback(
     (preservePositions = true) =>
       filtered.nodes.map<Node>((node, index) => {
@@ -168,6 +192,12 @@ function GraphCanvas({
           Boolean(query) &&
           (node.label.toLowerCase().includes(query.toLowerCase()) ||
             node.subtitle?.toLowerCase().includes(query.toLowerCase()));
+        const degree = degreeMap.get(node.id) ?? 0;
+        const overviewMode = viewportZoom < 0.62;
+        const labelScale =
+          viewportZoom < 0.82
+            ? Math.min(2.9, 0.86 / Math.max(viewportZoom, 0.28))
+            : 1;
 
         return {
           id: node.id,
@@ -183,28 +213,40 @@ function GraphCanvas({
               <button
                 className="grid w-full gap-2 text-left"
                 type="button"
+                style={{
+                  transform: `scale(${labelScale})`,
+                  transformOrigin: "center center",
+                }}
                 onClick={() => {
                   setEditing(null);
                   setDrawer(node);
                 }}
               >
-                <span className="flex items-center justify-between gap-2">
-                  <span
-                    className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em]"
-                    style={{ color: colors[node.type] }}
-                  >
-                    {typeCodes[node.type]}
-                  </span>
-                  {isSelected ? (
-                    <span className="text-[10px] uppercase tracking-[0.12em] text-amber-300">
-                      selected
+                {!overviewMode ? (
+                  <span className="flex items-center justify-between gap-2">
+                    <span
+                      className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em]"
+                      style={{ color: colors[node.type] }}
+                    >
+                      {typeCodes[node.type]}
                     </span>
-                  ) : null}
-                </span>
-                <span className="truncate text-sm font-semibold text-stone-100">
+                    {isSelected ? (
+                      <span className="text-[10px] uppercase tracking-[0.12em] text-amber-300">
+                        selected
+                      </span>
+                    ) : null}
+                  </span>
+                ) : null}
+                <span
+                  className={
+                    overviewMode
+                      ? "truncate text-[13px] font-semibold text-stone-100 [text-shadow:0_1px_3px_#000]"
+                      : "truncate text-sm font-semibold text-stone-100"
+                  }
+                >
                   {node.label}
                 </span>
-                {node.subtitle ? (
+                {!overviewMode && node.subtitle ? (
                   <span className="line-clamp-2 text-[11px] leading-4 text-stone-500">
                     {node.subtitle}
                   </span>
@@ -222,16 +264,23 @@ function GraphCanvas({
               : isSelected
                 ? "#171b1d"
                 : "#101518",
-            boxShadow: isSelected
-              ? "0 0 0 1px rgba(185,130,47,.14), 0 12px 28px rgba(0,0,0,.24)"
-              : "0 8px 22px rgba(0,0,0,.18)",
+            boxShadow: terrainShadow(degree, maxDegree, isSelected),
             color: "#e7e5e4",
             width: 210,
-            padding: 12,
+            padding: overviewMode ? 9 : 12,
+            zIndex: isSelected ? 60 : 10 + Math.min(degree, 30),
           },
         };
       }),
-    [filtered.nodes, query, savedPositions, selected],
+    [
+      degreeMap,
+      filtered.nodes,
+      maxDegree,
+      query,
+      savedPositions,
+      selected,
+      viewportZoom,
+    ],
   );
 
   const makeEdges = useCallback(
@@ -240,7 +289,7 @@ function GraphCanvas({
         id: edge.id,
         source: edge.source,
         target: edge.target,
-        label: edge.relationshipType,
+        label: viewportZoom >= 0.58 ? edge.relationshipType : undefined,
         animated: edge.sourceKind === "manual",
         style: {
           stroke: edge.sourceKind === "manual" ? "#c9963e" : "#5f6669",
@@ -256,7 +305,7 @@ function GraphCanvas({
           fillOpacity: 0.92,
         },
       })),
-    [filtered.edges],
+    [filtered.edges, viewportZoom],
   );
 
   const initialNodes = filtered.nodes.map<Node>((node, index) => ({
@@ -284,7 +333,7 @@ function GraphCanvas({
   }, [makeEdges, makeNodes, setEdges, setNodes]);
 
   function fitGraph() {
-    requestAnimationFrame(() => void fitView({ duration: 250, padding: 0.18 }));
+    requestAnimationFrame(() => void fitView({ duration: 280, padding: 0.1 }));
   }
 
   async function resetLayout() {
@@ -634,8 +683,23 @@ function GraphCanvas({
         ) : null}
       </section>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="relative h-[680px] overflow-hidden rounded-lg border border-stone-800/80 bg-[#0b0f11]">
+      <div className="relative">
+        <div className="relative h-[calc(100vh-11.5rem)] min-h-[760px] max-h-[1180px] overflow-hidden rounded-lg border border-stone-800/80 bg-[#090d0f]">
+          <div
+            className="pointer-events-none absolute inset-0 z-0 opacity-90"
+            aria-hidden
+            style={{
+              backgroundImage: [
+                "radial-gradient(ellipse at 18% 24%, rgba(185,130,47,.055), transparent 28%)",
+                "radial-gradient(ellipse at 76% 68%, rgba(93,142,143,.045), transparent 24%)",
+                "repeating-radial-gradient(ellipse at 18% 24%, transparent 0 58px, rgba(154,144,117,.045) 59px, transparent 62px)",
+                "repeating-radial-gradient(ellipse at 76% 68%, transparent 0 72px, rgba(105,128,130,.035) 73px, transparent 76px)",
+                "linear-gradient(rgba(255,255,255,.012) 1px, transparent 1px)",
+                "linear-gradient(90deg, rgba(255,255,255,.012) 1px, transparent 1px)",
+              ].join(", "),
+              backgroundSize: "auto, auto, auto, auto, 48px 48px, 48px 48px",
+            }}
+          />
           <div className="pointer-events-none absolute left-3 top-3 z-10 rounded border border-stone-800/80 bg-[#0f1417]/90 px-3 py-2 backdrop-blur-sm">
             <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-stone-600">
               Visible
@@ -643,11 +707,18 @@ function GraphCanvas({
             <p className="mt-1 text-sm text-stone-300">
               {filtered.nodes.length} entities · {filtered.edges.length} relationships
             </p>
+            <p className="mt-1 text-[10px] uppercase tracking-[0.1em] text-stone-600">
+              contour depth = connection density
+            </p>
           </div>
           <ReactFlow
+            className="relative z-[1]"
             nodes={nodes}
             edges={edges}
             fitView
+            minZoom={0.28}
+            maxZoom={2}
+            onMove={(_, viewport) => setViewportZoom(viewport.zoom)}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onNodeDragStop={saveNodePosition}
@@ -676,7 +747,7 @@ function GraphCanvas({
               }
             }}
           >
-            <Background color="#242a2d" gap={24} size={1} />
+            <Background color="#2b3134" gap={32} size={1} />
             <Controls />
             <MiniMap
               nodeColor={(node) =>
@@ -691,7 +762,7 @@ function GraphCanvas({
           </ReactFlow>
         </div>
 
-        <aside className="min-h-[220px] rounded-lg border border-stone-800/80 bg-[#0f1417] p-4">
+        <aside className="mt-4 min-h-[220px] rounded-lg border border-stone-800/80 bg-[#0f1417]/95 p-4 shadow-2xl backdrop-blur-md xl:absolute xl:right-4 xl:top-4 xl:z-20 xl:mt-0 xl:max-h-[calc(100%-2rem)] xl:w-[340px] xl:overflow-y-auto">
           {editing && editing.sourceKind === "manual" ? (
             <div>
               <div className="flex items-start justify-between gap-3">
@@ -819,6 +890,12 @@ function GraphCanvas({
                   <p className="citem-label">Manual links</p>
                   <p className="mt-1 text-xs leading-5 text-stone-600">
                     Amber animated links are explicit analyst-created graph relationships.
+                  </p>
+                </div>
+                <div>
+                  <p className="citem-label">Terrain depth</p>
+                  <p className="mt-1 text-xs leading-5 text-stone-600">
+                    Concentric contour halos grow around highly connected entities, giving dense graph regions a topographic reading.
                   </p>
                 </div>
                 <div>

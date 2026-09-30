@@ -43,4 +43,20 @@ describe("Knowledge Graph workspace v2", () => {
     expect(graph).toContain("showHistoricalInfrastructure");
     expect(graph).toContain("onNodeDragStop={saveNodePosition}");
   });
+
+  it("keeps overview labels readable while allowing a broad zoomed-out perspective", () => {
+    expect(graph).toContain("viewportZoom");
+    expect(graph).toContain("labelScale");
+    expect(graph).toContain("minZoom={0.28}");
+    expect(graph).toContain("viewportZoom >= 0.58");
+    expect(graph).toContain("h-[calc(100vh-11.5rem)]");
+  });
+
+  it("adds map-like terrain depth driven by visible connection density", () => {
+    expect(graph).toContain("terrainShadow");
+    expect(graph).toContain("degreeMap");
+    expect(graph).toContain("contour depth = connection density");
+    expect(graph).toContain("repeating-radial-gradient");
+    expect(graph).toContain("Terrain depth");
+  });
 });
