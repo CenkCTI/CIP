@@ -42,6 +42,7 @@ import {
 import { validTimelineDate } from "@/lib/reconstruction/presentation";
 import { LinkedOsint } from "@/components/osint/linked-osint";
 import { TimelineEventModal } from "@/components/timeline/timeline-event-modal";
+import { ActorDirectory } from "@/components/actors/actor-workspace";
 import { timelinePhaseLabel, timelineTimeLabel } from "@/lib/timeline/presentation";
 
 type SP = CtiSearchParams & {
@@ -260,7 +261,7 @@ export default async function Page({
     <section className="mx-auto max-w-6xl">
       <h1 className="text-3xl font-bold text-white">{project.name}</h1>
       
-      {tab !== "overview" && tab !== "graph" && tab !== "timeline" && (
+      {tab !== "overview" && tab !== "graph" && tab !== "timeline" && tab !== "actors" && (
         <SearchBar
           id={id}
           tab={tab}
@@ -336,12 +337,17 @@ export default async function Page({
         />
       )}{" "}
       {tab === "actors" && (
-        <CtiList
-          tab="actors"
-          id={id}
+        <ActorDirectory
+          projectId={id}
           rows={filterActors((actors ?? []) as Row[], sp)}
-          options={ctiOptions}
-          rels={rels}
+          allRows={(actors ?? []) as Row[]}
+          relations={{
+            campaignThreatActors: (campaignThreatActors ?? []) as Row[],
+            threatActorMalware: (threatActorMalware ?? []) as Row[],
+            threatActorIndicators: (threatActorIndicators ?? []) as Row[],
+            threatActorMitre: (threatActorMitre ?? []) as Row[],
+          }}
+          filters={sp}
         />
       )}{" "}
       {tab === "campaigns" && (
