@@ -690,7 +690,7 @@ export async function createAnnotationOutput(
     .select("id,claimed_actor_text")
     .single();
   if (error || !data) return { error: "Unable to record source attribution claim." };
-  return finishCreatedOutput({
+  const result = await finishCreatedOutput({
     context,
     annotation,
     sourceId,
@@ -700,6 +700,12 @@ export async function createAnnotationOutput(
     normalizedValue: claim.data.canonical_threat_actor_id ?? claim.data.claimed_actor_text,
     mappingOrigin: claim.data.mapping_origin,
   });
+  if (result.success && claim.data.canonical_threat_actor_id) {
+    revalidatePath(
+      `/projects/${context.projectId}/actors/${claim.data.canonical_threat_actor_id}`,
+    );
+  }
+  return result;
 }
 
 async function targetLabel(
@@ -844,7 +850,7 @@ export async function unlinkAnnotationOutput(
       .eq("project_id", resolved.context.projectId)
       .eq("source_annotation_id", resolved.annotation.id)
       .eq("id", existing.attribution_claim_id)
-      .select("id")
+      .select("id,canonical_threat_actor_id")
       .maybeSingle();
     if (claimError || !claim) {
       return {
@@ -853,6 +859,11 @@ export async function unlinkAnnotationOutput(
       };
     }
     revalidateProcessing(resolved.context.projectId, resolved.sourceId);
+    if (claim.canonical_threat_actor_id) {
+      revalidatePath(
+        `/projects/${resolved.context.projectId}/actors/${claim.canonical_threat_actor_id}`,
+      );
+    }
     return { success: "Source attribution claim deleted with its provenance link." };
   }
 
