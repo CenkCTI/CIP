@@ -14,6 +14,8 @@ import {
   MalwareProfileHeader,
   MalwareTechnicalContext,
 } from "@/components/malware/malware-workspace";
+import { SourceAnnotationSupport } from "@/components/processing/source-annotation-support";
+import { SourceAttributionClaims } from "@/components/processing/source-attribution-claims";
 import {
   ClusterMembershipForm,
   ReconstructionForm,
@@ -96,6 +98,14 @@ const optionKeys = {
   malware: "malware_ids",
   cves: "cve_ids",
   mitre: "mitre_technique_ids",
+} as const;
+const processingTargetColumns = {
+  actors: "threat_actor_id",
+  campaigns: "campaign_id",
+  indicators: "indicator_id",
+  malware: "malware_id",
+  cves: "cve_id",
+  mitre: "mitre_technique_id",
 } as const;
 
 function formatOptionalDate(value: unknown) {
@@ -468,6 +478,136 @@ export default async function Detail({
     );
   }
 
+  const supportColumn = processingTargetColumns[tab];
+  const sourceSupportOutputs = await supabase
+    .from("source_annotation_outputs")
+    .select(
+      "id,source_annotation_id,output_type,output_action,mapping_origin,target_label,raw_value,normalized_value,created_at",
+    )
+    .eq("project_id", id)
+    .eq(supportColumn, entityId)
+    .order("created_at", { ascending: true });
+
+  if (sourceSupportOutputs.error) {
+    return (
+      <section className="mx-auto max-w-5xl">
+        <div className="card text-red-300">
+          Unable to load source provenance. Apply the Stage 3 processing migration and retry.
+        </div>
+      </section>
+    );
+  }
+
+  const actorSourceClaims =
+    tab === "actors"
+      ? await supabase
+          .from("source_attribution_claims")
+          .select(
+            "id,source_annotation_id,claim_summary,claimed_actor_text,mapping_origin,created_at",
+          )
+          .eq("project_id", id)
+          .eq("canonical_threat_actor_id", entityId)
+          .order("created_at", { ascending: true })
+      : { data: [] as Row[], error: null };
+
+  if (actorSourceClaims.error) {
+    return (
+      <section className="mx-auto max-w-5xl">
+        <div className="card text-red-300">
+          Unable to load source-reported attribution claims.
+        </div>
+      </section>
+    );
+  }
+
+  const supportAnnotationIds = [
+    ...new Set([
+      ...(sourceSupportOutputs.data ?? []).map((item) =>
+        ss(item.source_annotation_id),
+      ),
+      ...(actorSourceClaims.data ?? []).map((item) =>
+        ss(item.source_annotation_id),
+      ),
+    ]),
+  ].filter(Boolean);
+  const supportAnnotations = supportAnnotationIds.length
+    ? await supabase
+        .from("source_annotations")
+        .select("id,source_id,asset_id,page_number,selected_text,comment")
+        .eq("project_id", id)
+        .in("id", supportAnnotationIds)
+    : { data: [] as Row[], error: null };
+
+  const supportSourceIds = [
+    ...new Set((supportAnnotations.data ?? []).map((item) => ss(item.source_id))),
+  ].filter(Boolean);
+  const supportAssetIds = [
+    ...new Set((supportAnnotations.data ?? []).map((item) => ss(item.asset_id))),
+  ].filter(Boolean);
+
+  const [supportSources, supportAssets] = await Promise.all([
+    supportSourceIds.length
+      ? supabase
+          .from("sources")
+          .select("id,title,publisher,published_at")
+          .eq("project_id", id)
+          .in("id", supportSourceIds)
+      : Promise.resolve({ data: [] as Row[], error: null }),
+    supportAssetIds.length
+      ? supabase
+          .from("source_assets")
+          .select("id,original_filename,sha256")
+          .eq("project_id", id)
+          .in("id", supportAssetIds)
+      : Promise.resolve({ data: [] as Row[], error: null }),
+  ]);
+
+  if (supportAnnotations.error || supportSources.error || supportAssets.error) {
+    return (
+      <section className="mx-auto max-w-5xl">
+        <div className="card text-red-300">
+          Unable to reconstruct source provenance. Please refresh and retry.
+        </div>
+      </section>
+    );
+  }
+
+  const supportAnnotationById = new Map(
+    (supportAnnotations.data ?? []).map((item) => [ss(item.id), item as Row]),
+  );
+  const supportSourceById = new Map(
+    (supportSources.data ?? []).map((item) => [ss(item.id), item as Row]),
+  );
+  const supportAssetById = new Map(
+    (supportAssets.data ?? []).map((item) => [ss(item.id), item as Row]),
+  );
+  const sourceSupport = (sourceSupportOutputs.data ?? []).flatMap((output) => {
+    const annotation = supportAnnotationById.get(ss(output.source_annotation_id));
+    if (!annotation) return [];
+    return [
+      {
+        ...(output as Row),
+        annotation,
+        source: supportSourceById.get(ss(annotation.source_id)) ?? null,
+        asset: supportAssetById.get(ss(annotation.asset_id)) ?? null,
+      },
+    ];
+  });
+  const sourceAttributionClaims = (actorSourceClaims.data ?? []).flatMap(
+    (claim) => {
+      const annotation = supportAnnotationById.get(ss(claim.source_annotation_id));
+      if (!annotation) return [];
+      return [
+        {
+          ...(claim as Row),
+          annotation,
+          source: supportSourceById.get(ss(annotation.source_id)) ?? null,
+          asset: supportAssetById.get(ss(annotation.asset_id)) ?? null,
+        },
+      ];
+    },
+  );
+
   return (
     <section className="mx-auto max-w-5xl space-y-6">
       <Link
@@ -518,6 +658,14 @@ export default async function Detail({
           </dl>
         </article>
       )}
+
+      <SourceAnnotationSupport projectId={id} items={sourceSupport as Row[]} />
+      {tab === "actors" ? (
+        <SourceAttributionClaims
+          projectId={id}
+          items={sourceAttributionClaims as Row[]}
+        />
+      ) : null}
 
       {tab === "indicators" ? (
         <ObservationHistory

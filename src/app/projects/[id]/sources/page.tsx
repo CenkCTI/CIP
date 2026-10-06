@@ -5,10 +5,25 @@ import { SourceLibrary } from "@/components/investigations/sources/source-librar
 import { requireOwnedProject } from "@/lib/projects/ownership";
 
 type CountRow = { source_id: string };
+type AnnotationStateRow = {
+  source_id: string;
+  processing_state?: string | null;
+  anchor_kind?: string | null;
+};
 
 function counts(rows: CountRow[]) {
   const out: Record<string, number> = {};
   for (const row of rows) out[row.source_id] = (out[row.source_id] ?? 0) + 1;
+  return out;
+}
+
+function unprocessedCounts(rows: AnnotationStateRow[]) {
+  const out: Record<string, number> = {};
+  for (const row of rows) {
+    if ((row.anchor_kind ?? "LEGACY_SCREEN") === "LEGACY_SCREEN") continue;
+    if ((row.processing_state ?? "UNPROCESSED") !== "UNPROCESSED") continue;
+    out[row.source_id] = (out[row.source_id] ?? 0) + 1;
+  }
   return out;
 }
 
@@ -61,7 +76,10 @@ export default async function SourcesPage({
       .eq("project_id", id)
       .eq("state", "READY"),
     context.supabase.from("source_notes").select("source_id").eq("project_id", id),
-    context.supabase.from("source_annotations").select("source_id").eq("project_id", id),
+    context.supabase
+      .from("source_annotations")
+      .select("source_id,processing_state,anchor_kind")
+      .eq("project_id", id),
   ]);
 
   const evidenceResult = await context.supabase
@@ -120,6 +138,9 @@ export default async function SourcesPage({
         assetCounts={counts((assetsResult.data ?? []) as CountRow[])}
         noteCounts={counts((notesResult.data ?? []) as CountRow[])}
         annotationCounts={counts((annotationsResult.data ?? []) as CountRow[])}
+        unprocessedAnnotationCounts={unprocessedCounts(
+          (annotationsResult.data ?? []) as AnnotationStateRow[],
+        )}
       />
     </section>
   );
