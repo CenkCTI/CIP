@@ -12,6 +12,7 @@ import {
   unlinkAnnotationOutput,
 } from "@/app/projects/[id]/source-processing-actions";
 import { AnnotationTimelineActions } from "@/components/investigations/source-reader/annotation-timeline-actions";
+import { SourceClaimProcessingPanel } from "@/components/investigations/source-reader/source-claim-processing-panel";
 import { extractIndicatorCandidatesFromText } from "@/lib/processing/indicator-extraction";
 import {
   mappingOrigins,
@@ -29,12 +30,15 @@ type ProcessingOptions = {
   mitre: Row[];
   campaign: Row[];
   actor: Row[];
+  source_claim: Row[];
 };
+type SourceReaderDestination = ProcessingDestination | "timeline" | "source_claim";
 
 const text = (value: unknown) => String(value ?? "");
 
-const destinationLabels: Record<ProcessingDestination | "timeline", string> = {
+const destinationLabels: Record<SourceReaderDestination, string> = {
   timeline: "Timeline Event",
+  source_claim: "Evidence / Source Claim",
   indicator: "Indicator / IOC",
   malware: "Malware",
   cve: "CVE",
@@ -422,6 +426,7 @@ export function AnnotationProcessingActions({
   events,
   timelineLinks,
   outputs,
+  sourceClaimAssertions,
   options,
 }: {
   projectId: string;
@@ -430,15 +435,16 @@ export function AnnotationProcessingActions({
   events: Row[];
   timelineLinks: Row[];
   outputs: Row[];
+  sourceClaimAssertions: Row[];
   options: ProcessingOptions;
 }) {
   const router = useRouter();
   const state = (text(annotation.processing_state) ||
     "UNPROCESSED") as AnnotationProcessingState;
   const [open, setOpen] = useState(false);
-  const [destination, setDestination] = useState<
-    ProcessingDestination | "timeline"
-  >("timeline");
+  const [destination, setDestination] = useState<SourceReaderDestination>(
+    "timeline",
+  );
   const [selectedTarget, setSelectedTarget] = useState("");
   const [origin, setOrigin] = useState<MappingOrigin>("SOURCE_EXPLICIT");
   const [ignoreOpen, setIgnoreOpen] = useState(false);
@@ -460,7 +466,9 @@ export function AnnotationProcessingActions({
   );
 
   const existing =
-    destination === "timeline" || destination === "attribution_claim"
+    destination === "timeline" ||
+    destination === "attribution_claim" ||
+    destination === "source_claim"
       ? []
       : options[destination];
 
@@ -484,7 +492,7 @@ export function AnnotationProcessingActions({
 
   function submitCreate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (destination === "timeline") return;
+    if (destination === "timeline" || destination === "source_claim") return;
     const formData = new FormData(event.currentTarget);
     startTransition(async () => {
       const result = await createAnnotationOutput(
@@ -503,6 +511,7 @@ export function AnnotationProcessingActions({
     if (
       destination === "timeline" ||
       destination === "attribution_claim" ||
+      destination === "source_claim" ||
       !selectedTarget
     )
       return;
@@ -542,7 +551,7 @@ export function AnnotationProcessingActions({
         </button>
       </div>
 
-      {timelineLinks.length || outputs.length ? (
+      {timelineLinks.length || outputs.length || sourceClaimAssertions.length ? (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {timelineLinks.map((link) => (
             <Link
@@ -554,6 +563,19 @@ export function AnnotationProcessingActions({
               {text((link.timeline_events as Row)?.event_name) || "Event"}
             </Link>
           ))}
+          {sourceClaimAssertions.map((assertion) => {
+            const claim = (assertion.source_claims ?? {}) as Row;
+            return (
+              <Link
+                key={text(assertion.id)}
+                className="citem-badge max-w-64 truncate hover:border-amber-700 hover:text-amber-200"
+                href={`/projects/${projectId}/source-claims/${text(assertion.source_claim_id)}`}
+                title={text(claim.claim_summary)}
+              >
+                Claim · {text(claim.claim_summary) || "Source Claim"}
+              </Link>
+            );
+          })}
           {outputs.map((output) => (
             <span
               className="inline-flex max-w-full items-center gap-1 rounded border border-stone-800 bg-black/10 px-2 py-1 text-[11px] text-stone-400"
@@ -722,6 +744,7 @@ export function AnnotationProcessingActions({
                 <div className="mt-2 grid gap-1">
                   {([
                     "timeline",
+                    "source_claim",
                     "indicator",
                     "malware",
                     "cve",
@@ -744,7 +767,8 @@ export function AnnotationProcessingActions({
                         setSelectedTarget("");
                         if (
                           item !== "timeline" &&
-                          item !== "attribution_claim"
+                          item !== "attribution_claim" &&
+                          item !== "source_claim"
                         ) {
                           setOrigin(defaultOrigin(item));
                         }
@@ -772,6 +796,14 @@ export function AnnotationProcessingActions({
                       links={timelineLinks}
                     />
                   </div>
+                ) : destination === "source_claim" ? (
+                  <SourceClaimProcessingPanel
+                    projectId={projectId}
+                    sourceId={sourceId}
+                    annotation={annotation}
+                    claims={options.source_claim}
+                    assertions={sourceClaimAssertions}
+                  />
                 ) : (
                   <div className="space-y-5">
                     {destination === "indicator" && candidates.length ? (
