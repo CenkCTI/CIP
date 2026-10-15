@@ -40,6 +40,7 @@ export function getInvestigationNavGroups(projectId: string): InvestigationNavGr
       items: [
         { key: "evidence", label: "Evidence", href: `${root}?tab=evidence&view=evidence`, tab: "evidence" },
         { key: "sources", label: "Sources", href: `${root}/sources`, pathPrefix: `${root}/sources` },
+        { key: "source-claims", label: "Source Claims", href: `${root}/source-claims`, pathPrefix: `${root}/source-claims` },
         { key: "intel-profile", label: "Intel Profile", href: `${root}/intel-profile`, pathPrefix: `${root}/intel-profile` },
       ],
     },
