@@ -260,8 +260,8 @@ export function SourceClaimProcessingPanel({
 
         <div className="grid gap-2 md:grid-cols-2">
           <label className="grid gap-1">
-            <span className="citem-label">Claim kind</span>
-            <select className="field" name="claim_kind" defaultValue="GENERAL">
+            <span className="citem-label">Type</span>
+            <select className="field" name="claim_kind" defaultValue="OTHER">
               {sourceClaimKinds.map((value) => (
                 <option key={value} value={value}>
                   {sourceClaimKindLabels[value]}
