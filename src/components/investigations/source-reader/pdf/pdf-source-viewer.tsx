@@ -199,6 +199,7 @@ export function PdfSourceViewer({
 }){
   const router=useRouter();
   const rootRef=useRef<HTMLDivElement>(null);
+  const selectionToolbarRef=useRef<HTMLDivElement>(null);
   const viewports=useRef(new Map<number,{viewport:PdfViewportLike;base:PdfViewportLike}>());
   const [pdfjs,setPdfjs]=useState<PdfJsLike|null>(null);
   const [pdf,setPdf]=useState<PdfDocumentLike|null>(null);
@@ -230,6 +231,37 @@ export function PdfSourceViewer({
     })();
     return()=>{cancelled=true;try{task?.destroy?.();}catch{}void loadedPdf?.destroy?.();};
   },[signedUrl]);
+
+  useEffect(()=>{
+    if(!selection)return;
+
+    const dismiss=()=>setSelection(null);
+    const onPointerDown=(event:PointerEvent)=>{
+      if(selectionToolbarRef.current?.contains(event.target as Node))return;
+      dismiss();
+    };
+    const onContextMenu=(event:MouseEvent)=>{
+      if(selectionToolbarRef.current?.contains(event.target as Node))return;
+      dismiss();
+    };
+    const onKeyDown=(event:KeyboardEvent)=>{
+      if(event.key==="Escape")dismiss();
+    };
+
+    document.addEventListener("pointerdown",onPointerDown,true);
+    document.addEventListener("contextmenu",onContextMenu,true);
+    document.addEventListener("scroll",dismiss,true);
+    window.addEventListener("resize",dismiss);
+    window.addEventListener("wheel",dismiss,{capture:true,passive:true});
+
+    return()=>{
+      document.removeEventListener("pointerdown",onPointerDown,true);
+      document.removeEventListener("contextmenu",onContextMenu,true);
+      document.removeEventListener("scroll",dismiss,true);
+      window.removeEventListener("resize",dismiss);
+      window.removeEventListener("wheel",dismiss,true);
+    };
+  },[selection]);
 
   useEffect(()=>{
     if(!focusedAnnotationId||!rootRef.current)return;
@@ -305,7 +337,14 @@ export function PdfSourceViewer({
     viewports.current.set(page,{viewport,base});
   },[]);
 
-  return <div ref={rootRef} className="citem-pdf-reader" onMouseUp={()=>requestAnimationFrame(captureSelection)}>
+  return <div
+    ref={rootRef}
+    className="citem-pdf-reader"
+    onMouseUp={(event)=>{
+      if(event.button!==0)return;
+      requestAnimationFrame(captureSelection);
+    }}
+  >
     <div className="citem-pdf-toolbar">
       <div className="flex items-center gap-2">
         <button type="button" className="citem-button-ghost" onClick={()=>setScale(v=>Math.max(.6,Number((v-.15).toFixed(2))))}>−</button>
@@ -339,7 +378,14 @@ export function PdfSourceViewer({
       />)}
     </div>:null}
 
-    {selection?<div className="citem-pdf-selection-toolbar" style={{left:selection.left,top:selection.top}} onMouseDown={e=>e.preventDefault()} onMouseUp={e=>e.stopPropagation()}>
+    {selection?<div
+      ref={selectionToolbarRef}
+      className="citem-pdf-selection-toolbar"
+      style={{left:selection.left,top:selection.top}}
+      onMouseDown={e=>e.preventDefault()}
+      onMouseUp={e=>e.stopPropagation()}
+      onContextMenu={e=>e.stopPropagation()}
+    >
       <button type="button" onClick={()=>openEditor("HIGHLIGHT")}>Vurgula</button>
       <button type="button" onClick={()=>openEditor("UNDERLINE")}>Altını Çiz</button>
       <button type="button" onClick={()=>openEditor("HIGHLIGHT",true)}>Not Ekle</button>
