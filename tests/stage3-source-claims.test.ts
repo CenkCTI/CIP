@@ -6,6 +6,14 @@ describe("Stage 3 Evidence / Source Claim", () => {
     "supabase/migrations/202610150060_stage3_source_claims.sql",
     "utf8",
   );
+  const taxonomyMigration = readFileSync(
+    "supabase/migrations/202610150061_stage3_source_claim_types.sql",
+    "utf8",
+  );
+  const claimTypes = readFileSync(
+    "src/lib/processing/source-claims.ts",
+    "utf8",
+  );
   const actions = readFileSync(
     "src/app/projects/[id]/source-processing-actions.ts",
     "utf8",
@@ -44,6 +52,33 @@ describe("Stage 3 Evidence / Source Claim", () => {
     expect(migration).toContain("'UNCLEAR'");
     expect(migration).toContain("source_qualifier");
     expect(migration).toContain("mapping_origin");
+  });
+
+  it("uses the analyst-facing Source Claim type taxonomy", () => {
+    for (const value of [
+      "TARGETING",
+      "OPERATIONAL_PURPOSE",
+      "OPERATIONAL_OUTCOME",
+      "INFRASTRUCTURE",
+      "GEOPOLITICAL_CONTEXT",
+      "CAPABILITY",
+      "SOURCE_ASSESSMENT",
+      "OTHER",
+    ]) {
+      expect(claimTypes).toContain(`"${value}"`);
+      expect(migration).toContain(`'${value}'`);
+    }
+    expect(claimTypes).not.toContain('"GENERAL"');
+    expect(claimTypes).not.toContain('"BEHAVIOR"');
+    expect(actions).toContain('sourceClaimKindSchema.default("OTHER")');
+    expect(panel).toContain(">Type</span>");
+    expect(taxonomyMigration).toContain("source_claim_kind_v2");
+    expect(taxonomyMigration).toContain(
+      "when 'INTENT_OBJECTIVE' then 'OPERATIONAL_PURPOSE'",
+    );
+    expect(taxonomyMigration).toContain(
+      "when 'IMPACT' then 'OPERATIONAL_OUTCOME'",
+    );
   });
 
   it("keeps Source Claims outside the generic entity output ledger", () => {
