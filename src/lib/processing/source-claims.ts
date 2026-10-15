@@ -1,12 +1,12 @@
 export const sourceClaimKinds = [
-  "GENERAL",
-  "BEHAVIOR",
   "TARGETING",
+  "OPERATIONAL_PURPOSE",
+  "OPERATIONAL_OUTCOME",
+  "INFRASTRUCTURE",
+  "GEOPOLITICAL_CONTEXT",
   "CAPABILITY",
-  "RELATIONSHIP",
-  "INTENT_OBJECTIVE",
-  "IMPACT",
-  "TECHNICAL_CONTEXT",
+  "SOURCE_ASSESSMENT",
+  "OTHER",
 ] as const;
 
 export type SourceClaimKind = (typeof sourceClaimKinds)[number];
@@ -21,14 +21,14 @@ export const sourceClaimStances = [
 export type SourceClaimStance = (typeof sourceClaimStances)[number];
 
 export const sourceClaimKindLabels: Record<SourceClaimKind, string> = {
-  GENERAL: "General",
-  BEHAVIOR: "Behavior",
   TARGETING: "Targeting",
+  OPERATIONAL_PURPOSE: "Operational purpose",
+  OPERATIONAL_OUTCOME: "Operational outcome",
+  INFRASTRUCTURE: "Infrastructure",
+  GEOPOLITICAL_CONTEXT: "Geopolitical context",
   CAPABILITY: "Capability",
-  RELATIONSHIP: "Relationship",
-  INTENT_OBJECTIVE: "Intent / objective",
-  IMPACT: "Impact",
-  TECHNICAL_CONTEXT: "Technical context",
+  SOURCE_ASSESSMENT: "Source assessment",
+  OTHER: "Other",
 };
 
 export const sourceClaimStanceLabels: Record<SourceClaimStance, string> = {
