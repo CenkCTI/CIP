@@ -534,6 +534,49 @@ export function SourceReaderWorkspace({
   const [editingComment, setEditingComment] = useState("");
   const [editingGapIds, setEditingGapIds] = useState<string[]>([]);
   const [editingRequirementIds, setEditingRequirementIds] = useState<string[]>([]);
+  const [localAnnotations, setLocalAnnotations] = useState<Row[]>([]);
+  const [localAnnotationFragments, setLocalAnnotationFragments] = useState<Row[]>([]);
+  const [localAnnotationGapLinks, setLocalAnnotationGapLinks] = useState<Row[]>([]);
+  const [localAnnotationRequirementLinks, setLocalAnnotationRequirementLinks] = useState<Row[]>([]);
+
+  const serverAnnotationIds = useMemo(
+    () => new Set(annotations.map((annotation) => s(annotation.id))),
+    [annotations],
+  );
+  const liveAnnotations = useMemo(
+    () => [
+      ...localAnnotations.filter((annotation) => !serverAnnotationIds.has(s(annotation.id))),
+      ...annotations,
+    ],
+    [annotations, localAnnotations, serverAnnotationIds],
+  );
+  const liveAnnotationFragments = useMemo(
+    () => [
+      ...annotationFragments,
+      ...localAnnotationFragments.filter(
+        (fragment) => !serverAnnotationIds.has(s(fragment.annotation_id)),
+      ),
+    ],
+    [annotationFragments, localAnnotationFragments, serverAnnotationIds],
+  );
+  const liveAnnotationGapLinks = useMemo(
+    () => [
+      ...annotationGapLinks,
+      ...localAnnotationGapLinks.filter(
+        (link) => !serverAnnotationIds.has(s(link.annotation_id)),
+      ),
+    ],
+    [annotationGapLinks, localAnnotationGapLinks, serverAnnotationIds],
+  );
+  const liveAnnotationRequirementLinks = useMemo(
+    () => [
+      ...annotationRequirementLinks,
+      ...localAnnotationRequirementLinks.filter(
+        (link) => !serverAnnotationIds.has(s(link.annotation_id)),
+      ),
+    ],
+    [annotationRequirementLinks, localAnnotationRequirementLinks, serverAnnotationIds],
+  );
 
   const gapById = useMemo(() => new Map(gaps.map((gap) => [s(gap.id), gap])), [gaps]);
   const requirementById = useMemo(
@@ -542,20 +585,20 @@ export function SourceReaderWorkspace({
   );
   const annGaps = useMemo(() => {
     const map = new Map<string, string[]>();
-    for (const link of annotationGapLinks) {
+    for (const link of liveAnnotationGapLinks) {
       const id = s(link.annotation_id);
       map.set(id, [...(map.get(id) ?? []), s(link.gap_id)]);
     }
     return map;
-  }, [annotationGapLinks]);
+  }, [liveAnnotationGapLinks]);
   const annReqs = useMemo(() => {
     const map = new Map<string, string[]>();
-    for (const link of annotationRequirementLinks) {
+    for (const link of liveAnnotationRequirementLinks) {
       const id = s(link.annotation_id);
       map.set(id, [...(map.get(id) ?? []), s(link.requirement_id)]);
     }
     return map;
-  }, [annotationRequirementLinks]);
+  }, [liveAnnotationRequirementLinks]);
   const annTimelineLinks = useMemo(() => {
     const map = new Map<string, Row[]>();
     for (const link of annotationTimelineLinks) {
@@ -582,13 +625,13 @@ export function SourceReaderWorkspace({
   }, [sourceClaimAssertions]);
   const processingCounts = useMemo(() => {
     const counts = { UNPROCESSED: 0, PROCESSED: 0, IGNORED: 0 };
-    for (const annotation of annotations) {
+    for (const annotation of liveAnnotations) {
       if (s(annotation.anchor_kind || "LEGACY_SCREEN") === "LEGACY_SCREEN") continue;
       const state = s(annotation.processing_state) || "UNPROCESSED";
       if (state in counts) counts[state as keyof typeof counts] += 1;
     }
     return counts;
-  }, [annotations]);
+  }, [liveAnnotations]);
 
   useEffect(() => {
     if (panel !== "annotations" || !focusedAnnotationId) return;
@@ -713,8 +756,8 @@ export function SourceReaderWorkspace({
               sourceId={s(source.id)}
               assetId={s(asset.id)}
               signedUrl={signedUrl}
-              annotations={annotations}
-              fragments={annotationFragments}
+              annotations={liveAnnotations}
+              fragments={liveAnnotationFragments}
               gaps={gaps}
               requirements={requirements}
               defaultGapIds={sourceGapIds}
@@ -724,12 +767,39 @@ export function SourceReaderWorkspace({
                 setPanel("annotations");
                 setFocusedAnnotationId(annotationId);
               }}
+              onAnnotationCreated={({ annotation, fragments, gapIds: createdGapIds, requirementIds: createdRequirementIds }) => {
+                const annotationId = s(annotation.id);
+                setLocalAnnotations((current) => [
+                  annotation,
+                  ...current.filter((item) => s(item.id) !== annotationId),
+                ]);
+                setLocalAnnotationFragments((current) => [
+                  ...current.filter((item) => s(item.annotation_id) !== annotationId),
+                  ...fragments,
+                ]);
+                setLocalAnnotationGapLinks((current) => [
+                  ...current.filter((item) => s(item.annotation_id) !== annotationId),
+                  ...createdGapIds.map((gapId) => ({
+                    annotation_id: annotationId,
+                    gap_id: gapId,
+                  })),
+                ]);
+                setLocalAnnotationRequirementLinks((current) => [
+                  ...current.filter((item) => s(item.annotation_id) !== annotationId),
+                  ...createdRequirementIds.map((requirementId) => ({
+                    annotation_id: annotationId,
+                    requirement_id: requirementId,
+                  })),
+                ]);
+                setPanel("annotations");
+                setFocusedAnnotationId(annotationId);
+              }}
             />
           ) : (
             <DocumentSurface
               asset={asset}
               signedUrl={signedUrl}
-              annotations={annotations}
+              annotations={liveAnnotations}
               annotationMode={mode}
               onRect={(rect) => {
                 setDraftRect(rect);
@@ -870,7 +940,7 @@ export function SourceReaderWorkspace({
                     Resumable analyst work state only; this is not a completion percentage.
                   </p>
                 </div>
-                {annotations.map((annotation) => {
+                {liveAnnotations.map((annotation) => {
                   const id = s(annotation.id);
                   const linkedGaps = annGaps.get(id) ?? [];
                   const linkedReqs = annReqs.get(id) ?? [];
@@ -1061,7 +1131,7 @@ export function SourceReaderWorkspace({
                     </article>
                   );
                 })}
-                {!annotations.length ? (
+                {!liveAnnotations.length ? (
                   <p className="text-xs text-stone-600">Henüz işaretleme yok.</p>
                 ) : null}
               </div>
