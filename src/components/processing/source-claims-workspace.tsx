@@ -363,7 +363,9 @@ export function SourceClaimDetail({
         <p className="mt-1 text-xs leading-5 text-stone-600">
           Normalize wording without turning it into a CITEM judgement. Keep the
           proposition atomic enough that sources can clearly assert, deny, or
-          qualify it.
+          qualify it. Editing this shared proposition changes what every linked
+          source position is being compared against, so review the positions after
+          a substantive rewrite.
         </p>
         <div className="mt-3 grid gap-3">
           <textarea
