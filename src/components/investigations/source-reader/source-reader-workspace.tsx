@@ -21,6 +21,11 @@ import {
 type Row = Record<string, unknown>;
 type Rect = { x: number; y: number; width: number; height: number };
 const s = (value: unknown) => String(value ?? "");
+const compactText = (value: unknown, max = 220) => {
+  const normalized = s(value).replace(/\s+/g, " ").trim();
+  if (normalized.length <= max) return normalized;
+  return `${normalized.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+};
 const initial: SourceCollectionActionState = {};
 
 function formatDate(value: unknown) {
@@ -534,6 +539,7 @@ export function SourceReaderWorkspace({
   const [editingComment, setEditingComment] = useState("");
   const [editingGapIds, setEditingGapIds] = useState<string[]>([]);
   const [editingRequirementIds, setEditingRequirementIds] = useState<string[]>([]);
+  const [expandedAnnotationId, setExpandedAnnotationId] = useState<string | null>(null);
   const [localAnnotations, setLocalAnnotations] = useState<Row[]>([]);
   const [localAnnotationFragments, setLocalAnnotationFragments] = useState<Row[]>([]);
   const [localAnnotationGapLinks, setLocalAnnotationGapLinks] = useState<Row[]>([]);
@@ -766,6 +772,7 @@ export function SourceReaderWorkspace({
               onAnnotationSelect={(annotationId) => {
                 setPanel("annotations");
                 setFocusedAnnotationId(annotationId);
+                setExpandedAnnotationId(annotationId);
               }}
               onAnnotationCreated={({ annotation, fragments, gapIds: createdGapIds, requirementIds: createdRequirementIds }) => {
                 const annotationId = s(annotation.id);
@@ -883,8 +890,8 @@ export function SourceReaderWorkspace({
           ) : null}
         </main>
 
-        <aside className="card self-start xl:sticky xl:top-4">
-          <div className="flex border-b border-stone-800 text-xs">
+        <aside className="card self-start xl:sticky xl:top-4 xl:flex xl:max-h-[calc(100dvh-2rem)] xl:flex-col xl:overflow-hidden">
+          <div className="shrink-0 flex border-b border-stone-800 text-xs">
             {(["context", "notes", "annotations"] as const).map((value) => (
               <button
                 key={value}
@@ -899,7 +906,10 @@ export function SourceReaderWorkspace({
             ))}
           </div>
 
-          <div className="mt-4">
+          <div
+            className="mt-3 min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain xl:pr-1 [scrollbar-gutter:stable]"
+            data-source-reader-panel-scroll
+          >
             {panel === "context" ? (
               <div className="space-y-5">
                 <ContextEditor
@@ -945,6 +955,8 @@ export function SourceReaderWorkspace({
                   const linkedGaps = annGaps.get(id) ?? [];
                   const linkedReqs = annReqs.get(id) ?? [];
                   const legacy = Number(annotation.geometry_version ?? 1) !== 2;
+                  const expanded =
+                    expandedAnnotationId === id || editingAnnotationId === id;
                   return (
                     <article
                       className={
@@ -963,8 +975,17 @@ export function SourceReaderWorkspace({
                         </span>
                       </div>
                       {annotation.selected_text ? (
-                        <blockquote className="mt-2 max-h-28 overflow-auto border-l-2 border-amber-700 pl-2 text-xs text-stone-500">
-                          {s(annotation.selected_text)}
+                        <blockquote
+                          className={
+                            expanded
+                              ? "mt-2 max-h-40 overflow-y-auto border-l-2 border-amber-700 pl-2 text-xs leading-5 text-stone-500"
+                              : "mt-2 border-l-2 border-amber-800/70 pl-2 text-xs leading-5 text-stone-500"
+                          }
+                          title={!expanded ? s(annotation.selected_text) : undefined}
+                        >
+                          {expanded
+                            ? s(annotation.selected_text)
+                            : compactText(annotation.selected_text, 220)}
                         </blockquote>
                       ) : null}
                       {editingAnnotationId === id ? (
@@ -1050,22 +1071,36 @@ export function SourceReaderWorkspace({
                       ) : (
                         <>
                           {annotation.comment ? (
-                            <p className="mt-2 whitespace-pre-wrap text-sm text-stone-300">
-                              {s(annotation.comment)}
-                            </p>
-                          ) : (
-                            <p className="mt-2 text-xs text-stone-600">Bu işaretlemeye analist notu eklenmemiş.</p>
-                          )}
-                          <div className="mt-2 space-y-1 text-[11px] text-stone-600">
-                            {linkedGaps.map((gapId) => (
-                              <p key={gapId}>Bilgi Açığı: {s(gapById.get(gapId)?.description)}</p>
-                            ))}
-                            {linkedReqs.map((requirementId) => (
-                              <p key={requirementId}>
-                                Toplama Gereksinimi: {s(requirementById.get(requirementId)?.requirement)}
+                            <div className="mt-2 rounded border border-stone-800/70 bg-black/10 px-2.5 py-2">
+                              <p className="citem-label">Analist notu</p>
+                              <p
+                                className={
+                                  expanded
+                                    ? "mt-1 whitespace-pre-wrap text-xs leading-5 text-stone-300"
+                                    : "mt-1 text-xs leading-5 text-stone-400"
+                                }
+                                title={!expanded ? s(annotation.comment) : undefined}
+                              >
+                                {expanded
+                                  ? s(annotation.comment)
+                                  : compactText(annotation.comment, 150)}
                               </p>
-                            ))}
-                          </div>
+                            </div>
+                          ) : null}
+                          {expanded && (linkedGaps.length || linkedReqs.length) ? (
+                            <div className="mt-2 space-y-1 text-[11px] text-stone-600">
+                              {linkedGaps.map((gapId) => (
+                                <p key={gapId}>
+                                  Bilgi Açığı: {s(gapById.get(gapId)?.description)}
+                                </p>
+                              ))}
+                              {linkedReqs.map((requirementId) => (
+                                <p key={requirementId}>
+                                  Toplama Gereksinimi: {s(requirementById.get(requirementId)?.requirement)}
+                                </p>
+                              ))}
+                            </div>
+                          ) : null}
                         </>
                       )}
                       {legacy ? (
@@ -1083,9 +1118,22 @@ export function SourceReaderWorkspace({
                           outputs={annProcessingOutputs.get(id) ?? []}
                           sourceClaimAssertions={annSourceClaimAssertions.get(id) ?? []}
                           options={processingOptions}
+                          compact={!expanded}
                         />
                       ) : null}
-                      <div className="mt-2 flex flex-wrap gap-3">
+                      <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-stone-800/70 pt-2">
+                        <button
+                          type="button"
+                          className="text-xs text-stone-500 hover:text-stone-200"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setExpandedAnnotationId((current) =>
+                              current === id ? null : id,
+                            );
+                          }}
+                        >
+                          {expanded ? "Daralt" : "Detay"}
+                        </button>
                         {!legacy && annotation.page_number ? (
                           <button
                             type="button"
