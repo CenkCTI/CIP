@@ -15,6 +15,12 @@ import {
 } from "@/lib/cti-schema";
 import { requireOwnedProject } from "@/lib/projects/ownership";
 import {
+  sourceClaimKinds,
+  sourceClaimStances,
+  type SourceClaimKind,
+  type SourceClaimStance,
+} from "@/lib/processing/source-claims";
+import {
   annotationProcessingStates,
   mappingOrigins,
   processingDestinations,
@@ -37,6 +43,16 @@ const batchIndicatorCandidateSchema = z
   )
   .min(1)
   .max(100);
+
+const sourceClaimKindSchema = z.enum(sourceClaimKinds);
+const sourceClaimStanceSchema = z.enum(sourceClaimStances);
+const sourceClaimCreateSchema = z.object({
+  claim_summary: z.string().trim().min(1).max(10000),
+  claim_kind: sourceClaimKindSchema.default("GENERAL"),
+  stance: sourceClaimStanceSchema.default("ASSERTS"),
+  source_qualifier: z.string().trim().max(1000).optional().default(""),
+  mapping_origin: mappingOriginSchema.default("ANALYST_MAPPED"),
+});
 
 const attributionClaimSchema = z.object({
   claim_summary: z.string().trim().min(1).max(10000),
@@ -278,6 +294,287 @@ export async function setAnnotationProcessingState(
           ? "Annotation marked ignored."
           : "Annotation marked processed.",
   };
+}
+
+function revalidateSourceClaim(
+  projectId: string,
+  sourceId?: string,
+  sourceClaimId?: string,
+) {
+  revalidatePath(`/projects/${projectId}/source-claims`);
+  if (sourceClaimId) {
+    revalidatePath(`/projects/${projectId}/source-claims/${sourceClaimId}`);
+  }
+  if (sourceId) {
+    revalidatePath(`/projects/${projectId}/sources/${sourceId}`);
+    revalidatePath(`/projects/${projectId}/sources`);
+  }
+}
+
+function normalizeSourceQualifier(value: unknown) {
+  return String(value ?? "").trim().slice(0, 1000);
+}
+
+export async function createSourceClaimFromAnnotation(
+  projectId: string,
+  sourceId: string,
+  annotationId: string,
+  formData: FormData,
+): Promise<ProcessingActionState> {
+  const resolved = await annotationContext(projectId, sourceId, annotationId);
+  if (!resolved) return { error: "Source annotation not found." };
+
+  const parsed = sourceClaimCreateSchema.safeParse({
+    claim_summary: formData.get("claim_summary"),
+    claim_kind: formData.get("claim_kind") ?? "GENERAL",
+    stance: formData.get("stance") ?? "ASSERTS",
+    source_qualifier: formData.get("source_qualifier") ?? "",
+    mapping_origin: formData.get("mapping_origin") ?? "ANALYST_MAPPED",
+  });
+  if (!parsed.success) {
+    return {
+      error: parsed.error.issues[0]?.message ?? "Invalid Source Claim.",
+    };
+  }
+
+  const { data, error } = await resolved.context.supabase.rpc(
+    "create_source_claim_from_annotation",
+    {
+      p_project_id: resolved.context.projectId,
+      p_source_annotation_id: resolved.annotation.id,
+      p_claim_summary: parsed.data.claim_summary,
+      p_claim_kind: parsed.data.claim_kind,
+      p_stance: parsed.data.stance,
+      p_source_qualifier: parsed.data.source_qualifier || null,
+      p_mapping_origin: parsed.data.mapping_origin,
+    },
+  );
+  if (error) {
+    return {
+      error:
+        error.message.includes("SOURCE_ANNOTATION_NOT_FOUND")
+          ? "Source annotation not found."
+          : "Unable to create Source Claim with annotation provenance.",
+    };
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  const claimId = String(row?.source_claim_id ?? "");
+  if (!uuid.safeParse(claimId).success) {
+    return { error: "Source Claim was not returned by the database." };
+  }
+
+  revalidateSourceClaim(resolved.context.projectId, resolved.sourceId, claimId);
+  return {
+    success:
+      "Source Claim created. The source position is preserved separately from later analytical judgement.",
+    targetId: claimId,
+    targetType: "source_claim",
+  };
+}
+
+export async function linkSourceClaimFromAnnotation(
+  projectId: string,
+  sourceId: string,
+  annotationId: string,
+  sourceClaimId: string,
+  stanceValue: SourceClaimStance,
+  sourceQualifier = "",
+  mappingOriginValue: MappingOrigin = "ANALYST_MAPPED",
+): Promise<ProcessingActionState> {
+  const claimId = uuid.safeParse(sourceClaimId);
+  const stance = sourceClaimStanceSchema.safeParse(stanceValue);
+  const origin = mappingOriginSchema.safeParse(mappingOriginValue);
+  const qualifier = normalizeSourceQualifier(sourceQualifier);
+  if (!claimId.success || !stance.success || !origin.success) {
+    return { error: "Invalid Source Claim link." };
+  }
+
+  const resolved = await annotationContext(projectId, sourceId, annotationId);
+  if (!resolved) return { error: "Source annotation not found." };
+
+  const { data: claim } = await resolved.context.supabase
+    .from("source_claims")
+    .select("id")
+    .eq("project_id", resolved.context.projectId)
+    .eq("id", claimId.data)
+    .maybeSingle();
+  if (!claim) {
+    return { error: "Selected Source Claim is not in this Investigation." };
+  }
+
+  const { error } = await resolved.context.supabase.rpc(
+    "link_source_claim_from_annotation",
+    {
+      p_project_id: resolved.context.projectId,
+      p_source_annotation_id: resolved.annotation.id,
+      p_source_claim_id: claimId.data,
+      p_stance: stance.data,
+      p_source_qualifier: qualifier || null,
+      p_mapping_origin: origin.data,
+    },
+  );
+  if (error) {
+    return { error: "Unable to link the annotation to this Source Claim." };
+  }
+
+  revalidateSourceClaim(
+    resolved.context.projectId,
+    resolved.sourceId,
+    claimId.data,
+  );
+  return {
+    success:
+      "Existing Source Claim linked. Stance records the source position, not CITEM agreement.",
+    targetId: claimId.data,
+    targetType: "source_claim",
+    linkedExisting: true,
+  };
+}
+
+export async function updateSourceClaimAssertion(
+  projectId: string,
+  assertionId: string,
+  stanceValue: SourceClaimStance,
+  sourceQualifier = "",
+  mappingOriginValue: MappingOrigin = "ANALYST_MAPPED",
+): Promise<ProcessingActionState> {
+  const assertion = uuid.safeParse(assertionId);
+  const stance = sourceClaimStanceSchema.safeParse(stanceValue);
+  const origin = mappingOriginSchema.safeParse(mappingOriginValue);
+  if (!assertion.success || !stance.success || !origin.success) {
+    return { error: "Invalid Source Claim assertion update." };
+  }
+  const context = await requireOwnedProject(projectId);
+  const { data: row } = await context.supabase
+    .from("source_claim_assertions")
+    .select("id,source_claim_id,source_annotation_id")
+    .eq("project_id", context.projectId)
+    .eq("id", assertion.data)
+    .maybeSingle();
+  if (!row) return { error: "Source Claim assertion not found." };
+
+  const { data, error } = await context.supabase.rpc(
+    "update_source_claim_assertion",
+    {
+      p_project_id: context.projectId,
+      p_assertion_id: assertion.data,
+      p_stance: stance.data,
+      p_source_qualifier: normalizeSourceQualifier(sourceQualifier) || null,
+      p_mapping_origin: origin.data,
+    },
+  );
+  if (error || data !== true) {
+    return { error: "Unable to update Source Claim assertion." };
+  }
+
+  revalidateSourceClaim(context.projectId, undefined, String(row.source_claim_id));
+  return { success: "Source position updated." };
+}
+
+export async function unlinkSourceClaimAssertion(
+  projectId: string,
+  sourceId: string,
+  annotationId: string,
+  assertionId: string,
+): Promise<ProcessingActionState> {
+  const assertion = uuid.safeParse(assertionId);
+  if (!assertion.success) return { error: "Source Claim assertion not found." };
+
+  const resolved = await annotationContext(projectId, sourceId, annotationId);
+  if (!resolved) return { error: "Source annotation not found." };
+
+  const { data, error } = await resolved.context.supabase.rpc(
+    "unlink_source_claim_assertion",
+    {
+      p_project_id: resolved.context.projectId,
+      p_source_annotation_id: resolved.annotation.id,
+      p_assertion_id: assertion.data,
+    },
+  );
+  if (error) {
+    return { error: "Unable to unlink Source Claim provenance." };
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  const claimId = String(row?.source_claim_id ?? "");
+  revalidateSourceClaim(
+    resolved.context.projectId,
+    resolved.sourceId,
+    uuid.safeParse(claimId).success ? claimId : undefined,
+  );
+  return {
+    success: row?.deleted_claim
+      ? "Source Claim provenance removed. The unsupported claim was also removed."
+      : "Source Claim provenance unlinked. Other source positions were preserved.",
+  };
+}
+
+export async function updateSourceClaim(
+  projectId: string,
+  sourceClaimId: string,
+  input: { claim_summary: string; claim_kind: SourceClaimKind },
+): Promise<ProcessingActionState> {
+  const claimId = uuid.safeParse(sourceClaimId);
+  const summary = z.string().trim().min(1).max(10000).safeParse(input.claim_summary);
+  const kind = sourceClaimKindSchema.safeParse(input.claim_kind);
+  if (!claimId.success || !summary.success || !kind.success) {
+    return { error: "Invalid Source Claim." };
+  }
+  const context = await requireOwnedProject(projectId);
+  const { data, error } = await context.supabase
+    .from("source_claims")
+    .update({ claim_summary: summary.data, claim_kind: kind.data })
+    .eq("project_id", context.projectId)
+    .eq("id", claimId.data)
+    .select("id")
+    .maybeSingle();
+  if (error || !data) return { error: "Unable to update Source Claim." };
+
+  revalidateSourceClaim(context.projectId, undefined, claimId.data);
+  return { success: "Source Claim updated." };
+}
+
+export async function deleteSourceClaim(
+  projectId: string,
+  sourceClaimId: string,
+): Promise<ProcessingActionState> {
+  const claimId = uuid.safeParse(sourceClaimId);
+  if (!claimId.success) return { error: "Source Claim not found." };
+  const context = await requireOwnedProject(projectId);
+
+  const { data: assertions } = await context.supabase
+    .from("source_claim_assertions")
+    .select("source_annotation_id")
+    .eq("project_id", context.projectId)
+    .eq("source_claim_id", claimId.data);
+
+  const { data, error } = await context.supabase
+    .from("source_claims")
+    .delete()
+    .eq("project_id", context.projectId)
+    .eq("id", claimId.data)
+    .select("id")
+    .maybeSingle();
+  if (error || !data) return { error: "Unable to delete Source Claim." };
+
+  revalidatePath(`/projects/${context.projectId}/source-claims`);
+  for (const assertion of assertions ?? []) {
+    const annotationId = String(assertion.source_annotation_id ?? "");
+    if (!annotationId) continue;
+    const { data: annotation } = await context.supabase
+      .from("source_annotations")
+      .select("source_id")
+      .eq("project_id", context.projectId)
+      .eq("id", annotationId)
+      .maybeSingle();
+    if (annotation?.source_id) {
+      revalidatePath(
+        `/projects/${context.projectId}/sources/${annotation.source_id}`,
+      );
+    }
+  }
+  return { success: "Source Claim and its source-position links deleted." };
 }
 
 export async function processAnnotationIndicatorBatch(
