@@ -48,7 +48,7 @@ const sourceClaimKindSchema = z.enum(sourceClaimKinds);
 const sourceClaimStanceSchema = z.enum(sourceClaimStances);
 const sourceClaimCreateSchema = z.object({
   claim_summary: z.string().trim().min(1).max(10000),
-  claim_kind: sourceClaimKindSchema.default("GENERAL"),
+  claim_kind: sourceClaimKindSchema.default("OTHER"),
   stance: sourceClaimStanceSchema.default("ASSERTS"),
   source_qualifier: z.string().trim().max(1000).optional().default(""),
   mapping_origin: mappingOriginSchema.default("ANALYST_MAPPED"),
@@ -326,7 +326,7 @@ export async function createSourceClaimFromAnnotation(
 
   const parsed = sourceClaimCreateSchema.safeParse({
     claim_summary: formData.get("claim_summary"),
-    claim_kind: formData.get("claim_kind") ?? "GENERAL",
+    claim_kind: formData.get("claim_kind") ?? "OTHER",
     stance: formData.get("stance") ?? "ASSERTS",
     source_qualifier: formData.get("source_qualifier") ?? "",
     mapping_origin: formData.get("mapping_origin") ?? "ANALYST_MAPPED",
