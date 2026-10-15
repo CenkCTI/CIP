@@ -21,14 +21,14 @@ export const sourceClaimStances = [
 export type SourceClaimStance = (typeof sourceClaimStances)[number];
 
 export const sourceClaimKindLabels: Record<SourceClaimKind, string> = {
-  TARGETING: "Targeting",
-  OPERATIONAL_PURPOSE: "Operational purpose",
-  OPERATIONAL_OUTCOME: "Operational outcome",
-  INFRASTRUCTURE: "Infrastructure",
-  GEOPOLITICAL_CONTEXT: "Geopolitical context",
-  CAPABILITY: "Capability",
-  SOURCE_ASSESSMENT: "Source assessment",
-  OTHER: "Other",
+  TARGETING: "TARGETING",
+  OPERATIONAL_PURPOSE: "OPERATIONAL_PURPOSE",
+  OPERATIONAL_OUTCOME: "OPERATIONAL_OUTCOME",
+  INFRASTRUCTURE: "INFRASTRUCTURE",
+  GEOPOLITICAL_CONTEXT: "GEOPOLITICAL_CONTEXT",
+  CAPABILITY: "CAPABILITY",
+  SOURCE_ASSESSMENT: "SOURCE_ASSESSMENT",
+  OTHER: "OTHER",
 };
 
 export const sourceClaimStanceLabels: Record<SourceClaimStance, string> = {
