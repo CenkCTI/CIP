@@ -38,6 +38,6 @@ describe("PDF Source Reader view continuity", () => {
     expect(workspace).toContain("liveAnnotations");
     expect(workspace).toContain("liveAnnotationFragments");
     expect(workspace).toContain("onAnnotationCreated=");
-    expect(workspace).toContain("processing_state:"); // viewer-created optimistic record contract
+    expect(viewer).toContain('processing_state:"UNPROCESSED"');
   });
 });
