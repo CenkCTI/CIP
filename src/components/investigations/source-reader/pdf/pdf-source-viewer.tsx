@@ -255,6 +255,8 @@ export function PdfSourceViewer({
       restoredViewRef.current=true;
       return;
     }
+
+    let restoredState:PersistedPdfViewState|null=null;
     try{
       const raw=window.sessionStorage.getItem(viewStateKey);
       if(raw){
@@ -262,16 +264,29 @@ export function PdfSourceViewer({
         const restoredScale=Number(parsed.scale);
         const restoredTop=Number(parsed.scrollTop);
         const restoredLeft=Number(parsed.scrollLeft);
-        const state:PersistedPdfViewState={
+        restoredState={
           scale:Number.isFinite(restoredScale)?Math.min(2.5,Math.max(.6,restoredScale)):1.2,
           scrollTop:Number.isFinite(restoredTop)?Math.max(0,restoredTop):0,
           scrollLeft:Number.isFinite(restoredLeft)?Math.max(0,restoredLeft):0,
         };
-        pendingRestoreRef.current=state;
-        setScale(state.scale);
       }
     }catch{}
-    restoredViewRef.current=true;
+
+    if(!restoredState){
+      restoredViewRef.current=true;
+      return;
+    }
+
+    // Restore on the next frame rather than synchronously from the effect.
+    // This avoids a cascading effect render while still restoring the saved
+    // zoom before the PDF pane's scroll position is replayed.
+    const state=restoredState;
+    const frame=window.requestAnimationFrame(()=>{
+      pendingRestoreRef.current=state;
+      restoredViewRef.current=true;
+      setScale(current=>Math.abs(current-state.scale)<.001?current:state.scale);
+    });
+    return()=>window.cancelAnimationFrame(frame);
   },[viewStateKey]);
 
   useEffect(()=>{
