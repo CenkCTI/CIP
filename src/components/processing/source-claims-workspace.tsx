@@ -62,7 +62,7 @@ export function SourceClaimDirectory({
           placeholder="Search proposition text"
         />
         <select className="field max-w-56" name="kind" defaultValue={kind}>
-          <option value="">All claim kinds</option>
+          <option value="">All types</option>
           {sourceClaimKinds.map((value) => (
             <option key={value} value={value}>
               {sourceClaimKindLabels[value]}
@@ -374,9 +374,11 @@ export function SourceClaimDetail({
             onChange={(event) => setSummary(event.currentTarget.value)}
             maxLength={10000}
           />
-          <select
-            className="field max-w-xs"
-            value={kind}
+          <label className="grid max-w-xs gap-1">
+            <span className="citem-label">Type</span>
+            <select
+              className="field"
+              value={kind}
             onChange={(event) =>
               setKind(event.currentTarget.value as SourceClaimKind)
             }
@@ -386,7 +388,8 @@ export function SourceClaimDetail({
                 {sourceClaimKindLabels[value]}
               </option>
             ))}
-          </select>
+            </select>
+          </label>
           <div className="flex flex-wrap gap-2">
             <button
               className="citem-button"
