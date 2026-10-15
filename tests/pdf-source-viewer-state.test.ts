@@ -29,7 +29,7 @@ describe("PDF Source Reader view continuity", () => {
     expect(viewer).not.toContain("router.refresh()");
     expect(viewer).toContain("onAnnotationCreated?.({");
     expect(actions).toContain("annotationId: String(data)");
-    expect(actions).toContain("avoid signed PDF");
+    expect(actions).toContain("rotates its signed PDF");
     expect(actions).toContain('revalidatePath(`/projects/${context.projectId}/sources`)');
   });
 
