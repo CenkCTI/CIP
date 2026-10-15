@@ -702,12 +702,12 @@ export function AnnotationProcessingActions({
           }}
         >
           <section
-            className="w-full max-w-4xl overflow-hidden rounded-lg border border-amber-900/40 bg-[#0f1417] shadow-2xl"
+            className="flex max-h-[calc(100dvh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-amber-900/40 bg-[#0f1417] shadow-2xl"
             role="dialog"
             aria-modal="true"
             aria-label="Process source annotation"
           >
-            <header className="flex items-start justify-between gap-4 border-b border-stone-800 p-4">
+            <header className="shrink-0 flex items-start justify-between gap-4 border-b border-stone-800 p-4">
               <div>
                 <p className="citem-label">Stage 3 · Processing</p>
                 <h2 className="mt-1 text-xl font-semibold text-stone-100">
@@ -728,8 +728,8 @@ export function AnnotationProcessingActions({
               </button>
             </header>
 
-            <div className="grid max-h-[82vh] overflow-hidden lg:grid-cols-[260px_minmax(0,1fr)]">
-              <aside className="overflow-y-auto border-b border-stone-800 p-4 lg:border-b-0 lg:border-r">
+            <div className="grid min-h-0 flex-1 overflow-y-auto overscroll-contain lg:grid-cols-[260px_minmax(0,1fr)] lg:overflow-hidden">
+              <aside className="border-b border-stone-800 p-4 lg:min-h-0 lg:overflow-y-auto lg:border-b-0 lg:border-r">
                 <p className="citem-label">Source wording</p>
                 <blockquote className="mt-2 max-h-40 overflow-y-auto border-l-2 border-amber-800/60 pl-3 text-xs leading-5 text-stone-500">
                   {excerpt ||
@@ -780,7 +780,7 @@ export function AnnotationProcessingActions({
                 </div>
               </aside>
 
-              <main className="overflow-y-auto p-4">
+              <main className="min-h-0 p-4 lg:overflow-y-auto">
                 {destination === "timeline" ? (
                   <div>
                     <p className="citem-label">Temporal record</p>
