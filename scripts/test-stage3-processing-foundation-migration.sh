@@ -208,6 +208,141 @@ begin
   end;
 end
 $test$;
+
+grant usage on schema public to authenticated;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
+
+do $claim_test$
+declare
+  v_claim uuid;
+  v_assertion_one uuid;
+  v_assertion_two uuid;
+  v_result record;
+begin
+  select source_claim_id,assertion_id
+  into v_claim,v_assertion_one
+  from public.create_source_claim_from_annotation(
+    '20000000-0000-4000-8000-000000000001',
+    '50000000-0000-4000-8000-000000000001',
+    'APT28 uses compromised routers as operational infrastructure.',
+    'BEHAVIOR',
+    'ASSERTS',
+    'we assess',
+    'ANALYST_MAPPED'
+  );
+
+  if not exists(
+    select 1 from public.source_claims
+    where id=v_claim
+      and project_id='20000000-0000-4000-8000-000000000001'
+      and claim_kind='BEHAVIOR'
+  ) then
+    raise exception 'source claim was not created';
+  end if;
+
+  if not exists(
+    select 1 from public.source_claim_assertions
+    where id=v_assertion_one
+      and source_claim_id=v_claim
+      and stance='ASSERTS'
+      and source_qualifier='we assess'
+      and assertion_action='CREATED'
+  ) then
+    raise exception 'source claim assertion was not created';
+  end if;
+
+  v_assertion_two := public.link_source_claim_from_annotation(
+    '20000000-0000-4000-8000-000000000001',
+    '50000000-0000-4000-8000-000000000002',
+    v_claim,
+    'DENIES',
+    'no evidence of',
+    'ANALYST_MAPPED'
+  );
+
+  if (
+    select count(*) from public.source_claim_assertions
+    where project_id='20000000-0000-4000-8000-000000000001'
+      and source_claim_id=v_claim
+  ) <> 2 then
+    raise exception 'multiple source positions were not preserved';
+  end if;
+
+  perform public.update_source_claim_assertion(
+    '20000000-0000-4000-8000-000000000001',
+    v_assertion_two,
+    'QUALIFIES',
+    'only in a subset of cases',
+    'ANALYST_MAPPED'
+  );
+
+  if not exists(
+    select 1 from public.source_claim_assertions
+    where id=v_assertion_two
+      and stance='QUALIFIES'
+      and source_qualifier='only in a subset of cases'
+  ) then
+    raise exception 'source position update failed';
+  end if;
+
+  select * into v_result
+  from public.unlink_source_claim_assertion(
+    '20000000-0000-4000-8000-000000000001',
+    '50000000-0000-4000-8000-000000000001',
+    v_assertion_one
+  );
+  if v_result.deleted_claim then
+    raise exception 'claim deleted while another source position remained';
+  end if;
+
+  select * into v_result
+  from public.unlink_source_claim_assertion(
+    '20000000-0000-4000-8000-000000000001',
+    '50000000-0000-4000-8000-000000000002',
+    v_assertion_two
+  );
+  if not v_result.deleted_claim then
+    raise exception 'unsupported claim was not removed after final unlink';
+  end if;
+  if exists(select 1 from public.source_claims where id=v_claim) then
+    raise exception 'orphan source claim remained';
+  end if;
+end
+$claim_test$;
+
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000002',false);
+
+do $rls_test$
+begin
+  if exists(
+    select 1 from public.source_claims
+    where project_id='20000000-0000-4000-8000-000000000001'
+  ) then
+    raise exception 'source claim RLS leak';
+  end if;
+
+  begin
+    perform public.create_source_claim_from_annotation(
+      '20000000-0000-4000-8000-000000000001',
+      '50000000-0000-4000-8000-000000000001',
+      'Cross-owner claim.',
+      'GENERAL',
+      'ASSERTS',
+      null,
+      'SOURCE_EXPLICIT'
+    );
+    raise exception 'cross-owner source claim unexpectedly created';
+  exception when others then
+    if sqlerrm='cross-owner source claim unexpectedly created' then
+      raise;
+    end if;
+  end;
+end
+$rls_test$;
+
+reset role;
 SQL
 
-echo "Stage 3 processing foundation migration tests passed."
+echo "Stage 3 processing foundation + Source Claim migration tests passed."
