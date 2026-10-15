@@ -43,16 +43,16 @@ Counting source positions is descriptive only. It is not a corroboration score b
 
 `source_claims` contains only the canonical proposition and a lightweight classification:
 
-- `GENERAL`
-- `BEHAVIOR`
-- `TARGETING`
-- `CAPABILITY`
-- `RELATIONSHIP`
-- `INTENT_OBJECTIVE`
-- `IMPACT`
-- `TECHNICAL_CONTEXT`
+- `TARGETING` — who, what, sector, organization, population, or geography the reporting says is targeted;
+- `OPERATIONAL_PURPOSE` — the reported or source-assessed operational aim/objective;
+- `OPERATIONAL_OUTCOME` — the reported result, effect, consequence, or achieved outcome;
+- `INFRASTRUCTURE` — hosting, devices, routing, delivery, command-and-control, or other infrastructure context meaningful beyond a single IOC;
+- `GEOPOLITICAL_CONTEXT` — political, military, diplomatic, economic, or strategic context reported by the source;
+- `CAPABILITY` — a reported ability, access, tooling capacity, technical competence, or operational capacity;
+- `SOURCE_ASSESSMENT` — an assessment or conclusion made by the source itself; this does **not** mean CITEM has evaluated that source;
+- `OTHER` — an analytically useful proposition that does not fit the controlled types above.
 
-The classification is for navigation/filtering, not epistemic scoring.
+The classification is for navigation/filtering, not epistemic scoring. In the UI this field is labeled **Type**.
 
 Claims deliberately have no reliability, credibility, confidence, truth, or assessment fields.
 
@@ -104,7 +104,7 @@ Linking an existing claim is always explicit. CITEM does not semantically auto-m
 The analyst records:
 
 - canonical proposition;
-- claim kind;
+- claim type;
 - source stance;
 - source qualifier, if present;
 - mapping origin.
@@ -136,7 +136,7 @@ Use `SOURCE_EXPLICIT` only when the proposition is retained essentially as the s
 `/projects/[id]/source-claims` provides a review directory showing:
 
 - canonical proposition;
-- claim kind;
+- claim type;
 - number of source positions;
 - stance counts.
 
@@ -151,7 +151,7 @@ Use `SOURCE_EXPLICIT` only when the proposition is retained essentially as the s
 - original asset filename and SHA-256;
 - deep link to the exact Source Annotation.
 
-The analyst can correct the canonical proposition, claim kind, stance, source qualifier, and mapping origin without altering the underlying source quote.
+The analyst can correct the canonical proposition, claim type, stance, source qualifier, and mapping origin without altering the underlying source quote.
 
 ## Database trust boundary
 
@@ -175,3 +175,17 @@ This capability belongs to Stage 3 because it structures what a source says.
 Stage 4 can later evaluate source reliability and information credibility against each source position.
 
 Stage 6 can later assign Source Claims an analytical role such as supporting or contradicting a hypothesis. That later **evidence role** is intentionally absent from Stage 3.
+
+
+## Taxonomy forward compatibility
+
+Migration `202610150061_stage3_source_claim_types.sql` normalizes databases that may already have applied an earlier migration 060 taxonomy.
+
+Legacy values are migrated conservatively:
+
+- `INTENT_OBJECTIVE` → `OPERATIONAL_PURPOSE`;
+- `IMPACT` → `OPERATIONAL_OUTCOME`;
+- `TARGETING` and `CAPABILITY` retain their meaning;
+- older broad categories without a safe one-to-one semantic mapping are moved to `OTHER` rather than guessed into a narrower category.
+
+The final database enum contains only the eight controlled Source Claim types used by the analyst UI.
