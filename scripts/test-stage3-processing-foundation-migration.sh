@@ -45,10 +45,10 @@ create function storage.filename(name text)returns text language sql immutable a
 $$;
 SQL
 
-find "$ROOT/supabase/migrations" -maxdepth 1 -name '*.sql'   ! -name '202609110053_investigation_direction_stage1.sql'   ! -name '202609230054_investigation_collection_stage2.sql'   ! -name '202609290055_source_reader_pdf_v2.sql'   ! -name '202609290056_source_reader_pdf_v2_hardening.sql'   ! -name '202609300057_timeline_stage3_workflow_v2.sql'   ! -name '202609300058_stage3_processing_foundation.sql'   ! -name '202609300059_stage3_processing_provenance_hardening.sql' ! -name '202610150060_stage3_source_claims.sql'   | sort | while read -r migration; do printf "\\i '%s'\n" "$migration"; done > "$PRE_SQL"
+find "$ROOT/supabase/migrations" -maxdepth 1 -name '*.sql'   ! -name '202609110053_investigation_direction_stage1.sql'   ! -name '202609230054_investigation_collection_stage2.sql'   ! -name '202609290055_source_reader_pdf_v2.sql'   ! -name '202609290056_source_reader_pdf_v2_hardening.sql'   ! -name '202609300057_timeline_stage3_workflow_v2.sql'   ! -name '202609300058_stage3_processing_foundation.sql'   ! -name '202609300059_stage3_processing_provenance_hardening.sql' ! -name '202610150060_stage3_source_claims.sql' ! -name '202610150061_stage3_source_claim_types.sql'   | sort | while read -r migration; do printf "\\i '%s'\n" "$migration"; done > "$PRE_SQL"
 
 "${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" -f "$PRE_SQL" >/dev/null
-for migration in   202609110053_investigation_direction_stage1.sql   202609230054_investigation_collection_stage2.sql   202609290055_source_reader_pdf_v2.sql   202609290056_source_reader_pdf_v2_hardening.sql   202609300057_timeline_stage3_workflow_v2.sql   202609300058_stage3_processing_foundation.sql   202609300059_stage3_processing_provenance_hardening.sql   202610150060_stage3_source_claims.sql
+for migration in   202609110053_investigation_direction_stage1.sql   202609230054_investigation_collection_stage2.sql   202609290055_source_reader_pdf_v2.sql   202609290056_source_reader_pdf_v2_hardening.sql   202609300057_timeline_stage3_workflow_v2.sql   202609300058_stage3_processing_foundation.sql   202609300059_stage3_processing_provenance_hardening.sql   202610150060_stage3_source_claims.sql   202610150061_stage3_source_claim_types.sql
 do
   "${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" -f "$ROOT/supabase/migrations/$migration" >/dev/null
 done
@@ -227,7 +227,7 @@ begin
     '20000000-0000-4000-8000-000000000001',
     '50000000-0000-4000-8000-000000000001',
     'APT28 uses compromised routers as operational infrastructure.',
-    'BEHAVIOR',
+    'INFRASTRUCTURE',
     'ASSERTS',
     'we assess',
     'ANALYST_MAPPED'
@@ -237,7 +237,7 @@ begin
     select 1 from public.source_claims
     where id=v_claim
       and project_id='20000000-0000-4000-8000-000000000001'
-      and claim_kind='BEHAVIOR'
+      and claim_kind='INFRASTRUCTURE'
   ) then
     raise exception 'source claim was not created';
   end if;
@@ -328,7 +328,7 @@ begin
       '20000000-0000-4000-8000-000000000001',
       '50000000-0000-4000-8000-000000000001',
       'Cross-owner claim.',
-      'GENERAL',
+      'OTHER',
       'ASSERTS',
       null,
       'SOURCE_EXPLICIT'
