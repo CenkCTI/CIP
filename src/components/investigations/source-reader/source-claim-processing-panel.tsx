@@ -221,7 +221,8 @@ export function SourceClaimProcessingPanel({
         className="space-y-3 rounded border border-stone-800 bg-black/10 p-3"
         onSubmit={(event) => {
           event.preventDefault();
-          const formData = new FormData(event.currentTarget);
+          const form = event.currentTarget;
+          const formData = new FormData(form);
           startTransition(async () => {
             const result = await createSourceClaimFromAnnotation(
               projectId,
@@ -230,7 +231,10 @@ export function SourceClaimProcessingPanel({
               formData,
             );
             setMessage(result);
-            if (result.success) router.refresh();
+            if (result.success) {
+              form.reset();
+              router.refresh();
+            }
           });
         }}
       >
@@ -250,7 +254,7 @@ export function SourceClaimProcessingPanel({
             name="claim_summary"
             required
             maxLength={10000}
-            defaultValue={excerpt}
+            placeholder="Write one atomic proposition derived from the source passage."
           />
         </label>
 
