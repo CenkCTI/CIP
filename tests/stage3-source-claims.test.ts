@@ -80,6 +80,13 @@ describe("Stage 3 Evidence / Source Claim", () => {
     expect(panel).toContain("Source qualifier");
   });
 
+  it("keeps the processing dialog inside the viewport and scrollable", () => {
+    expect(processing).toContain("max-h-[calc(100dvh-2rem)]");
+    expect(processing).toContain("min-h-0 flex-1 overflow-y-auto overscroll-contain");
+    expect(processing).toContain("lg:min-h-0 lg:overflow-y-auto");
+    expect(processing).toContain('className="min-h-0 p-4 lg:overflow-y-auto"');
+  });
+
   it("loads current assertions and existing claims for explicit create-vs-link", () => {
     expect(sourcePage).toContain('.from("source_claim_assertions")');
     expect(sourcePage).toContain('.from("source_claims")');
