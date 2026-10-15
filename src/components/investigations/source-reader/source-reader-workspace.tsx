@@ -399,9 +399,25 @@ function SourceNotes({
         {state.error ? <p className="text-xs text-red-300">{state.error}</p> : null}
       </form>
       <div className="mt-4 space-y-3">
-        {notes.map((note) => (
+        {notes.map((note) => {
+          const body = s(note.body);
+          const preview = compactText(body, 180);
+          const hasMore = body.replace(/\s+/g, " ").trim().length > preview.length;
+          return (
           <article className="rounded border border-stone-800 bg-black/10 p-3" key={s(note.id)}>
-            <p className="whitespace-pre-wrap text-sm text-stone-300">{s(note.body)}</p>
+            <p className="text-xs leading-5 text-stone-400" title={hasMore ? body : undefined}>
+              {preview}
+            </p>
+            {hasMore ? (
+              <details className="mt-2">
+                <summary className="cursor-pointer list-none text-[11px] text-amber-300">
+                  Tamamını göster
+                </summary>
+                <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-stone-300">
+                  {body}
+                </p>
+              </details>
+            ) : null}
             <div className="mt-2 flex items-center justify-between gap-3">
               <span className="text-[11px] text-stone-600">{formatDate(note.created_at)}</span>
               <button
@@ -419,7 +435,8 @@ function SourceNotes({
               </button>
             </div>
           </article>
-        ))}
+          );
+        })}
         {!notes.length ? <p className="text-xs text-stone-600">Henüz analyst note yok.</p> : null}
       </div>
     </div>
@@ -939,16 +956,18 @@ export function SourceReaderWorkspace({
 
             {panel === "annotations" ? (
               <div className="space-y-3">
-                <div className="rounded border border-stone-800/80 bg-black/10 p-3">
-                  <p className="citem-label">Processing queue</p>
-                  <div className="mt-2 flex flex-wrap gap-3 text-xs text-stone-500">
-                    <span className="text-amber-300">{processingCounts.UNPROCESSED} unprocessed</span>
-                    <span>{processingCounts.PROCESSED} processed</span>
-                    <span>{processingCounts.IGNORED} ignored</span>
+                <div
+                  className="rounded border border-stone-800/80 bg-black/10 p-2.5"
+                  title="Resumable analyst work state only; this is not a completion percentage."
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="citem-label">Processing queue</p>
+                    <div className="flex flex-wrap gap-2 font-mono text-[10px] uppercase tracking-[0.08em] text-stone-600">
+                      <span className="text-amber-300">{processingCounts.UNPROCESSED} open</span>
+                      <span>{processingCounts.PROCESSED} done</span>
+                      <span>{processingCounts.IGNORED} ignored</span>
+                    </div>
                   </div>
-                  <p className="mt-2 text-[11px] leading-5 text-stone-600">
-                    Resumable analyst work state only; this is not a completion percentage.
-                  </p>
                 </div>
                 {liveAnnotations.map((annotation) => {
                   const id = s(annotation.id);
