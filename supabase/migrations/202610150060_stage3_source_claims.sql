@@ -6,14 +6,14 @@
 
 do $$ begin
   create type public.source_claim_kind as enum (
-    'GENERAL',
-    'BEHAVIOR',
     'TARGETING',
+    'OPERATIONAL_PURPOSE',
+    'OPERATIONAL_OUTCOME',
+    'INFRASTRUCTURE',
+    'GEOPOLITICAL_CONTEXT',
     'CAPABILITY',
-    'RELATIONSHIP',
-    'INTENT_OBJECTIVE',
-    'IMPACT',
-    'TECHNICAL_CONTEXT'
+    'SOURCE_ASSESSMENT',
+    'OTHER'
   );
 exception when duplicate_object then null; end $$;
 
@@ -31,7 +31,7 @@ create table if not exists public.source_claims (
   project_id uuid not null references public.projects(id) on delete cascade,
   claim_summary text not null
     check(char_length(trim(claim_summary)) between 1 and 10000),
-  claim_kind public.source_claim_kind not null default 'GENERAL',
+  claim_kind public.source_claim_kind not null default 'OTHER',
   created_by uuid not null references auth.users(id) on delete restrict,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -135,6 +135,18 @@ begin
   if char_length(trim(coalesce(p_claim_summary,''))) < 1
      or char_length(trim(p_claim_summary)) > 10000 then
     raise exception 'INVALID_SOURCE_CLAIM_SUMMARY';
+  end if;
+  if p_claim_kind::text not in (
+    'TARGETING',
+    'OPERATIONAL_PURPOSE',
+    'OPERATIONAL_OUTCOME',
+    'INFRASTRUCTURE',
+    'GEOPOLITICAL_CONTEXT',
+    'CAPABILITY',
+    'SOURCE_ASSESSMENT',
+    'OTHER'
+  ) then
+    raise exception 'INVALID_SOURCE_CLAIM_TYPE';
   end if;
   if v_qualifier is not null and char_length(v_qualifier) > 1000 then
     raise exception 'INVALID_SOURCE_QUALIFIER';
