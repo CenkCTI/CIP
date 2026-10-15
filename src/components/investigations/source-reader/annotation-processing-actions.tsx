@@ -428,6 +428,7 @@ export function AnnotationProcessingActions({
   outputs,
   sourceClaimAssertions,
   options,
+  compact = false,
 }: {
   projectId: string;
   sourceId: string;
@@ -437,6 +438,7 @@ export function AnnotationProcessingActions({
   outputs: Row[];
   sourceClaimAssertions: Row[];
   options: ProcessingOptions;
+  compact?: boolean;
 }) {
   const router = useRouter();
   const state = (text(annotation.processing_state) ||
@@ -464,6 +466,8 @@ export function AnnotationProcessingActions({
   const selectedCandidates = candidates.filter((item) =>
     selectedCandidateKeys.has(`${item.type}:${item.canonicalValue}`),
   );
+  const structuredOutputCount =
+    timelineLinks.length + outputs.length + sourceClaimAssertions.length;
 
   const existing =
     destination === "timeline" ||
@@ -551,7 +555,45 @@ export function AnnotationProcessingActions({
         </button>
       </div>
 
-      {timelineLinks.length || outputs.length || sourceClaimAssertions.length ? (
+      {compact ? (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-stone-600">
+            {structuredOutputCount
+              ? `${structuredOutputCount} structured output${structuredOutputCount === 1 ? "" : "s"}`
+              : "No structured outputs"}
+          </span>
+          <div className="flex items-center gap-2">
+            {state === "UNPROCESSED" ? (
+              <>
+                <button
+                  className="text-[11px] text-stone-500 hover:text-emerald-300"
+                  type="button"
+                  disabled={pending}
+                  onClick={() => runState("PROCESSED")}
+                >
+                  Mark processed
+                </button>
+                <button
+                  className="text-[11px] text-stone-600 hover:text-stone-300"
+                  type="button"
+                  onClick={() => setIgnoreOpen((current) => !current)}
+                >
+                  Ignore
+                </button>
+              </>
+            ) : (
+              <button
+                className="text-[11px] text-stone-500 hover:text-amber-300"
+                type="button"
+                disabled={pending}
+                onClick={() => runState("UNPROCESSED")}
+              >
+                Reopen
+              </button>
+            )}
+          </div>
+        </div>
+      ) : timelineLinks.length || outputs.length || sourceClaimAssertions.length ? (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {timelineLinks.map((link) => (
             <Link
@@ -630,36 +672,38 @@ export function AnnotationProcessingActions({
         </p>
       )}
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        {state === "UNPROCESSED" ? (
-          <>
+      {!compact ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {state === "UNPROCESSED" ? (
+            <>
+              <button
+                className="citem-button-ghost min-h-0 px-2.5 py-1.5 text-xs"
+                type="button"
+                disabled={pending}
+                onClick={() => runState("PROCESSED")}
+              >
+                Mark processed
+              </button>
+              <button
+                className="min-h-0 px-2 py-1 text-xs text-stone-500 hover:text-stone-300"
+                type="button"
+                onClick={() => setIgnoreOpen((current) => !current)}
+              >
+                Ignore
+              </button>
+            </>
+          ) : (
             <button
               className="citem-button-ghost min-h-0 px-2.5 py-1.5 text-xs"
               type="button"
               disabled={pending}
-              onClick={() => runState("PROCESSED")}
+              onClick={() => runState("UNPROCESSED")}
             >
-              Mark processed
+              Reopen
             </button>
-            <button
-              className="min-h-0 px-2 py-1 text-xs text-stone-500 hover:text-stone-300"
-              type="button"
-              onClick={() => setIgnoreOpen((current) => !current)}
-            >
-              Ignore
-            </button>
-          </>
-        ) : (
-          <button
-            className="citem-button-ghost min-h-0 px-2.5 py-1.5 text-xs"
-            type="button"
-            disabled={pending}
-            onClick={() => runState("UNPROCESSED")}
-          >
-            Reopen
-          </button>
-        )}
-      </div>
+          )}
+        </div>
+      ) : null}
 
       {ignoreOpen ? (
         <div className="mt-2 grid gap-2 rounded border border-stone-800 bg-black/10 p-2">
@@ -682,7 +726,14 @@ export function AnnotationProcessingActions({
       ) : null}
 
       {annotation.processing_note ? (
-        <p className="mt-2 text-[11px] leading-5 text-stone-600">
+        <p
+          className={
+            compact
+              ? "mt-2 truncate text-[11px] text-stone-600"
+              : "mt-2 text-[11px] leading-5 text-stone-600"
+          }
+          title={compact ? text(annotation.processing_note) : undefined}
+        >
           Processing note: {text(annotation.processing_note)}
         </p>
       ) : null}
