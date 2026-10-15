@@ -481,6 +481,7 @@ export function SourceReaderWorkspace({
   timelineEvents,
   annotationTimelineLinks,
   processingOutputs,
+  sourceClaimAssertions,
   processingOptions,
   initialFocusedAnnotationId,
 }: {
@@ -500,6 +501,7 @@ export function SourceReaderWorkspace({
   timelineEvents: Row[];
   annotationTimelineLinks: Row[];
   processingOutputs: Row[];
+  sourceClaimAssertions: Row[];
   processingOptions: {
     indicator: Row[];
     malware: Row[];
@@ -507,6 +509,7 @@ export function SourceReaderWorkspace({
     mitre: Row[];
     campaign: Row[];
     actor: Row[];
+    source_claim: Row[];
   };
   initialFocusedAnnotationId?: string | null;
 }) {
@@ -569,6 +572,14 @@ export function SourceReaderWorkspace({
     }
     return map;
   }, [processingOutputs]);
+  const annSourceClaimAssertions = useMemo(() => {
+    const map = new Map<string, Row[]>();
+    for (const assertion of sourceClaimAssertions) {
+      const id = s(assertion.source_annotation_id);
+      map.set(id, [...(map.get(id) ?? []), assertion]);
+    }
+    return map;
+  }, [sourceClaimAssertions]);
   const processingCounts = useMemo(() => {
     const counts = { UNPROCESSED: 0, PROCESSED: 0, IGNORED: 0 };
     for (const annotation of annotations) {
@@ -1000,6 +1011,7 @@ export function SourceReaderWorkspace({
                           events={timelineEvents}
                           timelineLinks={annTimelineLinks.get(id) ?? []}
                           outputs={annProcessingOutputs.get(id) ?? []}
+                          sourceClaimAssertions={annSourceClaimAssertions.get(id) ?? []}
                           options={processingOptions}
                         />
                       ) : null}
