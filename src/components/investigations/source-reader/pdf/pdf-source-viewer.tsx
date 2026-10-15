@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 
 import { createSourceAnnotationV2 } from "@/app/projects/[id]/source-collection-actions";
 import {
@@ -44,6 +43,19 @@ type FragmentDraft={
 };
 type SelectionDraft={text:string;fragments:FragmentDraft[];left:number;top:number};
 type EditorDraft=SelectionDraft&{annotationType:"HIGHLIGHT"|"UNDERLINE"|"REGION";anchorKind:"TEXT"|"REGION";focusNote:boolean};
+
+export type PdfAnnotationCreated={
+  annotation:Record<string,unknown>;
+  fragments:Record<string,unknown>[];
+  gapIds:string[];
+  requirementIds:string[];
+};
+
+type PersistedPdfViewState={
+  scale:number;
+  scrollTop:number;
+  scrollLeft:number;
+};
 
 function annotationLabel(value:unknown){
   if(value==="HIGHLIGHT")return "Vurgulama";
@@ -191,16 +203,23 @@ function PdfPage({
 }
 
 export function PdfSourceViewer({
-  projectId,sourceId,assetId,signedUrl,annotations,fragments,gaps,requirements,defaultGapIds,defaultRequirementIds,focusedAnnotationId,onAnnotationSelect,
+  projectId,sourceId,assetId,signedUrl,annotations,fragments,gaps,requirements,defaultGapIds,defaultRequirementIds,focusedAnnotationId,onAnnotationSelect,onAnnotationCreated,
 }:{
   projectId:string;sourceId:string;assetId:string;signedUrl:string;annotations:Row[];fragments:Row[];gaps:Row[];requirements:Row[];
   defaultGapIds:string[];defaultRequirementIds:string[];focusedAnnotationId?:string|null;
   onAnnotationSelect?:(annotationId:string)=>void;
+  onAnnotationCreated?:(payload:PdfAnnotationCreated)=>void;
 }){
-  const router=useRouter();
   const rootRef=useRef<HTMLDivElement>(null);
+  const pagesRef=useRef<HTMLDivElement>(null);
   const selectionToolbarRef=useRef<HTMLDivElement>(null);
   const viewports=useRef(new Map<number,{viewport:PdfViewportLike;base:PdfViewportLike}>());
+  const pendingRestoreRef=useRef<PersistedPdfViewState|null>(null);
+  const restoredViewRef=useRef(false);
+  const viewStateKey=useMemo(
+    ()=>`citem:pdf-view:${projectId}:${sourceId}:${assetId}:v1`,
+    [projectId,sourceId,assetId],
+  );
   const [pdfjs,setPdfjs]=useState<PdfJsLike|null>(null);
   const [pdf,setPdf]=useState<PdfDocumentLike|null>(null);
   const [loading,setLoading]=useState(true);
@@ -214,6 +233,69 @@ export function PdfSourceViewer({
   const [requirementIds,setRequirementIds]=useState<string[]>(defaultRequirementIds);
   const [message,setMessage]=useState("");
   const [saving,startSaving]=useTransition();
+
+  const persistViewState=useCallback((scaleOverride?:number)=>{
+    if(typeof window==="undefined"||!restoredViewRef.current)return;
+    const pages=pagesRef.current;
+    if(!pages)return;
+    try{
+      const state:PersistedPdfViewState={
+        scale:scaleOverride??scale,
+        scrollTop:pages.scrollTop,
+        scrollLeft:pages.scrollLeft,
+      };
+      window.sessionStorage.setItem(viewStateKey,JSON.stringify(state));
+    }catch{}
+  },[scale,viewStateKey]);
+
+  useEffect(()=>{
+    restoredViewRef.current=false;
+    pendingRestoreRef.current=null;
+    if(typeof window==="undefined"){
+      restoredViewRef.current=true;
+      return;
+    }
+    try{
+      const raw=window.sessionStorage.getItem(viewStateKey);
+      if(raw){
+        const parsed=JSON.parse(raw) as Partial<PersistedPdfViewState>;
+        const restoredScale=Number(parsed.scale);
+        const restoredTop=Number(parsed.scrollTop);
+        const restoredLeft=Number(parsed.scrollLeft);
+        const state:PersistedPdfViewState={
+          scale:Number.isFinite(restoredScale)?Math.min(2.5,Math.max(.6,restoredScale)):1.2,
+          scrollTop:Number.isFinite(restoredTop)?Math.max(0,restoredTop):0,
+          scrollLeft:Number.isFinite(restoredLeft)?Math.max(0,restoredLeft):0,
+        };
+        pendingRestoreRef.current=state;
+        setScale(state.scale);
+      }
+    }catch{}
+    restoredViewRef.current=true;
+  },[viewStateKey]);
+
+  useEffect(()=>{
+    const pending=pendingRestoreRef.current;
+    const pages=pagesRef.current;
+    if(!pending||!pdf||!pages)return;
+    if(Math.abs(scale-pending.scale)>.001)return;
+    const first=window.requestAnimationFrame(()=>{
+      const second=window.requestAnimationFrame(()=>{
+        if(!focusedAnnotationId){
+          pages.scrollTop=pending.scrollTop;
+          pages.scrollLeft=pending.scrollLeft;
+        }
+        pendingRestoreRef.current=null;
+      });
+      return second;
+    });
+    return()=>window.cancelAnimationFrame(first);
+  },[pdf,scale,focusedAnnotationId]);
+
+  useEffect(()=>{
+    if(!restoredViewRef.current)return;
+    persistViewState(scale);
+  },[scale,persistViewState]);
 
   useEffect(()=>{
     let cancelled=false;let task:PdfLoadingTask|null=null;let loadedPdf:PdfDocumentLike|null=null;
@@ -322,13 +404,61 @@ export function PdfSourceViewer({
 
   function save(){
     if(!editor)return;
+    const draft=editor;
+    const draftComment=comment;
+    const draftGapIds=[...gapIds];
+    const draftRequirementIds=[...requirementIds];
     startSaving(async()=>{
+      persistViewState();
       const result=await createSourceAnnotationV2(projectId,{
-        source_id:sourceId,asset_id:assetId,annotation_type:editor.annotationType,anchor_kind:editor.anchorKind,
-        selected_text:editor.anchorKind==="TEXT"?editor.text:null,comment,fragments:editor.fragments,gap_ids:gapIds,requirement_ids:requirementIds,
+        source_id:sourceId,asset_id:assetId,annotation_type:draft.annotationType,anchor_kind:draft.anchorKind,
+        selected_text:draft.anchorKind==="TEXT"?draft.text:null,comment:draftComment,fragments:draft.fragments,gap_ids:draftGapIds,requirement_ids:draftRequirementIds,
       });
       if(result.error){setMessage(result.error);return;}
-      setEditor(null);setComment("");window.getSelection()?.removeAllRanges();setMessage(result.success??"İşaretleme kaydedildi.");router.refresh();
+      if(!result.annotationId){
+        setMessage("İşaretleme kaydedildi ancak okuyucu yerel olarak güncellenemedi. Sayfayı yenileyin.");
+        return;
+      }
+
+      const firstPage=draft.fragments[0]?.page_number??null;
+      const annotation:Record<string,unknown>={
+        id:result.annotationId,
+        project_id:projectId,
+        source_id:sourceId,
+        asset_id:assetId,
+        annotation_type:draft.annotationType,
+        page_number:firstPage,
+        rects:[],
+        selected_text:draft.anchorKind==="TEXT"?draft.text:null,
+        comment:draftComment.trim()||null,
+        geometry_version:2,
+        anchor_kind:draft.anchorKind,
+        processing_state:"UNPROCESSED",
+        processing_note:null,
+        processed_at:null,
+        processed_by:null,
+        created_at:new Date().toISOString(),
+      };
+      const createdFragments=draft.fragments.map((fragment,index)=>({
+        id:`local-${result.annotationId}-${index}`,
+        project_id:projectId,
+        source_id:sourceId,
+        asset_id:assetId,
+        annotation_id:result.annotationId,
+        anchor_kind:draft.anchorKind,
+        ...fragment,
+      }));
+      onAnnotationCreated?.({
+        annotation,
+        fragments:createdFragments,
+        gapIds:draftGapIds,
+        requirementIds:draftRequirementIds,
+      });
+
+      setEditor(null);
+      setComment("");
+      window.getSelection()?.removeAllRanges();
+      setMessage(result.success??"İşaretleme kaydedildi.");
     });
   }
 
@@ -359,7 +489,11 @@ export function PdfSourceViewer({
     <p className="mb-3 text-xs text-stone-500">Metni fareyle seçin; vurgulama, altını çizme veya bağlı analist notu ekleyin. Görsel ve tablolar için Bölge seç aracını kullanın.</p>
     {loading?<div className="citem-pdf-state">PDF hazırlanıyor…</div>:null}
     {error?<div className="citem-pdf-state text-red-300">{error}</div>:null}
-    {pdf&&pdfjs?<div className="citem-pdf-pages">
+    {pdf&&pdfjs?<div
+      ref={pagesRef}
+      className="citem-pdf-pages"
+      onScroll={()=>persistViewState()}
+    >
       {Array.from({length:pdf.numPages},(_,index)=><PdfPage
         key={index+1} pdf={pdf} pdfjs={pdfjs} pageNumber={index+1} scale={scale}
         annotations={annotations} fragments={fragments} regionMode={regionMode}
