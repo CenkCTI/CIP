@@ -286,8 +286,8 @@ begin
   end if;
 
   select count(*) into v_remaining
-  from public.source_claim_assertions
-  where project_id=p_project_id and source_claim_id=v_claim;
+  from public.source_claim_assertions a
+  where a.project_id=p_project_id and a.source_claim_id=v_claim;
 
   if v_remaining=0 then
     delete from public.source_claims
