@@ -13,6 +13,8 @@ import { Stage3PdfError } from "@/lib/ai/stage3/pdf-text";
 import { modelFacingSpans } from "@/lib/ai/stage3/provenance";
 import { stage3RequestSchema } from "@/lib/ai/stage3/schemas";
 import { runStage3Processing } from "@/lib/ai/stage3/workflows";
+import { runStage3CandidateExtraction } from "@/lib/ai/stage3/candidate-workflow";
+import { attachStage3CandidateMatches } from "@/lib/ai/stage3/matching";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -108,13 +110,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     try {
       stage = "nvidia";
-      const result = await runStage3Processing({request,...context},
-        (messages) => byokChat("nvidia_nim", credential.model, credential.apiKey, messages,"generation"));
+      const result = request.mode === "extract"
+        ? await runStage3CandidateExtraction(context,
+            (messages) => byokChat("nvidia_nim", credential.model, credential.apiKey, messages,"generation"))
+        : await runStage3Processing({request,...context},
+            (messages) => byokChat("nvidia_nim", credential.model, credential.apiKey, messages,"generation"));
+      // Existing record lookups run ONLY after the grounded generation and are
+      // scoped to this owned project. They never enter the NVIDIA prompt.
+      const enriched = request.mode === "extract" && "candidates" in result
+        ? {...result,candidates:await attachStage3CandidateMatches(owned,result.candidates)}
+        : result;
       await owned.supabase.rpc("complete_ai_usage_event",{
-        p_event_id:eventId,p_status:"SUCCEEDED",p_output_chars:JSON.stringify(result).length,
+        p_event_id:eventId,p_status:"SUCCEEDED",p_output_chars:JSON.stringify(enriched).length,
       });
       return noStore({
-        result, provider:"nvidia_nim", model:credential.model,
+        result:enriched, provider:"nvidia_nim", model:credential.model,
         notice:"AI suggestions only. The analyst must review evidence and explicitly save all domain records.",
       });
     } catch (e) {

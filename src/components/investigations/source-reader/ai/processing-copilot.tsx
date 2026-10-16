@@ -5,6 +5,8 @@ import { ByokConnectionPanel } from "@/components/ai/byok-connection-panel";
 import { CopilotChat, type CopilotResult, type CopilotTurn } from "./copilot-chat";
 import { CopilotContextSelector, contextTitle, type CopilotContext } from "./copilot-context-selector";
 import { useCopilotWindow } from "./use-copilot-window";
+import { CopilotCandidates } from "./copilot-candidates";
+import type { Stage3Candidate, Stage3CandidateResponse } from "@/lib/ai/stage3/candidates";
 
 type ByokStatus = {
   enabled?: boolean; connected?: boolean; state?: string;
@@ -60,12 +62,13 @@ export function validCopilotContext(value: CopilotContext, pageCount: number | n
 
 export function ProcessingCopilot({
   projectId, sourceId, assetId, sourceTitle, selectedAnnotationId,
-  activePage, pageCount, onClose, onNavigate,
+  activePage, pageCount, onClose, onNavigate, onReviewCandidate,
 }: {
   projectId: string; sourceId: string; assetId: string; sourceTitle: string;
   selectedAnnotationId: string | null; activePage: number; pageCount: number | null;
   onClose: () => void;
   onNavigate: (page: number, annotationId?: string) => void;
+  onReviewCandidate?: (candidate: Stage3Candidate) => void;
 }) {
   const windowState = useCopilotWindow();
   const [byok, setByok] = useState<ByokStatus | null>(null);
@@ -75,6 +78,8 @@ export function ProcessingCopilot({
   const [question, setQuestion] = useState("");
   const [responseLanguage, setResponseLanguage] = useState<"auto" | "tr" | "en">("auto");
   const [turns, setTurns] = useState<CopilotTurn[]>([]);
+  const [candidateResult, setCandidateResult] = useState<Stage3CandidateResponse|null>(null);
+  const [dismissedCandidates, setDismissedCandidates] = useState<Set<string>>(()=>new Set());
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
   const [diagnostic, setDiagnostic] = useState<{status:number;code:string;stage:string;sourceStep?:string}|null>(null);
@@ -98,7 +103,7 @@ export function ProcessingCopilot({
     const timer=window.setTimeout(() => {void refreshStatus();},0);
     return () => {window.clearTimeout(timer);mounted.current=false; inFlight.current?.abort();};
   },[refreshStatus]);
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; },[turns]);
+  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; },[turns,candidateResult]);
   useEffect(() => {
     const handler=(e:KeyboardEvent)=>{if(e.key==="Escape")onClose();};
     document.addEventListener("keydown",handler);
@@ -115,7 +120,7 @@ export function ProcessingCopilot({
   const contextValid = validCopilotContext(effectiveContext,pageCount);
   const canSend = connected && contextValid && !working;
 
-  async function submit(mode: "ask" | "analyse", prompt: string) {
+  async function submit(mode: "ask" | "analyse" | "extract", prompt: string) {
     if (!canSend || (mode === "ask" && !prompt.trim())) {
       if (!connected) setError("Connect NVIDIA NIM before sending a message.");
       else if (!contextValid) setError("Select the entire PDF, a valid PDF page, a text annotation or 1–10 consecutive pages.");
@@ -138,13 +143,13 @@ export function ProcessingCopilot({
         headers:{"content-type":"application/json"},
         body:JSON.stringify({sourceId,assetId,context:captured,mode,
           ...(mode==="ask"?{question:prompt.trim().slice(0,1500)}:{}),
-          ...(history.length?{history}:{}),
+          ...(mode!=="extract" && history.length?{history}:{}),
           ...(responseLanguage!=="auto"?{responseLanguage}:{}),
           byokConsent:true}),
         signal:abort.signal,
         cache:"no-store",
       });
-      let payload: {result?:CopilotResult;code?:string;error?:string;stage?:string;sourceStep?:string};
+      let payload: {result?:CopilotResult | Stage3CandidateResponse;code?:string;error?:string;stage?:string;sourceStep?:string};
       try {
         payload = await response.json();
       } catch {
@@ -157,12 +162,19 @@ export function ProcessingCopilot({
         throw new Error(SAFE_ERRORS[payload.code ?? ""] ?? payload.error ?? "NVIDIA processing failed.");
       }
       if (!mounted.current || abort.signal.aborted) return;
-      setTurns((current)=>[...current,{
-        id:++turnCounter.current,context:captured,mode,
-        prompt:mode==="analyse"?"Analyse selected source context":prompt.trim(),
-        result:payload.result!,
-      }]);
-      setQuestion("");
+      if(mode==="extract"){
+        if(!("candidates" in payload.result)) throw new Error("Invalid extraction response.");
+        setCandidateResult(payload.result);
+        setDismissedCandidates(new Set());
+      } else {
+        if(!("summary" in payload.result)) throw new Error("Invalid answer response.");
+        setTurns((current)=>[...current,{
+          id:++turnCounter.current,context:captured,mode,
+          prompt:mode==="analyse"?"Analyse selected source context":prompt.trim(),
+          result:payload.result as CopilotResult,
+        }]);
+        setQuestion("");
+      }
     } catch(cause) {
       if (!abort.signal.aborted && mounted.current) {
         setError(cause instanceof Error ? cause.message : "Processing request failed.");
@@ -234,7 +246,11 @@ export function ProcessingCopilot({
           <option value="tr">Türkçe</option>
           <option value="en">English</option>
         </select>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <button type="button" disabled={!canSend} onClick={()=>void submit("extract","")}
+            className="rounded border border-[var(--amber-dark)] bg-[var(--amber-tint)] px-3 py-1.5 text-xs font-semibold text-[var(--amber-soft)] hover:bg-[var(--amber-glow)] disabled:opacity-40">
+            Extract candidates
+          </button>
           <button type="button" disabled={!canSend} onClick={()=>void submit("analyse","")}
             className="rounded border border-[var(--amber-dark)] bg-[var(--amber-tint)] px-3 py-1.5 text-xs font-medium text-[var(--amber-soft)] hover:bg-[var(--amber-glow)] disabled:opacity-40">
             Analyse context
@@ -249,6 +265,12 @@ export function ProcessingCopilot({
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto bg-[var(--surface)]"
         aria-label="Copilot chat history">
         <CopilotChat turns={turns} onNavigate={onNavigate}/>
+        {candidateResult ? <CopilotCandidates result={candidateResult} dismissed={dismissedCandidates}
+          onDismiss={(candidateId)=>setDismissedCandidates((current)=>new Set([...current,candidateId]))}
+          onReview={(candidate)=>{
+            if(onReviewCandidate) onReviewCandidate(candidate);
+            else if(candidate.verifiedSupport[0]?.page) onNavigate(candidate.verifiedSupport[0].page,candidate.verifiedSupport[0].provenance.annotationId);
+          }} onNavigate={onNavigate}/> : null}
       </div>
       <form onSubmit={onSubmit}
         className="shrink-0 border-t border-[var(--line)] bg-[var(--surface-panel)] px-4 pb-3 pt-3">
