@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState, type PointerEvent } from "react";
 
-export const COPILOT_WINDOW_KEY = "citem:stage3-ai-window:v1";
+// v2 intentionally resets the previous cramped 440px floating geometry once.
+export const COPILOT_WINDOW_KEY = "citem:stage3-ai-window:v2";
 export type CopilotGeometry = {
   x: number; y: number; width: number; height: number;
   docked: boolean; minimized: boolean;
