@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { extractDocxPlainText, isDocxFile } from "@/lib/collection/docx-preview";
 import { PdfSourceViewer } from "@/components/investigations/source-reader/pdf/pdf-source-viewer";
+import { ProcessingCopilot } from "@/components/investigations/source-reader/ai/processing-copilot";
 import { AnnotationProcessingActions } from "@/components/investigations/source-reader/annotation-processing-actions";
 
 import {
@@ -293,6 +294,10 @@ function ContextEditor({
   selectedRequirementIds: string[];
 }) {
   const router = useRouter();
+  const [copilotOpen, setCopilotOpen] = useState(false);
+  const copilotButton = useRef<HTMLButtonElement>(null);
+  const [activePdfPage, setActivePdfPage] = useState(1);
+  const [pdfPageCount, setPdfPageCount] = useState(0);
   const [pending, start] = useTransition();
   const [message, setMessage] = useState<SourceCollectionActionState>({});
   const [gapIds, setGapIds] = useState(selectedGapIds);
@@ -742,6 +747,11 @@ export function SourceReaderWorkspace({
             </a>
           ) : null}
           {isPdf && asset ? <AnnotatedPdfDownloadButton projectId={projectId} sourceId={s(source.id)} /> : null}
+          {isPdf && asset && signedUrl && (
+            <button ref={copilotButton} type="button" className="citem-button"
+              aria-label="Open AI Processing Copilot" aria-expanded={copilotOpen}
+              onClick={()=>setCopilotOpen(true)}>◈ AI Copilot</button>
+          )}
         </div>
       </header>
 
@@ -786,6 +796,8 @@ export function SourceReaderWorkspace({
               defaultGapIds={sourceGapIds}
               defaultRequirementIds={sourceRequirementIds}
               focusedAnnotationId={focusedAnnotationId}
+              onActivePageChange={setActivePdfPage}
+              onPageCountChange={setPdfPageCount}
               onAnnotationSelect={(annotationId) => {
                 setPanel("annotations");
                 setFocusedAnnotationId(annotationId);
@@ -1206,6 +1218,35 @@ export function SourceReaderWorkspace({
           </div>
         </aside>
       </div>
+      {copilotOpen && isPdf && asset && signedUrl && (
+        <ProcessingCopilot
+          projectId={projectId}
+          sourceId={s(source.id)}
+          assetId={s(asset.id)}
+          sourceTitle={s(source.title)}
+          activePage={activePdfPage}
+          pageCount={pdfPageCount}
+          selectedAnnotationId={focusedAnnotationId}
+          annotations={liveAnnotations.filter(a=>s(a.asset_id)===s(asset.id)).map(a=>({
+            id:s(a.id),
+            page:a.page_number == null?null:Number(a.page_number),
+            text:s(a.selected_text),
+          }))}
+          onClose={()=>{
+            setCopilotOpen(false);
+            window.requestAnimationFrame(()=>copilotButton.current?.focus());
+          }}
+          onJumpToPage={page=>{
+            document.querySelector<HTMLElement>(`[data-pdf-page-number="${page}"]`)
+              ?.scrollIntoView({behavior:"smooth",block:"center"});
+          }}
+          onFocusAnnotation={annotationId=>{
+            setFocusedAnnotationId(annotationId);
+            setExpandedAnnotationId(annotationId);
+            setPanel("annotations");
+          }}
+        />
+      )}
     </section>
   );
 }
