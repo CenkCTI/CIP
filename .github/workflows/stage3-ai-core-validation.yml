@@ -37,7 +37,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Stage 3 security, provenance and repair tests
-        run: npm test -- tests/stage3-ai-processing-core.test.ts
+        run: npm test -- tests/stage3-ai-processing-core.test.ts tests/stage3-ai-response-recovery.test.ts tests/byok-nvidia-provider.test.ts
       - name: ESLint
         run: npm run lint
       - name: TypeScript
