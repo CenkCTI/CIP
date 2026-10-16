@@ -9,7 +9,7 @@ Open `/projects/[id]/sources/[sourceId]` and choose **AI Copilot**. The panel:
 - Is draggable and resizable on desktop (default 440 × 620); minimizable, dockable and dismissible; mobile uses a full-screen sheet.
 - Persists **window geometry only** to `sessionStorage["citem:stage3-ai-window:v1"]`.
 - Reuses the existing NVIDIA NIM BYOK connection panel, HttpOnly session cookie, and connection status endpoint.
-- Offers current **text** annotation, active PDF page, and selected 1–10 consecutive pages. Entire-document and Investigation-wide contexts are intentionally out of scope.
+- Offers entire PDF by default, current text annotation, active PDF page, and selected 1–10 consecutive pages. Investigation-wide context is intentionally out of scope.
 - Sends only selected project/source/asset/annotation identifiers and question to the Phase 1 API; the server is authoritative for the PDF contents and source metadata.
 - Displays returned grounded evidence with clickable page citations, unanswered questions, caveats and errors. Citation selection scrolls the existing PDF viewer to the correct page.
 - Supports Ask, Analyse context and Explain passage. Structured candidate extraction/handoff and external research remain later-phase capabilities.
@@ -118,3 +118,13 @@ Accessibility: the context button has `aria-expanded` and `aria-controls`; sourc
 ## NVIDIA model picker convenience
 
 The existing BYOK connection panel now renders an explicit model **select** for NVIDIA NIM instead of a browser-dependent datalist. `nvidia/nemotron-3-super-120b-a12b` appears as **Nemotron 3 Super 120B · Recommended** and is automatically selected whenever NVIDIA NIM is chosen (including the Stage 3 Copilot's default NVIDIA provider). The selected option's full allowlisted model ID is still sent unchanged to the existing `/api/ai/byok/connect` endpoint; no new credential storage, API routes or SQL. Other BYOK providers retain their manual model ID text input. Tests cover no-typing connection, alternate NVIDIA selection and switching providers.
+
+## Default document scope — entire PDF
+
+On opening the Source Reader's Copilot, **Entire PDF** is the default context. A request sends `context: { "kind": "document" }`, **not** a client-supplied page list, range, copied text or signed PDF URL. The owned server reads the original PDF from project Storage and extracts every page in order, attributing source spans to their actual PDF page numbers. All selected pages are processed as source data before NVIDIA generation; none are silently discarded.
+
+The analyst may open **Change context** and select **Entire PDF**, **Current page**, **Selected pages** (1–10 consecutive pages), or **Current annotation** (when a text annotation exists). Existing page citations, BYOK, chat follow-up isolation and intelligence-domain safety remain unchanged.
+
+**Explicit resource limits:** Whole-PDF processing can consume more provider context and quota. PDF.js rejects files with more than **200 pages** or more than **45,000 extracted characters**, returning the safe `pdf_document_too_large` error (HTTP 413) rather than making a partial “entire document” claim. The existing server input-size limit also applies to the final model-facing context. Scanned pages without extractable text cannot be OCR'd by this workflow and cause a clear error. In those cases the analyst can choose a page or bounded page range. This phase does **not** implement retrieval/index-based summarization of very large documents; that remains separate work.
+
+Automated coverage: strict whole-document request schema, every page of a 12-page PDF extracted (beyond old 10-page selection limit), cited page provenance, long-document rejection without silent truncation, and UI default+analyst selection overrides. No new SQL migration.
