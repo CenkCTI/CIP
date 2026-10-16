@@ -38,19 +38,25 @@ function readSaved(): CopilotGeometry {
 export function useCopilotWindow() {
   const [geometry, setGeometry] = useState<CopilotGeometry>(DEFAULT);
   const [mobile, setMobile] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
     const update = () => {
       setMobile(window.innerWidth < 768);
       setGeometry((previous) => clampCopilotGeometry(previous, window.innerWidth, window.innerHeight));
     };
-    setGeometry(readSaved());
-    update();
+    const saved=readSaved();
+    const frame=window.requestAnimationFrame(() => {
+      setGeometry(clampCopilotGeometry(saved,window.innerWidth,window.innerHeight));
+      setMobile(window.innerWidth<768);
+      setHydrated(true);
+    });
     window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
+    return () => {window.cancelAnimationFrame(frame);window.removeEventListener("resize", update);};
   }, []);
   useEffect(() => {
+    if (!hydrated) return;
     try { window.sessionStorage.setItem(COPILOT_WINDOW_KEY, JSON.stringify(geometry)); } catch {}
-  }, [geometry]);
+  }, [geometry,hydrated]);
 
   const setDocked = useCallback(() => setGeometry((v) => ({ ...v, docked: !v.docked, minimized: false })), []);
   const setMinimized = useCallback(() => setGeometry((v) => ({ ...v, minimized: !v.minimized })), []);
