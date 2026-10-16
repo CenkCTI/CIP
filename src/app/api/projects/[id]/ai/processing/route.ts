@@ -17,8 +17,11 @@ import { runStage3Processing } from "@/lib/ai/stage3/workflows";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function responseError(error: unknown) {
-  if (error instanceof z.ZodError) return noStore({code:"invalid_request",error:"Invalid processing request."},{status:400});
+export type Stage3FailureStage = "request" | "ownership" | "byok" | "source" | "quota" | "nvidia";
+
+/** Public diagnostics contain only fixed enum values; never raw Supabase/NVIDIA error details. */
+function responseError(error: unknown, stage: Stage3FailureStage) {
+  if (error instanceof z.ZodError) return noStore({code:"invalid_request",error:"Invalid processing request.",stage},{status:400});
   const code = error instanceof Stage3ContextError || error instanceof Stage3PdfError || error instanceof AiError
     ? error.code
     : error instanceof Error ? error.message : "request_failed";
@@ -46,21 +49,28 @@ function responseError(error: unknown) {
     nvidia_output_exhausted:[422,"NVIDIA reached its output limit."],
     rate_limited:[429,"AI request quota exceeded."],
     provider_rate_limited:[429,"NVIDIA request limit reached."],
+    provider_error:[502,"NVIDIA rejected this generation request. Try a different allowlisted model or a smaller PDF selection."],
     timeout:[504,"NVIDIA request timed out."],
     provider_unreachable:[502,"NVIDIA is unavailable."],
   };
-  if (code === "Investigation not found") return noStore({code:"not_found",error:"Investigation not found."},{status:404});
-  if (code === "byok_not_configured" || code === "byok_unavailable") return noStore({code:"byok_unavailable",error:"BYOK is not configured."},{status:503});
+  if (code === "Investigation not found") return noStore({code:"not_found",error:"Investigation not found.",stage},{status:404});
+  if (code === "byok_not_configured" || code === "byok_unavailable") return noStore({code:"byok_unavailable",error:"BYOK is not configured.",stage},{status:503});
   const [status,message] = errors[code] ?? [500,"Processing request failed."];
-  return noStore({code: errors[code] ? code : "request_failed",error:message},{status});
+  const publicCode = errors[code] ? code : "request_failed";
+  // Log only fixed diagnostic labels; raw error strings may expose internal data.
+  if (publicCode === "request_failed") console.error("stage3_processing_failure", {stage,code:publicCode});
+  return noStore({code:publicCode,error:message,stage},{status});
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  let stage: Stage3FailureStage = "request";
   try {
     validateOrigin(req);
     const { id } = await params;
     const request = stage3RequestSchema.parse(await readJsonLimited(req, 20_480));
+    stage = "ownership";
     const owned = await requireOwnedProject(id);
+    stage = "byok";
     if (!byokEnabled()) throw new Error("byok_unavailable");
     const cookie = (await cookies()).get(BYOK_COOKIE)?.value;
     if (!cookie) throw new AiError("byok_required");
@@ -68,6 +78,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (credential.providerId !== "nvidia_nim") throw new AiError("unsupported_provider");
     if (!validateProviderModel("nvidia_nim",credential.model)) throw new AiError("unsupported_model");
     // Verify the BYOK credential before performing expensive PDF extraction.
+    stage = "source";
     const context = await loadStage3DocumentContext(createStage3ReadContext(owned), request);
 
     const inputChars = JSON.stringify({
@@ -78,6 +89,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }).length;
     const cfg = getAiConfig();
     if (inputChars > cfg.maxInputChars) throw new Stage3ContextError("context_too_large");
+    stage = "quota";
     const {data:eventId,error:reservationError} = await owned.supabase.rpc("reserve_ai_usage_event", {
       p_project_id:owned.projectId,
       p_workflow:"stage3_processing",
@@ -89,6 +101,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (reservationError || !eventId) throw new AiError("rate_limited");
 
     try {
+      stage = "nvidia";
       const result = await runStage3Processing({request,...context},
         (messages) => byokChat("nvidia_nim", credential.model, credential.apiKey, messages,"generation"));
       await owned.supabase.rpc("complete_ai_usage_event",{
@@ -105,6 +118,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       throw e;
     }
   } catch (error) {
-    return responseError(error);
+    return responseError(error,stage);
   }
 }
