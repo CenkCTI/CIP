@@ -83,8 +83,13 @@ export function CopilotCandidates({result,dismissed,onDismiss,onReview,onNavigat
       <div className="flex flex-wrap justify-end gap-2 border-t border-[var(--line-neutral)] pt-3">
         <button type="button" className="rounded border border-[var(--line)] px-3 py-1.5 text-xs text-[var(--muted-strong)] hover:text-[var(--foreground)]"
           onClick={()=>onDismiss(candidate.candidateId)}>Dismiss</button>
-        <button type="button" className="rounded border border-[var(--amber-dark)] bg-[var(--amber-tint)] px-3 py-1.5 text-xs font-semibold text-[var(--amber-soft)] hover:bg-[var(--amber-glow)]"
-          onClick={()=>onReview(candidate)}>Review in Process</button>
+        {candidate.kind==="UNANSWERED_QUESTION"
+          ? <button type="button" className="rounded border border-[var(--amber-dark)] px-3 py-1.5 text-xs text-[var(--amber-soft)]"
+              onClick={()=>{const page=candidate.verifiedSupport[0]?.page;if(page)onNavigate(page);}}>
+              View source
+            </button>
+          : <button type="button" className="rounded border border-[var(--amber-dark)] bg-[var(--amber-tint)] px-3 py-1.5 text-xs font-semibold text-[var(--amber-soft)] hover:bg-[var(--amber-glow)]"
+              onClick={()=>onReview(candidate)}>Review in Process</button>}
       </div>
     </article>)}
     {result.discarded>0?<p role="note" className="text-xs text-[var(--amber-soft)]">
