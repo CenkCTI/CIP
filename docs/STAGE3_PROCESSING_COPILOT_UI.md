@@ -83,3 +83,19 @@ The trusted Stage 3 system policy requires `summary`, `evidence[].statement`, `u
 If Turkish is required and the generated natural-language explanation is unmistakably English, the server makes **at most one repair attempt**. If the model still ignores the request, the result includes an explicit warning; it does not silently translate source quotes or fabricate any evidence. Previous turns remain bounded, untrusted reference data.
 
 Regression tests cover the two Turkish questions reported by the user, manual language selection, English preference, exact English quotes in Turkish analytical prose and an English-to-Turkish retry. No schema migration or additional credential is necessary. Live NVIDIA confirmation is still required after deployment.
+
+## Phase 2: resilient grounded NVIDIA replies (malformed_output)
+
+An authenticated analyst reproduced `HTTP 422 · stage=nvidia · code=malformed_output` after asking in Turkish how the selected APT28 report described the attack chain over pages 1–5. A valid Turkish analysis had previously returned, but some unsupported evidence suggestions were discarded.
+
+- The Stage 3 prompt now explicitly permits **describing the source-reported attack sequence** while still forbidding invented/unreported steps and unverified attribution.
+- Ask responses request **up to 4 short verbatim quotations** (15–200 characters each), avoiding excessive JSON and unsupported long quotes. This is a target, not an authoritative evidence allowance.
+- If NVIDIA returns valid JSON with harmless format deviations (missing optional warning arrays, extra unsupported properties, model-invented page fields), the server **whitelists** only schema fields and runs normal quote-token grounding against the original selected PDF. Invalid evidence entries are discarded; invented page or source identifiers are NEVER honored.
+- If JSON parsing fails, Stage 3 requests one **compact repair** rather than echoing up to 18,000 chars of malformed assistant text back into the context. At most two NVIDIA generation attempts are made.
+- If the first attempt has already produced one or more **verified citations**, but the second reply is malformed, the API may return only those verified citations with **no model summary** and an explicit warning. It never turns an unverified answer into a verified one.
+- NVIDIA `finish_reason=length` is reported as `nvidia_output_exhausted` even if partial text was returned; this distinguishes provider output truncation from malformed JSON.
+- If both attempts are non-JSON/unverifiable, the API retains the existing safe `malformed_output` failure. The UI recommends selecting 1–2 pages and narrowing the question.
+
+Unit tests cover the reported Turkish attack-chain question, overlong/invalid JSON, invented page numbers, fake quotes, missing arrays, a repair succeeding on attempt two, safe fallback to verified evidence, and repeated unrecoverable output. The live model and attached private PDF are not accessible in CI; production acceptance still requires replaying the question on the deployed build.
+
+No additional SQL migration is required.

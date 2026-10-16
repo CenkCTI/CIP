@@ -51,6 +51,15 @@ describe("NVIDIA NIM BYOK provider", () => {
     await expect(byokChat("nvidia_nim", "nvidia/nemotron-3-super-120b-a12b", "nvapi-secret", [{ role: "user", content: "Return JSON" }], "connection_test")).rejects.toMatchObject({ code: "nvidia_output_exhausted" });
   });
 
+  it("classifies nonempty but truncated NVIDIA generation output as exhausted",async()=>{
+    fetchMock.mockResolvedValue({
+      ok:true,json:async()=>({choices:[{finish_reason:"length",message:{content:'{"summary":"incomplete"'}}]}),
+    });
+    await expect(byokChat("nvidia_nim","nvidia/nemotron-3-super-120b-a12b",
+      "nvapi-secret",[{role:"user",content:"Explain source evidence"}],"generation"))
+      .rejects.toMatchObject({code:"nvidia_output_exhausted"});
+  });
+
   it("fails closed when malformed NVIDIA output does not satisfy workflow schemas", async () => {
     const malformed = async () => "not json";
     await expect(runStructuredWorkflow("summarize_research", { pastedText: "demo" }, malformed as never)).rejects.toMatchObject({ code: "malformed_output" });

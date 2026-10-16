@@ -8,6 +8,8 @@ on:
       - "src/app/api/projects/**/ai/processing/**"
       - "supabase/migrations/202610160062_stage3_processing_ai_usage.sql"
       - "tests/stage3-ai-processing-core.test.ts"
+      - "tests/stage3-ai-response-recovery.test.ts"
+      - "src/lib/ai/byok/client.ts"
       - "scripts/assert-stage3-pdf-runtime.mjs"
       - "next.config.ts"
       - "package.json"
@@ -35,7 +37,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Stage 3 security, provenance and repair tests
-        run: npm test -- tests/stage3-ai-processing-core.test.ts
+        run: npm test -- tests/stage3-ai-processing-core.test.ts tests/stage3-ai-response-recovery.test.ts tests/byok-nvidia-provider.test.ts
       - name: ESLint
         run: npm run lint
       - name: TypeScript
