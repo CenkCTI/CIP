@@ -60,7 +60,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
     expect(JSON.stringify(body)).not.toMatch(/apiKey|signedUrl|selectedText/);
     fireEvent.click(screen.getByRole("button",{name:"Go to PDF page 5"}));
     expect(props.onNavigate).toHaveBeenCalledWith(5,undefined);
-    expect(screen.getByText(/Each question is independent/)).toBeTruthy();
+    expect(screen.getByText(/Only the last 3 replies/)).toBeTruthy();
   });
 
   it("requires NVIDIA and reuses BYOK panel, without exposing an API key input in Copilot", async()=>{
