@@ -118,6 +118,39 @@ describe("Stage 3 Processing Copilot UI",()=>{
     expect(JSON.parse(sent![1].body).context).toEqual({kind:"page",page:5});
   });
 
+  it("extracts verified candidates without domain mutations, supports review handoff and dismiss",async()=>{
+    const onReviewCandidate=vi.fn();
+    const candidate={
+      candidateId:"a9f4ed",kind:"SOURCE_CLAIM",claim:"The campaign targeted Polish institutions.",
+      claimType:"TARGETING",stance:"ASSERTS",sourceQualifier:null,derivation:"NORMALIZED",
+      sourceSupport:[{source_token:"DOC_P005_C01",quote:"phishing was reported"}],
+      verifiedSupport:[{statement:"SOURCE_CLAIM",quote:"phishing was reported",sourceToken:"DOC_P005_C01",
+        page:5,kind:"PDF",provenance:{sourceId,assetId}}],
+      caveats:[],status:"NOT_SAVED",
+    };
+    fetchMock.mockImplementation(async(url:string,options?:RequestInit)=>{
+      if(url==="/api/ai/byok/status")return {ok:true,json:async()=>({
+        connected:true,providerId:"nvidia_nim",model:"nvidia/nemotron-3-super-120b-a12b",
+      })};
+      if(url===`/api/projects/${projectId}/ai/processing` && options?.method==="POST"){
+        expect(JSON.parse(String(options.body)).mode).toBe("extract");
+        return {ok:true,json:async()=>({result:{candidates:[candidate],warnings:[],discarded:0}})};
+      }
+      throw Error("Unexpected request");
+    });
+    render(<ProcessingCopilot {...props} onReviewCandidate={onReviewCandidate}/>);
+    await screen.findByText("NVIDIA connected");
+    fireEvent.click(screen.getByRole("button",{name:"Extract candidates"}));
+    await screen.findByText("The campaign targeted Polish institutions.");
+    expect(screen.getByText(/NOT SAVED/)).toBeTruthy();
+    expect(fetchMock.mock.calls.filter(([url])=>url===`/api/projects/${projectId}/ai/processing`)).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button",{name:"Review in Process"}));
+    expect(onReviewCandidate).toHaveBeenCalledWith(candidate);
+    expect(fetchMock.mock.calls.filter(([url])=>url===`/api/projects/${projectId}/ai/processing`)).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button",{name:"Dismiss"}));
+    expect(screen.queryByText("The campaign targeted Polish institutions.")).toBeNull();
+  });
+
   it("requires NVIDIA and reuses BYOK panel, without exposing an API key input in Copilot", async()=>{
     fetchMock.mockResolvedValue({ok:true,json:async()=>({connected:false,enabled:true,state:"disconnected"})});
     render(<ProcessingCopilot {...props}/>);
