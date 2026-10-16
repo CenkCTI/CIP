@@ -114,3 +114,7 @@ The Source Reader Copilot keeps the same read-only server request, quote verific
 Accessibility: the context button has `aria-expanded` and `aria-controls`; source evidence uses native `details/summary`. Tests cover collapsed-by-default context and sources, expansion and citation jumps, theme tokens, and unchanged API send contracts.
 
 **Review requested:** PR is intentionally left open/unmerged. Verify appearance on desktop/mobile before merging. The CSS design has not been visually verified in a live user browser.
+
+## NVIDIA model picker convenience
+
+The existing BYOK connection panel now renders an explicit model **select** for NVIDIA NIM instead of a browser-dependent datalist. `nvidia/nemotron-3-super-120b-a12b` appears as **Nemotron 3 Super 120B · Recommended** and is automatically selected whenever NVIDIA NIM is chosen (including the Stage 3 Copilot's default NVIDIA provider). The selected option's full allowlisted model ID is still sent unchanged to the existing `/api/ai/byok/connect` endpoint; no new credential storage, API routes or SQL. Other BYOK providers retain their manual model ID text input. Tests cover no-typing connection, alternate NVIDIA selection and switching providers.
