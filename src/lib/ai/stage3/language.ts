@@ -31,3 +31,22 @@ export function stage3LanguagePolicy(language: ResolvedStage3Language, mode: "as
     "If a question cannot be answered from selected evidence, say so in the requested language; do not fill gaps from memory.",
   ].join("\n");
 }
+
+/** Retry only when the requested Turkish output is unmistakably English.
+ *  This is a conservative heuristic, not a natural-language classifier.
+ *  Source quotes are intentionally excluded: they MUST remain unchanged.
+ */
+export function plainlyEnglishInsteadOfTurkish(summary: string, statements: string[]): boolean {
+  const tokens = [summary, ...statements.slice(0, 4)].join(" ").toLocaleLowerCase("tr-TR")
+    .match(/[\p{L}]+/gu) ?? [];
+  if (tokens.length < 12) return false;
+  const english = new Set(["the", "and", "this", "that", "were", "was", "with", "from",
+    "source", "campaign", "based", "observed", "reported", "used", "which",
+    "including", "targeting", "technical", "sent", "files", "malware", "email"]);
+  const turkish = new Set(["ve", "bir", "bu", "ile", "olarak", "tarafından", "göre",
+    "için", "olduğu", "rapor", "kaynak", "saldırı", "saldırıyı", "yapılan", "tespit",
+    "edilen", "kullanılan", "gönderilen", "içeren", "kurumları", "e", "ait", "olan"]);
+  const englishHits = tokens.filter((word) => english.has(word)).length;
+  const turkishHits = tokens.filter((word) => turkish.has(word)).length;
+  return englishHits >= 5 && englishHits >= turkishHits * 3;
+}
