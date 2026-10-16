@@ -49,6 +49,8 @@ export type Stage3Candidate = Stage3CandidateModel & {
   candidateId: string;
   verifiedSupport: Stage3Support[];
   status: "NOT_SAVED";
+  existingMatches?: {id:string;label:string;matchType:"EXACT"|"POSSIBLE"}[];
+  matchStatus?: "CHECKED"|"UNAVAILABLE";
 };
 export type Stage3CandidateResponse = {candidates: Stage3Candidate[]; warnings:string[]; discarded:number};
 
