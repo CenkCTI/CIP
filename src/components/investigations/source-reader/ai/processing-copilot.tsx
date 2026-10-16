@@ -27,7 +27,7 @@ const SAFE_ERRORS: Record<string,string> = {
   rate_limited:"The AI usage limit was reached. Try again later.",
   provider_rate_limited:"NVIDIA has rate-limited this request.",
   nvidia_output_exhausted:"The model reached its output limit. Try a narrower question.",
-  malformed_output:"The model did not return a valid, grounded response.",
+  malformed_output:"NVIDIA could not provide valid, source-grounded JSON after a repair attempt. Try selecting 1–2 relevant pages and ask a more specific question.",
   invalid_request:"Choose a valid context and question.",
   bad_origin:"Request rejected due to origin validation.",
   request_failed:"CİTEM could not complete processing. Check the diagnostic code below.",
