@@ -28,6 +28,8 @@ describe("Stage 3 bounded contracts", () => {
     expect(stage3RequestSchema.safeParse({...req,signedUrl:"https://example.test/a.pdf"}).success).toBe(false);
     expect(stage3RequestSchema.safeParse({...req,byokConsent:false}).success).toBe(false);
     expect(stage3RequestSchema.safeParse({...req,context:{kind:"pages",pageStart:1,pageEnd:20}}).success).toBe(false);
+    expect(stage3RequestSchema.safeParse({...req,context:{kind:"document"}}).success).toBe(true);
+    expect(stage3RequestSchema.safeParse({...req,context:{kind:"document",pageStart:1,pageEnd:200}}).success).toBe(false);
     expect(stage3RequestSchema.safeParse({...req,mode:"ask"}).success).toBe(false);
   });
 
