@@ -89,4 +89,37 @@ describe("NVIDIA BYOK to Copilot send integration",()=>{
     expect(screen.getByText("The AI usage limit was reached. Try again later.")).toBeTruthy();
     expect((question as HTMLTextAreaElement).value).toBe("Why did this happen?");
   });
+  it("sends up to three same-context turns for follow-up but not after selecting another scope",async()=>{
+    let responseNumber=0;
+    fetchMock.mockImplementation(async (url:string)=>{
+      if(url==="/api/ai/byok/status")return {ok:true,json:async()=>({connected:true,enabled:true,providerId:"nvidia_nim",model})};
+      if(url===requestUrl){
+        responseNumber++;
+        return {ok:true,json:async()=>({result:{...response.result,summary:"Answer "+responseNumber}})};
+      }
+      throw Error("Unexpected fetch");
+    });
+    render(<ProcessingCopilot {...props}/>);
+    await screen.findByText("NVIDIA connected");
+    const question=screen.getByLabelText(/Ask about Page 5/);
+    const ask=screen.getByRole("button",{name:/^Ask$/});
+    fireEvent.change(question,{target:{value:"What did it report?"}});
+    fireEvent.click(ask);
+    await screen.findByText("Answer 1");
+    fireEvent.change(question,{target:{value:"What does that mean?"}});
+    fireEvent.click(ask);
+    await screen.findByText("Answer 2");
+    const calls=fetchMock.mock.calls.filter(([url])=>url===requestUrl);
+    expect(JSON.parse(String(calls[1][1].body)).history).toEqual([
+      {user:"What did it report?",assistant:"Answer 1"},
+    ]);
+
+    fireEvent.click(screen.getByLabelText(/Selected pages/));
+    fireEvent.change(screen.getByLabelText(/Ask about Pages/),{target:{value:"Summarize those pages"}});
+    fireEvent.click(ask);
+    await screen.findByText("Answer 3");
+    const updated=fetchMock.mock.calls.filter(([url])=>url===requestUrl);
+    expect(JSON.parse(String(updated[2][1].body)).history).toBeUndefined();
+  });
+
 });
