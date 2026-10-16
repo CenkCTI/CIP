@@ -13,7 +13,7 @@ export async function runStage3Processing(
 ) {
   const language = resolveStage3ResponseLanguage(input.request.question, input.request.responseLanguage);
   const messages: AiMessage[] = [
-    { role: "system", content: STAGE3_SYSTEM_POLICY + "\n" + stage3LanguagePolicy(language, input.request.mode) },
+    { role: "system", content: STAGE3_SYSTEM_POLICY + "\n" + stage3LanguagePolicy(language, input.request.mode === "extract" ? "analyse" : input.request.mode) },
     { role: "user", content: STAGE3_OUTPUT_CONTRACT +
       "\nCURRENT_ANALYST_REQUEST (the latest question to answer):\n" +
       JSON.stringify(input.request.question ?? "Analyse the selected source passage.") +
