@@ -8,8 +8,14 @@ import { useCopilotWindow } from "./use-copilot-window";
 
 type ByokStatus = {
   enabled?: boolean; connected?: boolean; state?: string;
-  providerId?: string; model?: string;
+  providerId?: string; provider?: string; model?: string;
 };
+
+/** Legacy connect responses provide provider name without a providerId. */
+export function isNvidiaByokConnection(status: ByokStatus | null): boolean {
+  return Boolean(status?.connected && (status.providerId === "nvidia_nim" ||
+    (!status.providerId && status.provider === "NVIDIA NIM")));
+}
 const SAFE_ERRORS: Record<string,string> = {
   byok_required:"Connect NVIDIA NIM to use the Copilot.",
   byok_expired:"Your NVIDIA session expired. Reconnect to continue.",
@@ -87,12 +93,16 @@ export function ProcessingCopilot({
     return context.kind === "annotation" ? {kind:"page",page:activePage} : context;
   },[context,activePage,selectedAnnotationId]);
   const onConnectionStatusChange = useCallback((next: ByokStatus) => { setByok(next); setStatusError(""); }, []);
-  const connected = Boolean(byok?.connected && byok.providerId==="nvidia_nim");
+  const connected = isNvidiaByokConnection(byok);
   const contextValid = validCopilotContext(effectiveContext,pageCount);
   const canSend = connected && contextValid && !working;
 
   async function submit(mode: "ask" | "analyse", prompt: string) {
-    if (!canSend || (mode === "ask" && !prompt.trim())) return;
+    if (!canSend || (mode === "ask" && !prompt.trim())) {
+      if (!connected) setError("Connect NVIDIA NIM before sending a message.");
+      else if (!contextValid) setError("Select a valid PDF page, text annotation or 1–10 pages.");
+      return;
+    }
     const captured=effectiveContext;
     setError("");
     setWorking(true);
