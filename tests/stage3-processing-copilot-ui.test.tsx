@@ -63,6 +63,19 @@ describe("Stage 3 Processing Copilot UI",()=>{
     expect(screen.getByText(/Enter: send/)).toBeTruthy();
   });
 
+  it("lets the analyst explicitly select Turkish while leaving the source text under server control",async()=>{
+    mockConnected();
+    render(<ProcessingCopilot {...props}/>);
+    await screen.findByText("NVIDIA connected");
+    fireEvent.change(screen.getByLabelText("Response language"),{target:{value:"tr"}});
+    fireEvent.change(screen.getByLabelText(/Ask about Page 5/),{target:{value:"Explain the passage"}});
+    fireEvent.click(screen.getByRole("button",{name:/^Ask$/}));
+    await screen.findByText("The source reports use of phishing.");
+    const post=fetchMock.mock.calls.find(([url])=>url===`/api/projects/${projectId}/ai/processing`);
+    expect(JSON.parse(post![1].body).responseLanguage).toBe("tr");
+    expect(JSON.parse(post![1].body).context).toEqual({kind:"page",page:5});
+  });
+
   it("requires NVIDIA and reuses BYOK panel, without exposing an API key input in Copilot", async()=>{
     fetchMock.mockResolvedValue({ok:true,json:async()=>({connected:false,enabled:true,state:"disconnected"})});
     render(<ProcessingCopilot {...props}/>);

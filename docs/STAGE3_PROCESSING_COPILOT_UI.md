@@ -73,3 +73,13 @@ This fix explicitly depends on the exact `@napi-rs/canvas@0.1.80` version alread
 The Stage 3 AI core CI runs `node scripts/assert-stage3-pdf-runtime.mjs` after a production build. It checks a real Node import/text-extraction of a synthetic PDF **and** asserts that the Next.js route's `.nft.json` file trace contains the PDF.js package, native canvas package and Linux native binary. This prevents a dev-only import test from concealing missing production files.
 
 After merging, **redeploy the server's latest `main`** and retry the same PDF. No SQL change or new NVIDIA key is needed. A passing build/trace probe is not itself a live Vercel or Oracle execution test; the user's production attempt remains the last acceptance gate. If the deployed runtime still fails, inspect `@napi-rs/canvas` native binary loading/platform compatibility and the full server-side exception in protected logs (never reveal credentials or source text).
+
+## Phase 2 language and task-following repair
+
+Source Reader's Copilot now supports `Response language: Auto (question) / Türkçe / English`. Auto detects Turkish from the **latest analyst question only**, not from untrusted source text or previous assistant replies. Explicit Turkish or English overrides that heuristic, including for the shortcut buttons.
+
+The trusted Stage 3 system policy requires `summary`, `evidence[].statement`, `unansweredQuestions` and `warnings` in the selected language; `evidence[].quote` and `source_token` **must remain exactly as in the original PDF** for quote verification. The latest analyst question is placed above the untrusted SOURCE_DATA block, so a question such as “bu sayfanın Türkçe özetini yaz” is not drowned out by a long English document. Source attribution remains source-reported, never promoted to an established claim.
+
+If Turkish is required and the generated natural-language explanation is unmistakably English, the server makes **at most one repair attempt**. If the model still ignores the request, the result includes an explicit warning; it does not silently translate source quotes or fabricate any evidence. Previous turns remain bounded, untrusted reference data.
+
+Regression tests cover the two Turkish questions reported by the user, manual language selection, English preference, exact English quotes in Turkish analytical prose and an English-to-Turkish retry. No schema migration or additional credential is necessary. Live NVIDIA confirmation is still required after deployment.

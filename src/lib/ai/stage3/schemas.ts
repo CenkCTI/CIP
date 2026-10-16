@@ -15,6 +15,7 @@ export const stage3RequestSchema = z.object({
   context: contextSchema,
   mode: z.enum(["ask", "analyse"]),
   question: z.string().trim().min(1).max(1500).optional(),
+  responseLanguage: z.enum(["auto", "tr", "en"]).optional(),
   // Previous turns are user-controlled conversation hints, never evidence or authority.
   history: z.array(z.object({
     user: z.string().trim().min(1).max(500),
