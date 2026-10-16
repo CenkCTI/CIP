@@ -76,8 +76,14 @@ function additionalGate(candidate: Stage3CandidateModel, evidence: Stage3Support
     if (!parsed.some((x)=>x.type === candidate.indicatorType &&
       x.observedValue.toLowerCase() === candidate.value.toLowerCase())) return false;
   }
-  if (candidate.kind === "TIMELINE" && candidate.normalizedDate &&
-    !/^\d{4}(?:-\d{2}(?:-\d{2})?)?$/.test(candidate.normalizedDate)) return false;
+  if (candidate.kind === "TIMELINE") {
+    if (candidate.sourceTimeExpression && !quoted.includes(candidate.sourceTimeExpression)) return false;
+    // Never infer an exact date from vague source wording, e.g. "summer 2023".
+    // This conservative pass permits only ISO dates literally present in the quote.
+    if (candidate.normalizedDate &&
+      (!/^\\d{4}(?:-\\d{2}(?:-\\d{2})?)?$/.test(candidate.normalizedDate) ||
+       !quoted.includes(candidate.normalizedDate))) return false;
+  }
   if (candidate.kind === "MALWARE" || candidate.kind === "THREAT_ACTOR" || candidate.kind === "CAMPAIGN") {
     if (!quoted.toLocaleLowerCase().includes(candidate.name.toLocaleLowerCase())) return false;
   }
