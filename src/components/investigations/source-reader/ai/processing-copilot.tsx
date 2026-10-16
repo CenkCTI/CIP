@@ -33,6 +33,12 @@ const SAFE_ERRORS: Record<string,string> = {
   request_failed:"Could not complete the request.",
 };
 
+export function copilotContextKey(context: CopilotContext): string {
+  if (context.kind === "annotation") return `annotation:${context.annotationId}`;
+  if (context.kind === "page") return `page:${context.page}`;
+  return `pages:${context.pageStart}-${context.pageEnd}`;
+}
+
 export function validCopilotContext(value: CopilotContext, pageCount: number | null) {
   const max = pageCount ?? 10000;
   if (value.kind === "annotation") return Boolean(value.annotationId);
@@ -104,6 +110,11 @@ export function ProcessingCopilot({
       return;
     }
     const captured=effectiveContext;
+    // Only the same selected page/annotation scope can contribute follow-up context.
+    const history=turns
+      .filter((turn)=>copilotContextKey(turn.context)===copilotContextKey(captured))
+      .slice(-3)
+      .map((turn)=>({user:turn.prompt.slice(0,500),assistant:turn.result.summary.slice(0,1000)}));
     setError("");
     setWorking(true);
     const abort=new AbortController();
@@ -114,6 +125,7 @@ export function ProcessingCopilot({
         headers:{"content-type":"application/json"},
         body:JSON.stringify({sourceId,assetId,context:captured,mode,
           ...(mode==="ask"?{question:prompt.trim().slice(0,1500)}:{}),
+          ...(history.length?{history}:{}),
           byokConsent:true}),
         signal:abort.signal,
         cache:"no-store",
@@ -217,7 +229,7 @@ export function ProcessingCopilot({
         {!contextValid ? <p role="alert" className="mb-2 text-xs text-amber-300">Select 1–10 consecutive valid pages.</p> : null}
         <div className="flex items-center justify-between gap-2">
           <p className="max-w-64 text-[10px] text-stone-500">
-            Sending will share selected source text with NVIDIA. Each question is independent; chat history stays only in memory.
+            Sending will share selected source text with NVIDIA. Only the last 3 replies from this same PDF context are sent for follow-up reference. Chat history is never saved.
           </p>
           <div className="flex gap-2">
             {working ? <button type="button" className="rounded border border-stone-600 px-3 py-2 text-xs"
