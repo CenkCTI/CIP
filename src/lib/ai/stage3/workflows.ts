@@ -1,7 +1,6 @@
 import { AiError, type AiMessage } from "@/lib/ai/client";
-import { parseAiJson } from "@/lib/ai/json";
+import { parseStage3ModelResponse } from "./response-recovery";
 import type { Stage3Request } from "./schemas";
-import { stage3ModelSchema } from "./schemas";
 import { modelFacingSpans, resolveGroundedEvidence, type Stage3Span } from "./provenance";
 import { STAGE3_OUTPUT_CONTRACT, STAGE3_SYSTEM_POLICY } from "./policy";
 import { plainlyEnglishInsteadOfTurkish, resolveStage3ResponseLanguage, stage3LanguagePolicy } from "./language";
@@ -30,14 +29,19 @@ export async function runStage3Processing(
       }),
     },
   ];
+  let bestVerified: Awaited<ReturnType<typeof groundedFallback>> | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     const raw = await chat(messages);
     try {
-      const result = parseAiJson(raw, stage3ModelSchema);
+      const parsed = parseStage3ModelResponse(raw);
+      const result = parsed.response;
       const grounded = resolveGroundedEvidence(result.evidence, input.spans);
-      if (grounded.rejected && attempt === 0) {
-        messages.push({ role: "assistant", content: raw.slice(0, 18000) });
-        messages.push({ role: "user", content: "Some citations had unknown source tokens or quotes that were not exact excerpts. Regenerate the complete JSON using ONLY exact quotations and tokens from SOURCE_DATA." });
+      const rejected = grounded.rejected + parsed.invalidEvidence;
+      if (grounded.accepted.length > 0) {
+        bestVerified = groundedFallback(grounded.accepted, rejected);
+      }
+      if (rejected && attempt === 0) {
+        messages.push({ role: "user", content: "Some evidence items had invalid fields, unknown source tokens or quotes not copied verbatim from a source token. Answer the LATEST question in strict JSON with at most FOUR evidence items, each using a SHORT exact copied quote (15-200 characters) and the correct source_token. Do not repeat unsupported items. Do not add page or UUID fields." });
         continue;
       }
       // On the first pass, retry obviously English output for an explicit
@@ -45,9 +49,8 @@ export async function runStage3Processing(
       if (language === "tr" && attempt === 0 && plainlyEnglishInsteadOfTurkish(
         result.summary, grounded.accepted.map((item) => item.statement),
       )) {
-        messages.push({ role: "assistant", content: raw.slice(0, 18000) });
         messages.push({ role: "user", content:
-          "Your previous summary and evidence statements were in English, but OUTPUT LANGUAGE is Turkish (tr-TR). Regenerate the complete JSON with summary, statement, unansweredQuestions and warnings in Turkish. Keep source_token and EXACT original-language quote substrings unchanged. Answer the CURRENT_ANALYST_REQUEST directly." });
+          "Your previous summary and evidence statements were in English, but OUTPUT LANGUAGE is Turkish (tr-TR). Regenerate the complete JSON with summary, statement, unansweredQuestions and warnings in Turkish. Keep source_token and EXACT original-language quote substrings unchanged. Answer the CURRENT_ANALYST_REQUEST directly. Include no more than four short quotes." });
         continue;
       }
       const languageWarning = language === "tr" && plainlyEnglishInsteadOfTurkish(
@@ -65,21 +68,39 @@ export async function runStage3Processing(
           evidence: [],
           unansweredQuestions: result.unansweredQuestions,
           warnings: [...result.warnings, ...languageWarning, "No source-supported statements could be verified."],
-          discarded: grounded.rejected,
+          discarded: rejected,
         };
       }
       return {
         summary: result.summary,
         evidence: grounded.accepted,
         unansweredQuestions: result.unansweredQuestions,
-        warnings: [...result.warnings, ...languageWarning, ...(grounded.rejected ? ["Unsupported AI suggestions were discarded."] : [])],
-        discarded: grounded.rejected,
+        warnings: [...result.warnings, ...languageWarning, ...(rejected ? ["Unsupported AI suggestions were discarded."] : [])],
+        discarded: rejected,
       };
     } catch {
-      if (attempt === 1) throw new AiError("malformed_output");
-      messages.push({ role: "assistant", content: raw.slice(0, 18000) });
-      messages.push({ role: "user", content: "Response was malformed. Produce exactly ONE JSON object matching the original schema, with verifiable source tokens and quotes. No markdown." });
+      if (attempt === 1) {
+        // Never discard an earlier server-verified evidence item merely because
+        // the model emitted malformed JSON on its repair attempt.
+        if (bestVerified) return bestVerified;
+        throw new AiError("malformed_output");
+      }
+      messages.push({ role: "user", content: "Your last output could not be parsed as the required JSON. Retry once using a COMPACT object with exactly summary (string), evidence (array of 1-4 objects with statement, source_token and a verbatim quote of 15-200 characters), unansweredQuestions (array) and warnings (array). Answer the analyst question directly. Source tokens must be from SOURCE_DATA. No markdown and no extra fields." });
     }
   }
+  if (bestVerified) return bestVerified;
   throw new AiError("malformed_output");
+}
+
+function groundedFallback(
+  evidence: ReturnType<typeof resolveGroundedEvidence>["accepted"],
+  discarded: number,
+) {
+  return {
+    summary: "",
+    evidence,
+    unansweredQuestions: [] as string[],
+    warnings: ["The model did not produce a complete validated response. Only previously verified source quotations are shown."],
+    discarded,
+  };
 }
