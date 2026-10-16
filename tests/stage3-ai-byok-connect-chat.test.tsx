@@ -50,7 +50,7 @@ describe("NVIDIA BYOK to Copilot send integration",()=>{
     await screen.findByText("NVIDIA not connected");
     const ask=screen.getByRole("button",{name:/^Ask$/});
     expect(ask.hasAttribute("disabled")).toBe(true);
-    fireEvent.change(screen.getByRole("textbox",{name:"BYOK model ID"}),{target:{value:model}});
+    fireEvent.change(screen.getByLabelText("BYOK model ID"),{target:{value:model}});
     fireEvent.change(screen.getByLabelText("BYOK API key"),{target:{value:"mock-ci-key-not-real"}});
     fireEvent.click(screen.getByRole("button",{name:"Test and Connect"}));
     await screen.findByText("NVIDIA connected");
