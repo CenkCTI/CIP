@@ -30,7 +30,13 @@ const SAFE_ERRORS: Record<string,string> = {
   malformed_output:"The model did not return a valid, grounded response.",
   invalid_request:"Choose a valid context and question.",
   bad_origin:"Request rejected due to origin validation.",
-  request_failed:"Could not complete the request.",
+  request_failed:"CİTEM could not complete processing. Check the diagnostic code below.",
+  provider_error:"NVIDIA rejected the generation request. Try a different allowlisted model or a smaller PDF selection.",
+  byok_unavailable:"NVIDIA BYOK is not configured on the server.",
+  provider_unreachable:"CİTEM could not reach NVIDIA.",
+  timeout:"NVIDIA request timed out; try again.",
+  stage3_not_found:"The selected source or PDF asset was not found.",
+  pdf_invalid:"The selected PDF cannot be processed.",
 };
 
 export function copilotContextKey(context: CopilotContext): string {
@@ -66,6 +72,7 @@ export function ProcessingCopilot({
   const [turns, setTurns] = useState<CopilotTurn[]>([]);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
+  const [diagnostic, setDiagnostic] = useState<{status:number;code:string;stage:string}|null>(null);
   const inFlight = useRef<AbortController|null>(null);
   const turnCounter = useRef(0);
   const mounted = useRef(true);
@@ -116,6 +123,7 @@ export function ProcessingCopilot({
       .slice(-3)
       .map((turn)=>({user:turn.prompt.slice(0,500),assistant:turn.result.summary.slice(0,1000)}));
     setError("");
+    setDiagnostic(null);
     setWorking(true);
     const abort=new AbortController();
     inFlight.current=abort;
@@ -130,8 +138,15 @@ export function ProcessingCopilot({
         signal:abort.signal,
         cache:"no-store",
       });
-      const payload=await response.json() as {result?:CopilotResult;code?:string;error?:string};
+      let payload: {result?:CopilotResult;code?:string;error?:string;stage?:string};
+      try {
+        payload = await response.json();
+      } catch {
+        setDiagnostic({status:response.status,code:"non_json_response",stage:"network"});
+        throw new Error(`CİTEM returned a non-JSON response (HTTP ${response.status}).`);
+      }
       if(!response.ok || !payload.result) {
+        setDiagnostic({status:response.status,code:payload.code ?? "invalid_response",stage:payload.stage ?? "unknown"});
         if (payload.code?.startsWith("byok_")) void refreshStatus();
         throw new Error(SAFE_ERRORS[payload.code ?? ""] ?? payload.error ?? "NVIDIA processing failed.");
       }
@@ -230,7 +245,12 @@ export function ProcessingCopilot({
           placeholder="What does this passage report?" maxLength={1500} rows={2}
           className="mt-1 w-full resize-none rounded border border-stone-700 bg-stone-950 p-2 text-sm text-white"
           disabled={working} />
-        {error ? <p role="alert" className="mb-2 text-xs text-red-300">{error}</p> : null}
+        {error ? <div role="alert" className="mb-2 space-y-1 text-xs text-red-300">
+          <p>{error}</p>
+          {diagnostic ? <p className="font-mono break-words text-red-200" data-testid="copilot-error-diagnostic">
+            HTTP {diagnostic.status} · stage={diagnostic.stage} · code={diagnostic.code}
+          </p> : null}
+        </div> : null}
         {!contextValid ? <p role="alert" className="mb-2 text-xs text-amber-300">Select 1–10 consecutive valid pages.</p> : null}
         <div className="flex items-center justify-between gap-2">
           <p className="max-w-64 text-[10px] text-stone-500">
