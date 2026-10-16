@@ -58,14 +58,14 @@ describe("NVIDIA BYOK to Copilot send integration",()=>{
     fireEvent.change(screen.getByLabelText("BYOK API key"),{target:{value:"mock-ci-key-not-real"}});
     fireEvent.click(screen.getByRole("button",{name:"Test and Connect"}));
     await screen.findByText("NVIDIA connected");
-    fireEvent.change(screen.getByLabelText(/Ask about Page 5/),{target:{value:"What does this page report?"}});
+    fireEvent.change(screen.getByLabelText(/Ask about Entire PDF/),{target:{value:"What does this page report?"}});
     await waitFor(()=>expect(ask.hasAttribute("disabled")).toBe(false));
-    fireEvent.keyDown(screen.getByLabelText(/Ask about Page 5/),{key:"Enter",code:"Enter"});
+    fireEvent.keyDown(screen.getByLabelText(/Ask about Entire PDF/),{key:"Enter",code:"Enter"});
     await screen.findByText("A source-reported fact.");
     const sent=fetchMock.mock.calls.find(([url])=>url===requestUrl);
     expect(sent).toBeTruthy();
     expect(JSON.parse(String(sent![1].body))).toEqual({
-      sourceId,assetId,context:{kind:"page",page:5},
+      sourceId,assetId,context:{kind:"document"},
       mode:"ask",question:"What does this page report?",byokConsent:true,
     });
   });
@@ -86,7 +86,7 @@ describe("NVIDIA BYOK to Copilot send integration",()=>{
     });
     render(<ProcessingCopilot {...props}/>);
     await screen.findByText("NVIDIA connected");
-    const question=screen.getByLabelText(/Ask about Page 5/);
+    const question=screen.getByLabelText(/Ask about Entire PDF/);
     fireEvent.change(question,{target:{value:"Why did this happen?"}});
     fireEvent.click(screen.getByRole("button",{name:/^Ask$/}));
     await screen.findByRole("alert");
@@ -105,7 +105,7 @@ describe("NVIDIA BYOK to Copilot send integration",()=>{
     });
     render(<ProcessingCopilot {...props}/>);
     await screen.findByText("NVIDIA connected");
-    const question=screen.getByLabelText(/Ask about Page 5/);
+    const question=screen.getByLabelText(/Ask about Entire PDF/);
     const ask=screen.getByRole("button",{name:/^Ask$/});
     fireEvent.change(question,{target:{value:"What did it report?"}});
     fireEvent.click(ask);
@@ -137,7 +137,7 @@ describe("NVIDIA BYOK to Copilot send integration",()=>{
     });
     render(<ProcessingCopilot {...props}/>);
     await screen.findByText("NVIDIA connected");
-    fireEvent.change(screen.getByLabelText(/Ask about Page 5/),{target:{value:"Explain this campaign."}});
+    fireEvent.change(screen.getByLabelText(/Ask about Entire PDF/),{target:{value:"Explain this campaign."}});
     fireEvent.click(screen.getByRole("button",{name:/^Ask$/}));
     await screen.findByText(/NVIDIA rejected the generation request/);
     expect(screen.getByTestId("copilot-error-diagnostic").textContent).toContain("HTTP 502");
@@ -155,7 +155,7 @@ describe("NVIDIA BYOK to Copilot send integration",()=>{
     });
     render(<ProcessingCopilot {...props}/>);
     await screen.findByText("NVIDIA connected");
-    fireEvent.change(screen.getByLabelText(/Ask about Page 5/),{target:{value:"Summarize."}});
+    fireEvent.change(screen.getByLabelText(/Ask about Entire PDF/),{target:{value:"Summarize."}});
     fireEvent.click(screen.getByRole("button",{name:/^Ask$/}));
     await screen.findByText(/could not complete processing/);
     const diag=screen.getByTestId("copilot-error-diagnostic").textContent ?? "";
@@ -174,7 +174,7 @@ describe("NVIDIA BYOK to Copilot send integration",()=>{
     });
     render(<ProcessingCopilot {...props}/>);
     await screen.findByText("NVIDIA connected");
-    fireEvent.change(screen.getByLabelText(/Ask about Page 5/),{target:{value:"Summarize."}});
+    fireEvent.change(screen.getByLabelText(/Ask about Entire PDF/),{target:{value:"Summarize."}});
     fireEvent.click(screen.getByRole("button",{name:/^Ask$/}));
     await screen.findByText(/non-JSON response/);
     expect(screen.getByTestId("copilot-error-diagnostic").textContent).toContain("code=non_json_response");
