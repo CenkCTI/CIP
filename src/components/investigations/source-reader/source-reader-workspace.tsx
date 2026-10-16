@@ -1144,6 +1144,7 @@ export function SourceReaderWorkspace({
                       ) : null}
                       {!legacy ? (
                         <AnnotationProcessingActions
+                          key={`${id}:${aiReview?.annotationId === id ? aiReview.candidate.candidateId : "manual"}`}
                           projectId={projectId}
                           sourceId={s(source.id)}
                           annotation={annotation}
