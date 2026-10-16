@@ -114,6 +114,7 @@ describe("NVIDIA BYOK to Copilot send integration",()=>{
       {user:"What did it report?",assistant:"Answer 1"},
     ]);
 
+    fireEvent.click(screen.getByRole("button",{name:/Change context/}));
     fireEvent.click(screen.getByLabelText(/Selected pages/));
     fireEvent.change(screen.getByLabelText(/Ask about Pages/),{target:{value:"Summarize those pages"}});
     fireEvent.click(ask);
