@@ -36,12 +36,12 @@ export function createStage3ReadContext(ctx: OwnedContext): Stage3AiReadContext 
     for (const [key, value] of Object.entries(filters)) query = query.eq(key, value);
     const { data, error } = await query.maybeSingle();
     if (error || !data) throw new Stage3ContextError("stage3_not_found");
-    return data as DataRow;
+    return data as unknown as DataRow;
   }
   async function list(table: "indicators" | "malware" | "cves" | "mitre_techniques" | "threat_actors" | "campaigns" | "source_claims" | "timeline_events", columns: string) {
     const { data, error } = await db.from(table).select(columns).eq("project_id", ctx.projectId).limit(100);
     if (error) throw new Stage3ContextError("stage3_not_found");
-    return (data ?? []) as DataRow[];
+    return (data ?? []) as unknown as DataRow[];
   }
   return {
     readSource: (id) => one("sources", "id,title,source_type", {id}),
