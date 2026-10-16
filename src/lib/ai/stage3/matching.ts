@@ -41,6 +41,7 @@ export async function findExistingCandidateMatches(
     case "SOURCE_CLAIM":table="source_claims";column="claim_summary";value=candidate.claim;matchType="POSSIBLE";break;
     default:return {matches:[],matchStatus:"CHECKED"};
   }
+  if (!table) return {matches:[],matchStatus:"CHECKED"};
   // Avoid interpolating any user/model content into PostgREST selectors or
   // SQL-like filters. Only exact values on fixed allowlisted columns.
   let query=owned.supabase.from(table).select("id").eq("project_id",owned.projectId)
