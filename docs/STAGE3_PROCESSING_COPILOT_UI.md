@@ -63,3 +63,13 @@ The API now returns a fixed `sourceStep` value only for source-stage errors:
 A PDF.js import failure is reported as `HTTP 503 · stage=source · sourceStep=pdf_extract · code=pdf_runtime_unavailable`, rather than an unclassified 500. The API and UI never include stack traces, raw backend errors, PDF text, access tokens or credentials. The user should share only HTTP status, stage, sourceStep and code.
 
 For a quick distinction before deploying this change, choose an existing text annotation as the Copilot context and retry `Analyse context`. Annotation context avoids the PDF binary download and text extraction, although it still needs source and asset metadata. This diagnostic should not be treated as a substitute for the current-head browser test.
+
+## Fix for `pdf_runtime_unavailable` on deployed server (Phase 2)
+
+A live `HTTP 503 · stage=source · sourceStep=pdf_extract · code=pdf_runtime_unavailable` indicates that server-side PDF.js could **not import** before reading the PDF. The NVIDIA connection and model are not implicated by this failure.
+
+This fix explicitly depends on the exact `@napi-rs/canvas@0.1.80` version already used transitively by `pdfjs-dist@5.4.296`. PDF.js 5's Node legacy runtime imports canvas for DOMMatrix and other globals; merely using `getTextContent` can still require it. `next.config.ts` now marks both PDF.js and canvas as server externals and explicitly traces PDF.js assets plus Linux native canvas binaries for the nested Stage 3 API route. Browser PDF UI code is unchanged.
+
+The Stage 3 AI core CI runs `node scripts/assert-stage3-pdf-runtime.mjs` after a production build. It checks a real Node import/text-extraction of a synthetic PDF **and** asserts that the Next.js route's `.nft.json` file trace contains the PDF.js package, native canvas package and Linux native binary. This prevents a dev-only import test from concealing missing production files.
+
+After merging, **redeploy the server's latest `main`** and retry the same PDF. No SQL change or new NVIDIA key is needed. A passing build/trace probe is not itself a live Vercel or Oracle execution test; the user's production attempt remains the last acceptance gate. If the deployed runtime still fails, inspect `@napi-rs/canvas` native binary loading/platform compatibility and the full server-side exception in protected logs (never reveal credentials or source text).
