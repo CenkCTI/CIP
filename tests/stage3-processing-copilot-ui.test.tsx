@@ -47,7 +47,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
     mockConnected();
     render(<ProcessingCopilot {...props}/>);
     await screen.findByText("NVIDIA connected");
-    const question=screen.getByLabelText(/Ask about Page 5/);
+    const question=screen.getByLabelText(/Ask about Entire PDF/);
     fireEvent.change(question,{target:{value:"What does this source report?"}});
     fireEvent.click(screen.getByRole("button",{name:/^Ask$/}));
     await screen.findByText("The source reports use of phishing.");
@@ -55,7 +55,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
     expect(sent).toBeTruthy();
     expect(sent![1].headers).toMatchObject({"content-type":"application/json"});
     const body=JSON.parse(sent![1].body);
-    expect(body).toEqual({sourceId,assetId,context:{kind:"page",page:5},
+    expect(body).toEqual({sourceId,assetId,context:{kind:"document"},
       mode:"ask",question:"What does this source report?",byokConsent:true});
     expect(JSON.stringify(body)).not.toMatch(/apiKey|signedUrl|selectedText/);
     fireEvent.click(screen.getByText("Source excerpts · 1"));
@@ -69,12 +69,12 @@ describe("Stage 3 Processing Copilot UI",()=>{
     render(<ProcessingCopilot {...props}/>);
     await screen.findByText("NVIDIA connected");
     fireEvent.change(screen.getByLabelText("Response language"),{target:{value:"tr"}});
-    fireEvent.change(screen.getByLabelText(/Ask about Page 5/),{target:{value:"Explain the passage"}});
+    fireEvent.change(screen.getByLabelText(/Ask about Entire PDF/),{target:{value:"Explain the passage"}});
     fireEvent.click(screen.getByRole("button",{name:/^Ask$/}));
     await screen.findByText("The source reports use of phishing.");
     const post=fetchMock.mock.calls.find(([url])=>url===`/api/projects/${projectId}/ai/processing`);
     expect(JSON.parse(post![1].body).responseLanguage).toBe("tr");
-    expect(JSON.parse(post![1].body).context).toEqual({kind:"page",page:5});
+    expect(JSON.parse(post![1].body).context).toEqual({kind:"document"});
   });
 
   it("uses a compact context bar, hides evidence by default and retains CİTEM branding",async()=>{
@@ -86,13 +86,15 @@ describe("Stage 3 Processing Copilot UI",()=>{
     expect(dialog.className).toContain("var(--line)");
     expect(screen.getByText("CİTEM / COPILOT")).toBeTruthy();
     expect(screen.getByText("Test PDF")).toBeTruthy();
+    expect(screen.getByText(/Entire PDF · 15 pages/)).toBeTruthy();
     expect(screen.getByRole("button",{name:/Change context/}).getAttribute("aria-expanded")).toBe("false");
     expect(screen.queryByLabelText(/Selected pages/)).toBeNull();
     fireEvent.click(screen.getByRole("button",{name:/Change context/}));
     expect(screen.getByLabelText(/Selected pages/)).toBeTruthy();
+    expect((screen.getByLabelText(/Entire PDF/) as HTMLInputElement).checked).toBe(true);
     fireEvent.click(screen.getByRole("button",{name:/Hide context/}));
     expect(screen.queryByLabelText(/Selected pages/)).toBeNull();
-    fireEvent.change(screen.getByLabelText(/Ask about Page 5/),{target:{value:"Please explain"}});
+    fireEvent.change(screen.getByLabelText(/Ask about Entire PDF/),{target:{value:"Please explain"}});
     fireEvent.click(screen.getByRole("button",{name:/^Ask$/}));
     await screen.findByText("The source reports use of phishing.");
     const source=screen.getByText("Source excerpts · 1").closest("details");
@@ -101,6 +103,19 @@ describe("Stage 3 Processing Copilot UI",()=>{
     fireEvent.click(screen.getByText("Source excerpts · 1"));
     expect(source?.open).toBe(true);
     expect(screen.getByRole("button",{name:"Go to PDF page 5"})).toBeTruthy();
+  });
+
+  it("switches the default full PDF to the currently displayed page when the analyst requests it",async()=>{
+    mockConnected();
+    render(<ProcessingCopilot {...props}/>);
+    await screen.findByText("NVIDIA connected");
+    fireEvent.click(screen.getByRole("button",{name:/Change context/}));
+    fireEvent.click(screen.getByLabelText(/Current page/));
+    fireEvent.change(screen.getByLabelText(/Ask about Page 5/),{target:{value:"Explain just this page"}});
+    fireEvent.click(screen.getByRole("button",{name:/^Ask$/}));
+    await screen.findByText("The source reports use of phishing.");
+    const sent=fetchMock.mock.calls.find(([url])=>url===`/api/projects/${projectId}/ai/processing`);
+    expect(JSON.parse(sent![1].body).context).toEqual({kind:"page",page:5});
   });
 
   it("requires NVIDIA and reuses BYOK panel, without exposing an API key input in Copilot", async()=>{
@@ -153,6 +168,8 @@ describe("Window and integration hardening",()=>{
     const geometry=clampCopilotGeometry({x:9999,y:9999,width:6000,height:5000,
       docked:false,minimized:false},1280,800);
     expect(geometry).toMatchObject({x:24,y:24,width:1256,height:776});
+    expect(validCopilotContext({kind:"document"},null)).toBe(true);
+    expect(validCopilotContext({kind:"document"},500)).toBe(true);
     expect(validCopilotContext({kind:"pages",pageStart:2,pageEnd:11},20)).toBe(true);
     expect(validCopilotContext({kind:"pages",pageStart:2,pageEnd:12},20)).toBe(false);
     expect(validCopilotContext({kind:"page",page:21},20)).toBe(false);
