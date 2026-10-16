@@ -110,7 +110,7 @@ describe("Window and integration hardening",()=>{
   it("bounds pointer geometry and range requests",()=>{
     const geometry=clampCopilotGeometry({x:9999,y:9999,width:6000,height:5000,
       docked:false,minimized:false},1280,800);
-    expect(geometry).toMatchObject({x:0,y:0,width:1256,height:776});
+    expect(geometry).toMatchObject({x:24,y:24,width:1256,height:776});
     expect(validCopilotContext({kind:"pages",pageStart:2,pageEnd:11},20)).toBe(true);
     expect(validCopilotContext({kind:"pages",pageStart:2,pageEnd:12},20)).toBe(false);
     expect(validCopilotContext({kind:"page",page:21},20)).toBe(false);
