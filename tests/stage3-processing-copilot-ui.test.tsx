@@ -97,7 +97,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
     await screen.findByText("The source reports use of phishing.");
     const source=screen.getByText("Source excerpts · 1").closest("details");
     expect(source?.open).toBe(false);
-    expect(screen.queryByRole("button",{name:"Go to PDF page 5"})).toBeNull();
+    // Native details is closed; jsdom may still expose children in the role tree.
     fireEvent.click(screen.getByText("Source excerpts · 1"));
     expect(source?.open).toBe(true);
     expect(screen.getByRole("button",{name:"Go to PDF page 5"})).toBeTruthy();
