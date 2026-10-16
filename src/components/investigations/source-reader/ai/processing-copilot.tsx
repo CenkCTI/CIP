@@ -42,6 +42,7 @@ const SAFE_ERRORS: Record<string,string> = {
 };
 
 export function copilotContextKey(context: CopilotContext): string {
+  if (context.kind === "document") return "document";
   if (context.kind === "annotation") return `annotation:${context.annotationId}`;
   if (context.kind === "page") return `page:${context.page}`;
   return `pages:${context.pageStart}-${context.pageEnd}`;
@@ -49,6 +50,7 @@ export function copilotContextKey(context: CopilotContext): string {
 
 export function validCopilotContext(value: CopilotContext, pageCount: number | null) {
   const max = pageCount ?? 10000;
+  if (value.kind === "document") return true;
   if (value.kind === "annotation") return Boolean(value.annotationId);
   if (value.kind === "page") return Number.isInteger(value.page) && value.page >= 1 && value.page <= max;
   return Number.isInteger(value.pageStart) && Number.isInteger(value.pageEnd)
@@ -69,7 +71,7 @@ export function ProcessingCopilot({
   const [byok, setByok] = useState<ByokStatus | null>(null);
   const [statusError, setStatusError] = useState("");
   const [showConnection, setShowConnection] = useState(false);
-  const [context, setContext] = useState<CopilotContext>({kind:"page",page:1});
+  const [context, setContext] = useState<CopilotContext>({kind:"document"});
   const [question, setQuestion] = useState("");
   const [responseLanguage, setResponseLanguage] = useState<"auto" | "tr" | "en">("auto");
   const [turns, setTurns] = useState<CopilotTurn[]>([]);
@@ -116,7 +118,7 @@ export function ProcessingCopilot({
   async function submit(mode: "ask" | "analyse", prompt: string) {
     if (!canSend || (mode === "ask" && !prompt.trim())) {
       if (!connected) setError("Connect NVIDIA NIM before sending a message.");
-      else if (!contextValid) setError("Select a valid PDF page, text annotation or 1–10 pages.");
+      else if (!contextValid) setError("Select the entire PDF, a valid PDF page, a text annotation or 1–10 consecutive pages.");
       return;
     }
     const captured=effectiveContext;
