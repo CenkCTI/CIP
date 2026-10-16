@@ -8,6 +8,10 @@ on:
       - "src/app/api/projects/**/ai/processing/**"
       - "supabase/migrations/202610160062_stage3_processing_ai_usage.sql"
       - "tests/stage3-ai-processing-core.test.ts"
+      - "scripts/assert-stage3-pdf-runtime.mjs"
+      - "next.config.ts"
+      - "package.json"
+      - "package-lock.json"
       - ".github/workflows/stage3-ai-core-validation.yml"
   push:
     branches: [feat/stage3-ai-processing-core]
@@ -40,3 +44,5 @@ jobs:
         run: npm test
       - name: Next.js production build
         run: npm run build
+      - name: PDF.js native import, extraction and traced serverless runtime smoke
+        run: node scripts/assert-stage3-pdf-runtime.mjs
