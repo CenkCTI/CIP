@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { loadStage3DocumentContext, type Stage3AiReadContext, type Stage3SourceStep } from "@/lib/ai/stage3/context";
 import { stage3RequestSchema } from "@/lib/ai/stage3/schemas";
 import { readFileSync } from "node:fs";
+import { PDFDocument, StandardFonts } from "pdf-lib";
 
 const sourceId="49429515-bc04-4539-ae53-69f0b47157cb";
 const assetId="49429615-bc04-4539-ae53-69f0b47157cb";
@@ -45,6 +46,26 @@ describe("Stage 3 source runtime triage",()=>{
     await expect(loadStage3DocumentContext(reader(),request,(step)=>{steps.push(step);}))
       .rejects.toMatchObject({code:"pdf_invalid"});
     expect(steps).toEqual(["read_source","read_asset","pdf_download","pdf_extract"]);
+  });
+
+  it("passes the entire PDF through server-owned extraction and preserves every page citation",async()=>{
+    const doc=await PDFDocument.create();
+    const font=await doc.embedFont(StandardFonts.Helvetica);
+    for(let page=1;page<=12;page++)doc.addPage([500,700])
+      .drawText(`Official source page ${page} text`,{x:30,y:600,font,size:12});
+    const bytes=Uint8Array.from(await doc.save()).buffer;
+    const full=stage3RequestSchema.parse({
+      sourceId,assetId,context:{kind:"document"},mode:"analyse",byokConsent:true,
+    });
+    const steps:Stage3SourceStep[]=[];
+    const result=await loadStage3DocumentContext(reader({
+      downloadOriginalPdf:vi.fn().mockResolvedValue(bytes),
+    }),full,(step)=>{steps.push(step);});
+    expect([...new Set(result.spans.map((span)=>span.page))]).toEqual(
+      Array.from({length:12},(_,i)=>i+1));
+    expect(result.spans.at(-1)?.token).toBe("DOC_P012_C01");
+    expect(steps).toEqual(["read_source","read_asset","pdf_download","pdf_extract","span_build"]);
+    expect(JSON.stringify(result.spans)).not.toContain("owned/test.pdf");
   });
 
   it("records a separate annotation source step without requiring PDF extraction",async()=>{

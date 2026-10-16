@@ -97,15 +97,17 @@ export async function loadStage3DocumentContext(
       kind: "ANNOTATION", sourceId: request.sourceId, assetId: request.assetId, annotationId: selection.annotationId,
     }];
   } else {
-    const selected = selection.kind === "page"
-      ? [selection.page]
-      : Array.from({length: selection.pageEnd - selection.pageStart + 1}, (_, i) => selection.pageStart + i);
+    const selected = selection.kind === "document"
+      ? "all" as const
+      : selection.kind === "page"
+        ? [selection.page]
+        : Array.from({length: selection.pageEnd - selection.pageStart + 1}, (_, i) => selection.pageStart + i);
     onStep?.("pdf_download");
     const originalPdf = await reader.downloadOriginalPdf(String(asset.storage_path));
     onStep?.("pdf_extract");
     const pages = await extractPdfPages(originalPdf, selected);
     const total = pages.reduce((count, page) => count + page.text.length, 0);
-    const cap = selection.kind === "page" ? 25_000 : 60_000;
+    const cap = selection.kind === "page" ? 25_000 : selection.kind === "document" ? 45_000 : 60_000;
     if (total > cap) throw new Stage3ContextError("context_too_large");
     onStep?.("span_build");
     spans = documentSpans(pages, request.sourceId, request.assetId);

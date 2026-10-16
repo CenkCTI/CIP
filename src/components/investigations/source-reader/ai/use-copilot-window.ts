@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useState, type PointerEvent } from "react";
 
-export const COPILOT_WINDOW_KEY = "citem:stage3-ai-window:v1";
+// v2 intentionally resets the previous cramped 440px floating geometry once.
+export const COPILOT_WINDOW_KEY = "citem:stage3-ai-window:v2";
 export type CopilotGeometry = {
   x: number; y: number; width: number; height: number;
   docked: boolean; minimized: boolean;
 };
-const DEFAULT: CopilotGeometry = { x: 64, y: 72, width: 440, height: 620, docked: false, minimized: false };
+// Chat-first desktop layout; geometry is still bounded by the available viewport.
+const DEFAULT: CopilotGeometry = { x: 48, y: 48, width: 660, height: 780, docked: false, minimized: false };
 
 export function clampCopilotGeometry(value: CopilotGeometry, viewportWidth: number, viewportHeight: number): CopilotGeometry {
   const width = Math.min(Math.max(360, value.width), Math.max(360, viewportWidth - 24));
@@ -24,7 +26,7 @@ function readSaved(): CopilotGeometry {
     const raw = window.sessionStorage.getItem(COPILOT_WINDOW_KEY);
     const input = raw ? JSON.parse(raw) as Partial<CopilotGeometry> : null;
     if (!input || ![input.x,input.y,input.width,input.height].every((v) => typeof v === "number" && Number.isFinite(v))) {
-      return clampCopilotGeometry({ ...DEFAULT, x: window.innerWidth - 464 }, window.innerWidth, window.innerHeight);
+      return clampCopilotGeometry({ ...DEFAULT, x: window.innerWidth - DEFAULT.width - 24 }, window.innerWidth, window.innerHeight);
     }
     return clampCopilotGeometry({
       x: input.x!, y: input.y!, width: input.width!, height: input.height!,
@@ -89,7 +91,7 @@ export function useCopilotWindow() {
   const style = mobile
     ? { left: 0, top: 0, width: "100vw", height: "100dvh" }
     : geometry.docked
-      ? { right: 0, top: 64, width: Math.min(440, windowSafeWidth() - 12), height: geometry.minimized ? 56 : "calc(100dvh - 64px)" }
+      ? { right: 0, top: 64, width: Math.min(620, windowSafeWidth() - 12), height: geometry.minimized ? 56 : "calc(100dvh - 64px)" }
       : { left: geometry.x, top: geometry.y, width: geometry.width, height: geometry.minimized ? 56 : geometry.height };
   return { geometry, mobile, style, setDocked, setMinimized, startPointer };
 }
