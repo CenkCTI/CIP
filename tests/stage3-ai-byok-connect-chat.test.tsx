@@ -33,6 +33,7 @@ function connectAfterDisconnected() {
     if (url==="/api/ai/byok/connect") {
       const body=JSON.parse(String(options?.body));
       expect(body.providerId).toBe("nvidia_nim");
+      expect(body.model).toBe(model);
       expect(body.scope).toBe("user");
       expect(body.consent).toBe(true);
       // Replicates the legacy API response without providerId that previously disabled Ask.
@@ -50,7 +51,10 @@ describe("NVIDIA BYOK to Copilot send integration",()=>{
     await screen.findByText("NVIDIA not connected");
     const ask=screen.getByRole("button",{name:/^Ask$/});
     expect(ask.hasAttribute("disabled")).toBe(true);
-    fireEvent.change(screen.getByLabelText("BYOK model ID"),{target:{value:model}});
+    const modelSelect=screen.getByLabelText("BYOK model ID") as HTMLSelectElement;
+    expect(modelSelect.tagName).toBe("SELECT");
+    expect(modelSelect.value).toBe(model);
+    expect(screen.getByRole("option",{name:/Nemotron 3 Super 120B · Recommended/})).toBeTruthy();
     fireEvent.change(screen.getByLabelText("BYOK API key"),{target:{value:"mock-ci-key-not-real"}});
     fireEvent.click(screen.getByRole("button",{name:"Test and Connect"}));
     await screen.findByText("NVIDIA connected");
