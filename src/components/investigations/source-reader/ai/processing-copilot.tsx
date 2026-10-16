@@ -37,6 +37,7 @@ const SAFE_ERRORS: Record<string,string> = {
   timeout:"NVIDIA request timed out; try again.",
   stage3_not_found:"The selected source or PDF asset was not found.",
   pdf_invalid:"The selected PDF cannot be processed.",
+  pdf_runtime_unavailable:"The server cannot load the PDF extraction engine. Check deployment dependencies.",
 };
 
 export function copilotContextKey(context: CopilotContext): string {
@@ -72,7 +73,7 @@ export function ProcessingCopilot({
   const [turns, setTurns] = useState<CopilotTurn[]>([]);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
-  const [diagnostic, setDiagnostic] = useState<{status:number;code:string;stage:string}|null>(null);
+  const [diagnostic, setDiagnostic] = useState<{status:number;code:string;stage:string;sourceStep?:string}|null>(null);
   const inFlight = useRef<AbortController|null>(null);
   const turnCounter = useRef(0);
   const mounted = useRef(true);
@@ -138,7 +139,7 @@ export function ProcessingCopilot({
         signal:abort.signal,
         cache:"no-store",
       });
-      let payload: {result?:CopilotResult;code?:string;error?:string;stage?:string};
+      let payload: {result?:CopilotResult;code?:string;error?:string;stage?:string;sourceStep?:string};
       try {
         payload = await response.json();
       } catch {
@@ -146,7 +147,7 @@ export function ProcessingCopilot({
         throw new Error(`CİTEM returned a non-JSON response (HTTP ${response.status}).`);
       }
       if(!response.ok || !payload.result) {
-        setDiagnostic({status:response.status,code:payload.code ?? "invalid_response",stage:payload.stage ?? "unknown"});
+        setDiagnostic({status:response.status,code:payload.code ?? "invalid_response",stage:payload.stage ?? "unknown",sourceStep:payload.sourceStep});
         if (payload.code?.startsWith("byok_")) void refreshStatus();
         throw new Error(SAFE_ERRORS[payload.code ?? ""] ?? payload.error ?? "NVIDIA processing failed.");
       }
@@ -248,7 +249,7 @@ export function ProcessingCopilot({
         {error ? <div role="alert" className="mb-2 space-y-1 text-xs text-red-300">
           <p>{error}</p>
           {diagnostic ? <p className="font-mono break-words text-red-200" data-testid="copilot-error-diagnostic">
-            HTTP {diagnostic.status} · stage={diagnostic.stage} · code={diagnostic.code}
+            HTTP {diagnostic.status} · stage={diagnostic.stage}{diagnostic.sourceStep ? ` · sourceStep=${diagnostic.sourceStep}` : ""} · code={diagnostic.code}
           </p> : null}
         </div> : null}
         {!contextValid ? <p role="alert" className="mb-2 text-xs text-amber-300">Select 1–10 consecutive valid pages.</p> : null}
