@@ -34,6 +34,7 @@ function responseError(error: unknown, stage: Stage3FailureStage, sourceStep?: S
     pdf_invalid:[422,"The PDF could not be processed."],
     pdf_runtime_unavailable:[503,"Server-side PDF extraction is unavailable. Check PDF.js runtime dependencies in the deployment."],
     pdf_too_large:[413,"PDF exceeds the server limit."],
+    pdf_document_too_large:[413,"The entire PDF exceeds the safe analysis limit (200 pages or 45,000 extracted characters). Choose a smaller page range."],
     context_too_large:[413,"Selected source text is too large. Select fewer pages."],
     bad_origin:[403,"Invalid request origin."],
     json_required:[415,"A JSON request is required."],
