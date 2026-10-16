@@ -25,7 +25,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Copilot UI integration tests
-        run: npm test -- tests/stage3-processing-copilot-ui.test.tsx
+        run: npm test -- tests/stage3-processing-copilot-ui.test.tsx tests/stage3-ai-byok-connect-chat.test.tsx tests/stage3-ai-processing-core.test.ts
       - name: Source Reader and PDF state regression tests
         run: npm test -- tests/stage3-source-reader-processing.test.ts tests/pdf-source-viewer-state.test.ts tests/byok-connection-panel.test.tsx
       - run: npm run lint
