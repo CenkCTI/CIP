@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import type { Stage3Candidate } from "@/lib/ai/stage3/candidates";
 import { useRouter } from "next/navigation";
 
@@ -449,23 +449,19 @@ export function AnnotationProcessingActions({
   const router = useRouter();
   const state = (text(annotation.processing_state) ||
     "UNPROCESSED") as AnnotationProcessingState;
-  const [open, setOpen] = useState(false);
-  useEffect(()=>{
-    if(!aiCandidate)return;
-    const destinations:Record<Stage3Candidate["kind"],SourceReaderDestination>={
+  const destinationForSuggestion = (candidate:Stage3Candidate | null | undefined):SourceReaderDestination => {
+    if(!candidate)return "timeline";
+    const kinds:Record<Stage3Candidate["kind"],SourceReaderDestination>={
       SOURCE_CLAIM:"source_claim",INDICATOR:"indicator",TIMELINE:"timeline",
       MALWARE:"malware",CVE:"cve",MITRE:"mitre",THREAT_ACTOR:"actor",CAMPAIGN:"campaign",
       ATTRIBUTION_CLAIM:"attribution_claim",UNANSWERED_QUESTION:"source_claim",
     };
-    setDestination(destinations[aiCandidate.kind]);
-    setOrigin("AI_SUGGESTED");
-    setOpen(true);
-  },[aiCandidate]);
-  const [destination, setDestination] = useState<SourceReaderDestination>(
-    "timeline",
-  );
+    return kinds[candidate.kind];
+  };
+  const [open, setOpen] = useState(Boolean(aiCandidate));
+  const [destination, setDestination] = useState<SourceReaderDestination>(()=>destinationForSuggestion(aiCandidate));
   const [selectedTarget, setSelectedTarget] = useState("");
-  const [origin, setOrigin] = useState<MappingOrigin>("SOURCE_EXPLICIT");
+  const [origin, setOrigin] = useState<MappingOrigin>(aiCandidate ? "AI_SUGGESTED" : "SOURCE_EXPLICIT");
   const [ignoreOpen, setIgnoreOpen] = useState(false);
   const [ignoreReason, setIgnoreReason] = useState("");
   const [pending, startTransition] = useTransition();
