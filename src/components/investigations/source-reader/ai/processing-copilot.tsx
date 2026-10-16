@@ -178,109 +178,116 @@ export function ProcessingCopilot({
   return <section
     role="dialog" aria-label="AI Processing Copilot" aria-modal="false"
     data-testid="stage3-processing-copilot"
-    className="fixed z-[70] flex flex-col overflow-hidden border border-amber-900/60 bg-[#101519] text-stone-100 shadow-2xl shadow-black/70 md:rounded-xl"
+    className="fixed z-[70] flex flex-col overflow-hidden border border-[var(--line)] bg-[var(--surface-panel)] text-[var(--foreground)] shadow-[0_24px_72px_rgba(0,0,0,0.65)] md:rounded-lg"
     style={windowState.style}
   >
-    <header className="flex touch-none select-none items-center justify-between border-b border-stone-800 bg-[#182026] px-3 py-3"
-      onPointerDown={(event)=>windowState.startPointer(event,"drag")}
-      aria-label="Drag Copilot window">
-      <div className="min-w-0">
-        <p className="truncate text-xs font-semibold tracking-widest text-amber-300">◈ AI PROCESSING COPILOT</p>
-        <p className="max-w-64 truncate text-[11px] text-stone-400">
-          NVIDIA NIM {connected && byok?.model ? `· ${byok.model}` : "· disconnected"}
-        </p>
+    <header className="flex min-h-14 touch-none select-none items-center justify-between gap-3 border-b border-[var(--line-neutral)] bg-[var(--surface-raised)] px-4"
+      onPointerDown={(event)=>windowState.startPointer(event,"drag")} aria-label="Drag Copilot window">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <div aria-hidden="true" className="grid h-8 w-8 shrink-0 place-items-center rounded border border-[var(--line)] bg-[var(--amber-tint)] text-lg text-[var(--amber-soft)]">✦</div>
+        <div className="min-w-0">
+          <p className="truncate text-xs font-semibold tracking-[0.16em] text-[var(--amber-soft)]">CİTEM / COPILOT</p>
+          <p className="flex items-center gap-1.5 truncate text-[11px] text-[var(--muted-strong)]"
+            title={connected && byok?.model ? byok.model : "NVIDIA NIM"}>
+            <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${connected ? "bg-[var(--success)]" : "bg-[var(--danger)]"}`}/>
+            {connected ? "NVIDIA connected" : statusError || "NVIDIA not connected"}
+          </p>
+        </div>
       </div>
-      <div className="flex shrink-0 items-center gap-1">
-        {!windowState.mobile ? <button type="button" className="rounded px-2 py-1 text-xs hover:bg-stone-700"
+      <div className="flex shrink-0 items-center gap-1 text-[var(--muted-strong)]">
+        <button type="button" title="NVIDIA connection settings" aria-label="BYOK settings"
+          className="rounded px-2 py-1.5 text-[11px] text-[var(--amber-soft)] hover:bg-[var(--amber-tint)]"
+          onClick={()=>{setShowConnection((v)=>!v);void refreshStatus();}}>
+          {showConnection ? "Hide settings" : "BYOK"}
+        </button>
+        {!windowState.mobile ? <button type="button" className="rounded px-2 py-1.5 text-xs hover:bg-[var(--amber-tint)]"
           aria-label={windowState.geometry.minimized?"Restore Copilot":"Minimize Copilot"}
-          onClick={windowState.setMinimized}>{windowState.geometry.minimized?"▢":"—"}</button> : null}
-        {!windowState.mobile ? <button type="button" className="rounded px-2 py-1 text-xs hover:bg-stone-700"
+          onClick={windowState.setMinimized}>{windowState.geometry.minimized?"▢":"−"}</button> : null}
+        {!windowState.mobile ? <button type="button" className="rounded px-2 py-1.5 text-[11px] hover:bg-[var(--amber-tint)]"
           aria-label={windowState.geometry.docked?"Undock Copilot":"Dock Copilot"}
           onClick={windowState.setDocked}>{windowState.geometry.docked?"Float":"Dock"}</button> : null}
-        <button type="button" className="rounded px-2 py-1 text-sm hover:bg-stone-700"
+        <button type="button" className="rounded px-2 py-1.5 text-base hover:bg-[var(--amber-tint)]"
           aria-label="Close Copilot" onClick={onClose}>×</button>
       </div>
     </header>
     {!isMinimized ? <>
-      <div className="flex items-center justify-between border-b border-stone-800 px-4 py-2 text-xs">
-        <span className={connected?"text-emerald-300":"text-amber-300"}>
-          {connected?"NVIDIA connected":statusError||"NVIDIA not connected"}
-        </span>
-        <button type="button" className="text-amber-300 underline"
-          onClick={()=>{setShowConnection((v)=>!v);void refreshStatus();}}>
-          {showConnection?"Hide connection":"BYOK settings"}
-        </button>
-      </div>
-      {!connected || showConnection ? <div className="max-h-[45%] overflow-auto px-3 py-3">
+      {!connected || showConnection ? <div className="max-h-[45%] shrink-0 overflow-y-auto border-b border-[var(--line-neutral)] bg-[var(--surface-input)] px-4 py-3">
         <ByokConnectionPanel scope="user" defaultProviderId="nvidia_nim" autoLoad={true}
-          onStatusChange={onConnectionStatusChange} />
-        {!connected ? <p className="mt-2 text-xs text-amber-300">
-          Select NVIDIA NIM and an allowlisted model. Other BYOK providers cannot run Stage 3 Processing.
+          onStatusChange={onConnectionStatusChange}/>
+        {!connected ? <p className="mt-2 text-xs text-[var(--amber-soft)]">
+          Choose an NVIDIA NIM model to enable source processing.
         </p> : null}
       </div> : null}
       <CopilotContextSelector context={effectiveContext} onChange={setContext}
         annotationId={selectedAnnotationId} activePage={activePage}
-        totalPages={pageCount} sourceTitle={sourceTitle} />
-      <div className="flex flex-wrap items-center gap-2 border-b border-stone-800 px-4 py-2 text-xs">
-        <label htmlFor="stage3-copilot-response-language" className="text-stone-300">Response language</label>
+        totalPages={pageCount} sourceTitle={sourceTitle}/>
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line-neutral)] px-4 py-2">
+        <label htmlFor="stage3-copilot-response-language" className="sr-only">Response language</label>
         <select id="stage3-copilot-response-language" value={responseLanguage}
           onChange={(event)=>setResponseLanguage(event.currentTarget.value as "auto" | "tr" | "en")}
-          className="rounded border border-stone-700 bg-stone-950 p-1 text-amber-200">
-          <option value="auto">Auto (question)</option>
+          className="min-h-8 rounded border border-[var(--line)] bg-[var(--surface-input)] px-2 text-xs text-[var(--foreground)]"
+          title="Response language">
+          <option value="auto">Auto language</option>
           <option value="tr">Türkçe</option>
           <option value="en">English</option>
         </select>
-        <button type="button" disabled={!canSend} onClick={()=>void submit("analyse","")}
-          className="rounded bg-amber-800/60 px-3 py-1.5 text-amber-100 disabled:opacity-40">
-          Analyse context
-        </button>
-        <button type="button" disabled={!canSend}
-          onClick={()=>void submit("ask","Explain this passage and its technical terminology using source evidence.")}
-          className="rounded border border-stone-700 px-3 py-1.5 disabled:opacity-40">Explain passage</button>
-        <span className="text-stone-500" title="Structured candidate extraction is planned for Phase 3">Extract candidates · Phase 3</span>
+        <div className="ml-auto flex items-center gap-2">
+          <button type="button" disabled={!canSend} onClick={()=>void submit("analyse","")}
+            className="rounded border border-[var(--amber-dark)] bg-[var(--amber-tint)] px-3 py-1.5 text-xs font-medium text-[var(--amber-soft)] hover:bg-[var(--amber-glow)] disabled:opacity-40">
+            Analyse context
+          </button>
+          <button type="button" disabled={!canSend}
+            onClick={()=>void submit("ask","Explain this passage and its technical terminology using source evidence.")}
+            className="rounded border border-[var(--line)] px-3 py-1.5 text-xs text-[var(--muted-strong)] hover:border-[var(--line-hover)] hover:text-[var(--foreground)] disabled:opacity-40">
+            Explain passage
+          </button>
+        </div>
       </div>
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto" aria-label="Copilot chat history">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto bg-[var(--surface)]"
+        aria-label="Copilot chat history">
         <CopilotChat turns={turns} onNavigate={onNavigate}/>
       </div>
-      <form onSubmit={onSubmit} className="border-t border-stone-800 p-3">
-        <label htmlFor="stage3-copilot-question" className="text-xs text-stone-400">
+      <form onSubmit={onSubmit}
+        className="shrink-0 border-t border-[var(--line)] bg-[var(--surface-panel)] px-4 pb-3 pt-3">
+        <label htmlFor="stage3-copilot-question"
+          className="mb-1.5 block text-xs font-medium text-[var(--muted-strong)]">
           Ask about {contextTitle(effectiveContext)}
         </label>
-        <textarea id="stage3-copilot-question" value={question}
-          onChange={(event)=>setQuestion(event.currentTarget.value)}
-          onKeyDown={(event)=>{
-            if(event.key==="Enter" && !event.shiftKey && !event.nativeEvent.isComposing){
-              event.preventDefault();void submit("ask",question);
-            }
-          }}
-          placeholder="What does this passage report?" maxLength={1500} rows={2}
-          className="mt-1 w-full resize-none rounded border border-stone-700 bg-stone-950 p-2 text-sm text-white"
-          disabled={working} />
-        {error ? <div role="alert" className="mb-2 space-y-1 text-xs text-red-300">
-          <p>{error}</p>
-          {diagnostic ? <p className="font-mono break-words text-red-200" data-testid="copilot-error-diagnostic">
-            HTTP {diagnostic.status} · stage={diagnostic.stage}{diagnostic.sourceStep ? ` · sourceStep=${diagnostic.sourceStep}` : ""} · code={diagnostic.code}
-          </p> : null}
-        </div> : null}
-        {!contextValid ? <p role="alert" className="mb-2 text-xs text-amber-300">Select 1–10 consecutive valid pages.</p> : null}
-        <div className="flex items-center justify-between gap-2">
-          <p className="max-w-64 text-[10px] text-stone-500">
-            Sending will share selected source text with NVIDIA. Enter: send · Shift+Enter: new line. Last 3 replies from this context support follow-ups; chat is never saved.
-          </p>
-          <div className="flex gap-2">
-            {working ? <button type="button" className="rounded border border-stone-600 px-3 py-2 text-xs"
+        <div className="flex items-end gap-2 rounded-lg border border-[var(--line)] bg-[var(--surface-input)] p-2 focus-within:border-[var(--line-hover)]">
+          <textarea id="stage3-copilot-question" value={question}
+            onChange={(event)=>setQuestion(event.currentTarget.value)}
+            onKeyDown={(event)=>{
+              if(event.key==="Enter" && !event.shiftKey && !event.nativeEvent.isComposing){
+                event.preventDefault();void submit("ask",question);
+              }
+            }}
+            placeholder="Ask a question about the selected source…" maxLength={1500} rows={3}
+            className="max-h-40 min-h-16 w-full flex-1 resize-y bg-transparent px-1.5 py-1 text-sm leading-relaxed text-[var(--foreground)] outline-none placeholder:text-[var(--muted)]"
+            disabled={working}/>
+          <div className="flex shrink-0 flex-col gap-1">
+            {working ? <button type="button" className="rounded border border-[var(--line)] px-3 py-2 text-xs text-[var(--muted-strong)]"
               onClick={()=>{inFlight.current?.abort();setWorking(false);}}>Cancel</button> : null}
             <button type="submit" disabled={!canSend || !question.trim()}
-              className="rounded bg-amber-700 px-4 py-2 text-xs font-semibold text-white disabled:opacity-40">
+              className="rounded border border-[var(--amber-strong)] bg-[var(--amber-strong)] px-4 py-2 text-xs font-semibold text-[#171106] hover:bg-[var(--amber-soft)] disabled:opacity-40">
               {working?"Asking…":"Ask"}
             </button>
           </div>
         </div>
+        {error ? <div role="alert" className="mt-2 space-y-1 text-xs text-[var(--danger)]">
+          <p>{error}</p>
+          {diagnostic ? <p className="break-words font-mono" data-testid="copilot-error-diagnostic">
+            HTTP {diagnostic.status} · stage={diagnostic.stage}{diagnostic.sourceStep ? ` · sourceStep=${diagnostic.sourceStep}` : ""} · code={diagnostic.code}
+          </p> : null}
+        </div> : null}
+        {!contextValid ? <p role="alert" className="mt-2 text-xs text-[var(--danger)]">Select 1–10 consecutive valid pages.</p> : null}
+        <p className="mt-2 text-[11px] text-[var(--muted)]">
+          Enter: send · Shift+Enter: new line · Source text shared with NVIDIA · No saved chat history
+        </p>
       </form>
     </> : null}
     {!windowState.mobile && !windowState.geometry.docked && !isMinimized
       ? <div role="separator" aria-label="Resize Copilot" title="Drag to resize"
-          className="absolute bottom-0 right-0 h-5 w-5 cursor-nwse-resize touch-none border-b-2 border-r-2 border-amber-700"
+          className="absolute bottom-0 right-0 h-5 w-5 cursor-nwse-resize touch-none border-b-2 border-r-2 border-[var(--amber)]"
           onPointerDown={(event)=>windowState.startPointer(event,"resize")}/> : null}
   </section>;
 }
