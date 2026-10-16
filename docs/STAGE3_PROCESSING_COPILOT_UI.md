@@ -31,3 +31,16 @@ At creation GitHub still showed **PR #63 Phase 1 open, not merged into main**. P
 ## BYOK-to-send fix
 
 The original BYOK connect endpoint returned `connected`, `provider` and `model` but omitted `providerId`; the Copilot required `providerId === "nvidia_nim"` to enable Ask. This PR updates the server connect response and existing panel to expose the stable ID, and accepts the exact `NVIDIA NIM` display name only when ID is absent for backward compatibility. `tests/stage3-ai-byok-connect-chat.test.tsx` exercises the real connection panel and subsequent POST on the same screen, including a legacy connect response.
+
+## Diagnosing live request failures (Phase 2 fix)
+
+If the Copilot displays an error, the UI now includes **HTTP status**, a coarse **stage**, and a public **code**. Neither the UI nor logs reveal the NVIDIA API key, the Supabase error body, the source content, or raw provider responses.
+
+- `stage=source`: verify the selected asset is a READY original PDF, source ownership, source-assets Storage access and extractable PDF text.
+- `stage=quota`: inspect the Stage 3 AI usage quota migration `202610160062_stage3_processing_ai_usage.sql` and authenticated RPC grants.
+- `stage=nvidia`, `code=provider_error`: NVIDIA rejected the **generation** request even though the lightweight BYOK connection test may have succeeded. Try a different allowlisted NVIDIA model or a smaller page selection; inspect server-side provider status, never reveal secrets.
+- `stage=byok`: verify BYOK cookie binding, expiry and supported model.
+- `code=request_failed`: unexpected server failure. Review CITEM server logs near the request for the sanitized `stage3_processing_failure` stage marker; use HTTP status/stage/code to locate the failing subsystem, not to infer an exact exception.
+- `code=non_json_response`: the server or gateway returned a non-JSON error; inspect deployment/network logs.
+
+The generic UI message alone cannot prove which failure occurred. Use the **Network** tab's POST `/api/projects/[id]/ai/processing` status and JSON body to identify the specific issue, and share only `status`, `code`, `stage` (never keys/cookies/PDF private content). This fix is limited to error classification and visibility. Live NVIDIA smoke is still required to establish production correctness.
