@@ -5,9 +5,10 @@ const nextConfig: NextConfig = {
   // outside the Next.js server bundler. Browser PDF viewing is unaffected.
   serverExternalPackages: ["pdfjs-dist", "@napi-rs/canvas"],
   outputFileTracingIncludes: {
-    // Explicitly target the nested App Router endpoint. The previous
-    // "/api/projects/*" pattern did not reliably cover this route.
-    "/api/projects/[id]/ai/processing": [
+    // Use a wildcard for the dynamic [id] segment. Picomatch treats bare
+    // brackets as a character class, so an unescaped literal "[id]" fails
+    // to match the route key and Next.js silently omits traced native files.
+    "/api/projects/*/ai/processing": [
       "./node_modules/pdfjs-dist/legacy/build/**/*",
       "./node_modules/pdfjs-dist/standard_fonts/**/*",
       "./node_modules/pdfjs-dist/cmaps/**/*",
