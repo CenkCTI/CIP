@@ -71,8 +71,8 @@ export function ProcessingCopilot({
   },[]);
   useEffect(() => {
     mounted.current=true;
-    void refreshStatus();
-    return () => {mounted.current=false; inFlight.current?.abort();};
+    const timer=window.setTimeout(() => {void refreshStatus();},0);
+    return () => {window.clearTimeout(timer);mounted.current=false; inFlight.current?.abort();};
   },[refreshStatus]);
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; },[turns]);
   useEffect(() => {
