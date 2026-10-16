@@ -109,8 +109,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     try {
       stage = "nvidia";
-      const result = await runStage3Processing({request,...context},
-        (messages) => byokChat("nvidia_nim", credential.model, credential.apiKey, messages,"generation"));
+      const result = request.mode === "extract"
+        ? await runStage3CandidateExtraction(context,
+            (messages) => byokChat("nvidia_nim", credential.model, credential.apiKey, messages,"generation"))
+        : await runStage3Processing({request,...context},
+            (messages) => byokChat("nvidia_nim", credential.model, credential.apiKey, messages,"generation"));
       await owned.supabase.rpc("complete_ai_usage_event",{
         p_event_id:eventId,p_status:"SUCCEEDED",p_output_chars:JSON.stringify(result).length,
       });
