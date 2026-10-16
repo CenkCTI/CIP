@@ -44,3 +44,22 @@ If the Copilot displays an error, the UI now includes **HTTP status**, a coarse 
 - `code=non_json_response`: the server or gateway returned a non-JSON error; inspect deployment/network logs.
 
 The generic UI message alone cannot prove which failure occurred. Use the **Network** tab's POST `/api/projects/[id]/ai/processing` status and JSON body to identify the specific issue, and share only `status`, `code`, `stage` (never keys/cookies/PDF private content). This fix is limited to error classification and visibility. Live NVIDIA smoke is still required to establish production correctness.
+
+## Phase 2 source-stage HTTP 500 triage
+
+An error such as `HTTP 500 · stage=source · code=request_failed` means source context preparation failed before the usage quota and NVIDIA request stages. It does **not** demonstrate a bad NVIDIA key or model. That broad stage formerly covered several operations.
+
+The API now returns a fixed `sourceStep` value only for source-stage errors:
+
+| sourceStep | Operation |
+|---|---|
+| `read_source` | Fetch owned source metadata |
+| `read_asset` | Fetch the owned PDF asset metadata |
+| `read_annotation` | Fetch the selected text annotation |
+| `pdf_download` | Download original PDF from project Storage |
+| `pdf_extract` | Load PDF.js and extract selected PDF text |
+| `span_build` | Chunk extracted text for citation grounding |
+
+A PDF.js import failure is reported as `HTTP 503 · stage=source · sourceStep=pdf_extract · code=pdf_runtime_unavailable`, rather than an unclassified 500. The API and UI never include stack traces, raw backend errors, PDF text, access tokens or credentials. The user should share only HTTP status, stage, sourceStep and code.
+
+For a quick distinction before deploying this change, choose an existing text annotation as the Copilot context and retry `Analyse context`. Annotation context avoids the PDF binary download and text extraction, although it still needs source and asset metadata. This diagnostic should not be treated as a substitute for the current-head browser test.

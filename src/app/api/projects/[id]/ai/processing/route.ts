@@ -8,7 +8,7 @@ import { validateProviderModel } from "@/lib/ai/byok/providers";
 import { noStore, readJsonLimited, validateOrigin } from "@/lib/ai/byok/security";
 import { getAiConfig } from "@/lib/ai/config";
 import { requireOwnedProject } from "@/lib/projects/ownership";
-import { Stage3ContextError, createStage3ReadContext, loadStage3DocumentContext } from "@/lib/ai/stage3/context";
+import { Stage3ContextError, createStage3ReadContext, loadStage3DocumentContext, type Stage3SourceStep } from "@/lib/ai/stage3/context";
 import { Stage3PdfError } from "@/lib/ai/stage3/pdf-text";
 import { modelFacingSpans } from "@/lib/ai/stage3/provenance";
 import { stage3RequestSchema } from "@/lib/ai/stage3/schemas";
@@ -20,8 +20,9 @@ export const dynamic = "force-dynamic";
 export type Stage3FailureStage = "request" | "ownership" | "byok" | "source" | "quota" | "nvidia";
 
 /** Public diagnostics contain only fixed enum values; never raw Supabase/NVIDIA error details. */
-function responseError(error: unknown, stage: Stage3FailureStage) {
-  if (error instanceof z.ZodError) return noStore({code:"invalid_request",error:"Invalid processing request.",stage},{status:400});
+function responseError(error: unknown, stage: Stage3FailureStage, sourceStep?: Stage3SourceStep) {
+  const detail = stage === "source" && sourceStep ? {sourceStep} : {};
+  if (error instanceof z.ZodError) return noStore({code:"invalid_request",error:"Invalid processing request.",stage,...detail},{status:400});
   const code = error instanceof Stage3ContextError || error instanceof Stage3PdfError || error instanceof AiError
     ? error.code
     : error instanceof Error ? error.message : "request_failed";
@@ -31,6 +32,7 @@ function responseError(error: unknown, stage: Stage3FailureStage) {
     pdf_text_unavailable:[422,"No extractable text found. OCR is not enabled."],
     pdf_page_out_of_range:[422,"Selected page is outside this document."],
     pdf_invalid:[422,"The PDF could not be processed."],
+    pdf_runtime_unavailable:[503,"Server-side PDF extraction is unavailable. Check PDF.js runtime dependencies in the deployment."],
     pdf_too_large:[413,"PDF exceeds the server limit."],
     context_too_large:[413,"Selected source text is too large. Select fewer pages."],
     bad_origin:[403,"Invalid request origin."],
@@ -53,17 +55,18 @@ function responseError(error: unknown, stage: Stage3FailureStage) {
     timeout:[504,"NVIDIA request timed out."],
     provider_unreachable:[502,"NVIDIA is unavailable."],
   };
-  if (code === "Investigation not found") return noStore({code:"not_found",error:"Investigation not found.",stage},{status:404});
-  if (code === "byok_not_configured" || code === "byok_unavailable") return noStore({code:"byok_unavailable",error:"BYOK is not configured.",stage},{status:503});
+  if (code === "Investigation not found") return noStore({code:"not_found",error:"Investigation not found.",stage,...detail},{status:404});
+  if (code === "byok_not_configured" || code === "byok_unavailable") return noStore({code:"byok_unavailable",error:"BYOK is not configured.",stage,...detail},{status:503});
   const [status,message] = errors[code] ?? [500,"Processing request failed."];
   const publicCode = errors[code] ? code : "request_failed";
   // Log only fixed diagnostic labels; raw error strings may expose internal data.
-  if (publicCode === "request_failed") console.error("stage3_processing_failure", {stage,code:publicCode});
-  return noStore({code:publicCode,error:message,stage},{status});
+  if (publicCode === "request_failed") console.error("stage3_processing_failure", {stage,sourceStep,code:publicCode});
+  return noStore({code:publicCode,error:message,stage,...detail},{status});
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   let stage: Stage3FailureStage = "request";
+  let sourceStep: Stage3SourceStep | undefined;
   try {
     validateOrigin(req);
     const { id } = await params;
@@ -79,7 +82,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!validateProviderModel("nvidia_nim",credential.model)) throw new AiError("unsupported_model");
     // Verify the BYOK credential before performing expensive PDF extraction.
     stage = "source";
-    const context = await loadStage3DocumentContext(createStage3ReadContext(owned), request);
+    const context = await loadStage3DocumentContext(
+      createStage3ReadContext(owned), request, (step) => { sourceStep = step; },
+    );
 
     const inputChars = JSON.stringify({
       title:context.sourceTitle,
@@ -118,6 +123,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       throw e;
     }
   } catch (error) {
-    return responseError(error,stage);
+    return responseError(error,stage,sourceStep);
   }
 }
