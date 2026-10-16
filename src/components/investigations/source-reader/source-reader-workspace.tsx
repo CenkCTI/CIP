@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { extractDocxPlainText, isDocxFile } from "@/lib/collection/docx-preview";
 import { PdfSourceViewer } from "@/components/investigations/source-reader/pdf/pdf-source-viewer";
 import { ProcessingCopilot } from "@/components/investigations/source-reader/ai/processing-copilot";
+import type { Stage3Candidate } from "@/lib/ai/stage3/candidates";
 import { AnnotationProcessingActions } from "@/components/investigations/source-reader/annotation-processing-actions";
 
 import {
@@ -555,6 +556,8 @@ export function SourceReaderWorkspace({
     initialFocusedAnnotationId ?? null,
   );
   const [copilotOpen, setCopilotOpen] = useState(false);
+  const [aiReview, setAiReview] = useState<{annotationId:string;candidate:Stage3Candidate}|null>(null);
+  const [aiReviewNotice, setAiReviewNotice] = useState("");
   const [activePdfPage, setActivePdfPage] = useState(1);
   const [pdfPageCount, setPdfPageCount] = useState<number | null>(null);
   const [copilotPageJump, setCopilotPageJump] = useState<{page:number;nonce:number}|null>(null);
@@ -1149,6 +1152,7 @@ export function SourceReaderWorkspace({
                           outputs={annProcessingOutputs.get(id) ?? []}
                           sourceClaimAssertions={annSourceClaimAssertions.get(id) ?? []}
                           options={processingOptions}
+                          aiCandidate={aiReview?.annotationId === id ? aiReview.candidate : null}
                           compact={!expanded}
                         />
                       ) : null}
@@ -1210,6 +1214,7 @@ export function SourceReaderWorkspace({
                     </article>
                   );
                 })}
+                {aiReviewNotice ? <p role="status" className="mb-3 rounded border border-amber-800/50 bg-amber-950/10 p-2 text-xs text-amber-300">{aiReviewNotice}</p> : null}
                 {!liveAnnotations.length ? (
                   <p className="text-xs text-stone-600">Henüz işaretleme yok.</p>
                 ) : null}
@@ -1233,6 +1238,33 @@ export function SourceReaderWorkspace({
           activePage={activePdfPage}
           pageCount={pdfPageCount}
           onClose={() => setCopilotOpen(false)}
+          onReviewCandidate={(candidate)=>{
+            const sources=candidate.verifiedSupport.filter((evidence)=>
+              evidence.provenance.sourceId===s(source.id) &&
+              evidence.provenance.assetId===s(asset.id));
+            const matching=liveAnnotations.find((annotation)=>sources.some((evidence)=>{
+              if(s(annotation.anchor_kind)!=="TEXT" || !s(annotation.selected_text).trim()) return false;
+              const normalize=(input:string)=>input.normalize("NFKC").replace(/\\s+/g," ").trim();
+              const excerpt=normalize(evidence.quote);
+              const selected=normalize(s(annotation.selected_text));
+              const samePage=evidence.page===null || Number(annotation.page_number)===evidence.page;
+              return samePage && excerpt.length>=8 && selected.includes(excerpt);
+            }));
+            const chosen=matching ?? liveAnnotations.find((annotation)=>
+              sources.some((evidence)=>evidence.provenance.annotationId===s(annotation.id)));
+            const page=sources[0]?.page;
+            if(page) setCopilotPageJump({page,nonce:Date.now()});
+            setPanel("annotations");
+            if(chosen){
+              setFocusedAnnotationId(s(chosen.id));
+              setExpandedAnnotationId(s(chosen.id));
+              setAiReview({annotationId:s(chosen.id),candidate});
+              setAiReviewNotice("AI candidate transferred to the existing Process / Extract form. Review before creating or linking any record.");
+            } else {
+              setAiReview(null);
+              setAiReviewNotice("No matching text annotation exists. Select and annotate the quoted passage on the PDF, then review the AI candidate. No record was created.");
+            }
+          }}
           onNavigate={(page, annotationId) => {
             setCopilotPageJump({ page, nonce: Date.now() });
             if (annotationId && liveAnnotations.some((annotation) => s(annotation.id) === annotationId)) {
