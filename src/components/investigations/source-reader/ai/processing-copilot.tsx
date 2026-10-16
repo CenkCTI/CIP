@@ -222,6 +222,11 @@ export function ProcessingCopilot({
         </label>
         <textarea id="stage3-copilot-question" value={question}
           onChange={(event)=>setQuestion(event.currentTarget.value)}
+          onKeyDown={(event)=>{
+            if(event.key==="Enter" && !event.shiftKey && !event.nativeEvent.isComposing){
+              event.preventDefault();void submit("ask",question);
+            }
+          }}
           placeholder="What does this passage report?" maxLength={1500} rows={2}
           className="mt-1 w-full resize-none rounded border border-stone-700 bg-stone-950 p-2 text-sm text-white"
           disabled={working} />
@@ -229,7 +234,7 @@ export function ProcessingCopilot({
         {!contextValid ? <p role="alert" className="mb-2 text-xs text-amber-300">Select 1–10 consecutive valid pages.</p> : null}
         <div className="flex items-center justify-between gap-2">
           <p className="max-w-64 text-[10px] text-stone-500">
-            Sending will share selected source text with NVIDIA. Only the last 3 replies from this same PDF context are sent for follow-up reference. Chat history is never saved.
+            Sending will share selected source text with NVIDIA. Enter: send · Shift+Enter: new line. Last 3 replies from this context support follow-ups; chat is never saved.
           </p>
           <div className="flex gap-2">
             {working ? <button type="button" className="rounded border border-stone-600 px-3 py-2 text-xs"
