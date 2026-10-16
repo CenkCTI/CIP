@@ -65,7 +65,7 @@ export function ByokConnectionPanel({ scope, onStatusChange, initialStatus, auto
             <option key={m} value={m}>{modelOptionLabel(m)}</option>)}
         </select> : <input aria-label="BYOK model ID" list={`${id}-models`}
           value={model} onChange={(e) => setModel(e.target.value)} maxLength={120}
-          pattern="[A-Za-z0-9._:/+\\-]+" placeholder="Explicit supported model"
+          pattern="[A-Za-z0-9._:/+-]+" placeholder="Explicit supported model"
           className="mt-1 w-full rounded bg-slate-950 p-2 text-white" />}
         {!isNvidiaNim ? <datalist id={`${id}-models`}>
           {(selectedProvider?.modelAllowlist ?? []).map((m) => <option key={m} value={m} />)}
