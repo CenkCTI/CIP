@@ -35,7 +35,10 @@ function responseError(error: unknown) {
     body_too_large:[413,"Request is too large."],
     byok_required:[401,"Connect NVIDIA NIM before processing."],
     byok_expired:[401,"NVIDIA BYOK session expired."],
-    byok_binding_mismatch:[401,"BYOK session is not valid for this user."],\n    invalid_byok_cookie:[401,"Reconnect NVIDIA NIM before processing."],\n    key_rejected:[401,"NVIDIA rejected the BYOK credential."],\n    provider_forbidden:[403,"NVIDIA provider access was denied."],
+    byok_binding_mismatch:[401,"BYOK session is not valid for this user."],
+    invalid_byok_cookie:[401,"Reconnect NVIDIA NIM before processing."],
+    key_rejected:[401,"NVIDIA rejected the BYOK credential."],
+    provider_forbidden:[403,"NVIDIA provider access was denied."],
     byok_consent_required:[400,"Explicit BYOK consent is required."],
     unsupported_provider:[400,"Stage 3 currently requires NVIDIA NIM."],
     unsupported_model:[400,"The NVIDIA model is not approved."],
@@ -59,12 +62,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const request = stage3RequestSchema.parse(await readJsonLimited(req, 20_480));
     const owned = await requireOwnedProject(id);
     if (!byokEnabled()) throw new Error("byok_unavailable");
-    const context = await loadStage3DocumentContext(createStage3ReadContext(owned), request);
     const cookie = (await cookies()).get(BYOK_COOKIE)?.value;
     if (!cookie) throw new AiError("byok_required");
     const credential = decryptCredential(cookie, {kind:"user",id:owned.user.id});
     if (credential.providerId !== "nvidia_nim") throw new AiError("unsupported_provider");
     if (!validateProviderModel("nvidia_nim",credential.model)) throw new AiError("unsupported_model");
+    // Verify the BYOK credential before performing expensive PDF extraction.
+    const context = await loadStage3DocumentContext(createStage3ReadContext(owned), request);
 
     const inputChars = JSON.stringify({
       title:context.sourceTitle,
