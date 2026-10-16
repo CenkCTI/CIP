@@ -58,6 +58,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
     expect(body).toEqual({sourceId,assetId,context:{kind:"page",page:5},
       mode:"ask",question:"What does this source report?",byokConsent:true});
     expect(JSON.stringify(body)).not.toMatch(/apiKey|signedUrl|selectedText/);
+    fireEvent.click(screen.getByText("Source excerpts · 1"));
     fireEvent.click(screen.getByRole("button",{name:"Go to PDF page 5"}));
     expect(props.onNavigate).toHaveBeenCalledWith(5,undefined);
     expect(screen.getByText(/Enter: send/)).toBeTruthy();
@@ -76,6 +77,32 @@ describe("Stage 3 Processing Copilot UI",()=>{
     expect(JSON.parse(post![1].body).context).toEqual({kind:"page",page:5});
   });
 
+  it("uses a compact context bar, hides evidence by default and retains CİTEM branding",async()=>{
+    mockConnected();
+    render(<ProcessingCopilot {...props}/>);
+    await screen.findByText("NVIDIA connected");
+    const dialog=screen.getByRole("dialog",{name:"AI Processing Copilot"});
+    expect(dialog.className).toContain("var(--surface-panel)");
+    expect(dialog.className).toContain("var(--line)");
+    expect(screen.getByText("CİTEM / COPILOT")).toBeTruthy();
+    expect(screen.getByText("Test PDF")).toBeTruthy();
+    expect(screen.getByRole("button",{name:/Change context/}).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByLabelText(/Selected pages/)).toBeNull();
+    fireEvent.click(screen.getByRole("button",{name:/Change context/}));
+    expect(screen.getByLabelText(/Selected pages/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button",{name:/Hide context/}));
+    expect(screen.queryByLabelText(/Selected pages/)).toBeNull();
+    fireEvent.change(screen.getByLabelText(/Ask about Page 5/),{target:{value:"Please explain"}});
+    fireEvent.click(screen.getByRole("button",{name:/^Ask$/}));
+    await screen.findByText("The source reports use of phishing.");
+    const source=screen.getByText("Source excerpts · 1").closest("details");
+    expect(source?.open).toBe(false);
+    expect(screen.queryByRole("button",{name:"Go to PDF page 5"})).toBeNull();
+    fireEvent.click(screen.getByText("Source excerpts · 1"));
+    expect(source?.open).toBe(true);
+    expect(screen.getByRole("button",{name:"Go to PDF page 5"})).toBeTruthy();
+  });
+
   it("requires NVIDIA and reuses BYOK panel, without exposing an API key input in Copilot", async()=>{
     fetchMock.mockResolvedValue({ok:true,json:async()=>({connected:false,enabled:true,state:"disconnected"})});
     render(<ProcessingCopilot {...props}/>);
@@ -90,6 +117,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
     mockConnected();
     render(<ProcessingCopilot {...props}/>);
     await screen.findByText("NVIDIA connected");
+    fireEvent.click(screen.getByRole("button",{name:/Change context/}));
     fireEvent.click(screen.getByLabelText(/Current annotation/));
     fireEvent.click(screen.getByRole("button",{name:"Analyse context"}));
     await screen.findByText("The source reports use of phishing.");
@@ -113,6 +141,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
         provenance:{sourceId,assetId,annotationId}}]}}]} onNavigate={onNavigate}/>);
     const item=within(screen.getByTestId("copilot-turn"));
     expect(item.getByText("phishing was reported")).toBeTruthy();
+    fireEvent.click(item.getByText("Source excerpts · 1"));
     fireEvent.click(item.getByRole("button",{name:"Go to PDF page 5"}));
     expect(onNavigate).toHaveBeenCalledWith(5,annotationId);
     expect(item.queryByText(/Save Candidate|Create Indicator/)).toBeNull();
