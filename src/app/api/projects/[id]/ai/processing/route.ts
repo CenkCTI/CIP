@@ -14,6 +14,7 @@ import { modelFacingSpans } from "@/lib/ai/stage3/provenance";
 import { stage3RequestSchema } from "@/lib/ai/stage3/schemas";
 import { runStage3Processing } from "@/lib/ai/stage3/workflows";
 import { runStage3CandidateExtraction } from "@/lib/ai/stage3/candidate-workflow";
+import { attachStage3CandidateMatches } from "@/lib/ai/stage3/matching";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
