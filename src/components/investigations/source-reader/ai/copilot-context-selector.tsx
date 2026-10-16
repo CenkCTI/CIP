@@ -3,11 +3,13 @@
 import { useState, type ChangeEvent } from "react";
 
 export type CopilotContext =
+  | { kind: "document" }
   | { kind: "annotation"; annotationId: string }
   | { kind: "page"; page: number }
   | { kind: "pages"; pageStart: number; pageEnd: number };
 
 export function contextTitle(context: CopilotContext) {
+  if (context.kind === "document") return "Entire PDF";
   if (context.kind === "annotation") return "Current annotation";
   if (context.kind === "page") return `Page ${context.page}`;
   return `Pages ${context.pageStart}–${context.pageEnd}`;
@@ -37,7 +39,7 @@ export function CopilotContextSelector({
       <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--amber-strong)]" />
       <div className="min-w-0 flex-1">
         <p className="truncate text-xs font-medium text-[var(--foreground)]" title={sourceTitle}>{sourceTitle}</p>
-        <p className="text-[11px] text-[var(--muted-strong)]">{contextTitle(context)} · source only</p>
+        <p className="text-[11px] text-[var(--muted-strong)]">{contextTitle(context)}{context.kind === "document" && totalPages ? ` · ${totalPages} pages` : ""} · source only</p>
       </div>
       <button type="button" aria-expanded={expanded} aria-controls="citem-copilot-context-options"
         className="shrink-0 rounded border border-[var(--line)] px-2.5 py-1.5 text-xs text-[var(--amber-soft)] hover:border-[var(--line-hover)] hover:bg-[var(--amber-tint)]"
@@ -49,6 +51,11 @@ export function CopilotContextSelector({
       className="space-y-3 border-t border-[var(--line-neutral)] bg-[var(--surface-input)] px-4 py-3 text-xs text-[var(--foreground)]">
       <legend className="sr-only">AI context</legend>
       <div className="flex flex-wrap gap-x-5 gap-y-2">
+        <label className="flex cursor-pointer items-center gap-2">
+          <input type="radio" name="copilot-context" checked={context.kind === "document"}
+            onChange={() => onChange({kind:"document"})} />
+          Entire PDF {totalPages ? `· ${totalPages} pages` : ""}
+        </label>
         <label className="flex cursor-pointer items-center gap-2">
           <input type="radio" name="copilot-context" disabled={!annotationId}
             checked={context.kind === "annotation"}
@@ -80,7 +87,7 @@ export function CopilotContextSelector({
         <span className="text-[var(--muted)]">Up to 10 pages</span>
       </div> : null}
       {invalidRange ? <p role="alert" className="text-[var(--danger)]">Choose 1–10 consecutive pages.</p> : null}
-      <p className="text-[11px] text-[var(--muted)]">Document-wide and Investigation-wide contexts are not enabled yet.</p>
+      <p className="text-[11px] text-[var(--muted)]">Entire PDF uses every extractable page. Very long or scanned PDFs may require selecting fewer pages; Investigation-wide context is not enabled.</p>
     </fieldset> : null}
   </section>;
 }
