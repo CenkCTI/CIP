@@ -1,0 +1,39 @@
+name: Stage 3 AI Copilot UI validation
+
+on:
+  pull_request:
+    branches:
+      - main
+      - feat/stage3-ai-processing-core
+  push:
+    branches:
+      - feat/stage3-ai-floating-copilot-ui
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stage3-ai-ui-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Copilot targeted tests
+        run: npm test -- tests/stage3-ai-floating-copilot.test.tsx tests/stage3-ai-processing-core.test.ts tests/stage3-ai-pdf-text.test.ts
+      - name: ESLint
+        run: npm run lint
+      - name: TypeScript typecheck
+        run: npm run typecheck
+      - name: All unit tests
+        run: npm test
+      - name: Next.js production build
+        run: npm run build
