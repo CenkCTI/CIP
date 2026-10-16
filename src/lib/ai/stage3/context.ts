@@ -8,6 +8,8 @@ import { extractPdfPages } from "./pdf-text";
 type OwnedContext = Awaited<ReturnType<typeof requireOwnedProject>>;
 type DataRow = Record<string, unknown>;
 
+export type Stage3SourceStep = "read_source" | "read_asset" | "read_annotation" | "pdf_download" | "pdf_extract" | "span_build";
+
 export class Stage3ContextError extends Error {
   constructor(public code: "stage3_not_found" | "context_too_large" | "unsupported_asset" | "pdf_text_unavailable") {
     super(code);
@@ -64,8 +66,14 @@ export function createStage3ReadContext(ctx: OwnedContext): Stage3AiReadContext 
   };
 }
 
-export async function loadStage3DocumentContext(reader: Stage3AiReadContext, request: Stage3Request) {
+export async function loadStage3DocumentContext(
+  reader: Stage3AiReadContext,
+  request: Stage3Request,
+  onStep?: (step: Stage3SourceStep) => void,
+) {
+  onStep?.("read_source");
   const source = await reader.readSource(request.sourceId);
+  onStep?.("read_asset");
   const asset = await reader.readAsset(request.sourceId, request.assetId);
   if (asset.asset_role !== "ORIGINAL" || asset.state !== "READY" ||
       typeof asset.storage_path !== "string" || !asset.storage_path ||
@@ -79,6 +87,7 @@ export async function loadStage3DocumentContext(reader: Stage3AiReadContext, req
   const selection = request.context;
   let spans: Stage3Span[];
   if (selection.kind === "annotation") {
+    onStep?.("read_annotation");
     const annotation = await reader.readAnnotation(request.sourceId, request.assetId, selection.annotationId);
     const text = String(annotation.selected_text ?? "").trim();
     if (!text) throw new Stage3ContextError("pdf_text_unavailable");
@@ -91,10 +100,14 @@ export async function loadStage3DocumentContext(reader: Stage3AiReadContext, req
     const selected = selection.kind === "page"
       ? [selection.page]
       : Array.from({length: selection.pageEnd - selection.pageStart + 1}, (_, i) => selection.pageStart + i);
-    const pages = await extractPdfPages(await reader.downloadOriginalPdf(String(asset.storage_path)), selected);
+    onStep?.("pdf_download");
+    const originalPdf = await reader.downloadOriginalPdf(String(asset.storage_path));
+    onStep?.("pdf_extract");
+    const pages = await extractPdfPages(originalPdf, selected);
     const total = pages.reduce((count, page) => count + page.text.length, 0);
     const cap = selection.kind === "page" ? 25_000 : 60_000;
     if (total > cap) throw new Stage3ContextError("context_too_large");
+    onStep?.("span_build");
     spans = documentSpans(pages, request.sourceId, request.assetId);
   }
   if (!spans.length) throw new Stage3ContextError("pdf_text_unavailable");
