@@ -74,7 +74,7 @@ export function ProcessingCopilot({
     void refreshStatus();
     return () => {mounted.current=false; inFlight.current?.abort();};
   },[refreshStatus]);
-  useEffect(() => { scrollRef.current?.scrollTo({ top:scrollRef.current.scrollHeight, behavior:"smooth" }); },[turns]);
+  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; },[turns]);
   useEffect(() => {
     const handler=(e:KeyboardEvent)=>{if(e.key==="Escape")onClose();};
     document.addEventListener("keydown",handler);
