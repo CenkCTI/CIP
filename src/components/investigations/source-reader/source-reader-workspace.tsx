@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { extractDocxPlainText, isDocxFile } from "@/lib/collection/docx-preview";
 import { PdfSourceViewer } from "@/components/investigations/source-reader/pdf/pdf-source-viewer";
+import { ProcessingCopilot } from "@/components/investigations/source-reader/ai/processing-copilot";
 import { AnnotationProcessingActions } from "@/components/investigations/source-reader/annotation-processing-actions";
 
 import {
@@ -553,6 +554,10 @@ export function SourceReaderWorkspace({
   const [focusedAnnotationId, setFocusedAnnotationId] = useState<string | null>(
     initialFocusedAnnotationId ?? null,
   );
+  const [copilotOpen, setCopilotOpen] = useState(false);
+  const [activePdfPage, setActivePdfPage] = useState(1);
+  const [pdfPageCount, setPdfPageCount] = useState<number | null>(null);
+  const [copilotPageJump, setCopilotPageJump] = useState<{page:number;nonce:number}|null>(null);
   const [editingComment, setEditingComment] = useState("");
   const [editingGapIds, setEditingGapIds] = useState<string[]>([]);
   const [editingRequirementIds, setEditingRequirementIds] = useState<string[]>([]);
@@ -741,6 +746,10 @@ export function SourceReaderWorkspace({
               Kaynak URL'si
             </a>
           ) : null}
+          {isPdf && asset && signedUrl ? (
+            <button type="button" className="citem-button" aria-label="Open AI Processing Copilot"
+              onClick={() => setCopilotOpen(true)}>◈ AI Copilot</button>
+          ) : null}
           {isPdf && asset ? <AnnotatedPdfDownloadButton projectId={projectId} sourceId={s(source.id)} /> : null}
         </div>
       </header>
@@ -786,6 +795,9 @@ export function SourceReaderWorkspace({
               defaultGapIds={sourceGapIds}
               defaultRequirementIds={sourceRequirementIds}
               focusedAnnotationId={focusedAnnotationId}
+              onActivePageChange={setActivePdfPage}
+              onPageCountChange={setPdfPageCount}
+              jumpToPage={copilotPageJump}
               onAnnotationSelect={(annotationId) => {
                 setPanel("annotations");
                 setFocusedAnnotationId(annotationId);
@@ -1206,6 +1218,31 @@ export function SourceReaderWorkspace({
           </div>
         </aside>
       </div>
+      {copilotOpen && isPdf && asset && signedUrl ? (
+        <ProcessingCopilot
+          key={`${s(source.id)}:${s(asset.id)}`}
+          projectId={projectId}
+          sourceId={s(source.id)}
+          assetId={s(asset.id)}
+          sourceTitle={s(source.title)}
+          selectedAnnotationId={(() => {
+            const active = liveAnnotations.find((annotation) => s(annotation.id) === focusedAnnotationId);
+            return active && s(active.anchor_kind) === "TEXT" && s(active.selected_text).trim()
+              ? s(active.id) : null;
+          })()}
+          activePage={activePdfPage}
+          pageCount={pdfPageCount}
+          onClose={() => setCopilotOpen(false)}
+          onNavigate={(page, annotationId) => {
+            setCopilotPageJump({ page, nonce: Date.now() });
+            if (annotationId && liveAnnotations.some((annotation) => s(annotation.id) === annotationId)) {
+              setFocusedAnnotationId(annotationId);
+              setExpandedAnnotationId(annotationId);
+              setPanel("annotations");
+            }
+          }}
+        />
+      ) : null}
     </section>
   );
 }

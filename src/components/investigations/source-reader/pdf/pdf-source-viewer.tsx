@@ -203,12 +203,15 @@ function PdfPage({
 }
 
 export function PdfSourceViewer({
-  projectId,sourceId,assetId,signedUrl,annotations,fragments,gaps,requirements,defaultGapIds,defaultRequirementIds,focusedAnnotationId,onAnnotationSelect,onAnnotationCreated,
+  projectId,sourceId,assetId,signedUrl,annotations,fragments,gaps,requirements,defaultGapIds,defaultRequirementIds,focusedAnnotationId,onAnnotationSelect,onAnnotationCreated,onActivePageChange,onPageCountChange,jumpToPage,
 }:{
   projectId:string;sourceId:string;assetId:string;signedUrl:string;annotations:Row[];fragments:Row[];gaps:Row[];requirements:Row[];
   defaultGapIds:string[];defaultRequirementIds:string[];focusedAnnotationId?:string|null;
   onAnnotationSelect?:(annotationId:string)=>void;
   onAnnotationCreated?:(payload:PdfAnnotationCreated)=>void;
+  onActivePageChange?:(page:number)=>void;
+  onPageCountChange?:(pages:number)=>void;
+  jumpToPage?:{page:number;nonce:number}|null;
 }){
   const rootRef=useRef<HTMLDivElement>(null);
   const pagesRef=useRef<HTMLDivElement>(null);
@@ -478,6 +481,25 @@ export function PdfSourceViewer({
   }
 
   const toggle=(items:string[],id:string)=>items.includes(id)?items.filter(x=>x!==id):[...items,id];
+  // Report the page visibly being read without changing PDF scroll or annotation state.
+  const reportActivePage=useCallback(()=>{
+    const pages=pagesRef.current;
+    if(!pages||!onActivePageChange)return;
+    const viewport=pages.getBoundingClientRect();
+    const scanLine=viewport.top+Math.min(120,Math.max(20,viewport.height*.2));
+    const nodes=[...pages.querySelectorAll<HTMLElement>("[data-pdf-page-number]")];
+    const current=nodes.find((node)=>{const r=node.getBoundingClientRect();return r.top<=scanLine&&r.bottom>=scanLine;});
+    if(current){const page=Number(current.dataset.pdfPageNumber);if(Number.isInteger(page))onActivePageChange(page);}
+  },[onActivePageChange]);
+
+  useEffect(()=>{if(pdf)onPageCountChange?.(pdf.numPages);},[pdf,onPageCountChange]);
+  useEffect(()=>{
+    if(!pdf||!jumpToPage||jumpToPage.page<1||jumpToPage.page>pdf.numPages)return;
+    const page=pagesRef.current?.querySelector<HTMLElement>(`[data-pdf-page-number="${jumpToPage.page}"]`);
+    page?.scrollIntoView({behavior:"smooth",block:"center"});
+    if(page)onActivePageChange?.(jumpToPage.page);
+  },[pdf,jumpToPage,onActivePageChange]);
+
   const handleViewport=useCallback((page:number,viewport:PdfViewportLike,base:PdfViewportLike)=>{
     viewports.current.set(page,{viewport,base});
   },[]);
@@ -507,7 +529,7 @@ export function PdfSourceViewer({
     {pdf&&pdfjs?<div
       ref={pagesRef}
       className="citem-pdf-pages"
-      onScroll={()=>persistViewState()}
+      onScroll={()=>{persistViewState();reportActivePage();}}
     >
       {Array.from({length:pdf.numPages},(_,index)=><PdfPage
         key={index+1} pdf={pdf} pdfjs={pdfjs} pageNumber={index+1} scale={scale}

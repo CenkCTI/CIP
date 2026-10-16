@@ -73,6 +73,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const inputChars = JSON.stringify({
       title:context.sourceTitle,
       question:request.question,
+      dialogue:request.history ?? [],
       excerpts:modelFacingSpans(context.spans),
     }).length;
     const cfg = getAiConfig();

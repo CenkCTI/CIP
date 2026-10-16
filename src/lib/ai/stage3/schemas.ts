@@ -15,6 +15,11 @@ export const stage3RequestSchema = z.object({
   context: contextSchema,
   mode: z.enum(["ask", "analyse"]),
   question: z.string().trim().min(1).max(1500).optional(),
+  // Previous turns are user-controlled conversation hints, never evidence or authority.
+  history: z.array(z.object({
+    user: z.string().trim().min(1).max(500),
+    assistant: z.string().trim().max(1000),
+  }).strict()).max(3).optional(),
   byokConsent: z.literal(true),
 }).strict().superRefine((v, ctx) => {
   if (v.mode === "ask" && !v.question) ctx.addIssue({

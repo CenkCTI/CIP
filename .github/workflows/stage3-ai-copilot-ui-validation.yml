@@ -1,0 +1,34 @@
+name: Stage 3 Processing Copilot UI validation
+
+on:
+  push:
+    branches: [feat/stage3-processing-copilot-ui]
+  pull_request:
+    branches: [main, feat/stage3-ai-processing-core]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stage3-copilot-ui-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Copilot UI integration tests
+        run: npm test -- tests/stage3-processing-copilot-ui.test.tsx tests/stage3-ai-byok-connect-chat.test.tsx tests/stage3-ai-processing-core.test.ts
+      - name: Source Reader and PDF state regression tests
+        run: npm test -- tests/stage3-source-reader-processing.test.ts tests/pdf-source-viewer-state.test.ts tests/byok-connection-panel.test.tsx
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build

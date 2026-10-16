@@ -18,6 +18,8 @@ export async function runStage3Processing(
         source_title: input.sourceTitle,
         mode: input.request.mode,
         question: input.request.question ?? "",
+        // Bounded client dialogue is untrusted context, never grounds a statement.
+        dialogue_for_reference_only: input.request.history ?? [],
         excerpts: modelFacingSpans(input.spans),
       }),
     },
