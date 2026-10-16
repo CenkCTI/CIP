@@ -86,6 +86,7 @@ export function ProcessingCopilot({
     if (context.kind === "annotation" && selectedAnnotationId) return {kind:"annotation",annotationId:selectedAnnotationId};
     return context.kind === "annotation" ? {kind:"page",page:activePage} : context;
   },[context,activePage,selectedAnnotationId]);
+  const onConnectionStatusChange = useCallback((next: ByokStatus) => { setByok(next); setStatusError(""); }, []);
   const connected = Boolean(byok?.connected && byok.providerId==="nvidia_nim");
   const contextValid = validCopilotContext(effectiveContext,pageCount);
   const canSend = connected && contextValid && !working;
@@ -171,8 +172,8 @@ export function ProcessingCopilot({
         </button>
       </div>
       {!connected || showConnection ? <div className="max-h-[45%] overflow-auto px-3 py-3">
-        <ByokConnectionPanel scope="user" defaultProviderId="nvidia_nim" autoLoad={false}
-          onStatusChange={(next)=>{setByok(next);setStatusError("");}} />
+        <ByokConnectionPanel scope="user" defaultProviderId="nvidia_nim" autoLoad={true}
+          onStatusChange={onConnectionStatusChange} />
         {!connected ? <p className="mt-2 text-xs text-amber-300">
           Select NVIDIA NIM and an allowlisted model. Other BYOK providers cannot run Stage 3 Processing.
         </p> : null}
