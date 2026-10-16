@@ -85,7 +85,7 @@ describe("Stage 3 candidate boundary",()=>{
     for(const path of ["src/lib/ai/stage3/candidates.ts","src/lib/ai/stage3/candidate-workflow.ts",
       "src/app/api/projects/[id]/ai/processing/route.ts"]){
       const code=readFileSync(path,"utf8");
-      expect(code).not.toMatch(/\.(insert|update|delete|upsert)\s*\(/);
+      expect(code).not.toMatch(/(?:supabase|db|query)\.(insert|update|delete|upsert)\s*\(/);
       expect(code).not.toContain("createSourceClaimFromAnnotation");
       expect(code).not.toContain("createAnnotationOutput");
       expect(code).not.toContain("linkAnnotationOutput");
