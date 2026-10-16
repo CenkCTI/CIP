@@ -99,3 +99,18 @@ An authenticated analyst reproduced `HTTP 422 · stage=nvidia · code=malformed_
 Unit tests cover the reported Turkish attack-chain question, overlong/invalid JSON, invented page numbers, fake quotes, missing arrays, a repair succeeding on attempt two, safe fallback to verified evidence, and repeated unrecoverable output. The live model and attached private PDF are not accessible in CI; production acceptance still requires replaying the question on the deployed build.
 
 No additional SQL migration is required.
+
+## Phase 2 UI refinement — focused chat (design-only PR)
+
+The Source Reader Copilot keeps the same read-only server request, quote verification, BYOK lifecycle, page/annotation scopes, bounded follow-up context, error diagnostics, and analyst-only decisions. This pass **does not** add Phase 3 features or SQL migrations.
+
+- Desktop floating size increases from **440×620** to **660×780** (clamped inside the actual viewport), with a wider **620px** docked layout. Mobile remains full-screen. Saved window geometry uses `citem:stage3-ai-window:v2` so users are not stuck with the older narrow session layout; only geometry is stored.
+- CİTEM's canonical theme variables from `src/app/globals.css` are used throughout: `--surface`, `--surface-panel`, `--surface-raised`, `--surface-input`, `--foreground`, `--muted`, `--amber-soft`, `--amber-strong`, `--line`, and `--line-neutral`. The UI avoids introducing a competing color palette.
+- The NVIDIA connection indicator is integrated into the compact header, with BYOK controls available from a single button.
+- Source context shows a compact title/page line and an explicit **Change context** expander. All three existing context modes and 1–10 page limit remain available. Entire-document and Investigation-wide contexts are still disabled.
+- The transcript takes the flexible majority of the panel; source-grounded answer text is larger and clearer. The exact quotations are retained behind expandable **Source excerpts** sections that expose the same PDF page-jump controls. Warnings remain visible.
+- A larger composer stays pinned below the independently scrolling chat. Enter-to-send, Shift+Enter newline, Ask/Analyse/Explain, cancellation, diagnostic error text, and language selector all remain functional. The data-transfer and nonpersistent-history notice remains visible.
+
+Accessibility: the context button has `aria-expanded` and `aria-controls`; source evidence uses native `details/summary`. Tests cover collapsed-by-default context and sources, expansion and citation jumps, theme tokens, and unchanged API send contracts.
+
+**Review requested:** PR is intentionally left open/unmerged. Verify appearance on desktop/mobile before merging. The CSS design has not been visually verified in a live user browser.
