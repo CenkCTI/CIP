@@ -1,7 +1,7 @@
 import "server-only";
 
 export class Stage3PdfError extends Error {
-  constructor(public code: "pdf_invalid" | "pdf_page_out_of_range" | "pdf_text_unavailable" | "pdf_too_large") {
+  constructor(public code: "pdf_invalid" | "pdf_page_out_of_range" | "pdf_text_unavailable" | "pdf_too_large" | "pdf_runtime_unavailable") {
     super(code);
   }
 }
@@ -18,8 +18,15 @@ export async function extractPdfPages(
   }
 
   // Server extracts text; neither the binary nor a Storage signed URL goes to NVIDIA.
-  const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  let document: Awaited<ReturnType<ReturnType<typeof getDocument>["promise"]["then"]>> | undefined;
+  // PDF.js may fail to load in production/serverless if its runtime dependencies
+  // are absent. A safe, typed error is more actionable than an unclassified 500.
+  let pdfjs: typeof import("pdfjs-dist/legacy/build/pdf.mjs");
+  try {
+    pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  } catch {
+    throw new Stage3PdfError("pdf_runtime_unavailable");
+  }
+  const { getDocument } = pdfjs;
   // Avoid relying on the PDF viewer's client-side worker or its signed URL.
   try {
     const loadingTask = getDocument({
