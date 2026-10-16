@@ -144,7 +144,7 @@ describe("NVIDIA BYOK to Copilot send integration",()=>{
     fetchMock.mockImplementation(async (url:string)=>{
       if (url==="/api/ai/byok/status") return {ok:true,json:async()=>({connected:true,providerId:"nvidia_nim",model})};
       if (url===requestUrl) return {ok:false,status:500,json:async()=>({
-        code:"request_failed",error:"Processing request failed.",stage:"source",
+        code:"request_failed",error:"Processing request failed.",stage:"source",sourceStep:"pdf_extract",
       })};
       throw Error("Unexpected fetch");
     });
@@ -156,6 +156,7 @@ describe("NVIDIA BYOK to Copilot send integration",()=>{
     const diag=screen.getByTestId("copilot-error-diagnostic").textContent ?? "";
     expect(diag).toContain("HTTP 500");
     expect(diag).toContain("stage=source");
+    expect(diag).toContain("sourceStep=pdf_extract");
     expect(diag).toContain("code=request_failed");
     expect(diag).not.toContain("API key");
   });
