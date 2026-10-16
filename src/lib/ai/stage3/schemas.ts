@@ -3,6 +3,7 @@ import { z } from "zod";
 const uuid = z.string().uuid();
 const page = z.number().int().min(1).max(10000);
 const contextSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("document") }).strict(),
   z.object({ kind: z.literal("annotation"), annotationId: uuid }).strict(),
   z.object({ kind: z.literal("page"), page: page }).strict(),
   z.object({ kind: z.literal("pages"), pageStart: page, pageEnd: page }).strict()
