@@ -122,4 +122,56 @@ describe("NVIDIA BYOK to Copilot send integration",()=>{
     expect(JSON.parse(String(updated[2][1].body)).history).toBeUndefined();
   });
 
+  it("shows NVIDIA generation rejection rather than the generic request failure", async () => {
+    fetchMock.mockImplementation(async (url:string)=>{
+      if (url==="/api/ai/byok/status") return {ok:true,json:async()=>({connected:true,enabled:true,providerId:"nvidia_nim",model})};
+      if (url===requestUrl) return {ok:false,status:502,json:async()=>({
+        code:"provider_error",error:"NVIDIA rejected this generation request.",stage:"nvidia",
+      })};
+      throw Error("Unexpected fetch");
+    });
+    render(<ProcessingCopilot {...props}/>);
+    await screen.findByText("NVIDIA connected");
+    fireEvent.change(screen.getByLabelText(/Ask about Page 5/),{target:{value:"Explain this campaign."}});
+    fireEvent.click(screen.getByRole("button",{name:/^Ask$/}));
+    await screen.findByText(/NVIDIA rejected the generation request/);
+    expect(screen.getByTestId("copilot-error-diagnostic").textContent).toContain("HTTP 502");
+    expect(screen.getByTestId("copilot-error-diagnostic").textContent).toContain("stage=nvidia");
+    expect(screen.getByTestId("copilot-error-diagnostic").textContent).toContain("code=provider_error");
+  });
+
+  it("exposes safe stage and code for unexpected server failures", async () => {
+    fetchMock.mockImplementation(async (url:string)=>{
+      if (url==="/api/ai/byok/status") return {ok:true,json:async()=>({connected:true,providerId:"nvidia_nim",model})};
+      if (url===requestUrl) return {ok:false,status:500,json:async()=>({
+        code:"request_failed",error:"Processing request failed.",stage:"source",
+      })};
+      throw Error("Unexpected fetch");
+    });
+    render(<ProcessingCopilot {...props}/>);
+    await screen.findByText("NVIDIA connected");
+    fireEvent.change(screen.getByLabelText(/Ask about Page 5/),{target:{value:"Summarize."}});
+    fireEvent.click(screen.getByRole("button",{name:/^Ask$/}));
+    await screen.findByText(/could not complete processing/);
+    const diag=screen.getByTestId("copilot-error-diagnostic").textContent ?? "";
+    expect(diag).toContain("HTTP 500");
+    expect(diag).toContain("stage=source");
+    expect(diag).toContain("code=request_failed");
+    expect(diag).not.toContain("API key");
+  });
+
+  it("keeps non-JSON server response failures distinguishable from provider errors", async () => {
+    fetchMock.mockImplementation(async (url:string)=>{
+      if (url==="/api/ai/byok/status") return {ok:true,json:async()=>({connected:true,providerId:"nvidia_nim",model})};
+      if (url===requestUrl) return {ok:false,status:502,json:async()=>{throw new SyntaxError("not JSON")}};
+      throw Error("Unexpected fetch");
+    });
+    render(<ProcessingCopilot {...props}/>);
+    await screen.findByText("NVIDIA connected");
+    fireEvent.change(screen.getByLabelText(/Ask about Page 5/),{target:{value:"Summarize."}});
+    fireEvent.click(screen.getByRole("button",{name:/^Ask$/}));
+    await screen.findByText(/non-JSON response/);
+    expect(screen.getByTestId("copilot-error-diagnostic").textContent).toContain("code=non_json_response");
+  });
+
 });
