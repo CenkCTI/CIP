@@ -55,6 +55,18 @@ export function CopilotCandidates({result,dismissed,onDismiss,onReview,onNavigat
       {candidate.caveats.length ? <ul className="list-inside list-disc text-xs leading-5 text-[var(--muted-strong)]">
         {candidate.caveats.map((caveat,index)=><li key={index}>{caveat}</li>)}
       </ul>:null}
+      {candidate.existingMatches?.length ? <div className="rounded border border-[var(--line)] bg-[var(--amber-tint)] p-2.5 text-xs text-[var(--amber-soft)]">
+        <p className="font-medium">{candidate.existingMatches.length} existing Investigation record(s) may match</p>
+        <ul className="mt-1 space-y-1">
+          {candidate.existingMatches.map((existing)=><li key={existing.id}>
+            {existing.matchType==="POSSIBLE"?"Possible similar claim":"Exact field match"} · {existing.label}
+          </li>)}
+        </ul>
+        <p className="mt-1 text-[var(--muted-strong)]">Review whether to link instead of creating a duplicate. No automatic merge.</p>
+      </div>:null}
+      {candidate.matchStatus==="UNAVAILABLE" ? <p className="text-xs text-[var(--amber-soft)]">
+        Existing-record comparison unavailable. Check manually before saving.
+      </p>:null}
       <details className="rounded border border-[var(--line-neutral)] bg-[var(--surface-input)] p-2.5">
         <summary className="cursor-pointer text-xs text-[var(--amber-soft)]">Verified source support · {candidate.verifiedSupport.length}</summary>
         <div className="mt-2 space-y-3">
