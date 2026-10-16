@@ -170,6 +170,8 @@ export default async function SourceDetailPage({
     processingMitreResult,
     processingCampaignsResult,
     processingActorsResult,
+    sourceClaimAssertionsResult,
+    processingSourceClaimsResult,
   ] = await Promise.all([
     context.supabase
       .from("timeline_events")
@@ -229,6 +231,22 @@ export default async function SourceDetailPage({
       .eq("project_id", context.projectId)
       .order("name", { ascending: true })
       .limit(500),
+    annotationIds.size
+      ? context.supabase
+          .from("source_claim_assertions")
+          .select(
+            "id,source_claim_id,source_annotation_id,stance,source_qualifier,mapping_origin,assertion_action,source_claims(id,claim_summary,claim_kind)",
+          )
+          .eq("project_id", context.projectId)
+          .in("source_annotation_id", [...annotationIds])
+          .order("created_at", { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
+    context.supabase
+      .from("source_claims")
+      .select("id,claim_summary,claim_kind,updated_at")
+      .eq("project_id", context.projectId)
+      .order("updated_at", { ascending: false })
+      .limit(500),
   ]);
 
   if (
@@ -242,12 +260,14 @@ export default async function SourceDetailPage({
       processingMitreResult,
       processingCampaignsResult,
       processingActorsResult,
+      sourceClaimAssertionsResult,
+      processingSourceClaimsResult,
     ].some((result) => result.error)
   ) {
     return (
       <section className="mx-auto max-w-6xl">
         <div className="card text-red-300">
-          Stage 3 processing context could not be loaded. Apply migrations 057 and 058 and retry.
+          Stage 3 processing context could not be loaded. Apply migrations 057–060 and retry.
         </div>
       </section>
     );
@@ -283,6 +303,7 @@ export default async function SourceDetailPage({
       timelineEvents={timelineEventsResult.data ?? []}
       annotationTimelineLinks={annotationTimelineLinksResult.data ?? []}
       processingOutputs={processingOutputsResult.data ?? []}
+      sourceClaimAssertions={sourceClaimAssertionsResult.data ?? []}
       processingOptions={{
         indicator: processingIndicatorsResult.data ?? [],
         malware: processingMalwareResult.data ?? [],
@@ -290,6 +311,7 @@ export default async function SourceDetailPage({
         mitre: processingMitreResult.data ?? [],
         campaign: processingCampaignsResult.data ?? [],
         actor: processingActorsResult.data ?? [],
+        source_claim: processingSourceClaimsResult.data ?? [],
       }}
       initialFocusedAnnotationId={initialFocusedAnnotationId}
     />

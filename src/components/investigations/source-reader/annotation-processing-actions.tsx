@@ -12,6 +12,7 @@ import {
   unlinkAnnotationOutput,
 } from "@/app/projects/[id]/source-processing-actions";
 import { AnnotationTimelineActions } from "@/components/investigations/source-reader/annotation-timeline-actions";
+import { SourceClaimProcessingPanel } from "@/components/investigations/source-reader/source-claim-processing-panel";
 import { extractIndicatorCandidatesFromText } from "@/lib/processing/indicator-extraction";
 import {
   mappingOrigins,
@@ -29,12 +30,15 @@ type ProcessingOptions = {
   mitre: Row[];
   campaign: Row[];
   actor: Row[];
+  source_claim: Row[];
 };
+type SourceReaderDestination = ProcessingDestination | "timeline" | "source_claim";
 
 const text = (value: unknown) => String(value ?? "");
 
-const destinationLabels: Record<ProcessingDestination | "timeline", string> = {
+const destinationLabels: Record<SourceReaderDestination, string> = {
   timeline: "Timeline Event",
+  source_claim: "Evidence / Source Claim",
   indicator: "Indicator / IOC",
   malware: "Malware",
   cve: "CVE",
@@ -422,7 +426,9 @@ export function AnnotationProcessingActions({
   events,
   timelineLinks,
   outputs,
+  sourceClaimAssertions,
   options,
+  compact = false,
 }: {
   projectId: string;
   sourceId: string;
@@ -430,15 +436,17 @@ export function AnnotationProcessingActions({
   events: Row[];
   timelineLinks: Row[];
   outputs: Row[];
+  sourceClaimAssertions: Row[];
   options: ProcessingOptions;
+  compact?: boolean;
 }) {
   const router = useRouter();
   const state = (text(annotation.processing_state) ||
     "UNPROCESSED") as AnnotationProcessingState;
   const [open, setOpen] = useState(false);
-  const [destination, setDestination] = useState<
-    ProcessingDestination | "timeline"
-  >("timeline");
+  const [destination, setDestination] = useState<SourceReaderDestination>(
+    "timeline",
+  );
   const [selectedTarget, setSelectedTarget] = useState("");
   const [origin, setOrigin] = useState<MappingOrigin>("SOURCE_EXPLICIT");
   const [ignoreOpen, setIgnoreOpen] = useState(false);
@@ -458,9 +466,13 @@ export function AnnotationProcessingActions({
   const selectedCandidates = candidates.filter((item) =>
     selectedCandidateKeys.has(`${item.type}:${item.canonicalValue}`),
   );
+  const structuredOutputCount =
+    timelineLinks.length + outputs.length + sourceClaimAssertions.length;
 
   const existing =
-    destination === "timeline" || destination === "attribution_claim"
+    destination === "timeline" ||
+    destination === "attribution_claim" ||
+    destination === "source_claim"
       ? []
       : options[destination];
 
@@ -484,7 +496,7 @@ export function AnnotationProcessingActions({
 
   function submitCreate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (destination === "timeline") return;
+    if (destination === "timeline" || destination === "source_claim") return;
     const formData = new FormData(event.currentTarget);
     startTransition(async () => {
       const result = await createAnnotationOutput(
@@ -503,6 +515,7 @@ export function AnnotationProcessingActions({
     if (
       destination === "timeline" ||
       destination === "attribution_claim" ||
+      destination === "source_claim" ||
       !selectedTarget
     )
       return;
@@ -542,7 +555,45 @@ export function AnnotationProcessingActions({
         </button>
       </div>
 
-      {timelineLinks.length || outputs.length ? (
+      {compact ? (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-stone-600">
+            {structuredOutputCount
+              ? `${structuredOutputCount} structured output${structuredOutputCount === 1 ? "" : "s"}`
+              : "No structured outputs"}
+          </span>
+          <div className="flex items-center gap-2">
+            {state === "UNPROCESSED" ? (
+              <>
+                <button
+                  className="text-[11px] text-stone-500 hover:text-emerald-300"
+                  type="button"
+                  disabled={pending}
+                  onClick={() => runState("PROCESSED")}
+                >
+                  Mark processed
+                </button>
+                <button
+                  className="text-[11px] text-stone-600 hover:text-stone-300"
+                  type="button"
+                  onClick={() => setIgnoreOpen((current) => !current)}
+                >
+                  Ignore
+                </button>
+              </>
+            ) : (
+              <button
+                className="text-[11px] text-stone-500 hover:text-amber-300"
+                type="button"
+                disabled={pending}
+                onClick={() => runState("UNPROCESSED")}
+              >
+                Reopen
+              </button>
+            )}
+          </div>
+        </div>
+      ) : timelineLinks.length || outputs.length || sourceClaimAssertions.length ? (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {timelineLinks.map((link) => (
             <Link
@@ -554,6 +605,19 @@ export function AnnotationProcessingActions({
               {text((link.timeline_events as Row)?.event_name) || "Event"}
             </Link>
           ))}
+          {sourceClaimAssertions.map((assertion) => {
+            const claim = (assertion.source_claims ?? {}) as Row;
+            return (
+              <Link
+                key={text(assertion.id)}
+                className="citem-badge max-w-64 truncate hover:border-amber-700 hover:text-amber-200"
+                href={`/projects/${projectId}/source-claims/${text(assertion.source_claim_id)}`}
+                title={text(claim.claim_summary)}
+              >
+                Claim · {text(claim.claim_summary) || "Source Claim"}
+              </Link>
+            );
+          })}
           {outputs.map((output) => (
             <span
               className="inline-flex max-w-full items-center gap-1 rounded border border-stone-800 bg-black/10 px-2 py-1 text-[11px] text-stone-400"
@@ -608,36 +672,38 @@ export function AnnotationProcessingActions({
         </p>
       )}
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        {state === "UNPROCESSED" ? (
-          <>
+      {!compact ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {state === "UNPROCESSED" ? (
+            <>
+              <button
+                className="citem-button-ghost min-h-0 px-2.5 py-1.5 text-xs"
+                type="button"
+                disabled={pending}
+                onClick={() => runState("PROCESSED")}
+              >
+                Mark processed
+              </button>
+              <button
+                className="min-h-0 px-2 py-1 text-xs text-stone-500 hover:text-stone-300"
+                type="button"
+                onClick={() => setIgnoreOpen((current) => !current)}
+              >
+                Ignore
+              </button>
+            </>
+          ) : (
             <button
               className="citem-button-ghost min-h-0 px-2.5 py-1.5 text-xs"
               type="button"
               disabled={pending}
-              onClick={() => runState("PROCESSED")}
+              onClick={() => runState("UNPROCESSED")}
             >
-              Mark processed
+              Reopen
             </button>
-            <button
-              className="min-h-0 px-2 py-1 text-xs text-stone-500 hover:text-stone-300"
-              type="button"
-              onClick={() => setIgnoreOpen((current) => !current)}
-            >
-              Ignore
-            </button>
-          </>
-        ) : (
-          <button
-            className="citem-button-ghost min-h-0 px-2.5 py-1.5 text-xs"
-            type="button"
-            disabled={pending}
-            onClick={() => runState("UNPROCESSED")}
-          >
-            Reopen
-          </button>
-        )}
-      </div>
+          )}
+        </div>
+      ) : null}
 
       {ignoreOpen ? (
         <div className="mt-2 grid gap-2 rounded border border-stone-800 bg-black/10 p-2">
@@ -660,7 +726,14 @@ export function AnnotationProcessingActions({
       ) : null}
 
       {annotation.processing_note ? (
-        <p className="mt-2 text-[11px] leading-5 text-stone-600">
+        <p
+          className={
+            compact
+              ? "mt-2 truncate text-[11px] text-stone-600"
+              : "mt-2 text-[11px] leading-5 text-stone-600"
+          }
+          title={compact ? text(annotation.processing_note) : undefined}
+        >
           Processing note: {text(annotation.processing_note)}
         </p>
       ) : null}
@@ -680,12 +753,12 @@ export function AnnotationProcessingActions({
           }}
         >
           <section
-            className="w-full max-w-4xl overflow-hidden rounded-lg border border-amber-900/40 bg-[#0f1417] shadow-2xl"
+            className="flex max-h-[calc(100dvh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-amber-900/40 bg-[#0f1417] shadow-2xl"
             role="dialog"
             aria-modal="true"
             aria-label="Process source annotation"
           >
-            <header className="flex items-start justify-between gap-4 border-b border-stone-800 p-4">
+            <header className="shrink-0 flex items-start justify-between gap-4 border-b border-stone-800 p-4">
               <div>
                 <p className="citem-label">Stage 3 · Processing</p>
                 <h2 className="mt-1 text-xl font-semibold text-stone-100">
@@ -706,8 +779,8 @@ export function AnnotationProcessingActions({
               </button>
             </header>
 
-            <div className="grid max-h-[82vh] overflow-hidden lg:grid-cols-[260px_minmax(0,1fr)]">
-              <aside className="overflow-y-auto border-b border-stone-800 p-4 lg:border-b-0 lg:border-r">
+            <div className="grid min-h-0 flex-1 overflow-y-auto overscroll-contain lg:grid-cols-[260px_minmax(0,1fr)] lg:overflow-hidden">
+              <aside className="border-b border-stone-800 p-4 lg:min-h-0 lg:overflow-y-auto lg:border-b-0 lg:border-r">
                 <p className="citem-label">Source wording</p>
                 <blockquote className="mt-2 max-h-40 overflow-y-auto border-l-2 border-amber-800/60 pl-3 text-xs leading-5 text-stone-500">
                   {excerpt ||
@@ -722,6 +795,7 @@ export function AnnotationProcessingActions({
                 <div className="mt-2 grid gap-1">
                   {([
                     "timeline",
+                    "source_claim",
                     "indicator",
                     "malware",
                     "cve",
@@ -744,7 +818,8 @@ export function AnnotationProcessingActions({
                         setSelectedTarget("");
                         if (
                           item !== "timeline" &&
-                          item !== "attribution_claim"
+                          item !== "attribution_claim" &&
+                          item !== "source_claim"
                         ) {
                           setOrigin(defaultOrigin(item));
                         }
@@ -756,7 +831,7 @@ export function AnnotationProcessingActions({
                 </div>
               </aside>
 
-              <main className="overflow-y-auto p-4">
+              <main className="min-h-0 p-4 lg:overflow-y-auto">
                 {destination === "timeline" ? (
                   <div>
                     <p className="citem-label">Temporal record</p>
@@ -772,6 +847,14 @@ export function AnnotationProcessingActions({
                       links={timelineLinks}
                     />
                   </div>
+                ) : destination === "source_claim" ? (
+                  <SourceClaimProcessingPanel
+                    projectId={projectId}
+                    sourceId={sourceId}
+                    annotation={annotation}
+                    claims={options.source_claim}
+                    assertions={sourceClaimAssertions}
+                  />
                 ) : (
                   <div className="space-y-5">
                     {destination === "indicator" && candidates.length ? (

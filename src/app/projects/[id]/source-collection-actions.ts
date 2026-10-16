@@ -27,6 +27,7 @@ export type SourceCollectionActionState = {
   assetId?: string;
   path?: string;
   token?: string;
+  annotationId?: string;
 };
 
 function refresh(projectId: string, sourceId?: string) {
@@ -599,8 +600,18 @@ export async function createSourceAnnotationV2(
       p_requirement_ids: parsed.data.requirement_ids,
     });
     if (error || !data) return { error: "PDF işaretlemesi kaydedilemedi." };
-    refresh(context.projectId, parsed.data.source_id);
-    return { success: "PDF işaretlemesi kaydedildi." };
+
+    // The Source Reader updates the newly-created annotation optimistically.
+    // Revalidating the currently-open detail route here rotates its signed PDF
+    // URL during an active PDF.js session and can race the client renderer.
+    // Keep the collection/list surfaces fresh without remounting the open reader.
+    revalidatePath(`/projects/${context.projectId}/collection`);
+    revalidatePath(`/projects/${context.projectId}/sources`);
+
+    return {
+      success: "PDF işaretlemesi kaydedildi.",
+      annotationId: String(data),
+    };
   } catch {
     return { error: "Investigation bulunamadı." };
   }

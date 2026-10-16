@@ -21,6 +21,11 @@ import {
 type Row = Record<string, unknown>;
 type Rect = { x: number; y: number; width: number; height: number };
 const s = (value: unknown) => String(value ?? "");
+const compactText = (value: unknown, max = 220) => {
+  const normalized = s(value).replace(/\s+/g, " ").trim();
+  if (normalized.length <= max) return normalized;
+  return `${normalized.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+};
 const initial: SourceCollectionActionState = {};
 
 function formatDate(value: unknown) {
@@ -394,9 +399,25 @@ function SourceNotes({
         {state.error ? <p className="text-xs text-red-300">{state.error}</p> : null}
       </form>
       <div className="mt-4 space-y-3">
-        {notes.map((note) => (
+        {notes.map((note) => {
+          const body = s(note.body);
+          const preview = compactText(body, 180);
+          const hasMore = body.replace(/\s+/g, " ").trim().length > preview.length;
+          return (
           <article className="rounded border border-stone-800 bg-black/10 p-3" key={s(note.id)}>
-            <p className="whitespace-pre-wrap text-sm text-stone-300">{s(note.body)}</p>
+            <p className="text-xs leading-5 text-stone-400" title={hasMore ? body : undefined}>
+              {preview}
+            </p>
+            {hasMore ? (
+              <details className="mt-2">
+                <summary className="cursor-pointer list-none text-[11px] text-amber-300">
+                  Tamamını göster
+                </summary>
+                <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-stone-300">
+                  {body}
+                </p>
+              </details>
+            ) : null}
             <div className="mt-2 flex items-center justify-between gap-3">
               <span className="text-[11px] text-stone-600">{formatDate(note.created_at)}</span>
               <button
@@ -414,7 +435,8 @@ function SourceNotes({
               </button>
             </div>
           </article>
-        ))}
+          );
+        })}
         {!notes.length ? <p className="text-xs text-stone-600">Henüz analyst note yok.</p> : null}
       </div>
     </div>
@@ -481,6 +503,7 @@ export function SourceReaderWorkspace({
   timelineEvents,
   annotationTimelineLinks,
   processingOutputs,
+  sourceClaimAssertions,
   processingOptions,
   initialFocusedAnnotationId,
 }: {
@@ -500,6 +523,7 @@ export function SourceReaderWorkspace({
   timelineEvents: Row[];
   annotationTimelineLinks: Row[];
   processingOutputs: Row[];
+  sourceClaimAssertions: Row[];
   processingOptions: {
     indicator: Row[];
     malware: Row[];
@@ -507,6 +531,7 @@ export function SourceReaderWorkspace({
     mitre: Row[];
     campaign: Row[];
     actor: Row[];
+    source_claim: Row[];
   };
   initialFocusedAnnotationId?: string | null;
 }) {
@@ -531,6 +556,50 @@ export function SourceReaderWorkspace({
   const [editingComment, setEditingComment] = useState("");
   const [editingGapIds, setEditingGapIds] = useState<string[]>([]);
   const [editingRequirementIds, setEditingRequirementIds] = useState<string[]>([]);
+  const [expandedAnnotationId, setExpandedAnnotationId] = useState<string | null>(null);
+  const [localAnnotations, setLocalAnnotations] = useState<Row[]>([]);
+  const [localAnnotationFragments, setLocalAnnotationFragments] = useState<Row[]>([]);
+  const [localAnnotationGapLinks, setLocalAnnotationGapLinks] = useState<Row[]>([]);
+  const [localAnnotationRequirementLinks, setLocalAnnotationRequirementLinks] = useState<Row[]>([]);
+
+  const serverAnnotationIds = useMemo(
+    () => new Set(annotations.map((annotation) => s(annotation.id))),
+    [annotations],
+  );
+  const liveAnnotations = useMemo(
+    () => [
+      ...localAnnotations.filter((annotation) => !serverAnnotationIds.has(s(annotation.id))),
+      ...annotations,
+    ],
+    [annotations, localAnnotations, serverAnnotationIds],
+  );
+  const liveAnnotationFragments = useMemo(
+    () => [
+      ...annotationFragments,
+      ...localAnnotationFragments.filter(
+        (fragment) => !serverAnnotationIds.has(s(fragment.annotation_id)),
+      ),
+    ],
+    [annotationFragments, localAnnotationFragments, serverAnnotationIds],
+  );
+  const liveAnnotationGapLinks = useMemo(
+    () => [
+      ...annotationGapLinks,
+      ...localAnnotationGapLinks.filter(
+        (link) => !serverAnnotationIds.has(s(link.annotation_id)),
+      ),
+    ],
+    [annotationGapLinks, localAnnotationGapLinks, serverAnnotationIds],
+  );
+  const liveAnnotationRequirementLinks = useMemo(
+    () => [
+      ...annotationRequirementLinks,
+      ...localAnnotationRequirementLinks.filter(
+        (link) => !serverAnnotationIds.has(s(link.annotation_id)),
+      ),
+    ],
+    [annotationRequirementLinks, localAnnotationRequirementLinks, serverAnnotationIds],
+  );
 
   const gapById = useMemo(() => new Map(gaps.map((gap) => [s(gap.id), gap])), [gaps]);
   const requirementById = useMemo(
@@ -539,20 +608,20 @@ export function SourceReaderWorkspace({
   );
   const annGaps = useMemo(() => {
     const map = new Map<string, string[]>();
-    for (const link of annotationGapLinks) {
+    for (const link of liveAnnotationGapLinks) {
       const id = s(link.annotation_id);
       map.set(id, [...(map.get(id) ?? []), s(link.gap_id)]);
     }
     return map;
-  }, [annotationGapLinks]);
+  }, [liveAnnotationGapLinks]);
   const annReqs = useMemo(() => {
     const map = new Map<string, string[]>();
-    for (const link of annotationRequirementLinks) {
+    for (const link of liveAnnotationRequirementLinks) {
       const id = s(link.annotation_id);
       map.set(id, [...(map.get(id) ?? []), s(link.requirement_id)]);
     }
     return map;
-  }, [annotationRequirementLinks]);
+  }, [liveAnnotationRequirementLinks]);
   const annTimelineLinks = useMemo(() => {
     const map = new Map<string, Row[]>();
     for (const link of annotationTimelineLinks) {
@@ -569,15 +638,23 @@ export function SourceReaderWorkspace({
     }
     return map;
   }, [processingOutputs]);
+  const annSourceClaimAssertions = useMemo(() => {
+    const map = new Map<string, Row[]>();
+    for (const assertion of sourceClaimAssertions) {
+      const id = s(assertion.source_annotation_id);
+      map.set(id, [...(map.get(id) ?? []), assertion]);
+    }
+    return map;
+  }, [sourceClaimAssertions]);
   const processingCounts = useMemo(() => {
     const counts = { UNPROCESSED: 0, PROCESSED: 0, IGNORED: 0 };
-    for (const annotation of annotations) {
+    for (const annotation of liveAnnotations) {
       if (s(annotation.anchor_kind || "LEGACY_SCREEN") === "LEGACY_SCREEN") continue;
       const state = s(annotation.processing_state) || "UNPROCESSED";
       if (state in counts) counts[state as keyof typeof counts] += 1;
     }
     return counts;
-  }, [annotations]);
+  }, [liveAnnotations]);
 
   useEffect(() => {
     if (panel !== "annotations" || !focusedAnnotationId) return;
@@ -702,8 +779,8 @@ export function SourceReaderWorkspace({
               sourceId={s(source.id)}
               assetId={s(asset.id)}
               signedUrl={signedUrl}
-              annotations={annotations}
-              fragments={annotationFragments}
+              annotations={liveAnnotations}
+              fragments={liveAnnotationFragments}
               gaps={gaps}
               requirements={requirements}
               defaultGapIds={sourceGapIds}
@@ -712,13 +789,41 @@ export function SourceReaderWorkspace({
               onAnnotationSelect={(annotationId) => {
                 setPanel("annotations");
                 setFocusedAnnotationId(annotationId);
+                setExpandedAnnotationId(annotationId);
+              }}
+              onAnnotationCreated={({ annotation, fragments, gapIds: createdGapIds, requirementIds: createdRequirementIds }) => {
+                const annotationId = s(annotation.id);
+                setLocalAnnotations((current) => [
+                  annotation,
+                  ...current.filter((item) => s(item.id) !== annotationId),
+                ]);
+                setLocalAnnotationFragments((current) => [
+                  ...current.filter((item) => s(item.annotation_id) !== annotationId),
+                  ...fragments,
+                ]);
+                setLocalAnnotationGapLinks((current) => [
+                  ...current.filter((item) => s(item.annotation_id) !== annotationId),
+                  ...createdGapIds.map((gapId) => ({
+                    annotation_id: annotationId,
+                    gap_id: gapId,
+                  })),
+                ]);
+                setLocalAnnotationRequirementLinks((current) => [
+                  ...current.filter((item) => s(item.annotation_id) !== annotationId),
+                  ...createdRequirementIds.map((requirementId) => ({
+                    annotation_id: annotationId,
+                    requirement_id: requirementId,
+                  })),
+                ]);
+                setPanel("annotations");
+                setFocusedAnnotationId(annotationId);
               }}
             />
           ) : (
             <DocumentSurface
               asset={asset}
               signedUrl={signedUrl}
-              annotations={annotations}
+              annotations={liveAnnotations}
               annotationMode={mode}
               onRect={(rect) => {
                 setDraftRect(rect);
@@ -802,8 +907,8 @@ export function SourceReaderWorkspace({
           ) : null}
         </main>
 
-        <aside className="card self-start xl:sticky xl:top-4">
-          <div className="flex border-b border-stone-800 text-xs">
+        <aside className="card self-start xl:sticky xl:top-4 xl:flex xl:max-h-[calc(100dvh-2rem)] xl:flex-col xl:overflow-hidden">
+          <div className="shrink-0 flex border-b border-stone-800 text-xs">
             {(["context", "notes", "annotations"] as const).map((value) => (
               <button
                 key={value}
@@ -818,7 +923,10 @@ export function SourceReaderWorkspace({
             ))}
           </div>
 
-          <div className="mt-4">
+          <div
+            className="mt-3 min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain xl:pr-1 [scrollbar-gutter:stable]"
+            data-source-reader-panel-scroll
+          >
             {panel === "context" ? (
               <div className="space-y-5">
                 <ContextEditor
@@ -848,22 +956,26 @@ export function SourceReaderWorkspace({
 
             {panel === "annotations" ? (
               <div className="space-y-3">
-                <div className="rounded border border-stone-800/80 bg-black/10 p-3">
-                  <p className="citem-label">Processing queue</p>
-                  <div className="mt-2 flex flex-wrap gap-3 text-xs text-stone-500">
-                    <span className="text-amber-300">{processingCounts.UNPROCESSED} unprocessed</span>
-                    <span>{processingCounts.PROCESSED} processed</span>
-                    <span>{processingCounts.IGNORED} ignored</span>
+                <div
+                  className="rounded border border-stone-800/80 bg-black/10 p-2.5"
+                  title="Resumable analyst work state only; this is not a completion percentage."
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="citem-label">Processing queue</p>
+                    <div className="flex flex-wrap gap-2 font-mono text-[10px] uppercase tracking-[0.08em] text-stone-600">
+                      <span className="text-amber-300">{processingCounts.UNPROCESSED} open</span>
+                      <span>{processingCounts.PROCESSED} done</span>
+                      <span>{processingCounts.IGNORED} ignored</span>
+                    </div>
                   </div>
-                  <p className="mt-2 text-[11px] leading-5 text-stone-600">
-                    Resumable analyst work state only; this is not a completion percentage.
-                  </p>
                 </div>
-                {annotations.map((annotation) => {
+                {liveAnnotations.map((annotation) => {
                   const id = s(annotation.id);
                   const linkedGaps = annGaps.get(id) ?? [];
                   const linkedReqs = annReqs.get(id) ?? [];
                   const legacy = Number(annotation.geometry_version ?? 1) !== 2;
+                  const expanded =
+                    expandedAnnotationId === id || editingAnnotationId === id;
                   return (
                     <article
                       className={
@@ -882,8 +994,17 @@ export function SourceReaderWorkspace({
                         </span>
                       </div>
                       {annotation.selected_text ? (
-                        <blockquote className="mt-2 max-h-28 overflow-auto border-l-2 border-amber-700 pl-2 text-xs text-stone-500">
-                          {s(annotation.selected_text)}
+                        <blockquote
+                          className={
+                            expanded
+                              ? "mt-2 max-h-40 overflow-y-auto border-l-2 border-amber-700 pl-2 text-xs leading-5 text-stone-500"
+                              : "mt-2 border-l-2 border-amber-800/70 pl-2 text-xs leading-5 text-stone-500"
+                          }
+                          title={!expanded ? s(annotation.selected_text) : undefined}
+                        >
+                          {expanded
+                            ? s(annotation.selected_text)
+                            : compactText(annotation.selected_text, 220)}
                         </blockquote>
                       ) : null}
                       {editingAnnotationId === id ? (
@@ -969,22 +1090,36 @@ export function SourceReaderWorkspace({
                       ) : (
                         <>
                           {annotation.comment ? (
-                            <p className="mt-2 whitespace-pre-wrap text-sm text-stone-300">
-                              {s(annotation.comment)}
-                            </p>
-                          ) : (
-                            <p className="mt-2 text-xs text-stone-600">Bu işaretlemeye analist notu eklenmemiş.</p>
-                          )}
-                          <div className="mt-2 space-y-1 text-[11px] text-stone-600">
-                            {linkedGaps.map((gapId) => (
-                              <p key={gapId}>Bilgi Açığı: {s(gapById.get(gapId)?.description)}</p>
-                            ))}
-                            {linkedReqs.map((requirementId) => (
-                              <p key={requirementId}>
-                                Toplama Gereksinimi: {s(requirementById.get(requirementId)?.requirement)}
+                            <div className="mt-2 rounded border border-stone-800/70 bg-black/10 px-2.5 py-2">
+                              <p className="citem-label">Analist notu</p>
+                              <p
+                                className={
+                                  expanded
+                                    ? "mt-1 whitespace-pre-wrap text-xs leading-5 text-stone-300"
+                                    : "mt-1 text-xs leading-5 text-stone-400"
+                                }
+                                title={!expanded ? s(annotation.comment) : undefined}
+                              >
+                                {expanded
+                                  ? s(annotation.comment)
+                                  : compactText(annotation.comment, 150)}
                               </p>
-                            ))}
-                          </div>
+                            </div>
+                          ) : null}
+                          {expanded && (linkedGaps.length || linkedReqs.length) ? (
+                            <div className="mt-2 space-y-1 text-[11px] text-stone-600">
+                              {linkedGaps.map((gapId) => (
+                                <p key={gapId}>
+                                  Bilgi Açığı: {s(gapById.get(gapId)?.description)}
+                                </p>
+                              ))}
+                              {linkedReqs.map((requirementId) => (
+                                <p key={requirementId}>
+                                  Toplama Gereksinimi: {s(requirementById.get(requirementId)?.requirement)}
+                                </p>
+                              ))}
+                            </div>
+                          ) : null}
                         </>
                       )}
                       {legacy ? (
@@ -1000,10 +1135,24 @@ export function SourceReaderWorkspace({
                           events={timelineEvents}
                           timelineLinks={annTimelineLinks.get(id) ?? []}
                           outputs={annProcessingOutputs.get(id) ?? []}
+                          sourceClaimAssertions={annSourceClaimAssertions.get(id) ?? []}
                           options={processingOptions}
+                          compact={!expanded}
                         />
                       ) : null}
-                      <div className="mt-2 flex flex-wrap gap-3">
+                      <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-stone-800/70 pt-2">
+                        <button
+                          type="button"
+                          className="text-xs text-stone-500 hover:text-stone-200"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setExpandedAnnotationId((current) =>
+                              current === id ? null : id,
+                            );
+                          }}
+                        >
+                          {expanded ? "Daralt" : "Detay"}
+                        </button>
                         {!legacy && annotation.page_number ? (
                           <button
                             type="button"
@@ -1049,7 +1198,7 @@ export function SourceReaderWorkspace({
                     </article>
                   );
                 })}
-                {!annotations.length ? (
+                {!liveAnnotations.length ? (
                   <p className="text-xs text-stone-600">Henüz işaretleme yok.</p>
                 ) : null}
               </div>
