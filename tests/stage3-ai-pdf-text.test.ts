@@ -34,12 +34,14 @@ describe("Stage 3 server-side PDF context", () => {
     const font=await document.embedFont(StandardFonts.Helvetica);
     for(let index=1;index<=3;index++)
       document.addPage([500,700]).drawText(`Evidence from page ${index}`,{x:30,y:600,font,size:12});
-    const bytes=Uint8Array.from(await document.save()).buffer;
-    await expect(extractPdfPages(bytes,"all",{maxDocumentPages:2}))
+    const savedBytes=Uint8Array.from(await document.save());
+    // PDF.js may transfer/detach its input ArrayBuffer; each parse needs a fresh buffer.
+    const freshBytes=()=>Uint8Array.from(savedBytes).buffer;
+    await expect(extractPdfPages(freshBytes(),"all",{maxDocumentPages:2}))
       .rejects.toMatchObject({code:"pdf_document_too_large"});
-    await expect(extractPdfPages(bytes,"all",{maxDocumentChars:15}))
+    await expect(extractPdfPages(freshBytes(),"all",{maxDocumentChars:15}))
       .rejects.toMatchObject({code:"pdf_document_too_large"});
-    const pageOnly=await extractPdfPages(bytes,[2]);
+    const pageOnly=await extractPdfPages(freshBytes(),[2]);
     expect(pageOnly.map((p)=>p.page)).toEqual([2]);
   });
 
