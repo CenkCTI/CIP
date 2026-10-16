@@ -49,7 +49,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
     await screen.findByText("NVIDIA connected");
     const question=screen.getByLabelText(/Ask about Page 5/);
     fireEvent.change(question,{target:{value:"What does this source report?"}});
-    fireEvent.click(screen.getByRole("button",{name:"Ask",exact:true}));
+    fireEvent.click(screen.getByRole("button",{name:/^Ask$/}));
     await screen.findByText("The source reports use of phishing.");
     const sent=fetchMock.mock.calls.find((args)=>args[0]===`/api/projects/${projectId}/ai/processing`);
     expect(sent).toBeTruthy();
@@ -68,7 +68,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
     render(<ProcessingCopilot {...props}/>);
     await screen.findByText("NVIDIA not connected");
     expect(screen.getByTestId("existing-byok-panel").textContent).toContain("nvidia_nim");
-    expect(screen.getByRole("button",{name:"Ask",exact:true}).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button",{name:/^Ask$/}).hasAttribute("disabled")).toBe(true);
     expect(document.querySelector('input[type="password"]')).toBeNull();
     expect(window.sessionStorage.getItem(COPILOT_WINDOW_KEY) ?? "").not.toContain("apiKey");
   });
