@@ -56,7 +56,7 @@ describe("NVIDIA BYOK to Copilot send integration",()=>{
     await screen.findByText("NVIDIA connected");
     fireEvent.change(screen.getByLabelText(/Ask about Page 5/),{target:{value:"What does this page report?"}});
     await waitFor(()=>expect(ask.hasAttribute("disabled")).toBe(false));
-    fireEvent.click(ask);
+    fireEvent.keyDown(screen.getByLabelText(/Ask about Page 5/),{key:"Enter",code:"Enter"});
     await screen.findByText("A source-reported fact.");
     const sent=fetchMock.mock.calls.find(([url])=>url===requestUrl);
     expect(sent).toBeTruthy();
