@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import type { Stage3Candidate } from "@/lib/ai/stage3/candidates";
 import { useRouter } from "next/navigation";
 
 import {
@@ -113,10 +114,12 @@ function CreateFields({
   destination,
   annotation,
   candidate,
+  aiCandidate,
 }: {
   destination: ProcessingDestination;
   annotation: Row;
   candidate?: { observedValue: string; canonicalValue: string; type: string } | null;
+  aiCandidate?: Stage3Candidate | null;
 }) {
   const excerpt = text(annotation.selected_text) || text(annotation.comment);
   const cve = excerpt.match(/CVE-\d{4}-\d{4,}/i)?.[0]?.toUpperCase() ?? "";
@@ -132,7 +135,7 @@ function CreateFields({
             <select
               className="field"
               name="type"
-              defaultValue={candidate?.type ?? "DOMAIN"}
+              defaultValue={aiCandidate?.kind === "INDICATOR" ? aiCandidate.indicatorType : candidate?.type ?? "DOMAIN"}
             >
               {["IP", "CIDR", "DOMAIN", "URL", "HASH", "EMAIL", "FILE", "REGISTRY"].map(
                 (type) => (
@@ -147,7 +150,7 @@ function CreateFields({
               className="field font-mono"
               name="value"
               required
-              defaultValue={candidate?.observedValue ?? ""}
+              defaultValue={aiCandidate?.kind === "INDICATOR" ? aiCandidate.value : candidate?.observedValue ?? ""}
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
@@ -178,7 +181,7 @@ function CreateFields({
       <>
         <label className="grid gap-1">
           <span className="citem-label">Malware / tool name</span>
-          <input className="field" name="name" required maxLength={180} />
+          <input className="field" name="name" required maxLength={180} defaultValue={aiCandidate?.kind === "MALWARE" ? aiCandidate.name : ""}/>
         </label>
         <label className="grid gap-1">
           <span className="citem-label">Family / classification</span>
@@ -226,7 +229,7 @@ function CreateFields({
               className="field font-mono"
               name="cve_id"
               required
-              defaultValue={cve}
+              defaultValue={aiCandidate?.kind === "CVE" ? aiCandidate.cveId : cve}
             />
           </label>
           <label className="grid gap-1">
@@ -282,7 +285,7 @@ function CreateFields({
               className="field font-mono"
               name="technique_id"
               required
-              defaultValue={technique}
+              defaultValue={aiCandidate?.kind === "MITRE" ? aiCandidate.techniqueId : technique}
             />
           </label>
           <label className="grid gap-1">
@@ -312,7 +315,7 @@ function CreateFields({
           <select
             className="field"
             name="mapping_origin"
-            defaultValue="ANALYST_MAPPED"
+            defaultValue={aiCandidate ? "AI_SUGGESTED" : "ANALYST_MAPPED"}
           >
             {mappingOrigins.map((origin) => (
               <option key={origin}>{origin}</option>
@@ -330,7 +333,7 @@ function CreateFields({
           <span className="citem-label">
             Source-reported Campaign / activity name
           </span>
-          <input className="field" name="name" required maxLength={180} />
+          <input className="field" name="name" required maxLength={180} defaultValue={aiCandidate?.kind === "CAMPAIGN" ? aiCandidate.name : ""}/>
         </label>
         <label className="grid gap-1">
           <span className="citem-label">Source-derived description</span>
@@ -354,7 +357,7 @@ function CreateFields({
       <>
         <label className="grid gap-1">
           <span className="citem-label">Canonical tracked name</span>
-          <input className="field" name="name" required maxLength={180} />
+          <input className="field" name="name" required maxLength={180} defaultValue={aiCandidate?.kind === "THREAT_ACTOR" ? aiCandidate.name : ""}/>
         </label>
         <label className="grid gap-1">
           <span className="citem-label">Aliases</span>
@@ -378,7 +381,7 @@ function CreateFields({
         </label>
         <label className="grid gap-1">
           <span className="citem-label">Identity mapping origin</span>
-          <select className="field" name="mapping_origin" defaultValue="ANALYST_MAPPED">
+          <select className="field" name="mapping_origin" defaultValue={aiCandidate ? "AI_SUGGESTED" : "ANALYST_MAPPED"}>
             {mappingOrigins.map((origin) => (
               <option key={origin}>{origin}</option>
             ))}
@@ -402,6 +405,7 @@ function CreateFields({
         <input
           className="field"
           name="claimed_actor_text"
+          defaultValue={aiCandidate?.kind === "ATTRIBUTION_CLAIM" ? aiCandidate.claimedActorText : ""}
           required
           maxLength={500}
         />
@@ -412,7 +416,7 @@ function CreateFields({
           className="field min-h-24"
           name="claim_summary"
           required
-          defaultValue={excerpt}
+          defaultValue={aiCandidate?.kind === "ATTRIBUTION_CLAIM" ? aiCandidate.attributionText : excerpt}
         />
       </label>
     </>
@@ -429,6 +433,7 @@ export function AnnotationProcessingActions({
   sourceClaimAssertions,
   options,
   compact = false,
+  aiCandidate,
 }: {
   projectId: string;
   sourceId: string;
@@ -439,11 +444,23 @@ export function AnnotationProcessingActions({
   sourceClaimAssertions: Row[];
   options: ProcessingOptions;
   compact?: boolean;
+  aiCandidate?: Stage3Candidate | null;
 }) {
   const router = useRouter();
   const state = (text(annotation.processing_state) ||
     "UNPROCESSED") as AnnotationProcessingState;
   const [open, setOpen] = useState(false);
+  useEffect(()=>{
+    if(!aiCandidate)return;
+    const destinations:Record<Stage3Candidate["kind"],SourceReaderDestination>={
+      SOURCE_CLAIM:"source_claim",INDICATOR:"indicator",TIMELINE:"timeline",
+      MALWARE:"malware",CVE:"cve",MITRE:"mitre",THREAT_ACTOR:"actor",CAMPAIGN:"campaign",
+      ATTRIBUTION_CLAIM:"attribution_claim",UNANSWERED_QUESTION:"source_claim",
+    };
+    setDestination(destinations[aiCandidate.kind]);
+    setOrigin("AI_SUGGESTED");
+    setOpen(true);
+  },[aiCandidate]);
   const [destination, setDestination] = useState<SourceReaderDestination>(
     "timeline",
   );
@@ -854,6 +871,8 @@ export function AnnotationProcessingActions({
                     annotation={annotation}
                     claims={options.source_claim}
                     assertions={sourceClaimAssertions}
+                    aiCandidate={aiCandidate?.kind === "SOURCE_CLAIM" ? aiCandidate : null}
+                    key={aiCandidate?.candidateId ?? "manual-claim"}
                   />
                 ) : (
                   <div className="space-y-5">
@@ -1000,10 +1019,15 @@ export function AnnotationProcessingActions({
                         </p>
                       </div>
 
+                      {aiCandidate ? <p className="rounded border border-amber-700/50 bg-amber-950/20 p-2 text-xs text-amber-300">
+                        AI SUGGESTION · Review before creating. Nothing has been saved.
+                      </p> : null}
                       <CreateFields
+                        key={aiCandidate?.candidateId ?? "manual"}
                         destination={destination}
                         annotation={annotation}
                         candidate={candidate}
+                        aiCandidate={aiCandidate}
                       />
 
                       {destination === "attribution_claim" ? (
