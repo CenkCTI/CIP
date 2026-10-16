@@ -203,12 +203,14 @@ function PdfPage({
 }
 
 export function PdfSourceViewer({
-  projectId,sourceId,assetId,signedUrl,annotations,fragments,gaps,requirements,defaultGapIds,defaultRequirementIds,focusedAnnotationId,onAnnotationSelect,onAnnotationCreated,
+  projectId,sourceId,assetId,signedUrl,annotations,fragments,gaps,requirements,defaultGapIds,defaultRequirementIds,focusedAnnotationId,onAnnotationSelect,onAnnotationCreated,onActivePageChange,onPageCountChange,
 }:{
   projectId:string;sourceId:string;assetId:string;signedUrl:string;annotations:Row[];fragments:Row[];gaps:Row[];requirements:Row[];
   defaultGapIds:string[];defaultRequirementIds:string[];focusedAnnotationId?:string|null;
   onAnnotationSelect?:(annotationId:string)=>void;
   onAnnotationCreated?:(payload:PdfAnnotationCreated)=>void;
+  onActivePageChange?:(page:number)=>void;
+  onPageCountChange?:(count:number)=>void;
 }){
   const rootRef=useRef<HTMLDivElement>(null);
   const pagesRef=useRef<HTMLDivElement>(null);
@@ -216,6 +218,7 @@ export function PdfSourceViewer({
   const viewports=useRef(new Map<number,{viewport:PdfViewportLike;base:PdfViewportLike}>());
   const pendingRestoreRef=useRef<PersistedPdfViewState|null>(null);
   const restoredViewRef=useRef(false);
+  const lastReportedPage=useRef(0);
   const viewStateKey=useMemo(
     ()=>`citem:pdf-view:${projectId}:${sourceId}:${assetId}:v1`,
     [projectId,sourceId,assetId],
@@ -233,6 +236,34 @@ export function PdfSourceViewer({
   const [requirementIds,setRequirementIds]=useState<string[]>(defaultRequirementIds);
   const [message,setMessage]=useState("");
   const [saving,startSaving]=useTransition();
+
+  const reportVisiblePage=useCallback(()=>{
+    const container=pagesRef.current;
+    if(!container||!onActivePageChange)return;
+    const box=container.getBoundingClientRect();
+    const probe=box.top + Math.min(150,box.height*.35);
+    const pages=container.querySelectorAll<HTMLElement>("[data-pdf-page-number]");
+    let visible=1;
+    for(const node of pages){
+      const bounds=node.getBoundingClientRect();
+      if(bounds.bottom > probe){
+        visible=Number(node.dataset.pdfPageNumber)||1;
+        break;
+      }
+    }
+    if(visible!==lastReportedPage.current){
+      lastReportedPage.current=visible;
+      onActivePageChange(visible);
+    }
+  },[onActivePageChange]);
+  useEffect(()=>{
+    onPageCountChange?.(pdf?.numPages??0);
+    lastReportedPage.current=0;
+    if(pdf){
+      const frame=window.requestAnimationFrame(reportVisiblePage);
+      return()=>window.cancelAnimationFrame(frame);
+    }
+  },[pdf,onPageCountChange,reportVisiblePage]);
 
   const persistViewState=useCallback((scaleOverride?:number)=>{
     if(typeof window==="undefined"||!restoredViewRef.current)return;
@@ -507,7 +538,7 @@ export function PdfSourceViewer({
     {pdf&&pdfjs?<div
       ref={pagesRef}
       className="citem-pdf-pages"
-      onScroll={()=>persistViewState()}
+      onScroll={()=>{persistViewState();reportVisiblePage();}}
     >
       {Array.from({length:pdf.numPages},(_,index)=><PdfPage
         key={index+1} pdf={pdf} pdfjs={pdfjs} pageNumber={index+1} scale={scale}
