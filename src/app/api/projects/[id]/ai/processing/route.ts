@@ -13,6 +13,7 @@ import { Stage3PdfError } from "@/lib/ai/stage3/pdf-text";
 import { modelFacingSpans } from "@/lib/ai/stage3/provenance";
 import { stage3RequestSchema } from "@/lib/ai/stage3/schemas";
 import { runStage3Processing } from "@/lib/ai/stage3/workflows";
+import { runStage3CandidateExtraction } from "@/lib/ai/stage3/candidate-workflow";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
