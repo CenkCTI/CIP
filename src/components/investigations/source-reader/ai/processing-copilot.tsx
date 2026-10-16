@@ -70,6 +70,7 @@ export function ProcessingCopilot({
   const [showConnection, setShowConnection] = useState(false);
   const [context, setContext] = useState<CopilotContext>({kind:"page",page:1});
   const [question, setQuestion] = useState("");
+  const [responseLanguage, setResponseLanguage] = useState<"auto" | "tr" | "en">("auto");
   const [turns, setTurns] = useState<CopilotTurn[]>([]);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
@@ -135,6 +136,7 @@ export function ProcessingCopilot({
         body:JSON.stringify({sourceId,assetId,context:captured,mode,
           ...(mode==="ask"?{question:prompt.trim().slice(0,1500)}:{}),
           ...(history.length?{history}:{}),
+          ...(responseLanguage!=="auto"?{responseLanguage}:{}),
           byokConsent:true}),
         signal:abort.signal,
         cache:"no-store",
@@ -220,6 +222,14 @@ export function ProcessingCopilot({
         annotationId={selectedAnnotationId} activePage={activePage}
         totalPages={pageCount} sourceTitle={sourceTitle} />
       <div className="flex flex-wrap items-center gap-2 border-b border-stone-800 px-4 py-2 text-xs">
+        <label htmlFor="stage3-copilot-response-language" className="text-stone-300">Response language</label>
+        <select id="stage3-copilot-response-language" value={responseLanguage}
+          onChange={(event)=>setResponseLanguage(event.currentTarget.value as "auto" | "tr" | "en")}
+          className="rounded border border-stone-700 bg-stone-950 p-1 text-amber-200">
+          <option value="auto">Auto (question)</option>
+          <option value="tr">Türkçe</option>
+          <option value="en">English</option>
+        </select>
         <button type="button" disabled={!canSend} onClick={()=>void submit("analyse","")}
           className="rounded bg-amber-800/60 px-3 py-1.5 text-amber-100 disabled:opacity-40">
           Analyse context
