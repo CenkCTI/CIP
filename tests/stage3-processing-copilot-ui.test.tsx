@@ -91,7 +91,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
     expect(screen.queryByLabelText(/Selected pages/)).toBeNull();
     fireEvent.click(screen.getByRole("button",{name:/Change context/}));
     expect(screen.getByLabelText(/Selected pages/)).toBeTruthy();
-    expect((screen.getByLabelText(/Entire PDF/) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole("radio",{name:/^Entire PDF/}) as HTMLInputElement).checked).toBe(true);
     fireEvent.click(screen.getByRole("button",{name:/Hide context/}));
     expect(screen.queryByLabelText(/Selected pages/)).toBeNull();
     fireEvent.change(screen.getByLabelText(/Ask about Entire PDF/),{target:{value:"Please explain"}});
