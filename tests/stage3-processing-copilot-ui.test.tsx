@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { ProcessingCopilot, validCopilotContext } from "@/components/investigations/source-reader/ai/processing-copilot";
@@ -70,7 +70,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
     expect(screen.getByTestId("existing-byok-panel").textContent).toContain("nvidia_nim");
     expect(screen.getByRole("button",{name:"Ask",exact:true}).hasAttribute("disabled")).toBe(true);
     expect(document.querySelector('input[type="password"]')).toBeNull();
-    expect(window.sessionStorage.getItem(COPILOT_WINDOW_KEY)).not.toContain("apiKey");
+    expect(window.sessionStorage.getItem(COPILOT_WINDOW_KEY) ?? "").not.toContain("apiKey");
   });
 
   it("allows annotation selection, page range, docking and closing",async()=>{
