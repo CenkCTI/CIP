@@ -35,7 +35,7 @@ function responseError(error: unknown) {
     body_too_large:[413,"Request is too large."],
     byok_required:[401,"Connect NVIDIA NIM before processing."],
     byok_expired:[401,"NVIDIA BYOK session expired."],
-    byok_binding_mismatch:[401,"BYOK session is not valid for this user."],
+    byok_binding_mismatch:[401,"BYOK session is not valid for this user."],\n    invalid_byok_cookie:[401,"Reconnect NVIDIA NIM before processing."],\n    key_rejected:[401,"NVIDIA rejected the BYOK credential."],\n    provider_forbidden:[403,"NVIDIA provider access was denied."],
     byok_consent_required:[400,"Explicit BYOK consent is required."],
     unsupported_provider:[400,"Stage 3 currently requires NVIDIA NIM."],
     unsupported_model:[400,"The NVIDIA model is not approved."],
