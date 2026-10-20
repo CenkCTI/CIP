@@ -27,6 +27,16 @@ export function ensureCitemPdfFonts() {
         src: path.join(standardFonts, "LiberationSans-Bold.ttf"),
         fontWeight: 700,
       },
+      {
+        src: path.join(standardFonts, "LiberationSans-Italic.ttf"),
+        fontWeight: 400,
+        fontStyle: "italic",
+      },
+      {
+        src: path.join(standardFonts, "LiberationSans-BoldItalic.ttf"),
+        fontWeight: 700,
+        fontStyle: "italic",
+      },
     ],
   });
 
