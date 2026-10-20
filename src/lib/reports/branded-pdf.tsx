@@ -127,7 +127,7 @@ export function reportPdfMetadata(record:Row,versioned:boolean) {
   return { title,type,status,issued,created,
     version:versioned?value(record.version_number):null,
     author:versioned ? value(record.created_by) : null,
-    draft:!versioned || record.version_status!=="PUBLISHED",
+    draft:!versioned || !record.published_at,
   };
 }
 
