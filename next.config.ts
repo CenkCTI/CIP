@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
     "/api/projects/*/reports/*/export/*": [
       "./node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf",
       "./node_modules/pdfjs-dist/standard_fonts/LiberationSans-Bold.ttf",
+      "./node_modules/pdfjs-dist/standard_fonts/LiberationSans-Italic.ttf",
+      "./node_modules/pdfjs-dist/standard_fonts/LiberationSans-BoldItalic.ttf",
     ],
     // Use a wildcard for the dynamic [id] segment. Picomatch treats bare
     // brackets as a character class, so an unescaped literal "[id]" fails
