@@ -7,8 +7,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     // Embed the same Turkish-capable Liberation Sans fonts in server-rendered reports.
     "/api/projects/*/reports/*/export/*": [
-      "./node_modules/pdfjs-dist/standard_fonts/LiberationSans-Bold.ttf",
-      "./node_modules/pdfjs-dist/standard_fonts/LiberationSans-BoldItalic.ttf",
+      "./src/lib/reports/assets/*.ttf",
     ],
     // Use a wildcard for the dynamic [id] segment. Picomatch treats bare
     // brackets as a character class, so an unescaped literal "[id]" fails
