@@ -10,7 +10,7 @@ type Row = Record<string, unknown>;
 
 const s = StyleSheet.create({
   cover: {
-    backgroundColor: C.charcoal, color: C.white, fontFamily: CITEM_PDF_FONT_FAMILY,
+    height: 841.89, backgroundColor: C.charcoal, color: C.white, fontFamily: CITEM_PDF_FONT_FAMILY,
     paddingHorizontal: 54, paddingTop: 53, paddingBottom: 42,
   },
   coverAccent: {
@@ -56,12 +56,15 @@ const s = StyleSheet.create({
   runningBrand: { fontSize: 10.5, color: C.amberDark, fontWeight: 700, letterSpacing: 1.6 },
   runningType: { fontSize: 8.2, color: C.secondary },
   runningFooter: {
-    position: "absolute", bottom: 27, left: 51, right: 51,
+    position: "absolute", top: 785, left: 51, right: 51,
     borderTopWidth: 1, borderTopColor: C.rule, paddingTop: 10,
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
   },
   footerLabel: { color: C.secondary, fontSize: 8.2 },
-  footerNo: { color: C.amberDark, fontWeight: 700, fontSize: 8.8 },
+  footerNo: {
+    position: "absolute", top: 795, right: 51,
+    color: C.amberDark, fontWeight: 700, fontSize: 8.8,
+  },
   section: { marginBottom: 19 },
   sectionKicker: {
     fontSize: 8, color: C.amberDark, fontWeight: 700, letterSpacing: 1.6,
@@ -147,7 +150,7 @@ export function BrandedReportPdf({record,content,versioned}:{record:Row;content:
     : [];
   return <Document
     title={meta.title} subject={meta.type} creator="CİTEM Report Export" producer="CİTEM / BAYKUSH">
-    <Page size="A4" style={s.cover} wrap={false}>
+    <Page size="A4" style={s.cover}>
       <View style={s.coverAccent}/>
       <Text style={s.coverBrand}>CİTEM</Text>
       <Text style={s.coverBrandSub}>BAYKUSH / CYBER THREAT INTELLIGENCE</Text>
@@ -187,9 +190,9 @@ export function BrandedReportPdf({record,content,versioned}:{record:Row;content:
       </View>
       <View fixed style={s.runningFooter}>
         <Text style={s.footerLabel}>BAYKUSH / CİTEM · {meta.title.slice(0,48)}</Text>
-        <Text fixed style={s.footerNo} render={({pageNumber,totalPages})=>
-          `PAGE ${pageNumber} / ${totalPages}`}/>
       </View>
+      <Text fixed style={s.footerNo} render={({pageNumber,totalPages})=>
+        `PAGE ${pageNumber} / ${totalPages}`}/>
       <SectionHeading number="00" title="Document information"/>
       <View style={s.metaBox}>
         <View style={s.metaRow}><Text style={s.metaKey}>Product type</Text><Text style={s.metaValue}>{meta.type}</Text></View>
