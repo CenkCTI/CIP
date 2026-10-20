@@ -26,7 +26,7 @@ const providers: ByokProviderOption[] = [
 ];
 const DEFAULT_NVIDIA_MODEL = "nvidia/nemotron-3-super-120b-a12b";
 const modelOptionLabel = (modelId: string) => modelId === DEFAULT_NVIDIA_MODEL
-  ? "Nemotron 3 Super 120B · Recommended"
+  ? `Nemotron 3 Super 120B · Recommended · ${modelId}`
   : modelId;
 
 const errorText: Record<string, string> = { key_rejected: "Provider rejected the API key.", provider_rate_limited: "Provider rate limit reached.", timeout: "Provider timed out.", provider_unreachable: "Provider is unreachable.", unsupported_model: "The selected model is unsupported.", byok_unavailable: "BYOK is not enabled on this server.", auth_required: "Sign in to connect BYOK for project workflows.", guest_session_required: "Start an AI demo session before connecting BYOK.", nvidia_output_exhausted: "NVIDIA returned reasoning without final content. Thinking is disabled for supported Nemotron models; choose an allowlisted model or try again." };
@@ -67,6 +67,9 @@ export function ByokConnectionPanel({ scope, onStatusChange, initialStatus, auto
           value={model} onChange={(e) => setModel(e.target.value)} maxLength={120}
           pattern="[A-Za-z0-9._:/+-]+" placeholder="Explicit supported model"
           className="mt-1 w-full rounded bg-slate-950 p-2 text-white" />}
+        {isNvidiaNim ? <p className="mt-1 break-all font-mono text-[11px] text-[var(--muted-strong)]" data-testid="nvidia-selected-model-id">
+          {model}
+        </p> : null}
         {!isNvidiaNim ? <datalist id={`${id}-models`}>
           {(selectedProvider?.modelAllowlist ?? []).map((m) => <option key={m} value={m} />)}
         </datalist> : null}
