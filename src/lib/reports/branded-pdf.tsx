@@ -1,7 +1,7 @@
 import React from "react";
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 
-import { ensureCitemPdfFonts, CITEM_PDF_FONT_FAMILY } from "@/lib/collection/pdf-fonts";
+import { ensureCitemReportFonts, CITEM_REPORT_FONT_FAMILY } from "./pdf-fonts";
 import type { ReportDoc } from "./schema";
 import { REPORT_PDF_COLORS as C, tiptapToPdfElements } from "./render";
 import { attributionDisclaimer } from "./versioning";
@@ -10,7 +10,7 @@ type Row = Record<string, unknown>;
 
 const s = StyleSheet.create({
   cover: {
-    height: 841.89, backgroundColor: C.charcoal, color: C.white, fontFamily: CITEM_PDF_FONT_FAMILY,
+    height: 841.89, backgroundColor: C.charcoal, color: C.white, fontFamily: CITEM_REPORT_FONT_FAMILY,
     paddingHorizontal: 54, paddingTop: 53, paddingBottom: 42,
   },
   coverAccent: {
@@ -44,7 +44,7 @@ const s = StyleSheet.create({
   },
   coverFoot: { marginTop: 21, fontSize: 8, letterSpacing: 1.1, color: "#989E9D" },
   body: {
-    backgroundColor: C.paper, color: C.ink, fontFamily: CITEM_PDF_FONT_FAMILY,
+    backgroundColor: C.paper, color: C.ink, fontFamily: CITEM_REPORT_FONT_FAMILY,
     fontSize: 10.3, lineHeight: 1.48,
     paddingTop: 77, paddingBottom: 63, paddingHorizontal: 51,
   },
@@ -143,7 +143,7 @@ function SectionHeading({number,title}:{number:string;title:string}){
 }
 
 export function BrandedReportPdf({record,content,versioned}:{record:Row;content:ReportDoc;versioned:boolean}){
-  ensureCitemPdfFonts();
+  ensureCitemReportFonts();
   const meta=reportPdfMetadata(record,versioned);
   const refs=versioned && Array.isArray(record.report_version_references)
     ? record.report_version_references.filter((x):x is Row=>x!==null && typeof x==="object" && !Array.isArray(x))
