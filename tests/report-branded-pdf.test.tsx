@@ -90,7 +90,7 @@ describe("CİTEM branded report PDF",()=>{
   it("renders a legible multi-page A4 report with an actual cover, Turkish Unicode, sections and appendix",async()=>{
     const buf=await renderToBuffer(<BrandedReportPdf record={version} content={doc} versioned={true}/>);
     savePreview("citem-report-issued-version.pdf",buf);
-    const pdf=await PDFDocument.load(buf);
+    const pdf=await PDFDocument.load(Uint8Array.from(buf));
     expect(pdf.getPageCount()).toBeGreaterThanOrEqual(2);
     for(const page of pdf.getPages()){
       expect(page.getWidth()).toBeCloseTo(595.28,0);
@@ -121,7 +121,8 @@ describe("CİTEM branded report PDF",()=>{
     savePreview("citem-report-working-draft-multipage.pdf",buf);
     const pages=await extractText(buf);
     expect(pages.length).toBeGreaterThan(2);
-    expect(pages.slice(1).every((page)=>page.includes("PAGE"))).toBe(true);
+    expect(pages.slice(1).map((page)=>page.includes("PAGE"))).toEqual(
+      Array.from({length:pages.length-1},()=>true));
     expect(pages.join(" ")).toContain("Section 70");
     expect(pages[0]).toContain("WORKING / UNPUBLISHED COPY");
   },30000);
