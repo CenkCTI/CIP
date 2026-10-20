@@ -1,0 +1,44 @@
+name: Report PDF visual preview
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/lib/reports/**"
+      - "src/lib/collection/pdf-fonts.ts"
+      - "src/app/api/projects/*/reports/*/export/*/**"
+      - "tests/report-branded-pdf.test.tsx"
+      - "tests/report-export-route.test.ts"
+      - "next.config.ts"
+      - ".github/workflows/report-pdf-design-preview.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: report-pdf-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Render real PDF layout fixtures and verify page text
+        env:
+          REPORT_PDF_PREVIEW_DIR: ${{ runner.temp }}/report-pdf-previews
+        run: npm test -- tests/report-branded-pdf.test.tsx tests/report-export-route.test.ts tests/reports.test.ts
+      - name: Downloadable CİTEM PDF previews
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: citem-report-pdf-previews
+          path: ${{ runner.temp }}/report-pdf-previews/*.pdf
+          if-no-files-found: error
+          retention-days: 7
