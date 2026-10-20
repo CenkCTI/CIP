@@ -1,6 +1,6 @@
 import React from "react";
 import { NextResponse } from "next/server";
-import { renderToBuffer } from "@react-pdf/renderer";
+import { Document, renderToBuffer } from "@react-pdf/renderer";
 import { requireUser } from "@/lib/auth";
 import { parseJsonDoc, safeReportFilename, type ReportDoc } from "@/lib/reports/schema";
 import { escapeHtml, standaloneHtml, tiptapToMarkdown } from "@/lib/reports/render";
