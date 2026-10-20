@@ -35,7 +35,7 @@ jobs:
           REPORT_PDF_PREVIEW_DIR: ${{ runner.temp }}/report-pdf-previews
         run: npm test -- tests/report-branded-pdf.test.tsx tests/report-export-route.test.ts tests/reports.test.ts
       - name: Downloadable CİTEM PDF previews
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: citem-report-pdf-previews
