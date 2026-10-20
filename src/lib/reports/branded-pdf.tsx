@@ -187,7 +187,7 @@ export function BrandedReportPdf({record,content,versioned}:{record:Row;content:
       </View>
       <View fixed style={s.runningFooter}>
         <Text style={s.footerLabel}>BAYKUSH / CİTEM · {meta.title.slice(0,48)}</Text>
-        <Text style={s.footerNo} render={({pageNumber,totalPages})=>
+        <Text fixed style={s.footerNo} render={({pageNumber,totalPages})=>
           `PAGE ${pageNumber} / ${totalPages}`}/>
       </View>
       <SectionHeading number="00" title="Document information"/>
