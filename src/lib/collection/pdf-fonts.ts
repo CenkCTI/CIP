@@ -20,7 +20,7 @@ export function ensureCitemPdfFonts() {
     family: CITEM_PDF_FONT_FAMILY,
     fonts: [
       {
-        src: path.join(standardFonts, "LiberationSans-Regular.ttf"),
+        src: path.join(standardFonts, "LiberationSerif-Regular.ttf"),
         fontWeight: 400,
       },
       {
@@ -28,7 +28,7 @@ export function ensureCitemPdfFonts() {
         fontWeight: 700,
       },
       {
-        src: path.join(standardFonts, "LiberationSans-Italic.ttf"),
+        src: path.join(standardFonts, "LiberationSerif-Italic.ttf"),
         fontWeight: 400,
         fontStyle: "italic",
       },
