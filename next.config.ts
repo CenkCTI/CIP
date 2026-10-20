@@ -7,9 +7,9 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     // Embed the same Turkish-capable Liberation Sans fonts in server-rendered reports.
     "/api/projects/*/reports/*/export/*": [
-      "./node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf",
+      "./node_modules/pdfjs-dist/standard_fonts/LiberationSerif-Regular.ttf",
       "./node_modules/pdfjs-dist/standard_fonts/LiberationSans-Bold.ttf",
-      "./node_modules/pdfjs-dist/standard_fonts/LiberationSans-Italic.ttf",
+      "./node_modules/pdfjs-dist/standard_fonts/LiberationSerif-Italic.ttf",
       "./node_modules/pdfjs-dist/standard_fonts/LiberationSans-BoldItalic.ttf",
     ],
     // Use a wildcard for the dynamic [id] segment. Picomatch treats bare
