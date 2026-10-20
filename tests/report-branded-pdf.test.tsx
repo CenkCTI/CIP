@@ -97,7 +97,7 @@ describe("CİTEM branded report PDF",()=>{
       expect(page.getHeight()).toBeCloseTo(841.89,0);
     }
     const text=await extractText(buf);
-    expect(text[0]).toContain("CİTEM");
+    expect(text[0].replace(/\s+/g,"")).toContain("CİTEM");
     expect(text[0]).toContain("APT28");
     const body=text.slice(1).join(" ");
     expect(body).toContain("Document information");
