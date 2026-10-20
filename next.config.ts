@@ -5,6 +5,11 @@ const nextConfig: NextConfig = {
   // outside the Next.js server bundler. Browser PDF viewing is unaffected.
   serverExternalPackages: ["pdfjs-dist", "@napi-rs/canvas"],
   outputFileTracingIncludes: {
+    // Embed the same Turkish-capable Liberation Sans fonts in server-rendered reports.
+    "/api/projects/*/reports/*/export/*": [
+      "./node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf",
+      "./node_modules/pdfjs-dist/standard_fonts/LiberationSans-Bold.ttf",
+    ],
     // Use a wildcard for the dynamic [id] segment. Picomatch treats bare
     // brackets as a character class, so an unescaped literal "[id]" fails
     // to match the route key and Next.js silently omits traced native files.
