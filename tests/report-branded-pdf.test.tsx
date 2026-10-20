@@ -1,4 +1,6 @@
 import React from "react";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
@@ -49,6 +51,12 @@ const version={
     source_updated_at:"2026-10-19T12:00:00Z",
   }],
 };
+function savePreview(name:string,bytes:Buffer){
+  const directory=process.env.REPORT_PDF_PREVIEW_DIR;
+  if(!directory)return;
+  mkdirSync(directory,{recursive:true});
+  writeFileSync(join(directory,name),bytes);
+}
 async function extractText(bytes:Buffer){
   const {getDocument}=await import("pdfjs-dist/legacy/build/pdf.mjs");
   // PDF.js may transfer the provided bytes; never reuse the underlying buffer.
@@ -81,6 +89,7 @@ describe("CİTEM branded report PDF",()=>{
   });
   it("renders a legible multi-page A4 report with an actual cover, Turkish Unicode, sections and appendix",async()=>{
     const buf=await renderToBuffer(<BrandedReportPdf record={version} content={doc} versioned={true}/>);
+    savePreview("citem-report-issued-version.pdf",buf);
     const pdf=await PDFDocument.load(buf);
     expect(pdf.getPageCount()).toBeGreaterThanOrEqual(2);
     for(const page of pdf.getPages()){
@@ -109,6 +118,7 @@ describe("CİTEM branded report PDF",()=>{
     expect(long.success).toBe(true);
     if(!long.success) return;
     const buf=await renderToBuffer(<BrandedReportPdf record={{title:"Multi-page",type:"CTI",status:"DRAFT",updated_at:"2026-10-20"}} content={long.data} versioned={false}/>);
+    savePreview("citem-report-working-draft-multipage.pdf",buf);
     const pages=await extractText(buf);
     expect(pages.length).toBeGreaterThan(2);
     expect(pages.slice(1).every((page)=>page.includes("PAGE"))).toBe(true);
