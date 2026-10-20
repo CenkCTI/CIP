@@ -1,0 +1,48 @@
+name: Vendor report fonts once
+
+on:
+  push:
+    branches: [design/reports-branded-pdf-export]
+    paths: [".github/workflows/vendor-report-fonts-once.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  vendor:
+    if: github.repository == 'CenkCTI/CIP'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Download pinned OFL font sources and make static font variants
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p src/lib/reports/assets
+          python3 -m pip install --disable-pip-version-check --quiet --user fonttools==4.63.0
+          base="https://raw.githubusercontent.com/google/fonts/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/figtree"
+          curl --fail --location --retry 3 --silent --show-error "$base/Figtree%5Bwght%5D.ttf" -o /tmp/Figtree.ttf
+          curl --fail --location --retry 3 --silent --show-error "$base/Figtree-Italic%5Bwght%5D.ttf" -o /tmp/Figtree-Italic.ttf
+          curl --fail --location --retry 3 --silent --show-error "$base/OFL.txt" -o src/lib/reports/assets/OFL.txt
+          python3 - <<'PY'
+          from fontTools.ttLib import TTFont
+          from fontTools.varLib.instancer import instantiateVariableFont
+          variants=[('/tmp/Figtree.ttf',400,'figtree-regular.ttf'),('/tmp/Figtree.ttf',700,'figtree-bold.ttf'),('/tmp/Figtree-Italic.ttf',400,'figtree-italic.ttf')]
+          for source,weight,name in variants:
+              font=TTFont(source)
+              instantiateVariableFont(font,{'wght':weight},inplace=True)
+              font.save('src/lib/reports/assets/'+name)
+              print(name)
+          PY
+          sha256sum src/lib/reports/assets/*.ttf
+      - name: Commit font assets to design branch only
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/reports/assets
+          git commit -m "assets(reports): vendor licensed Turkish-capable Figtree report fonts"
+          git push origin HEAD:design/reports-branded-pdf-export
