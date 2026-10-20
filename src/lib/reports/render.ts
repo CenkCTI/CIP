@@ -208,48 +208,71 @@ export function tiptapToMarkdown(doc: ReportDoc, title?: string) {
 export function plainText(doc: ReportDoc) {
   return tiptapToMarkdown(doc).replace(/[#*_`>|-]/g, "");
 }
+// Print-safe equivalents of CİTEM's charcoal / bronze / amber UI palette.
+// Warm ivory paper keeps long intelligence assessments legible when printed.
+export const REPORT_PDF_COLORS = {
+  charcoal: "#14191D",
+  charcoalSoft: "#222B30",
+  amber: "#B9822F",
+  amberDark: "#80581E",
+  amberLight: "#D4A958",
+  ink: "#253038",
+  secondary: "#58636B",
+  rule: "#D9D2C5",
+  paper: "#FCFBF8",
+  panel: "#F2EFE9",
+  white: "#FFFFFF",
+} as const;
+
 export const pdfStyles: Record<string, PdfStyle> = StyleSheet.create({
-  h1: { fontSize: 22, marginBottom: 10, fontWeight: 700 },
-  h2: { fontSize: 18, marginBottom: 8, fontWeight: 700 },
-  h3: { fontSize: 15, marginBottom: 6, fontWeight: 700 },
-  p: { marginBottom: 7 },
+  h1: {
+    color: REPORT_PDF_COLORS.charcoal, fontSize: 19, lineHeight: 1.3,
+    marginTop: 20, marginBottom: 11, paddingBottom: 8,
+    borderBottomWidth: 2, borderBottomColor: REPORT_PDF_COLORS.amber,
+    fontWeight: 700,
+  },
+  h2: {
+    color: REPORT_PDF_COLORS.charcoal, fontSize: 14, lineHeight: 1.32,
+    marginTop: 16, marginBottom: 9, fontWeight: 700,
+    borderLeftWidth: 3, borderLeftColor: REPORT_PDF_COLORS.amber,
+    paddingLeft: 10,
+  },
+  h3: {
+    color: REPORT_PDF_COLORS.ink, fontSize: 11.5, lineHeight: 1.35,
+    marginTop: 12, marginBottom: 6, fontWeight: 700,
+  },
+  p: { marginBottom: 9, color: REPORT_PDF_COLORS.ink, fontSize: 10.2, lineHeight: 1.52 },
   bold: { fontWeight: 700 },
   italic: { fontStyle: "italic" },
-  code: { fontFamily: "Courier", backgroundColor: "#f1f5f9" },
+  code: { backgroundColor: REPORT_PDF_COLORS.panel, color: REPORT_PDF_COLORS.ink },
   quote: {
-    borderLeftWidth: 3,
-    borderLeftColor: "#38bdf8",
-    paddingLeft: 8,
-    marginBottom: 8,
-    color: "#475569",
+    backgroundColor: REPORT_PDF_COLORS.panel,
+    borderLeftWidth: 3, borderLeftColor: REPORT_PDF_COLORS.amber,
+    paddingHorizontal: 12, paddingVertical: 9, marginVertical: 8,
+    color: REPORT_PDF_COLORS.secondary,
   },
   codeBlock: {
-    fontFamily: "Courier",
-    backgroundColor: "#f1f5f9",
-    padding: 8,
-    marginBottom: 8,
+    backgroundColor: REPORT_PDF_COLORS.panel,
+    borderLeftWidth: 2, borderLeftColor: REPORT_PDF_COLORS.rule,
+    color: REPORT_PDF_COLORS.ink, fontSize: 9,
+    padding: 10, marginVertical: 8, lineHeight: 1.45,
   },
-  li: { flexDirection: "row", marginBottom: 4 },
-  bullet: { width: 24 },
+  list: { marginBottom: 9 },
+  li: { flexDirection: "row", marginBottom: 5 },
+  bullet: { width: 22, fontSize: 9.5, color: REPORT_PDF_COLORS.amberDark },
   liText: { flex: 1 },
   table: {
-    display: "flex",
-    width: "100%",
-    marginBottom: 10,
-    borderTopWidth: 1,
-    borderLeftWidth: 1,
-    borderColor: "#cbd5e1",
+    width: "100%", marginVertical: 12,
+    borderTopWidth: 1, borderLeftWidth: 1, borderColor: REPORT_PDF_COLORS.rule,
   },
   row: { flexDirection: "row" },
   cell: {
-    flex: 1,
-    borderRightWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: "#cbd5e1",
-    padding: 4,
+    flex: 1, minWidth: 0, borderRightWidth: 1, borderBottomWidth: 1,
+    borderColor: REPORT_PDF_COLORS.rule, paddingHorizontal: 8, paddingVertical: 7,
+    backgroundColor: REPORT_PDF_COLORS.white,
   },
-  th: { fontWeight: 700, backgroundColor: "#f8fafc" },
-  link: { color: "#0369a1", textDecoration: "underline" },
+  th: { fontWeight: 700, backgroundColor: REPORT_PDF_COLORS.panel },
+  link: { color: REPORT_PDF_COLORS.amberDark, textDecoration: "underline" },
 });
 function pdfInline(ns?: TNode[], keyPrefix = "i"): React.ReactNode[] {
   return (ns ?? []).flatMap((n, i): React.ReactNode[] => {
@@ -304,6 +327,7 @@ function pdfBlock(
         PdfText,
         {
           key,
+          minPresenceAhead: 52,
           style:
             Number(n.attrs?.level) === 1
               ? pdfStyles.h1
@@ -316,7 +340,7 @@ function pdfBlock(
     case "bulletList":
       return React.createElement(
         PdfView,
-        { key },
+        { key, style: pdfStyles.list },
         children(n).map((c, i) =>
           pdfBlock(c, `${key}-${i}`, depth, false, i + 1),
         ),
@@ -325,7 +349,7 @@ function pdfBlock(
       const start = Number(n.attrs?.start) || 1;
       return React.createElement(
         PdfView,
-        { key },
+        { key, style: pdfStyles.list },
         children(n).map((c, i) =>
           pdfBlock(c, `${key}-${i}`, depth, true, start + i),
         ),
@@ -335,7 +359,7 @@ function pdfBlock(
       const [first, ...rest] = children(n);
       return React.createElement(
         PdfView,
-        { key, style: [pdfStyles.li, { marginLeft: depth * 14 }] },
+        { key, style: [pdfStyles.li, { marginLeft: depth * 13 }] },
         React.createElement(
           PdfText,
           { style: pdfStyles.bullet },
@@ -366,7 +390,7 @@ function pdfBlock(
     case "table":
       return React.createElement(
         PdfView,
-        { key, style: pdfStyles.table },
+        { key, style: pdfStyles.table, wrap: true },
         children(n).map((r, i) => pdfBlock(r, `${key}-${i}`, depth)),
       );
     case "tableRow":
