@@ -16,6 +16,11 @@ describe("shared BYOK connection panel", () => {
     rerender(<AiWorkspace projectId="33333333-3333-4333-8333-333333333333" notes={[]} evidence={[]} campaigns={[]} malware={[]} />);
     expect(screen.getByTestId("byok-connection-panel")).toBeInTheDocument();
     expect(screen.getAllByRole("option", { name: "NVIDIA NIM" }).length).toBeGreaterThan(0);
+    // Authenticated AI Workspace now exposes NVIDIA and the full Nemotron ID
+    // without selecting a provider or typing the model ID manually.
+    expect((screen.getByRole("combobox", { name: "BYOK provider" }) as HTMLSelectElement).value).toBe("nvidia_nim");
+    expect((screen.getByRole("combobox", { name: "BYOK model ID" }) as HTMLSelectElement).value).toBe("nvidia/nemotron-3-super-120b-a12b");
+    expect(screen.getByTestId("nvidia-selected-model-id").textContent?.trim()).toBe("nvidia/nemotron-3-super-120b-a12b");
   });
 
   it("connects without rendering plaintext key and disconnects with structured responses", async () => {
@@ -67,6 +72,7 @@ describe("shared BYOK connection panel", () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ connected: false, state: "disconnected" }) });
     const user = userEvent.setup();
     render(<AiWorkspace projectId="33333333-3333-4333-8333-333333333333" notes={[]} evidence={[]} campaigns={[]} malware={[]} />);
+    await user.selectOptions(screen.getByRole("combobox", { name: "BYOK provider" }), "groq");
     await user.type(screen.getByLabelText("BYOK model ID"), "llama-3.1-8b-instant");
     await user.type(screen.getByLabelText("BYOK API key"), "gsk-secret-test-value");
     await user.click(screen.getByRole("button", { name: "Test and Connect" }));
