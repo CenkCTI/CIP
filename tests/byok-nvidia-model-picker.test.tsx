@@ -12,7 +12,9 @@ describe("NVIDIA NIM model picker",()=>{
     const picker=screen.getByLabelText("BYOK model ID") as HTMLSelectElement;
     expect(picker.tagName).toBe("SELECT");
     expect(picker.value).toBe(preferred);
-    expect(screen.getByRole("option",{name:"Nemotron 3 Super 120B · Recommended"}).getAttribute("value")).toBe(preferred);
+    expect(screen.getByTestId("nvidia-selected-model-id").textContent?.trim()).toBe(preferred);
+
+    expect(screen.getByRole("option",{name:`Nemotron 3 Super 120B · Recommended · ${preferred}`}).getAttribute("value")).toBe(preferred);
     fireEvent.change(picker,{target:{value:alternative}});
     expect(picker.value).toBe(alternative);
   });
