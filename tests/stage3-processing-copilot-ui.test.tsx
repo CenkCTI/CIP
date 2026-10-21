@@ -440,6 +440,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
   it("labels partial source-support explicitly rather than hiding discarded model suggestions",()=>{
     render(<CopilotChat turns={[{id:1,context:{kind:"page",page:5},mode:"analyse",
       prompt:"Analyse",result:{...verified,discarded:2,
+        evidence:verified.evidence.map((item)=>({...item,kind:"PDF" as const})),
         warnings:["Unsupported AI suggestions were discarded."]}}]} onNavigate={vi.fn()}/>);
     expect(screen.getByTestId("copilot-partial-evidence").textContent)
       .toContain("2 unsupported AI suggestions were discarded");
