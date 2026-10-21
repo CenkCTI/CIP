@@ -51,6 +51,28 @@ describe("Stage 3 candidate boundary",()=>{
     expect(verified.candidates).toHaveLength(1);
     expect(verified.candidates[0].kind).toBe("SOURCE_CLAIM");
   });
+  it("keeps supported exact ISO days and discards invented timeline dates",()=>{
+    const day:Stage3CandidateModel={kind:"TIMELINE",eventName:"Incident",description:"Observed incident",
+      sourceTimeExpression:"2026-10-21",normalizedDate:"2026-10-21",temporalPrecision:"DAY",
+      derivation:"EXTRACTED",caveats:[],sourceSupport:support("incident on 2026-10-21")};
+    const daySpan={...span,text:"The incident on 2026-10-21 was reported."};
+    const result=verifyStage3Candidates([day,{...day,normalizedDate:"2026-10-20"}],[daySpan]);
+    expect(result.candidates).toHaveLength(1);
+    expect(result.discarded).toBe(1);
+    const vague:Stage3CandidateModel={...day,sourceTimeExpression:"summer 2023",
+      normalizedDate:null,temporalPrecision:"SEASON",sourceSupport:support("during summer 2023")};
+    expect(verifyStage3Candidates([vague],[{...span,text:"during summer 2023"}]).candidates).toHaveLength(1);
+  });
+  it("rejects negated attribution and invented upgrades while retaining quoted attribution",()=>{
+    const denied="We cannot attribute this campaign to APT28.";
+    const failed:Stage3CandidateModel={...attribution,attributionText:denied,sourceSupport:support(denied)};
+    expect(verifyStage3Candidates([failed],[{...span,text:denied}]).discarded).toBe(1);
+    const affirmed="Mandiant attributes the operation to APT28.";
+    const supported:Stage3CandidateModel={...attribution,attributionText:affirmed,sourceSupport:support(affirmed)};
+    expect(verifyStage3Candidates([supported],[{...span,text:affirmed}]).candidates).toHaveLength(1);
+    expect(verifyStage3Candidates([{...supported,attributionText:"APT28 carried out the attack."}],
+      [{...span,text:affirmed}]).discarded).toBe(1);
+  });
   it("requires exact CVE and reported ATT&CK ID; does not treat model fields as evidence",()=>{
     const fakeCve:Stage3CandidateModel={...cve,cveId:"CVE-2030-98765"};
     const mitre:Stage3CandidateModel={kind:"MITRE",techniqueId:"T1566.002",

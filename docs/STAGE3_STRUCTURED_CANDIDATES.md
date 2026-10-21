@@ -24,9 +24,9 @@ This builds on Phase 1's source provenance gateway and Phase 2's AI chat reader.
 
 ## Work remaining before Phase 3 merge
 
-- Full CI and browser E2E of source annotation prefill, safe document navigation, controlled Create/Link, and negative mismatched-annotation cases.
+- Full CI and authenticated browser E2E of source annotation prefill, safe document navigation, controlled Create/Link, and negative mismatched-annotation cases. Unit tests alone cannot prove the live PostgreSQL no-write-before-confirmation gate.
 - Live NVIDIA/Nemotron response acceptance on a real APT28 PDF: candidate quality, exact quote matching, extraction JSON compliance, duplicate review and user-facing feedback.
-- Improve semantic similarity suggestions for Source Claim (no automatic semantic merge), actor aliases and case-normalized exact name matching.
+- Lexical-overlap Source Claim warnings, case-insensitive literal name lookup and exact actor alias lookups are implemented. No semantic auto-merge; alias case folding requires a future canonical-alias index.
 - Longer documents still need Phase 4 chunk orchestration and review queue.
 
 **Do not merge PR #72 until the acceptance gates pass.**

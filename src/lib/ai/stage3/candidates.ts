@@ -67,6 +67,12 @@ function additionalGate(candidate: Stage3CandidateModel, evidence: Stage3Support
     // in the ORIGINAL excerpt, is required; the model cannot invent it.
     const affirmative = /\b(?:attribut(?:e|ed|es|ion)|responsib(?:le|ility)|conducted|carried out|associat(?:e|ed|es)|linked to|assess(?:ed|es)?|believ(?:e|ed|es))\b/i;
     if (!affirmative.test(quoted)) return false;
+    // The claimed actor and the source's attribution statement must both appear verbatim.
+    const normalized = (text:string) => text.normalize("NFKC").replace(/\s+/g, " ").trim().toLocaleLowerCase();
+    if (!normalized(quoted).includes(normalized(candidate.claimedActorText))) return false;
+    if (!normalized(quoted).includes(normalized(candidate.attributionText))) return false;
+    // Negative attribution language does not establish a positive source attribution.
+    if (/\b(?:not|never|cannot|can't|no)\b.{0,45}\b(?:attribut(?:e|ed)|associat(?:e|ed)|link(?:ed)?|responsib(?:le|ility))\b/i.test(quoted)) return false;
   }
   if (candidate.kind === "CVE" && !quoted.toUpperCase().includes(candidate.cveId.toUpperCase())) return false;
   if (candidate.kind === "MITRE" && candidate.derivation === "EXTRACTED" &&
@@ -81,7 +87,7 @@ function additionalGate(candidate: Stage3CandidateModel, evidence: Stage3Support
     // Never infer an exact date from vague source wording, e.g. "summer 2023".
     // This conservative pass permits only ISO dates literally present in the quote.
     if (candidate.normalizedDate &&
-      (!/^\\d{4}(?:-\\d{2}(?:-\\d{2})?)?$/.test(candidate.normalizedDate) ||
+      (!/^\d{4}(?:-\d{2}(?:-\d{2})?)?$/.test(candidate.normalizedDate) ||
        !quoted.includes(candidate.normalizedDate))) return false;
   }
   if (candidate.kind === "MALWARE" || candidate.kind === "THREAT_ACTOR" || candidate.kind === "CAMPAIGN") {

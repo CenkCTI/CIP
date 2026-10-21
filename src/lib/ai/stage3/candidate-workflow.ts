@@ -14,7 +14,7 @@ INDICATOR: value, indicatorType (IP/CIDR/DOMAIN/URL/HASH/EMAIL/FILE/REGISTRY).
 TIMELINE: eventName, description, sourceTimeExpression (verbatim or empty string), normalizedDate (YYYY-MM-DD, YYYY-MM, YYYY or null), temporalPrecision (EXACT/DAY/MONTH/YEAR/SEASON/UNKNOWN).
 MALWARE, THREAT_ACTOR, CAMPAIGN: name (only explicitly named entities).
 CVE: cveId (explicit CVE identifier). MITRE: techniqueId (T#### or T####.###), explanation (grounded behavior-to-technique mapping).
-ATTRIBUTION_CLAIM: claimedActorText, attributionText (explicit SOURCE attribution wording; mere APT mention DOES NOT imply attribution).
+ATTRIBUTION_CLAIM: claimedActorText, attributionText (verbatim SOURCE attribution wording from a supporting quote; mere actor mention or denied attribution DOES NOT imply attribution).
 UNANSWERED_QUESTION: question (open analytical question grounded in an evidence gap).
 Never invent dates, actor identities, technical indicators, source positions, reports or matches.
 Keep source-reported uncertainty intact. Source assessment is NOT CİTEM assessment or a Stage 4 credibility rating.

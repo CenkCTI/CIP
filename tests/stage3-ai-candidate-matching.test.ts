@@ -16,6 +16,8 @@ function fakeOwned(rows:{id:string}[],error:null|{message:string}=null){
     select:vi.fn(()=>query),
     eq:vi.fn((key:string,value:string)=>{keys.push({key,value});return query;}),
     limit:vi.fn(()=>query),
+    ilike:vi.fn(()=>query),
+    contains:vi.fn(()=>query),
     then:(resolve:(v:unknown)=>unknown)=>Promise.resolve({data:rows,error}).then(resolve),
   };
   const from=vi.fn(()=>query);
@@ -35,6 +37,13 @@ describe("Project-scoped exact candidate matching",()=>{
   it("reports lookup errors as unavailable rather than incorrectly claiming there is no duplicate",async()=>{
     const {owned}=fakeOwned([],{message:"database error"});
     expect(await findExistingCandidateMatches(owned,candidate)).toEqual({matches:[],matchStatus:"UNAVAILABLE"});
+  });
+  it("uses case-insensitive exact name and scoped actor alias queries",async()=>{
+    const {owned,query}=fakeOwned([{id:"7e8b6e26-d172-4eba-8c94-9299867bad44"}]);
+    const actor={...candidate,kind:"THREAT_ACTOR",name:"APT28"} as never;
+    await findExistingCandidateMatches(owned,actor);
+    expect(query.ilike).toHaveBeenCalledWith("name","APT28");
+    expect(query.contains).toHaveBeenCalledWith("aliases",["APT28"]);
   });
   it("does not scan unrelated tables for attribution candidates or unresolved questions",async()=>{
     const {owned,from}=fakeOwned([]);
