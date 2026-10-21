@@ -61,7 +61,7 @@ export async function readPublicWebPage(rawUrl:string):Promise<ReadWebPage>{
           headers:{"user-agent":"CITEM-ResearchReader/1.0",
             "accept":"text/html,text/plain,application/pdf",
             "accept-encoding":"identity"},
-          headersTimeout:5000,signal:abort.signal,maxRedirections:0,
+          headersTimeout:5000,signal:abort.signal,
         });
         bodyToDispose=res.body;
         if([301,302,303,307,308].includes(res.statusCode)){
