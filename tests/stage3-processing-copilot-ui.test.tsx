@@ -151,6 +151,81 @@ describe("Stage 3 Processing Copilot UI",()=>{
     expect(screen.queryByText("The campaign targeted Polish institutions.")).toBeNull();
   });
 
+  it("automatically falls back to verified pages when a document exceeds the single-call text limit",async()=>{
+    const covered:number[]=[];
+    fetchMock.mockImplementation(async(url:string,options?:RequestInit)=>{
+      if(url==="/api/ai/byok/status")return {ok:true,json:async()=>({
+        connected:true,providerId:"nvidia_nim",model:"nvidia/nemotron-3-super-120b-a12b",
+      })};
+      const body=JSON.parse(String(options?.body));
+      if(body.context.kind==="document")return {ok:false,status:413,json:async()=>({
+        code:"pdf_document_too_large",stage:"source",error:"Single document request too large.",
+      })};
+      const {pageStart,pageEnd}=body.context;
+      for(let p=pageStart;p<=pageEnd;p++)covered.push(p);
+      return {ok:true,status:200,json:async()=>({result:{...verified,
+        summary:`Pages ${pageStart}-${pageEnd} reviewed`}})};
+    });
+    render(<ProcessingCopilot {...props} pageCount={16}/>);
+    await screen.findByText("NVIDIA connected");
+    fireEvent.click(screen.getByRole("button",{name:"Analyse context"}));
+    await screen.findByText(/16 \/ 16 pages processed/);
+    expect(covered).toEqual(Array.from({length:16},(_,i)=>i+1));
+    expect(screen.getByText(/Complete/)).toBeTruthy();
+    expect(fetchMock.mock.calls.filter(([url])=>url===`/api/projects/${projectId}/ai/processing`)).toHaveLength(3);
+  });
+
+  it("does not lose completed pages when quota pauses a 205-page PDF and resumes without replay",async()=>{
+    const covered:number[]=[];
+    let pause=true;
+    fetchMock.mockImplementation(async(url:string,options?:RequestInit)=>{
+      if(url==="/api/ai/byok/status")return {ok:true,json:async()=>({
+        connected:true,providerId:"nvidia_nim",model:"nvidia/nemotron-3-super-120b-a12b",
+      })};
+      const body=JSON.parse(String(options?.body));
+      if(body.context.kind!=="pages")throw Error("Large document was not batched.");
+      const {pageStart,pageEnd}=body.context;
+      if(pageStart===9 && pause){
+        pause=false;
+        return {ok:false,status:429,json:async()=>({code:"rate_limited",stage:"quota"})};
+      }
+      for(let p=pageStart;p<=pageEnd;p++)covered.push(p);
+      return {ok:true,status:200,json:async()=>({result:{...verified,
+        summary:`Pages ${pageStart}-${pageEnd} processed`}})};
+    });
+    render(<ProcessingCopilot {...props} pageCount={205}/>);
+    await screen.findByText("NVIDIA connected");
+    fireEvent.click(screen.getByRole("button",{name:"Analyse context"}));
+    await screen.findByRole("button",{name:"Continue Entire PDF"});
+    expect(screen.getByText(/8 \/ 205 pages processed/)).toBeTruthy();
+    expect(covered).toEqual([1,2,3,4,5,6,7,8]);
+    fireEvent.click(screen.getByRole("button",{name:"Continue Entire PDF"}));
+    await screen.findByText(/205 \/ 205 pages processed/);
+    expect(covered).toEqual(Array.from({length:205},(_,i)=>i+1));
+    expect(screen.getByText(/Complete/)).toBeTruthy();
+  });
+
+  it("divides a dense page range without marking its unprocessed pages as complete",async()=>{
+    const covered:number[]=[];
+    fetchMock.mockImplementation(async(url:string,options?:RequestInit)=>{
+      if(url==="/api/ai/byok/status")return {ok:true,json:async()=>({
+        connected:true,providerId:"nvidia_nim",model:"nvidia/nemotron-3-super-120b-a12b",
+      })};
+      const {context}=JSON.parse(String(options?.body));
+      if(context.kind==="document")return {ok:false,status:413,json:async()=>({code:"pdf_document_too_large"})};
+      if(context.pageStart===1 && context.pageEnd===8)
+        return {ok:false,status:413,json:async()=>({code:"context_too_large"})};
+      for(let p=context.pageStart;p<=context.pageEnd;p++)covered.push(p);
+      return {ok:true,status:200,json:async()=>({result:{...verified,
+        summary:`Pages ${context.pageStart}-${context.pageEnd} read`}})};
+    });
+    render(<ProcessingCopilot {...props} pageCount={9}/>);
+    await screen.findByText("NVIDIA connected");
+    fireEvent.click(screen.getByRole("button",{name:"Analyse context"}));
+    await screen.findByText(/9 \/ 9 pages processed/);
+    expect(covered).toEqual(Array.from({length:9},(_,i)=>i+1));
+  });
+
   it("requires NVIDIA and reuses BYOK panel, without exposing an API key input in Copilot", async()=>{
     fetchMock.mockResolvedValue({ok:true,json:async()=>({connected:false,enabled:true,state:"disconnected"})});
     render(<ProcessingCopilot {...props}/>);
