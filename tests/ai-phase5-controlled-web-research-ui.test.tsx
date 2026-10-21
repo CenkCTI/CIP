@@ -63,6 +63,9 @@ describe("AI Phase 5 deliberate web search UI",()=>{
     expect(called).toHaveLength(2);
     expect(JSON.parse(String(fetchMock.mock.calls[1][1].body)).queries)
       .toEqual(["APT28 router compromise"]);
+    const read=screen.getByRole("button",{name:"Read with AI: Outside report"});
+    expect(read.getAttribute("data-testid")).toBe("web-read-with-ai");
+    expect(read.hasAttribute("disabled")).toBe(false);
     const add=screen.getByRole("link",{name:/Add to Collection/}) as HTMLAnchorElement;
     expect(add.href).toContain("/sources?research_url=");
     expect(decodeURIComponent(add.href)).toContain("https://example.org/report");
@@ -94,7 +97,7 @@ describe("AI Phase 5 deliberate web search UI",()=>{
     fireEvent.click(screen.getByRole("button",{name:"Search selected"}));
     await screen.findByText("Outside report");
     expect(calls).toHaveLength(2);
-    fireEvent.click(screen.getByRole("button",{name:"Read with AI"}));
+    fireEvent.click(screen.getByRole("button",{name:"Read with AI: Outside report"}));
     await screen.findByText("External reporting describes similar operations.");
     expect(screen.getByText("Specific quote from the report")).toBeTruthy();
     expect(screen.getByText(/WEB_001/)).toBeTruthy();

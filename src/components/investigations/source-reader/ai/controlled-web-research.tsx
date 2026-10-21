@@ -117,11 +117,20 @@ export function ControlledWebResearch({projectId,sourceId,assetId,context,connec
           <p className="font-semibold">{r.title}</p>
           <p className="mt-1 break-all text-[var(--muted)]">{r.domain}</p>
           <p className="mt-1">{r.snippet}</p>
-          <div className="mt-2 flex flex-wrap gap-3 text-[var(--amber-soft)]">
-            <a href={r.url} target="_blank" rel="noopener noreferrer">Open ↗</a>
-            <button type="button" disabled={busy!==null||!connected}
-              onClick={()=>void runRead(r)}>Read with AI</button>
-            <a href={prefill(r)} target="_blank" rel="noopener noreferrer">
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-[var(--amber-soft)]">
+            <a href={r.url} target="_blank" rel="noopener noreferrer"
+              className="inline-flex min-h-9 items-center rounded border border-[var(--line)] px-3 py-2 font-medium hover:border-[var(--amber-dark)]">
+              Open ↗
+            </a>
+            <button type="button" aria-label={"Read with AI: "+r.title}
+              disabled={busy!==null||!connected}
+              data-testid="web-read-with-ai"
+              className="inline-flex min-h-9 items-center rounded border border-[var(--amber-dark)] bg-[var(--amber-tint)] px-3 py-2 font-semibold text-[var(--amber-soft)] hover:bg-[var(--amber-glow)] disabled:opacity-50"
+              onClick={()=>void runRead(r)}>
+              {busy==="read"?"Reading…":"Read with AI"}
+            </button>
+            <a href={prefill(r)} target="_blank" rel="noopener noreferrer"
+              className="inline-flex min-h-9 items-center rounded border border-[var(--line)] px-3 py-2 font-medium hover:border-[var(--amber-dark)]">
               Add to Collection ↗
             </a>
           </div>
