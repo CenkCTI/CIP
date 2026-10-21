@@ -437,6 +437,17 @@ describe("Stage 3 Processing Copilot UI",()=>{
     expect(props.onClose).toHaveBeenCalled();
   });
 
+  it("labels partial source-support explicitly rather than hiding discarded model suggestions",()=>{
+    render(<CopilotChat turns={[{id:1,context:{kind:"page",page:5},mode:"analyse",
+      prompt:"Analyse",result:{...verified,discarded:2,
+        warnings:["Unsupported AI suggestions were discarded."]}}]} onNavigate={vi.fn()}/>);
+    expect(screen.getByTestId("copilot-partial-evidence").textContent)
+      .toContain("2 unsupported AI suggestions were discarded");
+    expect(screen.getByTestId("copilot-partial-evidence").textContent)
+      .toContain("not been verified sentence by sentence");
+    expect(screen.getByText("phishing was reported")).toBeTruthy();
+  });
+
   it("never creates structured domain records and renders only clickable verified citations",()=>{
     const onNavigate=vi.fn();
     render(<CopilotChat turns={[{id:1,context:{kind:"page",page:5},mode:"ask",prompt:"Explain",

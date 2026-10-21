@@ -5,8 +5,13 @@ import type { Stage3Support } from "./provenance";
 
 /**
  * A request to analyse a source is complete only when a narrative AND exact,
- * server-verified source excerpts survived output validation. This does not
- * assess the *truth* of a claim or magically prove every sentence in a summary.
+ * server-verified source excerpts survived output validation. Rejected model
+ * quotations are ALWAYS stripped by provenance verification before this gate.
+ * Their removal alone must not trigger repeated full-batch NVIDIA requests if
+ * there is still useful source-backed material and a narrative. Such responses
+ * retain a visible partial-verification warning for analyst review.
+ * This does not assess the *truth* of a claim or magically prove every sentence
+ * in a summary.
  * Failing closed lets the caller retry a narrower PDF page range instead of
  * mislabeling pages as successfully analysed.
  *
@@ -18,7 +23,7 @@ export function assertStage3AnalysisComplete(
   result: {summary:string; evidence:Stage3Support[]; discarded:number; warnings:string[]},
 ):void {
   if(request.mode!=="analyse")return;
-  if(!result.summary.trim() || !result.evidence.length || result.discarded>0 ||
+  if(!result.summary.trim() || !result.evidence.length ||
      result.warnings.some((warning)=>/only previously verified source quotations|no source-supported statements could be verified/i.test(warning))){
     throw new AiError("analysis_incomplete");
   }

@@ -53,6 +53,12 @@ export function CopilotChat({ turns, onNavigate }: {
           <p className="whitespace-pre-wrap break-words text-sm leading-7 text-[var(--foreground)]">{turn.result.summary}</p>
           : <p className="text-xs text-[var(--muted-strong)]">No validated narrative summary was returned.</p>}
 
+        {turn.result.discarded > 0 ? <p data-testid="copilot-partial-evidence"
+          className="rounded border border-[var(--line)] bg-[var(--amber-tint)] px-3 py-2 text-xs leading-relaxed text-[var(--amber-soft)]">
+          Partially verified · {turn.result.discarded} unsupported AI {turn.result.discarded===1?"suggestion was":"suggestions were"} discarded.
+          The remaining quotations match the source text, but the model-generated narrative
+          has not been verified sentence by sentence. Review before using it.
+        </p> : null}
         {turn.result.evidence.length ? <details className="group rounded-lg border border-[var(--line-neutral)] bg-[var(--surface-input)]">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-3 text-xs text-[var(--amber-soft)] hover:bg-[var(--amber-tint)] [&::-webkit-details-marker]:hidden">
             <span className="font-medium">Source excerpts · {turn.result.evidence.length}</span>

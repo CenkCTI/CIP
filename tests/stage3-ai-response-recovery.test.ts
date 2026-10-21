@@ -39,8 +39,10 @@ describe("Source-grounded Analyse completion gate",()=>{
       .toThrow(expect.objectContaining({code:"analysis_incomplete"}));
     expect(()=>assertStage3AnalysisComplete(analysis,{...goodResult,evidence:[]}))
       .toThrow(expect.objectContaining({code:"analysis_incomplete"}));
-    expect(()=>assertStage3AnalysisComplete(analysis,{...goodResult,discarded:1}))
-      .toThrow(expect.objectContaining({code:"analysis_incomplete"}));
+    // A rejected model suggestion is not returned as a citation. Validated
+    // survivors are useful but must retain their visible partial-verification warning.
+    expect(()=>assertStage3AnalysisComplete(analysis,{...goodResult,discarded:1,
+      warnings:["Unsupported AI suggestions were discarded."]})).not.toThrow();
     expect(()=>assertStage3AnalysisComplete(analysis,{...goodResult,warnings:[
       "The model did not produce a complete validated response. Only previously verified source quotations are shown."
     ]})).toThrow(expect.objectContaining({code:"analysis_incomplete"}));
@@ -57,6 +59,41 @@ describe("Source-grounded Analyse completion gate",()=>{
       {...goodResult,summary:"",evidence:[]})).not.toThrow();
     expect(()=>assertStage3AnalysisComplete({...analysis,mode:"extract"},
       {...goodResult,summary:"",evidence:[]})).not.toThrow();
+  });
+});
+
+describe("Cost-bounded partial evidence handling for Analyse",()=>{
+  it("preserves a usable source-cited analysis in one NVIDIA call when another quote is invented",async()=>{
+    const analyseRequest=stage3RequestSchema.parse({
+      sourceId,assetId,context:{kind:"pages",pageStart:1,pageEnd:5},
+      mode:"analyse",responseLanguage:"tr",byokConsent:true,
+    });
+    const partialModel=JSON.stringify({
+      summary:"Rapora göre e-posta bağlantıları üzerinden yönlendirme yapılmıştır.",
+      evidence:[grounded,{statement:"Uydurma istihbarat",source_token:"DOC_P003_C01",
+        quote:"Fabricated quote absent from original source."}],
+      unansweredQuestions:[],warnings:[],
+    });
+    const chat=vi.fn().mockResolvedValue(partialModel);
+    const result=await runStage3Processing({request:analyseRequest,spans,sourceTitle:"CSRB"},chat);
+    expect(chat).toHaveBeenCalledTimes(1);
+    expect(result.evidence).toHaveLength(1);
+    expect(result.evidence[0]).toMatchObject({page:3,quote,sourceToken:"DOC_P003_C01"});
+    expect(JSON.stringify(result.evidence)).not.toContain("Fabricated quote");
+    expect(result.discarded).toBe(1);
+    expect(result.warnings.join(" ")).toContain("Unsupported AI suggestions were discarded");
+    expect(()=>assertStage3AnalysisComplete(analyseRequest,result)).not.toThrow();
+  });
+  it("still rejects zero-citation analyses and empty narratives, even after partial repair",()=>{
+    const p={mode:"analyse" as const,responseLanguage:"en" as const,question:undefined};
+    const r={summary:"A summary with no verified source excerpt",evidence:[],
+      discarded:2,warnings:["Unsupported AI suggestions were discarded."]};
+    expect(()=>assertStage3AnalysisComplete(p,r)).toThrow(
+      expect.objectContaining({code:"analysis_incomplete"}));
+    expect(()=>assertStage3AnalysisComplete(p,{...r,evidence:[{
+      statement:"Reported text",quote,sourceToken:"DOC_P003_C01",
+      page:3,kind:"PDF" as const,provenance:{sourceId,assetId},
+    }],summary:""})).toThrow(expect.objectContaining({code:"analysis_incomplete"}));
   });
 });
 
