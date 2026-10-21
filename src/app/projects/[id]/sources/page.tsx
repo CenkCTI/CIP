@@ -28,11 +28,26 @@ function unprocessedCounts(rows: AnnotationStateRow[]) {
 }
 
 export default async function SourcesPage({
-  params,
+  params,searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?:Promise<Record<string,string|string[]|undefined>>;
 }) {
   const { id } = await params;
+  const paramsWeb=await searchParams;
+  const field=(key:string,limit:number)=>{
+    const raw=paramsWeb?.[key];return typeof raw==="string"?raw.slice(0,limit):"";
+  };
+  const candidateUrl=field("research_url",2048);
+  let webPrefill:null|{url:string;title:string;publisher:string;rationale:string}=null;
+  try{
+    const url=new URL(candidateUrl);
+    if(url.protocol==="https:"&&!url.username&&!url.password&&url.hostname.includes(".")){
+      webPrefill={url:url.toString(),title:field("research_title",240),
+        publisher:field("research_publisher",240),
+        rationale:field("research_rationale",4000)};
+    }
+  }catch{/* no valid prefill */}
   const context = await requireOwnedProject(id).catch(() => notFound());
   const [
     projectResult,
@@ -129,6 +144,7 @@ export default async function SourcesPage({
         </Link>
       </header>
       <SourceLibrary
+        webPrefill={webPrefill}
         projectId={id}
         sources={sourcesResult.data ?? []}
         gaps={gapsResult.data ?? []}

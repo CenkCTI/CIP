@@ -10,6 +10,7 @@ import type { Stage3Candidate, Stage3CandidateResponse } from "@/lib/ai/stage3/c
 import { dividePdfBatch, planPdfBatches, type PdfBatch } from "@/lib/ai/stage3/document-batches";
 import { useDocumentExtraction, type ScanSelection } from "./use-document-extraction";
 import { DocumentProcessingReview } from "./document-processing-review";
+import { ControlledWebResearch } from "./controlled-web-research";
 
 type ByokStatus = {
   enabled?: boolean; connected?: boolean; state?: string;
@@ -447,6 +448,9 @@ export function ProcessingCopilot({
               onNavigate(candidate.verifiedSupport[0].page,candidate.verifiedSupport[0].provenance.annotationId);
           }}
           onResume={(failed)=>void documentScan.resume(failed)} onCancel={documentScan.cancel}/>:null}
+        <ControlledWebResearch key={sourceId+":"+assetId} projectId={projectId}
+          sourceId={sourceId} assetId={assetId}
+          context={effectiveContext} connected={connected}/>
         <CopilotChat turns={turns} onNavigate={onNavigate}/>
         {candidateResult ? <CopilotCandidates result={candidateResult} dismissed={dismissedCandidates}
           onDismiss={(candidateId)=>setDismissedCandidates((current)=>new Set([...current,candidateId]))}
