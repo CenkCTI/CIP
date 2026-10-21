@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
-export const documentSelectionSchema=z.discriminatedUnion("kind",[
+export const documentSelectionSchema=z.union([
   z.object({kind:z.literal("document")}).strict(),
   z.object({kind:z.literal("pages"),pageStart:z.number().int().min(1).max(10000),
     pageEnd:z.number().int().min(1).max(10000)}).strict()
