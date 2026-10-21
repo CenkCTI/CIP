@@ -113,6 +113,6 @@ describe("Stage 3 candidate boundary",()=>{
       expect(code).not.toContain("linkAnnotationOutput");
     }
     expect(CANDIDATE_EXTRACTION_POLICY).toContain("Do not include confidence");
-    expect(CANDIDATE_EXTRACTION_POLICY).toContain("mere APT mention");
+    expect(CANDIDATE_EXTRACTION_POLICY).toContain("mere actor mention");
   });
 });
