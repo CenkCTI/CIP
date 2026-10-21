@@ -22,6 +22,10 @@ export function getAiConfig() {
     maxOutputTokens: intEnv("AI_MAX_OUTPUT_TOKENS", 4096, 256, 8192),
     rateLimitRequests: intEnv("AI_RATE_LIMIT_REQUESTS", 10, 1, 100),
     rateLimitInputChars: intEnv("AI_RATE_LIMIT_INPUT_CHARS", 200000, 1000, 1000000),
+    // Stage 3 uses analyst-supplied NVIDIA BYOK and processes large PDFs in page batches.
+    // The SQL function independently hard-caps this workflow at 30 / 1,200,000 per hour.
+    stage3RateLimitRequests: intEnv("AI_STAGE3_RATE_LIMIT_REQUESTS", 30, 1, 30),
+    stage3RateLimitInputChars: intEnv("AI_STAGE3_RATE_LIMIT_INPUT_CHARS", 1200000, 1000, 1200000),
     rateLimitWindowMinutes: intEnv("AI_RATE_LIMIT_WINDOW_MINUTES", 60, 1, 1440),
   };
 }

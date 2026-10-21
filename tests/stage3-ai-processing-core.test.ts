@@ -5,6 +5,8 @@ import { documentSpans, modelFacingSpans, resolveGroundedEvidence } from "@/lib/
 import { runStage3Processing } from "@/lib/ai/stage3/workflows";
 import { STAGE3_SYSTEM_POLICY } from "@/lib/ai/stage3/policy";
 import { createStage3ReadContext } from "@/lib/ai/stage3/context";
+import { getAiConfig } from "@/lib/ai/config";
+import { assertStage3QuotaReservation } from "@/lib/ai/stage3/usage-quota";
 
 const sourceId = "49429515-bc04-4539-ae53-69f0b47157cb";
 const assetId = "49429615-bc04-4539-ae53-69f0b47157cb";
@@ -162,6 +164,34 @@ describe("Read-only and security boundary", () => {
     expect(route).toContain("requireOwnedProject(id)");
     expect(route).toContain("reserve_ai_usage_event");
     expect(route).toContain("complete_ai_usage_event");
+  });
+  it("reserves more capacity for long PDF batches without bypassing project-scoped database quotas", () => {
+    const sql=readFileSync("supabase/migrations/202610210063_stage3_long_pdf_usage_quota.sql","utf8");
+    expect(sql).toContain("p_workflow = 'stage3_processing' then 30 else 10");
+    expect(sql).toContain("p_workflow = 'stage3_processing' then 1200000 else 200000");
+    expect(sql).toContain("pg_advisory_xact_lock");
+    expect(sql).toContain("p.owner_id = v_user");
+    expect(sql).toContain("created_at >= v_start");
+    expect(sql).toContain("grant execute on function public.reserve_ai_usage_event");
+    expect(sql).not.toContain("source_claims");
+    const cfg=getAiConfig();
+    expect(cfg.stage3RateLimitRequests).toBeGreaterThanOrEqual(1);
+    expect(cfg.stage3RateLimitRequests).toBeLessThanOrEqual(30);
+    expect(cfg.stage3RateLimitInputChars).toBeLessThanOrEqual(1200000);
+    const route=readFileSync("src/app/api/projects/[id]/ai/processing/route.ts","utf8");
+    expect(route).toContain("p_max_requests:cfg.stage3RateLimitRequests");
+    expect(route).toContain("p_max_input_chars:cfg.stage3RateLimitInputChars");
+  });
+  it("distinguishes actual quota exhaustion from missing migrations and database failures",()=>{
+    expect(()=>assertStage3QuotaReservation("event",{message:"rate limit exceeded",code:"P0001"}))
+      .toThrow(expect.objectContaining({code:"rate_limited"}));
+    expect(()=>assertStage3QuotaReservation(null,{message:"function does not exist",code:"PGRST202"}))
+      .toThrow(expect.objectContaining({code:"quota_unavailable"}));
+    expect(()=>assertStage3QuotaReservation(null,{message:"permission denied",code:"42501"}))
+      .toThrow(expect.objectContaining({code:"quota_unavailable"}));
+    expect(()=>assertStage3QuotaReservation(null,null))
+      .toThrow(expect.objectContaining({code:"quota_unavailable"}));
+    expect(()=>assertStage3QuotaReservation("valid-event-id",null)).not.toThrow();
   });
   it("migration records only usage metadata and preserves quota restrictions", () => {
     const sql=readFileSync("supabase/migrations/202610160062_stage3_processing_ai_usage.sql","utf8");

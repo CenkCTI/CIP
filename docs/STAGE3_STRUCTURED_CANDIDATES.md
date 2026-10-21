@@ -20,7 +20,7 @@ This builds on Phase 1's source provenance gateway and Phase 2's AI chat reader.
 - Timeline normalized dates are allowed only when literally supported in the cited excerpt; vague seasons remain an unnormalized source time expression.
 - No model confidence or implied information-credibility scoring. Stage 4 reliability, independent attribution judgement and campaign reconstruction remain outside this workflow.
 - Matching uses allowlisted fields and `project_id` filters; no investigation DB dump is added to the NVIDIA prompt. Matches are advisory; duplicate decisions remain with the analyst.
-- No new SQL migration. BYOK quota, origin validation and server-only credential protections are unchanged.
+- Stage 3 long-PDF usage quota is upgraded by migration `202610210063_stage3_long_pdf_usage_quota.sql`: 30 requests / 1,200,000 input characters per rolling 60-minute window, enforced server-side only for `stage3_processing`, with independent application configuration and unchanged authentication, project ownership, safe secrets and per-request input caps. Other AI workflows keep the original 10 / 200,000 quota; provider BYOK quotas still apply. An unapplied migration is diagnosed as `quota_unavailable` (503) rather than misreported as `rate_limited` (429).
 
 ## Work remaining before Phase 3 merge
 

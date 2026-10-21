@@ -15,6 +15,7 @@ import { stage3RequestSchema } from "@/lib/ai/stage3/schemas";
 import { runStage3Processing } from "@/lib/ai/stage3/workflows";
 import { runStage3CandidateExtraction } from "@/lib/ai/stage3/candidate-workflow";
 import { attachStage3CandidateMatches } from "@/lib/ai/stage3/matching";
+import { assertStage3QuotaReservation } from "@/lib/ai/stage3/usage-quota";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,7 +53,8 @@ function responseError(error: unknown, stage: Stage3FailureStage, sourceStep?: S
     unsupported_model:[400,"The NVIDIA model is not approved."],
     malformed_output:[422,"AI output could not be validated."],
     nvidia_output_exhausted:[422,"NVIDIA reached its output limit."],
-    rate_limited:[429,"AI request quota exceeded."],
+    rate_limited:[429,"CİTEM's rolling 60-minute AI usage quota is full. Keep this tab open and continue after older requests expire."],
+    quota_unavailable:[503,"The AI usage gate could not reserve this request. Verify the database migration and retry."],
     provider_rate_limited:[429,"NVIDIA request limit reached."],
     provider_error:[502,"NVIDIA rejected this generation request. Try a different allowlisted model or a smaller PDF selection."],
     timeout:[504,"NVIDIA request timed out."],
@@ -103,10 +105,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       p_workflow:"stage3_processing",
       p_input_chars:inputChars,
       p_window_minutes:cfg.rateLimitWindowMinutes,
-      p_max_requests:cfg.rateLimitRequests,
-      p_max_input_chars:cfg.rateLimitInputChars,
+      p_max_requests:cfg.stage3RateLimitRequests,
+      p_max_input_chars:cfg.stage3RateLimitInputChars,
     });
-    if (reservationError || !eventId) throw new AiError("rate_limited");
+    assertStage3QuotaReservation(eventId,reservationError);
 
     try {
       stage = "nvidia";
