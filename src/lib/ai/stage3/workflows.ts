@@ -13,7 +13,7 @@ export async function runStage3Processing(
 ) {
   const language = resolveStage3ResponseLanguage(input.request.question, input.request.responseLanguage);
   const messages: AiMessage[] = [
-    { role: "system", content: STAGE3_SYSTEM_POLICY + "\n" + stage3LanguagePolicy(language, input.request.mode) },
+    { role: "system", content: STAGE3_SYSTEM_POLICY + "\n" + stage3LanguagePolicy(language, input.request.mode === "extract" ? "analyse" : input.request.mode) },
     { role: "user", content: STAGE3_OUTPUT_CONTRACT +
       "\nCURRENT_ANALYST_REQUEST (the latest question to answer):\n" +
       JSON.stringify(input.request.question ?? "Analyse the selected source passage.") +
@@ -40,7 +40,12 @@ export async function runStage3Processing(
       if (grounded.accepted.length > 0) {
         bestVerified = groundedFallback(grounded.accepted, rejected);
       }
-      if (rejected && attempt === 0) {
+      if (rejected && attempt === 0 &&
+        // For Analyse with a valid narrative and at least one verified quote,
+        // retain ONLY the verified items and warn the analyst rather than
+        // spending extra model calls re-generating already usable evidence.
+        // Ask keeps its original one-repair behavior for conversational replies.
+        !(input.request.mode === "analyse" && result.summary.trim() && grounded.accepted.length)) {
         messages.push({ role: "user", content: "Some evidence items had invalid fields, unknown source tokens or quotes not copied verbatim from a source token. Answer the LATEST question in strict JSON with at most FOUR evidence items, each using a SHORT exact copied quote (15-200 characters) and the correct source_token. Do not repeat unsupported items. Do not add page or UUID fields." });
         continue;
       }
@@ -75,7 +80,7 @@ export async function runStage3Processing(
         summary: result.summary,
         evidence: grounded.accepted,
         unansweredQuestions: result.unansweredQuestions,
-        warnings: [...result.warnings, ...languageWarning, ...(rejected ? ["Unsupported AI suggestions were discarded."] : [])],
+        warnings: [...result.warnings, ...languageWarning, ...(rejected ? ["Unsupported AI suggestions were discarded. The remaining quotes match the source, but review the narrative against them before relying on it."] : [])],
         discarded: rejected,
       };
     } catch {

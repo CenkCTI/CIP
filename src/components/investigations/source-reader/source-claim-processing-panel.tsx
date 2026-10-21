@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import type { Stage3Candidate } from "@/lib/ai/stage3/candidates";
 
 import {
   createSourceClaimFromAnnotation,
@@ -28,12 +29,14 @@ export function SourceClaimProcessingPanel({
   annotation,
   claims,
   assertions,
+  aiCandidate,
 }: {
   projectId: string;
   sourceId: string;
   annotation: Row;
   claims: Row[];
   assertions: Row[];
+  aiCandidate?: Extract<Stage3Candidate,{kind:"SOURCE_CLAIM"}> | null;
 }) {
   const router = useRouter();
   const excerpt = text(annotation.selected_text) || text(annotation.comment);
@@ -41,7 +44,7 @@ export function SourceClaimProcessingPanel({
   const [selectedClaimId, setSelectedClaimId] = useState("");
   const [stance, setStance] = useState<SourceClaimStance>("ASSERTS");
   const [qualifier, setQualifier] = useState("");
-  const [origin, setOrigin] = useState<MappingOrigin>("ANALYST_MAPPED");
+  const [origin, setOrigin] = useState<MappingOrigin>(aiCandidate ? "AI_SUGGESTED" : "ANALYST_MAPPED");
   const [message, setMessage] = useState<{ error?: string; success?: string }>({});
 
   function linkExisting() {
@@ -239,6 +242,9 @@ export function SourceClaimProcessingPanel({
         }}
       >
         <div>
+          {aiCandidate ? <p className="mb-2 rounded border border-amber-700/50 bg-amber-950/20 p-2 text-xs text-amber-300">
+            AI SUGGESTION · Review and edit before saving. No source claim has been created.
+          </p> : null}
           <p className="citem-label">Create new Source Claim</p>
           <p className="mt-1 text-xs leading-5 text-stone-600">
             Write one atomic, evaluable proposition. If the passage contains
@@ -255,13 +261,14 @@ export function SourceClaimProcessingPanel({
             required
             maxLength={10000}
             placeholder="Write one atomic proposition derived from the source passage."
+            defaultValue={aiCandidate?.claim ?? ""}
           />
         </label>
 
         <div className="grid gap-2 md:grid-cols-2">
           <label className="grid gap-1">
             <span className="citem-label">Type</span>
-            <select className="field" name="claim_kind" defaultValue="OTHER">
+            <select className="field" name="claim_kind" defaultValue={aiCandidate?.claimType ?? "OTHER"}>
               {sourceClaimKinds.map((value) => (
                 <option key={value} value={value}>
                   {sourceClaimKindLabels[value]}
@@ -271,7 +278,7 @@ export function SourceClaimProcessingPanel({
           </label>
           <label className="grid gap-1">
             <span className="citem-label">Source stance</span>
-            <select className="field" name="stance" defaultValue="ASSERTS">
+            <select className="field" name="stance" defaultValue={aiCandidate?.stance ?? "ASSERTS"}>
               {sourceClaimStances.map((value) => (
                 <option key={value} value={value}>
                   {sourceClaimStanceLabels[value]}
@@ -288,6 +295,7 @@ export function SourceClaimProcessingPanel({
             name="source_qualifier"
             maxLength={1000}
             placeholder="Optional: likely; possibly; we assess; according to third-party reporting"
+            defaultValue={aiCandidate?.sourceQualifier ?? ""}
           />
         </label>
 
@@ -296,7 +304,7 @@ export function SourceClaimProcessingPanel({
           <select
             className="field"
             name="mapping_origin"
-            defaultValue="ANALYST_MAPPED"
+            defaultValue={aiCandidate ? "AI_SUGGESTED" : "ANALYST_MAPPED"}
           >
             {mappingOrigins.map((value) => (
               <option key={value}>{value}</option>

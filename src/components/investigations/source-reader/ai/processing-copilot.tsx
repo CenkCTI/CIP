@@ -5,6 +5,9 @@ import { ByokConnectionPanel } from "@/components/ai/byok-connection-panel";
 import { CopilotChat, type CopilotResult, type CopilotTurn } from "./copilot-chat";
 import { CopilotContextSelector, contextTitle, type CopilotContext } from "./copilot-context-selector";
 import { useCopilotWindow } from "./use-copilot-window";
+import { CopilotCandidates } from "./copilot-candidates";
+import type { Stage3Candidate, Stage3CandidateResponse } from "@/lib/ai/stage3/candidates";
+import { dividePdfBatch, planPdfBatches, type PdfBatch } from "@/lib/ai/stage3/document-batches";
 
 type ByokStatus = {
   enabled?: boolean; connected?: boolean; state?: string;
@@ -22,13 +25,17 @@ const SAFE_ERRORS: Record<string,string> = {
   unsupported_provider:"The Copilot requires an NVIDIA NIM BYOK connection.",
   unsupported_asset:"Only ready original PDFs are supported.",
   pdf_text_unavailable:"No extractable text found. OCR is not enabled.",
-  context_too_large:"Too much source text to analyse safely in one request. Select a smaller page range.",
-  pdf_document_too_large:"The whole PDF is too long for one safe request (over 200 pages or 45,000 characters). Select a smaller page range.",
+  context_too_large:"This page contains too much text for one safe request. Even the smallest chunk cannot fit.",
+  pdf_document_too_large:"The PDF needs multi-part processing. Select Entire PDF to process it in batches.",
+  pdf_too_large:"PDF file is over the server's 50 MB limit. Compress or split the source PDF before processing.",
   pdf_page_out_of_range:"The selected PDF page does not exist.",
-  rate_limited:"The AI usage limit was reached. Try again later.",
+  rate_limited:"CİTEM's hourly AI quota is full (separate from NVIDIA). Keep this page open and retry Continue Entire PDF after earlier requests leave the rolling 60-minute window.",
+  quota_unavailable:"CİTEM could not reach its usage reservation gate. This is a server/database configuration issue, not an NVIDIA rate limit.",
   provider_rate_limited:"NVIDIA has rate-limited this request.",
   nvidia_output_exhausted:"The model reached its output limit. Try a narrower question.",
-  malformed_output:"NVIDIA could not provide valid, source-grounded JSON after a repair attempt. Try selecting 1–2 relevant pages and ask a more specific question.",
+  malformed_output:"NVIDIA returned invalid source-grounded JSON twice. CİTEM automatically narrows Entire PDF batches; if a single page still fails, choose that page or a different NVIDIA model. Failed pages remain unread.",
+  analysis_incomplete:"NVIDIA produced missing or partly unsupported source evidence. CİTEM did not count these pages as analysed. Try Continue Entire PDF to retry smaller batches.",
+  analysis_language_mismatch:"NVIDIA did not follow your selected response language. CİTEM will retry on fewer pages; if one page still fails, try another model.",
   invalid_request:"Choose a valid context and question.",
   bad_origin:"Request rejected due to origin validation.",
   request_failed:"CİTEM could not complete processing. Check the diagnostic code below.",
@@ -58,14 +65,40 @@ export function validCopilotContext(value: CopilotContext, pageCount: number | n
     && value.pageStart <= value.pageEnd && value.pageEnd - value.pageStart < 10;
 }
 
+type LargeDocumentRun = {
+  mode:"ask"|"analyse"|"extract";
+  prompt:string;
+  language:"auto"|"tr"|"en";
+  sourceId:string;
+  assetId:string;
+  total:number;
+  completed:number;
+  queue:PdfBatch[];
+  needsReview:{page:number;code:string}[];
+};
+type PdfProgress = {
+  total:number;completed:number;
+  needsReview:{page:number;code:string}[];
+  status:"running"|"paused"|"needs_review"|"complete";
+};
+function pdfRunProgress(run:LargeDocumentRun,status:PdfProgress["status"]):PdfProgress {
+  return {total:run.total,completed:run.completed,
+    needsReview:[...run.needsReview],status};
+}
+const RETRYABLE_PAGE_CODES = new Set([
+  "context_too_large","malformed_output","nvidia_output_exhausted",
+  "analysis_incomplete","analysis_language_mismatch",
+]);
+
 export function ProcessingCopilot({
   projectId, sourceId, assetId, sourceTitle, selectedAnnotationId,
-  activePage, pageCount, onClose, onNavigate,
+  activePage, pageCount, onClose, onNavigate, onReviewCandidate,
 }: {
   projectId: string; sourceId: string; assetId: string; sourceTitle: string;
   selectedAnnotationId: string | null; activePage: number; pageCount: number | null;
   onClose: () => void;
   onNavigate: (page: number, annotationId?: string) => void;
+  onReviewCandidate?: (candidate: Stage3Candidate) => void;
 }) {
   const windowState = useCopilotWindow();
   const [byok, setByok] = useState<ByokStatus | null>(null);
@@ -75,10 +108,16 @@ export function ProcessingCopilot({
   const [question, setQuestion] = useState("");
   const [responseLanguage, setResponseLanguage] = useState<"auto" | "tr" | "en">("auto");
   const [turns, setTurns] = useState<CopilotTurn[]>([]);
+  const [candidateResult, setCandidateResult] = useState<Stage3CandidateResponse|null>(null);
+  const [dismissedCandidates, setDismissedCandidates] = useState<Set<string>>(()=>new Set());
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
   const [diagnostic, setDiagnostic] = useState<{status:number;code:string;stage:string;sourceStep?:string}|null>(null);
   const inFlight = useRef<AbortController|null>(null);
+  // Ephemeral browser-session state: failed or cancelled batches may be resumed.
+  // Never store the original PDF, model key or source excerpts in browser storage.
+  const documentRun = useRef<LargeDocumentRun|null>(null);
+  const [pdfProgress, setPdfProgress] = useState<PdfProgress|null>(null);
   const turnCounter = useRef(0);
   const mounted = useRef(true);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -98,7 +137,7 @@ export function ProcessingCopilot({
     const timer=window.setTimeout(() => {void refreshStatus();},0);
     return () => {window.clearTimeout(timer);mounted.current=false; inFlight.current?.abort();};
   },[refreshStatus]);
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; },[turns]);
+  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; },[turns,candidateResult]);
   useEffect(() => {
     const handler=(e:KeyboardEvent)=>{if(e.key==="Escape")onClose();};
     document.addEventListener("keydown",handler);
@@ -115,14 +154,22 @@ export function ProcessingCopilot({
   const contextValid = validCopilotContext(effectiveContext,pageCount);
   const canSend = connected && contextValid && !working;
 
-  async function submit(mode: "ask" | "analyse", prompt: string) {
-    if (!canSend || (mode === "ask" && !prompt.trim())) {
-      if (!connected) setError("Connect NVIDIA NIM before sending a message.");
-      else if (!contextValid) setError("Select the entire PDF, a valid PDF page, a text annotation or 1–10 consecutive pages.");
+  async function submit(mode:"ask"|"analyse"|"extract",prompt:string,resume=false) {
+    if(!canSend || (mode==="ask" && !prompt.trim())) {
+      if(!connected)setError("Connect NVIDIA NIM before sending a message.");
+      else if(!contextValid)setError("Select the entire PDF, a valid PDF page, a text annotation or 1–10 consecutive pages.");
       return;
     }
     const captured=effectiveContext;
-    // Only the same selected page/annotation scope can contribute follow-up context.
+    const active=resume?documentRun.current:null;
+    if(resume && (!active || active.mode!==mode || active.prompt!==prompt ||
+       active.sourceId!==sourceId || active.assetId!==assetId))return;
+    if(!resume) {documentRun.current=null;setPdfProgress(null);}
+    if(resume && active && !active.queue.length && active.needsReview.length){
+      // Requeue only unresolved single pages on deliberate analyst retry.
+      active.queue=active.needsReview.map(({page})=>({pageStart:page,pageEnd:page}));
+      active.needsReview=[];
+    }
     const history=turns
       .filter((turn)=>copilotContextKey(turn.context)===copilotContextKey(captured))
       .slice(-3)
@@ -132,43 +179,143 @@ export function ProcessingCopilot({
     setWorking(true);
     const abort=new AbortController();
     inFlight.current=abort;
-    try {
+    const language=active?.language ?? responseLanguage;
+
+    async function requestPart(part:CopilotContext,withHistory:boolean):Promise<CopilotResult|Stage3CandidateResponse>{
       const response=await fetch(`/api/projects/${projectId}/ai/processing`, {
         method:"POST",
         headers:{"content-type":"application/json"},
-        body:JSON.stringify({sourceId,assetId,context:captured,mode,
+        body:JSON.stringify({sourceId,assetId,context:part,mode,
           ...(mode==="ask"?{question:prompt.trim().slice(0,1500)}:{}),
-          ...(history.length?{history}:{}),
-          ...(responseLanguage!=="auto"?{responseLanguage}:{}),
+          ...(mode!=="extract" && withHistory && history.length?{history}:{}),
+          ...(language!=="auto"?{responseLanguage:language}:{}),
           byokConsent:true}),
         signal:abort.signal,
         cache:"no-store",
       });
-      let payload: {result?:CopilotResult;code?:string;error?:string;stage?:string;sourceStep?:string};
-      try {
-        payload = await response.json();
-      } catch {
+      let payload:{result?:CopilotResult|Stage3CandidateResponse;code?:string;error?:string;stage?:string;sourceStep?:string};
+      try {payload=await response.json();}
+      catch {
         setDiagnostic({status:response.status,code:"non_json_response",stage:"network"});
         throw new Error(`CİTEM returned a non-JSON response (HTTP ${response.status}).`);
       }
-      if(!response.ok || !payload.result) {
-        setDiagnostic({status:response.status,code:payload.code ?? "invalid_response",stage:payload.stage ?? "unknown",sourceStep:payload.sourceStep});
-        if (payload.code?.startsWith("byok_")) void refreshStatus();
-        throw new Error(SAFE_ERRORS[payload.code ?? ""] ?? payload.error ?? "NVIDIA processing failed.");
+      if(!response.ok || !payload.result){
+        const code=payload.code??"invalid_response";
+        setDiagnostic({status:response.status,code,stage:payload.stage??"unknown",sourceStep:payload.sourceStep});
+        if(code.startsWith("byok_"))void refreshStatus();
+        const err=new Error(SAFE_ERRORS[code]??payload.error??"NVIDIA processing failed.");
+        Object.assign(err,{code});
+        throw err;
       }
-      if (!mounted.current || abort.signal.aborted) return;
-      setTurns((current)=>[...current,{
-        id:++turnCounter.current,context:captured,mode,
-        prompt:mode==="analyse"?"Analyse selected source context":prompt.trim(),
-        result:payload.result!,
-      }]);
-      setQuestion("");
-    } catch(cause) {
-      if (!abort.signal.aborted && mounted.current) {
-        setError(cause instanceof Error ? cause.message : "Processing request failed.");
+      return payload.result;
+    }
+    function applyResult(result:CopilotResult|Stage3CandidateResponse,range?:PdfBatch){
+      if(!mounted.current||abort.signal.aborted)return;
+      if(mode==="extract"){
+        if(!("candidates" in result))throw new Error("Invalid extraction response.");
+        setCandidateResult((previous)=>{
+          if(!range||!previous)return result;
+          const ids=new Set(previous.candidates.map((item)=>item.candidateId));
+          return {candidates:[...previous.candidates,...result.candidates.filter((item)=>!ids.has(item.candidateId))],
+            discarded:previous.discarded+result.discarded,
+            warnings:[...new Set([...previous.warnings,...result.warnings])]};
+        });
+        setDismissedCandidates(new Set());
+      }else{
+        if(!("summary" in result))throw new Error("Invalid answer response.");
+        const label=range?` · PDF pages ${range.pageStart}–${range.pageEnd}`:"";
+        setTurns((current)=>[...current,{
+          id:++turnCounter.current,context:captured,mode,
+          prompt:(mode==="analyse"?"Analyse selected source context":prompt.trim())+label,
+          result,
+        }]);
+        setQuestion("");
       }
-    } finally {
-      if(mounted.current && inFlight.current===abort) {
+    }
+
+    try{
+      if(!resume){
+        // Keep the existing single request for PDFs that fit the validated context.
+        // Larger PDFs are never sampled or silently truncated.
+        if(captured.kind!=="document" || (pageCount!==null && pageCount<=200)){
+          try{
+            const result=await requestPart(captured,true);
+            applyResult(result);
+            return;
+          }catch(cause){
+            const code=(cause as {code?:string}).code;
+            if(captured.kind!=="document" ||
+                (code!=="pdf_document_too_large" && code!=="context_too_large" &&
+                 code!=="malformed_output" && code!=="nvidia_output_exhausted" &&
+                 code!=="analysis_incomplete" && code!=="analysis_language_mismatch"))throw cause;
+          }
+        }
+        if(captured.kind!=="document" || pageCount===null || pageCount<1){
+          throw new Error("PDF page count is unavailable. Open the PDF viewer, then try Entire PDF again.");
+        }
+        const run:LargeDocumentRun={mode,prompt,language,sourceId,assetId,
+          total:pageCount,completed:0,queue:planPdfBatches(pageCount),needsReview:[]};
+        documentRun.current=run;
+        if(mode==="extract"){setCandidateResult(null);setDismissedCandidates(new Set());}
+      }
+      const run=documentRun.current;
+      if(!run)throw new Error("No document processing run is available.");
+      setPdfProgress(pdfRunProgress(run,"running"));
+      while(run.queue.length){
+        if(abort.signal.aborted)break;
+        const part=run.queue[0];
+        let response:CopilotResult|Stage3CandidateResponse;
+        try{
+          response=await requestPart({kind:"pages",...part},false);
+        }catch(cause){
+          // A dense passage can exceed the input/output caps or produce invalid JSON.
+          // Retry at smaller scope without claiming any failed page was processed.
+          // Quota/network/auth errors are NOT splittable and must pause the run.
+          const code=(cause as {code?:string}).code;
+          if(typeof code==="string" && RETRYABLE_PAGE_CODES.has(code)){
+            const halves=dividePdfBatch(part);
+            if(halves){
+              run.queue.splice(0,1,...halves);
+              setDiagnostic(null);
+              continue;
+            }
+            // A single page cannot be subdivided. Flag it, do not count it as
+            // analysed, and continue other pages; only the analyst can retry.
+            run.needsReview.push({page:part.pageStart,code});
+            run.queue.shift();
+            setDiagnostic(null);
+            setPdfProgress(pdfRunProgress(run,"running"));
+            continue;
+          }
+          throw cause;
+        }
+        if(abort.signal.aborted)break;
+        applyResult(response,part);
+        run.queue.shift();
+        run.completed+=part.pageEnd-part.pageStart+1;
+        setPdfProgress(pdfRunProgress(run,"running"));
+      }
+      if(!abort.signal.aborted && !run.queue.length){
+        if(run.needsReview.length){
+          // Attempts are exhausted but not every page has validated findings.
+          setPdfProgress(pdfRunProgress(run,"needs_review"));
+        }else{
+          documentRun.current=null;
+          setPdfProgress(pdfRunProgress(run,"complete"));
+        }
+      }else{
+        setPdfProgress(pdfRunProgress(run,"paused"));
+      }
+    }catch(cause){
+      if(documentRun.current){
+        const run=documentRun.current;
+        if(mounted.current)setPdfProgress(pdfRunProgress(run,"paused"));
+      }
+      if(!abort.signal.aborted && mounted.current){
+        setError(cause instanceof Error?cause.message:"Processing request failed.");
+      }
+    }finally{
+      if(mounted.current && inFlight.current===abort){
         inFlight.current=null;setWorking(false);
       }
     }
@@ -234,7 +381,11 @@ export function ProcessingCopilot({
           <option value="tr">Türkçe</option>
           <option value="en">English</option>
         </select>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <button type="button" disabled={!canSend} onClick={()=>void submit("extract","")}
+            className="rounded border border-[var(--amber-dark)] bg-[var(--amber-tint)] px-3 py-1.5 text-xs font-semibold text-[var(--amber-soft)] hover:bg-[var(--amber-glow)] disabled:opacity-40">
+            Extract candidates
+          </button>
           <button type="button" disabled={!canSend} onClick={()=>void submit("analyse","")}
             className="rounded border border-[var(--amber-dark)] bg-[var(--amber-tint)] px-3 py-1.5 text-xs font-medium text-[var(--amber-soft)] hover:bg-[var(--amber-glow)] disabled:opacity-40">
             Analyse context
@@ -246,9 +397,39 @@ export function ProcessingCopilot({
           </button>
         </div>
       </div>
+      {pdfProgress ? <div role="status" aria-live="polite" data-testid="pdf-batch-progress"
+        className="shrink-0 border-b border-[var(--line-neutral)] px-4 py-2 text-xs text-[var(--muted-strong)]">
+        <span>Entire PDF: {pdfProgress.completed} / {pdfProgress.total} pages processed</span>
+        <span className="ml-2 text-[var(--amber-soft)]">
+          {pdfProgress.status==="complete"?"Complete":
+           pdfProgress.status==="needs_review"?"Review needed · other pages processed":
+           pdfProgress.status==="paused"?"Paused · results retained":"Reading in verified batches…"}
+        </span>
+        {(pdfProgress.status==="paused" || pdfProgress.status==="needs_review") && !working ?
+          <button type="button" className="ml-3 underline text-[var(--amber-soft)]"
+            onClick={()=>{const run=documentRun.current;if(run)void submit(run.mode,run.prompt,true);}}>
+            {pdfProgress.status==="needs_review"?"Retry flagged pages":"Continue Entire PDF"}
+          </button>:null}
+        {pdfProgress.needsReview.length>0 ? <p className="mt-1 text-[11px]" data-testid="pdf-needs-review">
+          Needs analyst review: {pdfProgress.needsReview.length} unverified
+          {pdfProgress.needsReview.length===1?" page":" pages"} ({pdfProgress.needsReview.slice(0,12)
+            .map(({page,code})=>`p.${page}: ${code}`).join(", ")}
+          {pdfProgress.needsReview.length>12?`, +${pdfProgress.needsReview.length-12} more`:""}).
+          These pages were attempted but NOT counted as analysed.
+        </p>:null}
+        {pdfProgress.status!=="complete" ? <p className="mt-1 text-[11px]">
+          Each batch is cited separately. Unverifiable pages are flagged while other pages continue; only validated results count as analysed.
+        </p>:null}
+      </div>:null}
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto bg-[var(--surface)]"
         aria-label="Copilot chat history">
         <CopilotChat turns={turns} onNavigate={onNavigate}/>
+        {candidateResult ? <CopilotCandidates result={candidateResult} dismissed={dismissedCandidates}
+          onDismiss={(candidateId)=>setDismissedCandidates((current)=>new Set([...current,candidateId]))}
+          onReview={(candidate)=>{
+            if(onReviewCandidate) onReviewCandidate(candidate);
+            else if(candidate.verifiedSupport[0]?.page) onNavigate(candidate.verifiedSupport[0].page,candidate.verifiedSupport[0].provenance.annotationId);
+          }} onNavigate={onNavigate}/> : null}
       </div>
       <form onSubmit={onSubmit}
         className="shrink-0 border-t border-[var(--line)] bg-[var(--surface-panel)] px-4 pb-3 pt-3">
@@ -269,7 +450,7 @@ export function ProcessingCopilot({
             disabled={working}/>
           <div className="flex shrink-0 flex-col gap-1">
             {working ? <button type="button" className="rounded border border-[var(--line)] px-3 py-2 text-xs text-[var(--muted-strong)]"
-              onClick={()=>{inFlight.current?.abort();setWorking(false);}}>Cancel</button> : null}
+              onClick={()=>inFlight.current?.abort()}>Cancel</button> : null}
             <button type="submit" disabled={!canSend || !question.trim()}
               className="rounded border border-[var(--amber-strong)] bg-[var(--amber-strong)] px-4 py-2 text-xs font-semibold text-[#171106] hover:bg-[var(--amber-soft)] disabled:opacity-40">
               {working?"Asking…":"Ask"}

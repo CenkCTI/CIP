@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import type { Stage3Candidate } from "@/lib/ai/stage3/candidates";
 
 import {
   createTimelineEventFromAnnotation,
@@ -27,16 +28,22 @@ export function AnnotationTimelineActions({
   annotation,
   events,
   links,
+  aiCandidate,
 }: {
   projectId: string;
   sourceId: string;
   annotation: Row;
   events: Row[];
   links: Row[];
+  aiCandidate?: Extract<Stage3Candidate,{kind:"TIMELINE"}> | null;
 }) {
   const router = useRouter();
-  const [mode, setMode] = useState<"idle" | "create" | "link">("idle");
-  const [precision, setPrecision] = useState<Precision>("DAY");
+  const aiDate=aiCandidate?.normalizedDate ?? "";
+  const initialPrecision:Precision=/^\d{4}-\d{2}-\d{2}$/.test(aiDate)?"DAY":
+    /^\d{4}-\d{2}$/.test(aiDate)?"MONTH":/^\d{4}$/.test(aiDate)?"YEAR":
+    aiCandidate?.sourceTimeExpression?"APPROXIMATE":"DAY";
+  const [mode, setMode] = useState<"idle" | "create" | "link">(aiCandidate ? "create" : "idle");
+  const [precision, setPrecision] = useState<Precision>(initialPrecision);
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ error?: string; success?: string }>({});
   const linkedIds = new Set(links.map((link) => text(link.timeline_event_id)));
@@ -79,7 +86,7 @@ export function AnnotationTimelineActions({
             e.preventDefault();
             const form = e.currentTarget;
             const fd = new FormData(form);
-            fd.set("description", text(annotation.selected_text) || text(annotation.comment));
+            // Keep the analyst-reviewed description from the form; never overwrite it here.
             fd.set("basis", "OBSERVED");
             fd.set("activity_phase", "UNKNOWN");
             fd.set("assessment_status", "RECORDED");
@@ -100,15 +107,28 @@ export function AnnotationTimelineActions({
             });
           }}
         >
+          {aiCandidate ? <p className="rounded border border-amber-700/50 bg-amber-950/20 p-2 text-xs text-amber-300">
+            AI SUGGESTION · NOT SAVED. Review the event description and source date before creating.
+          </p> : null}
           <input
             className="field min-h-10 py-2 text-sm"
             name="event_name"
             required
             maxLength={180}
-            defaultValue={suggestedTitle(annotation)}
+            defaultValue={aiCandidate?.eventName ?? suggestedTitle(annotation)}
             placeholder="What happened?"
           />
-          <TimelineTimeInputs precision={precision} onPrecisionChange={setPrecision} compact />
+          <label className="grid gap-1">
+            <span className="citem-label">Event description</span>
+            <textarea className="field min-h-20 text-sm" name="description" maxLength={10000}
+              defaultValue={aiCandidate?.description ?? (text(annotation.selected_text) || text(annotation.comment))}/>
+          </label>
+          {aiCandidate?.sourceTimeExpression ? <p className="text-xs text-amber-300">
+            Source-reported time: {aiCandidate.sourceTimeExpression}. If no exact date is given, do not invent one.
+          </p> : null}
+          <TimelineTimeInputs precision={precision} onPrecisionChange={setPrecision}
+            event={{event_date:aiDate,time_label:initialPrecision==="APPROXIMATE" ? aiCandidate?.sourceTimeExpression ?? "" : ""}}
+            compact />
           <button className="citem-button w-full min-h-10 py-2" disabled={pending}>
             {pending ? "Adding…" : "Add to Timeline"}
           </button>
