@@ -74,8 +74,21 @@ type LargeDocumentRun = {
   total:number;
   completed:number;
   queue:PdfBatch[];
+  needsReview:{page:number;code:string}[];
 };
-type PdfProgress = {total:number;completed:number;status:"running"|"paused"|"complete"};
+type PdfProgress = {
+  total:number;completed:number;
+  needsReview:{page:number;code:string}[];
+  status:"running"|"paused"|"needs_review"|"complete";
+};
+function pdfRunProgress(run:LargeDocumentRun,status:PdfProgress["status"]):PdfProgress {
+  return {total:run.total,completed:run.completed,
+    needsReview:[...run.needsReview],status};
+}
+const RETRYABLE_PAGE_CODES = new Set([
+  "context_too_large","malformed_output","nvidia_output_exhausted",
+  "analysis_incomplete","analysis_language_mismatch",
+]);
 
 export function ProcessingCopilot({
   projectId, sourceId, assetId, sourceTitle, selectedAnnotationId,
@@ -152,6 +165,11 @@ export function ProcessingCopilot({
     if(resume && (!active || active.mode!==mode || active.prompt!==prompt ||
        active.sourceId!==sourceId || active.assetId!==assetId))return;
     if(!resume) {documentRun.current=null;setPdfProgress(null);}
+    if(resume && active && !active.queue.length && active.needsReview.length){
+      // Requeue only unresolved single pages on deliberate analyst retry.
+      active.queue=active.needsReview.map(({page})=>({pageStart:page,pageEnd:page}));
+      active.needsReview=[];
+    }
     const history=turns
       .filter((turn)=>copilotContextKey(turn.context)===copilotContextKey(captured))
       .slice(-3)
@@ -236,13 +254,13 @@ export function ProcessingCopilot({
           throw new Error("PDF page count is unavailable. Open the PDF viewer, then try Entire PDF again.");
         }
         const run:LargeDocumentRun={mode,prompt,language,sourceId,assetId,
-          total:pageCount,completed:0,queue:planPdfBatches(pageCount)};
+          total:pageCount,completed:0,queue:planPdfBatches(pageCount),needsReview:[]};
         documentRun.current=run;
         if(mode==="extract"){setCandidateResult(null);setDismissedCandidates(new Set());}
       }
       const run=documentRun.current;
       if(!run)throw new Error("No document processing run is available.");
-      setPdfProgress({total:run.total,completed:run.completed,status:"running"});
+      setPdfProgress(pdfRunProgress(run,"running"));
       while(run.queue.length){
         if(abort.signal.aborted)break;
         const part=run.queue[0];
@@ -254,15 +272,20 @@ export function ProcessingCopilot({
           // Retry at smaller scope without claiming any failed page was processed.
           // Quota/network/auth errors are NOT splittable and must pause the run.
           const code=(cause as {code?:string}).code;
-          if(code==="context_too_large" || code==="malformed_output" ||
-             code==="nvidia_output_exhausted" || code==="analysis_incomplete" ||
-             code==="analysis_language_mismatch"){
+          if(typeof code==="string" && RETRYABLE_PAGE_CODES.has(code)){
             const halves=dividePdfBatch(part);
             if(halves){
               run.queue.splice(0,1,...halves);
               setDiagnostic(null);
               continue;
             }
+            // A single page cannot be subdivided. Flag it, do not count it as
+            // analysed, and continue other pages; only the analyst can retry.
+            run.needsReview.push({page:part.pageStart,code});
+            run.queue.shift();
+            setDiagnostic(null);
+            setPdfProgress(pdfRunProgress(run,"running"));
+            continue;
           }
           throw cause;
         }
@@ -270,18 +293,23 @@ export function ProcessingCopilot({
         applyResult(response,part);
         run.queue.shift();
         run.completed+=part.pageEnd-part.pageStart+1;
-        setPdfProgress({total:run.total,completed:run.completed,status:"running"});
+        setPdfProgress(pdfRunProgress(run,"running"));
       }
       if(!abort.signal.aborted && !run.queue.length){
-        documentRun.current=null;
-        setPdfProgress({total:run.total,completed:run.completed,status:"complete"});
+        if(run.needsReview.length){
+          // Attempts are exhausted but not every page has validated findings.
+          setPdfProgress(pdfRunProgress(run,"needs_review"));
+        }else{
+          documentRun.current=null;
+          setPdfProgress(pdfRunProgress(run,"complete"));
+        }
       }else{
-        setPdfProgress({total:run.total,completed:run.completed,status:"paused"});
+        setPdfProgress(pdfRunProgress(run,"paused"));
       }
     }catch(cause){
       if(documentRun.current){
         const run=documentRun.current;
-        if(mounted.current)setPdfProgress({total:run.total,completed:run.completed,status:"paused"});
+        if(mounted.current)setPdfProgress(pdfRunProgress(run,"paused"));
       }
       if(!abort.signal.aborted && mounted.current){
         setError(cause instanceof Error?cause.message:"Processing request failed.");
@@ -373,15 +401,24 @@ export function ProcessingCopilot({
         className="shrink-0 border-b border-[var(--line-neutral)] px-4 py-2 text-xs text-[var(--muted-strong)]">
         <span>Entire PDF: {pdfProgress.completed} / {pdfProgress.total} pages processed</span>
         <span className="ml-2 text-[var(--amber-soft)]">
-          {pdfProgress.status==="complete"?"Complete":pdfProgress.status==="paused"?"Paused · results retained":"Reading in verified batches…"}
+          {pdfProgress.status==="complete"?"Complete":
+           pdfProgress.status==="needs_review"?"Review needed · other pages processed":
+           pdfProgress.status==="paused"?"Paused · results retained":"Reading in verified batches…"}
         </span>
-        {pdfProgress.status==="paused" && !working ?
+        {(pdfProgress.status==="paused" || pdfProgress.status==="needs_review") && !working ?
           <button type="button" className="ml-3 underline text-[var(--amber-soft)]"
             onClick={()=>{const run=documentRun.current;if(run)void submit(run.mode,run.prompt,true);}}>
-            Continue Entire PDF
+            {pdfProgress.status==="needs_review"?"Retry flagged pages":"Continue Entire PDF"}
           </button>:null}
+        {pdfProgress.needsReview.length>0 ? <p className="mt-1 text-[11px]" data-testid="pdf-needs-review">
+          Needs analyst review: {pdfProgress.needsReview.length} unverified
+          {pdfProgress.needsReview.length===1?" page":" pages"} ({pdfProgress.needsReview.slice(0,12)
+            .map(({page,code})=>`p.${page}: ${code}`).join(", ")}
+          {pdfProgress.needsReview.length>12?`, +${pdfProgress.needsReview.length-12} more`:""}).
+          These pages were attempted but NOT counted as analysed.
+        </p>:null}
         {pdfProgress.status!=="complete" ? <p className="mt-1 text-[11px]">
-          Each batch is cited separately. Invalid, uncited or wrong-language analysis is retried on fewer pages. Failed pages never count as analysed.
+          Each batch is cited separately. Unverifiable pages are flagged while other pages continue; only validated results count as analysed.
         </p>:null}
       </div>:null}
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto bg-[var(--surface)]"
