@@ -47,6 +47,9 @@ const errorMap:Record<string,[number,string,string]>={
   document_chunk_limit:[422,"source","Document exceeds 24 chunks. Select a smaller range."],
   document_empty:[422,"source","No extractable text."],
   stale_document_chunk:[409,"source","Document has changed. Restart scan."],
+  bad_origin:[403,"request","Invalid request origin."],
+  json_required:[415,"request","Expected JSON."],
+  body_too_large:[413,"request","Request is too large."],
 };
 function errResponse(e:unknown){
   if(e instanceof z.ZodError)return noStore({code:"invalid_request",stage:"request",error:"Invalid chunk selection."},{status:400});
