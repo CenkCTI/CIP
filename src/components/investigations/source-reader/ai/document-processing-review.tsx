@@ -3,7 +3,8 @@ import { useMemo,useState } from "react";
 import { CopilotCandidates } from "./copilot-candidates";
 import type { Stage3Candidate } from "@/lib/ai/stage3/candidates";
 import type { DocumentScanView } from "./use-document-extraction";
-import { candidateKinds } from "@/lib/ai/stage3/candidates";
+const candidateKinds=["SOURCE_CLAIM","INDICATOR","TIMELINE","MALWARE","CVE","MITRE",
+  "THREAT_ACTOR","CAMPAIGN","ATTRIBUTION_CLAIM","UNANSWERED_QUESTION"] as const;
 
 export function DocumentProcessingReview({view,working,dismissed,onDismiss,onReview,onNavigate,onResume,onCancel}:{
   view:DocumentScanView;working:boolean;dismissed:Set<string>;
