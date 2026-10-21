@@ -270,7 +270,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
     expect(scopes).toEqual(["document","pages"]);
   });
 
-  it("keeps a one-page malformed result unprocessed and allows explicit retry",async()=>{
+  it("flags one-page malformed output while analysing the other pages and retries only the flagged page",async()=>{
     let failure=true;
     const covered:number[]=[];
     fetchMock.mockImplementation(async(url:string,options?:RequestInit)=>{
@@ -291,13 +291,14 @@ describe("Stage 3 Processing Copilot UI",()=>{
     render(<ProcessingCopilot {...props} pageCount={3}/>);
     await screen.findByText("NVIDIA connected");
     fireEvent.click(screen.getByRole("button",{name:"Analyse context"}));
-    await screen.findByRole("button",{name:"Continue Entire PDF"});
-    expect(screen.getByText(/0 \/ 3 pages processed/)).toBeTruthy();
-    expect(covered).toEqual([]);
-    expect(screen.getByTestId("copilot-error-diagnostic").textContent).toContain("code=malformed_output");
-    fireEvent.click(screen.getByRole("button",{name:"Continue Entire PDF"}));
+    await screen.findByRole("button",{name:"Retry flagged pages"});
+    expect(screen.getByText(/2 \/ 3 pages processed/)).toBeTruthy();
+    expect(covered).toEqual([2,3]);
+    expect(screen.getByTestId("pdf-needs-review").textContent).toContain("p.1: malformed_output");
+    fireEvent.click(screen.getByRole("button",{name:"Retry flagged pages"}));
     await screen.findByText(/3 \/ 3 pages processed/);
-    expect(covered).toEqual([1,2,3]);
+    expect(covered).toEqual([2,3,1]);
+    expect(screen.queryByTestId("pdf-needs-review")).toBeNull();
   });
 
 
@@ -325,7 +326,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
     expect(succeeded).toEqual(Array.from({length:10},(_,i)=>i+1));
   });
 
-  it("pauses without marking a single-page wrong-language analysis as complete",async()=>{
+  it("flags wrong-language single pages without claiming completion",async()=>{
     fetchMock.mockImplementation(async(url:string,options?:RequestInit)=>{
       if(url==="/api/ai/byok/status")return {ok:true,json:async()=>({
         connected:true,providerId:"nvidia_nim",model:"nvidia/nemotron-3-super-120b-a12b",
@@ -337,9 +338,72 @@ describe("Stage 3 Processing Copilot UI",()=>{
     render(<ProcessingCopilot {...props} pageCount={3}/>);
     await screen.findByText("NVIDIA connected");
     fireEvent.click(screen.getByRole("button",{name:"Analyse context"}));
-    await screen.findByRole("button",{name:"Continue Entire PDF"});
+    await screen.findByRole("button",{name:"Retry flagged pages"});
     expect(screen.getByText(/0 \/ 3 pages processed/)).toBeTruthy();
-    expect(screen.getByTestId("copilot-error-diagnostic").textContent).toContain("analysis_language_mismatch");
+    expect(screen.getByTestId("pdf-needs-review").textContent).toContain("p.3: analysis_language_mismatch");
+    expect(screen.queryByText(/^Complete$/)).toBeNull();
+  });
+
+
+  it("continues a 34-page document after page 3 fails, tracks the gap and retries only it",async()=>{
+    const succeeded:number[]=[];
+    let recover=false;
+    const attempted:string[]=[];
+    fetchMock.mockImplementation(async(url:string,options?:RequestInit)=>{
+      if(url==="/api/ai/byok/status")return {ok:true,json:async()=>({
+        connected:true,providerId:"nvidia_nim",model:"nvidia/nemotron-3-super-120b-a12b",
+      })};
+      const {context}=JSON.parse(String(options?.body));
+      if(context.kind==="document")return {ok:false,status:413,json:async()=>({code:"pdf_document_too_large"})};
+      const {pageStart,pageEnd}=context;
+      attempted.push(`${pageStart}-${pageEnd}`);
+      if(pageStart<=3 && pageEnd>=3 && !recover)
+        return {ok:false,status:422,json:async()=>({code:"analysis_incomplete",stage:"nvidia"})};
+      for(let page=pageStart;page<=pageEnd;page++)succeeded.push(page);
+      return {ok:true,status:200,json:async()=>({result:{...verified,
+        summary:`Valid pages ${pageStart}-${pageEnd}`}})};
+    });
+    render(<ProcessingCopilot {...props} pageCount={34}/>);
+    await screen.findByText("NVIDIA connected");
+    fireEvent.click(screen.getByRole("button",{name:"Analyse context"}));
+    await screen.findByRole("button",{name:"Retry flagged pages"});
+    expect(screen.getByText(/33 \/ 34 pages processed/)).toBeTruthy();
+    expect(screen.getByTestId("pdf-needs-review").textContent).toContain("p.3: analysis_incomplete");
+    expect(succeeded).toEqual(Array.from({length:34},(_,i)=>i+1).filter(p=>p!==3));
+    const seen=succeeded.length;
+    recover=true;
+    fireEvent.click(screen.getByRole("button",{name:"Retry flagged pages"}));
+    await screen.findByText(/34 \/ 34 pages processed/);
+    expect(succeeded.slice(seen)).toEqual([3]);
+    expect(attempted[attempted.length-1]).toBe("3-3");
+    expect(screen.getByText(/^Complete$/)).toBeTruthy();
+  });
+
+  it("still pauses on quota errors without skipping the requested page range",async()=>{
+    let quota=true;
+    const attempted:string[]=[];
+    fetchMock.mockImplementation(async(url:string,options?:RequestInit)=>{
+      if(url==="/api/ai/byok/status")return {ok:true,json:async()=>({
+        connected:true,providerId:"nvidia_nim",model:"nvidia/nemotron-3-super-120b-a12b",
+      })};
+      const {context}=JSON.parse(String(options?.body));
+      if(context.kind==="document")return {ok:false,status:413,json:async()=>({code:"pdf_document_too_large"})};
+      attempted.push(`${context.pageStart}-${context.pageEnd}`);
+      if(quota && context.pageStart===9){
+        quota=false;
+        return {ok:false,status:429,json:async()=>({code:"rate_limited",stage:"quota"})};
+      }
+      return {ok:true,status:200,json:async()=>({result:verified})};
+    });
+    render(<ProcessingCopilot {...props} pageCount={17}/>);
+    await screen.findByText("NVIDIA connected");
+    fireEvent.click(screen.getByRole("button",{name:"Analyse context"}));
+    await screen.findByRole("button",{name:"Continue Entire PDF"});
+    expect(screen.getByText(/8 \/ 17 pages processed/)).toBeTruthy();
+    expect(screen.queryByTestId("pdf-needs-review")).toBeNull();
+    fireEvent.click(screen.getByRole("button",{name:"Continue Entire PDF"}));
+    await screen.findByText(/17 \/ 17 pages processed/);
+    expect(attempted).toEqual(["1-8","9-16","9-16","17-17"]);
   });
 
   it("requires NVIDIA and reuses BYOK panel, without exposing an API key input in Copilot", async()=>{
