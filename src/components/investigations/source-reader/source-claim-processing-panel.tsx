@@ -44,7 +44,7 @@ export function SourceClaimProcessingPanel({
   const [selectedClaimId, setSelectedClaimId] = useState("");
   const [stance, setStance] = useState<SourceClaimStance>("ASSERTS");
   const [qualifier, setQualifier] = useState("");
-  const [origin, setOrigin] = useState<MappingOrigin>("ANALYST_MAPPED");
+  const [origin, setOrigin] = useState<MappingOrigin>(aiCandidate ? "AI_SUGGESTED" : "ANALYST_MAPPED");
   const [message, setMessage] = useState<{ error?: string; success?: string }>({});
 
   function linkExisting() {

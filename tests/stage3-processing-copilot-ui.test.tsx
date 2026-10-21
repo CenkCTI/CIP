@@ -218,6 +218,21 @@ describe("Window and integration hardening",()=>{
     expect(pdf).toContain("reportActivePage");
     expect(pdf).toContain("scrollIntoView");
   });
+  it("keeps Stage 3 candidate review attached to verified source annotation and analyst-only mutation",()=>{
+    const reader=readFileSync("src/components/investigations/source-reader/source-reader-workspace.tsx","utf8");
+    const timeline=readFileSync("src/components/investigations/source-reader/annotation-timeline-actions.tsx","utf8");
+    const actions=readFileSync("src/components/investigations/source-reader/annotation-processing-actions.tsx","utf8");
+    expect(reader).toContain('evidence.provenance.assetId===s(asset.id)');
+    expect(reader).toContain('s(annotation.anchor_kind)!=="TEXT"');
+    expect(reader).toContain('replace(/\\s+/g," ")');
+    expect(reader).toContain("selected.includes(excerpt)");
+    expect(timeline).toContain('aiCandidate?.eventName ?? suggestedTitle(annotation)');
+    expect(timeline).toContain('aiCandidate?.description');
+    expect(timeline).toContain("AI SUGGESTION · NOT SAVED");
+    expect(actions).toContain('aiCandidate?.kind === "TIMELINE" ? aiCandidate : null');
+    expect(actions).toContain('aiCandidate?.candidateId ?? "manual"');
+    expect(actions).not.toContain('defaultValue="SOURCE_EXPLICIT"');
+  });
   it("does not include intelligence-domain write APIs in the Copilot implementation",()=>{
     const paths=[
       "src/components/investigations/source-reader/ai/processing-copilot.tsx",

@@ -858,6 +858,7 @@ export function AnnotationProcessingActions({
                       annotation={annotation}
                       events={events}
                       links={timelineLinks}
+                      aiCandidate={aiCandidate?.kind === "TIMELINE" ? aiCandidate : null}
                     />
                   </div>
                 ) : destination === "source_claim" ? (
@@ -1003,7 +1004,7 @@ export function AnnotationProcessingActions({
                     ) : null}
 
                     <form
-                      key={`${destination}:${candidate?.canonicalValue ?? ""}`}
+                      key={`${destination}:${candidate?.canonicalValue ?? ""}:${aiCandidate?.candidateId ?? "manual"}`}
                       className="space-y-3 rounded border border-stone-800 bg-black/10 p-3"
                       onSubmit={submitCreate}
                     >
@@ -1047,18 +1048,7 @@ export function AnnotationProcessingActions({
                               ))}
                             </select>
                           </label>
-                          <label className="grid gap-1">
-                            <span className="citem-label">Mapping origin</span>
-                            <select
-                              className="field"
-                              name="mapping_origin"
-                              defaultValue="SOURCE_EXPLICIT"
-                            >
-                              {mappingOrigins.map((item) => (
-                                <option key={item}>{item}</option>
-                              ))}
-                            </select>
-                          </label>
+
                         </>
                       ) : null}
 

@@ -1245,7 +1245,7 @@ export function SourceReaderWorkspace({
               evidence.provenance.assetId===s(asset.id));
             const matching=liveAnnotations.find((annotation)=>sources.some((evidence)=>{
               if(s(annotation.anchor_kind)!=="TEXT" || !s(annotation.selected_text).trim()) return false;
-              const normalize=(input:string)=>input.normalize("NFKC").replace(/\\s+/g," ").trim();
+              const normalize=(input:string)=>input.normalize("NFKC").replace(/\s+/g," ").trim();
               const excerpt=normalize(evidence.quote);
               const selected=normalize(s(annotation.selected_text));
               const samePage=evidence.page===null || Number(annotation.page_number)===evidence.page;
