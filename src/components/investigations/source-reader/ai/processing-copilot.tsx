@@ -437,6 +437,12 @@ export function ProcessingCopilot({
           Each batch is cited separately. Unverifiable pages are flagged while other pages continue; only validated results count as analysed.
         </p>:null}
       </div>:null}
+      <div className="max-h-[45%] shrink-0 overflow-y-auto border-b border-[var(--line-neutral)] bg-[var(--surface-panel)]"
+        data-testid="copilot-research-dock">
+        <ControlledWebResearch key={sourceId+":"+assetId} projectId={projectId}
+          sourceId={sourceId} assetId={assetId}
+          context={effectiveContext} connected={connected}/>
+      </div>
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto bg-[var(--surface)]"
         aria-label="Copilot chat history">
         {documentScan.view?<DocumentProcessingReview view={documentScan.view}
@@ -448,9 +454,6 @@ export function ProcessingCopilot({
               onNavigate(candidate.verifiedSupport[0].page,candidate.verifiedSupport[0].provenance.annotationId);
           }}
           onResume={(failed)=>void documentScan.resume(failed)} onCancel={documentScan.cancel}/>:null}
-        <ControlledWebResearch key={sourceId+":"+assetId} projectId={projectId}
-          sourceId={sourceId} assetId={assetId}
-          context={effectiveContext} connected={connected}/>
         <CopilotChat turns={turns} onNavigate={onNavigate}/>
         {candidateResult ? <CopilotCandidates result={candidateResult} dismissed={dismissedCandidates}
           onDismiss={(candidateId)=>setDismissedCandidates((current)=>new Set([...current,candidateId]))}

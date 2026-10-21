@@ -72,10 +72,12 @@ export function ControlledWebResearch({projectId,sourceId,assetId,context,connec
   return <section className="border-b border-[var(--line-neutral)] px-4 py-3"
     aria-label="Controlled Web Research" data-testid="controlled-web-research">
     <button type="button" onClick={()=>setOpen(o=>!o)}
-      className="text-xs font-semibold text-[var(--amber-soft)]">
-      {open?"▾":"▸"} Controlled Web Research
+      aria-expanded={open} aria-controls="controlled-web-research-content"
+      className="flex min-h-9 w-full items-center justify-between rounded border border-[var(--amber-dark)] bg-[var(--amber-tint)] px-3 py-2 text-left text-xs font-semibold text-[var(--amber-soft)] hover:bg-[var(--amber-glow)]">
+      <span>{open?"▾":"▸"} Controlled Web Research</span>
+      <span className="font-normal">AI Faz 5</span>
     </button>
-    {open?<div className="mt-3 space-y-3">
+    {open?<div id="controlled-web-research-content" className="mt-3 space-y-3">
       <p className="text-xs text-[var(--muted)]">
         AI proposes searches, but only your Search selected action contacts the search provider.
         External web text is untrusted and never saves a Source automatically.
