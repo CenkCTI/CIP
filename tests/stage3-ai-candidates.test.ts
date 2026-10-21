@@ -103,6 +103,51 @@ describe("Stage 3 candidate boundary",()=>{
     await expect(runStage3CandidateExtraction({sourceTitle:"Source",spans:[span]},
       vi.fn().mockResolvedValue("invalid model output"))).rejects.toMatchObject({code:"malformed_output"});
   });
+
+  it("keeps individually validated candidates without paying for a second NVIDIA response",async()=>{
+    const input={candidates:[claim,
+      {...claim,claimType:"invented_enum"},
+      {...claim,sourceSupport:[{source_token:"DOC_P001_C01",quote:"unsupported statement about Mars"}]}],
+      warnings:[]};
+    const chat=vi.fn().mockResolvedValue(JSON.stringify(input));
+    const result=await runStage3CandidateExtraction({sourceTitle:"Source",spans:[span]},chat);
+    expect(chat).toHaveBeenCalledTimes(1);
+    expect(result.candidates).toHaveLength(1);
+    expect(result.discarded).toBe(2);
+    expect(result.candidates[0].verifiedSupport[0].quote).toBe("phishing targeting Polish government");
+    expect(result.warnings.join(" ")).toContain("discarded");
+  });
+  it("does not launder entirely invalid candidates into a completed empty chunk",async()=>{
+    const invalid=JSON.stringify({candidates:[{kind:"SOURCE_CLAIM",claim:"unsupported"}],warnings:[]});
+    const chat=vi.fn().mockResolvedValue(invalid);
+    await expect(runStage3CandidateExtraction({sourceTitle:"Source",spans:[span]},chat))
+      .rejects.toMatchObject({code:"malformed_output"});
+    expect(chat).toHaveBeenCalledTimes(2);
+  });
+  it("accepts legitimately empty source extraction without retry",async()=>{
+    const chat=vi.fn().mockResolvedValue('{"candidates":[],"warnings":[]}');
+    const result=await runStage3CandidateExtraction({sourceTitle:"Source",spans:[span]},chat);
+    expect(result.candidates).toEqual([]);
+    expect(result.discarded).toBe(0);
+    expect(chat).toHaveBeenCalledTimes(1);
+  });
+  it("rejects unsupported press-briefing MITRE mappings without account or domain evidence",()=>{
+    const generic="building a censorship operation in which they could monitor the whole information space";
+    const pressSpan={...span,text:generic};
+    const mapping=(techniqueId:string)=>({
+      kind:"MITRE" as const,derivation:"MAPPED" as const,techniqueId,
+      explanation:"Generic claims about information control.",
+      caveats:[],sourceSupport:[{source_token:span.token,quote:generic}],
+    });
+    const result=verifyStage3Candidates([mapping("T1583.001"),mapping("T1585.001")],[pressSpan]);
+    expect(result.candidates).toEqual([]);
+    expect(result.discarded).toBe(2);
+    const domainQuote="The group acquired domains to support the operation.";
+    const domain=verifyStage3Candidates([{
+      ...mapping("T1583.001"),sourceSupport:[{source_token:span.token,quote:domainQuote}],
+    }],[{...span,text:domainQuote}]);
+    expect(domain.candidates).toHaveLength(1);
+  });
   it("does not import any domain-writing operations in AI extraction files",()=>{
     for(const path of ["src/lib/ai/stage3/candidates.ts","src/lib/ai/stage3/candidate-workflow.ts",
       "src/app/api/projects/[id]/ai/processing/route.ts"]){

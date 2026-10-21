@@ -75,8 +75,17 @@ function additionalGate(candidate: Stage3CandidateModel, evidence: Stage3Support
     if (/\b(?:not|never|cannot|can't|no)\b.{0,45}\b(?:attribut(?:e|ed)|associat(?:e|ed)|link(?:ed)?|responsib(?:le|ility))\b/i.test(quoted)) return false;
   }
   if (candidate.kind === "CVE" && !quoted.toUpperCase().includes(candidate.cveId.toUpperCase())) return false;
-  if (candidate.kind === "MITRE" && candidate.derivation === "EXTRACTED" &&
-    !quoted.toUpperCase().includes(candidate.techniqueId.toUpperCase())) return false;
+  if (candidate.kind === "MITRE") {
+    const id=candidate.techniqueId.toUpperCase();
+    if(candidate.derivation==="EXTRACTED" && !quoted.toUpperCase().includes(id))return false;
+    // Conservative targeted structural checks for two frequent false
+    // mappings from generic media/censorship commentary. Exact quote
+    // presence does not establish semantic equivalence to ATT&CK.
+    if(candidate.derivation==="MAPPED"){
+      if(id==="T1583.001" && !/\bdomains?\b/i.test(quoted))return false;
+      if(id==="T1585.001" && !/\baccounts?\b/i.test(quoted))return false;
+    }
+  }
   if (candidate.kind === "INDICATOR") {
     const parsed = extractIndicatorCandidatesFromText(quoted);
     if (!parsed.some((x)=>x.type === candidate.indicatorType &&
