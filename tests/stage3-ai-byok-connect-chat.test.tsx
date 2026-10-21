@@ -90,7 +90,7 @@ describe("NVIDIA BYOK to Copilot send integration",()=>{
     fireEvent.change(question,{target:{value:"Why did this happen?"}});
     fireEvent.click(screen.getByRole("button",{name:/^Ask$/}));
     await screen.findByRole("alert");
-    expect(screen.getByText("The AI usage limit was reached. Try again later.")).toBeTruthy();
+    expect(screen.getByText(/CİTEM.s hourly AI quota is full/)).toBeTruthy();
     expect((question as HTMLTextAreaElement).value).toBe("Why did this happen?");
   });
   it("sends up to three same-context turns for follow-up but not after selecting another scope",async()=>{
