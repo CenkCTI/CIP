@@ -32,3 +32,8 @@ This builds on Phase 1's source provenance gateway and Phase 2's AI chat reader.
 - Longer documents still need Phase 4 chunk orchestration and review queue.
 
 **Do not merge PR #72 until the acceptance gates pass.**
+
+
+## Verified-analysis completion gate (21 October 2026)
+
+A live 34-page CSRB Storm-0558 test exposed that a batch could be counted as processed even when NVIDIA returned no verified summary, no source excerpts, or an obviously English response despite explicit Turkish selection. The new server-side gate applies **only to Analyse**, not Ask (which can legitimately have no evidence) or Extract (which can legitimately have no candidates). Each Analyse completion requires a non-empty narrative summary, at least one server-verified source excerpt, zero rejected evidence items and no unvalidated fallback warnings. Explicit Turkish requests also reject unambiguously English narrative responses after the model repair attempt. If validation fails, return a typed 422; the client bisects 8→4→2→1 pages and never counts invalid batches. A single-page failure stays paused for analyst inspection; quota, auth and network failures do not auto-retry. A verified quote still does NOT independently prove every factual clause in a model-generated summary, and this stage does not make credibility, actor attribution or report-wide conclusions. Live BYOK verification is required; CI uses controlled responses.

@@ -300,6 +300,48 @@ describe("Stage 3 Processing Copilot UI",()=>{
     expect(covered).toEqual([1,2,3]);
   });
 
+
+  it("splits unverified analyses instead of counting pages without citations",async()=>{
+    const succeeded:number[]=[];
+    const attempted:string[]=[];
+    fetchMock.mockImplementation(async(url:string,options?:RequestInit)=>{
+      if(url==="/api/ai/byok/status")return {ok:true,json:async()=>({
+        connected:true,providerId:"nvidia_nim",model:"nvidia/nemotron-3-super-120b-a12b",
+      })};
+      const {context}=JSON.parse(String(options?.body));
+      if(context.kind==="document")return {ok:false,status:413,json:async()=>({code:"pdf_document_too_large"})};
+      const {pageStart,pageEnd}=context;
+      attempted.push(`${pageStart}-${pageEnd}`);
+      if(pageStart===1 && pageEnd===8)
+        return {ok:false,status:422,json:async()=>({code:"analysis_incomplete",stage:"nvidia"})};
+      for(let p=pageStart;p<=pageEnd;p++)succeeded.push(p);
+      return {ok:true,status:200,json:async()=>({result:verified})};
+    });
+    render(<ProcessingCopilot {...props} pageCount={10}/>);
+    await screen.findByText("NVIDIA connected");
+    fireEvent.click(screen.getByRole("button",{name:"Analyse context"}));
+    await screen.findByText(/10 \/ 10 pages processed/);
+    expect(attempted).toEqual(["1-8","1-4","5-8","9-10"]);
+    expect(succeeded).toEqual(Array.from({length:10},(_,i)=>i+1));
+  });
+
+  it("pauses without marking a single-page wrong-language analysis as complete",async()=>{
+    fetchMock.mockImplementation(async(url:string,options?:RequestInit)=>{
+      if(url==="/api/ai/byok/status")return {ok:true,json:async()=>({
+        connected:true,providerId:"nvidia_nim",model:"nvidia/nemotron-3-super-120b-a12b",
+      })};
+      const {context}=JSON.parse(String(options?.body));
+      if(context.kind==="document")return {ok:false,status:422,json:async()=>({code:"analysis_language_mismatch",stage:"nvidia"})};
+      return {ok:false,status:422,json:async()=>({code:"analysis_language_mismatch",stage:"nvidia"})};
+    });
+    render(<ProcessingCopilot {...props} pageCount={3}/>);
+    await screen.findByText("NVIDIA connected");
+    fireEvent.click(screen.getByRole("button",{name:"Analyse context"}));
+    await screen.findByRole("button",{name:"Continue Entire PDF"});
+    expect(screen.getByText(/0 \/ 3 pages processed/)).toBeTruthy();
+    expect(screen.getByTestId("copilot-error-diagnostic").textContent).toContain("analysis_language_mismatch");
+  });
+
   it("requires NVIDIA and reuses BYOK panel, without exposing an API key input in Copilot", async()=>{
     fetchMock.mockResolvedValue({ok:true,json:async()=>({connected:false,enabled:true,state:"disconnected"})});
     render(<ProcessingCopilot {...props}/>);

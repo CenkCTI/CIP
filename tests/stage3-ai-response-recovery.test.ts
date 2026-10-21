@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { parseStage3ModelResponse } from "@/lib/ai/stage3/response-recovery";
 import { stage3RequestSchema } from "@/lib/ai/stage3/schemas";
 import { runStage3Processing } from "@/lib/ai/stage3/workflows";
+import { assertStage3AnalysisComplete } from "@/lib/ai/stage3/analysis-quality";
+
 
 const sourceId="49429515-bc04-4539-ae53-69f0b47157cb";
 const assetId="49429615-bc04-4539-ae53-69f0b47157cb";
@@ -23,6 +25,39 @@ const grounded={
 const good=JSON.stringify({
   summary:"Rapora göre saldırıda e-posta bağlantıları aracılığıyla yönlendirme kullanılmıştır.",
   evidence:[grounded],unansweredQuestions:[],warnings:[],
+});
+
+describe("Source-grounded Analyse completion gate",()=>{
+  const evidence=[{statement:"Rapora göre e-posta üzerinden kimlik avı gerçekleştirildi.",quote,
+    sourceToken:"DOC_P003_C01",page:3,kind:"PDF" as const,
+    provenance:{sourceId,assetId}}];
+  const analysis={mode:"analyse" as const,responseLanguage:"tr" as const,question:undefined};
+  const goodResult={summary:"Raporda kimlik avı saldırısı bildirilmektedir.",evidence,discarded:0,warnings:[]};
+  it("accepts a cited Turkish analysis but not an empty or fallback summary",()=>{
+    expect(()=>assertStage3AnalysisComplete(analysis,goodResult)).not.toThrow();
+    expect(()=>assertStage3AnalysisComplete(analysis,{...goodResult,summary:""}))
+      .toThrow(expect.objectContaining({code:"analysis_incomplete"}));
+    expect(()=>assertStage3AnalysisComplete(analysis,{...goodResult,evidence:[]}))
+      .toThrow(expect.objectContaining({code:"analysis_incomplete"}));
+    expect(()=>assertStage3AnalysisComplete(analysis,{...goodResult,discarded:1}))
+      .toThrow(expect.objectContaining({code:"analysis_incomplete"}));
+    expect(()=>assertStage3AnalysisComplete(analysis,{...goodResult,warnings:[
+      "The model did not produce a complete validated response. Only previously verified source quotations are shown."
+    ]})).toThrow(expect.objectContaining({code:"analysis_incomplete"}));
+  });
+  it("rejects unmistakably English analyses when Turkish was explicitly requested",()=>{
+    const english="The source reported that the attackers used stolen signing keys and the Microsoft identity system was compromised. The incident was reported and these failures were described in the source, which included the attack timeline.";
+    expect(()=>assertStage3AnalysisComplete(analysis,{...goodResult,summary:english}))
+      .toThrow(expect.objectContaining({code:"analysis_language_mismatch"}));
+    expect(()=>assertStage3AnalysisComplete({...analysis,responseLanguage:"en"},
+      {...goodResult,summary:english})).not.toThrow();
+  });
+  it("does not penalize unanswered Ask requests or legitimately empty extraction",()=>{
+    expect(()=>assertStage3AnalysisComplete({...analysis,mode:"ask"},
+      {...goodResult,summary:"",evidence:[]})).not.toThrow();
+    expect(()=>assertStage3AnalysisComplete({...analysis,mode:"extract"},
+      {...goodResult,summary:"",evidence:[]})).not.toThrow();
+  });
 });
 
 describe("Stage 3 structured output resilience",()=>{

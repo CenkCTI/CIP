@@ -34,6 +34,8 @@ const SAFE_ERRORS: Record<string,string> = {
   provider_rate_limited:"NVIDIA has rate-limited this request.",
   nvidia_output_exhausted:"The model reached its output limit. Try a narrower question.",
   malformed_output:"NVIDIA returned invalid source-grounded JSON twice. CİTEM automatically narrows Entire PDF batches; if a single page still fails, choose that page or a different NVIDIA model. Failed pages remain unread.",
+  analysis_incomplete:"NVIDIA produced missing or partly unsupported source evidence. CİTEM did not count these pages as analysed. Try Continue Entire PDF to retry smaller batches.",
+  analysis_language_mismatch:"NVIDIA did not follow your selected response language. CİTEM will retry on fewer pages; if one page still fails, try another model.",
   invalid_request:"Choose a valid context and question.",
   bad_origin:"Request rejected due to origin validation.",
   request_failed:"CİTEM could not complete processing. Check the diagnostic code below.",
@@ -226,7 +228,8 @@ export function ProcessingCopilot({
             const code=(cause as {code?:string}).code;
             if(captured.kind!=="document" ||
                 (code!=="pdf_document_too_large" && code!=="context_too_large" &&
-                 code!=="malformed_output" && code!=="nvidia_output_exhausted"))throw cause;
+                 code!=="malformed_output" && code!=="nvidia_output_exhausted" &&
+                 code!=="analysis_incomplete" && code!=="analysis_language_mismatch"))throw cause;
           }
         }
         if(captured.kind!=="document" || pageCount===null || pageCount<1){
@@ -252,7 +255,8 @@ export function ProcessingCopilot({
           // Quota/network/auth errors are NOT splittable and must pause the run.
           const code=(cause as {code?:string}).code;
           if(code==="context_too_large" || code==="malformed_output" ||
-             code==="nvidia_output_exhausted"){
+             code==="nvidia_output_exhausted" || code==="analysis_incomplete" ||
+             code==="analysis_language_mismatch"){
             const halves=dividePdfBatch(part);
             if(halves){
               run.queue.splice(0,1,...halves);
@@ -377,7 +381,7 @@ export function ProcessingCopilot({
             Continue Entire PDF
           </button>:null}
         {pdfProgress.status!=="complete" ? <p className="mt-1 text-[11px]">
-          Each batch is cited separately. Invalid JSON is retried on fewer pages; quota errors pause the run. Unverified pages never count as read.
+          Each batch is cited separately. Invalid, uncited or wrong-language analysis is retried on fewer pages. Failed pages never count as analysed.
         </p>:null}
       </div>:null}
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto bg-[var(--surface)]"

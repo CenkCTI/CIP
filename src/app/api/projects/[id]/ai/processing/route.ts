@@ -15,6 +15,7 @@ import { stage3RequestSchema } from "@/lib/ai/stage3/schemas";
 import { runStage3Processing } from "@/lib/ai/stage3/workflows";
 import { runStage3CandidateExtraction } from "@/lib/ai/stage3/candidate-workflow";
 import { attachStage3CandidateMatches } from "@/lib/ai/stage3/matching";
+import { assertStage3AnalysisComplete } from "@/lib/ai/stage3/analysis-quality";
 import { assertStage3QuotaReservation } from "@/lib/ai/stage3/usage-quota";
 
 export const runtime = "nodejs";
@@ -52,6 +53,8 @@ function responseError(error: unknown, stage: Stage3FailureStage, sourceStep?: S
     unsupported_provider:[400,"Stage 3 currently requires NVIDIA NIM."],
     unsupported_model:[400,"The NVIDIA model is not approved."],
     malformed_output:[422,"AI output could not be validated."],
+    analysis_incomplete:[422,"NVIDIA did not return a complete analysis with verified source citations. Try fewer pages or another model."],
+    analysis_language_mismatch:[422,"NVIDIA could not produce a source-grounded analysis in the selected language. A smaller PDF selection may help."],
     nvidia_output_exhausted:[422,"NVIDIA reached its output limit."],
     rate_limited:[429,"CİTEM's rolling 60-minute AI usage quota is full. Keep this tab open and continue after older requests expire."],
     quota_unavailable:[503,"The AI usage gate could not reserve this request. Verify the database migration and retry."],
@@ -117,6 +120,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             (messages) => byokChat("nvidia_nim", credential.model, credential.apiKey, messages,"generation"))
         : await runStage3Processing({request,...context},
             (messages) => byokChat("nvidia_nim", credential.model, credential.apiKey, messages,"generation"));
+      // Never present an incomplete or wrong-language analysis as a processed PDF
+      // segment. The client can safely retry it with smaller page ranges.
+      if(request.mode==="analyse" && "summary" in result){
+        assertStage3AnalysisComplete(request,result);
+      }
       // Existing record lookups run ONLY after the grounded generation and are
       // scoped to this owned project. They never enter the NVIDIA prompt.
       const enriched = request.mode === "extract" && "candidates" in result
