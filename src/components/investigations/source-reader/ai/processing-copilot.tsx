@@ -8,6 +8,8 @@ import { useCopilotWindow } from "./use-copilot-window";
 import { CopilotCandidates } from "./copilot-candidates";
 import type { Stage3Candidate, Stage3CandidateResponse } from "@/lib/ai/stage3/candidates";
 import { dividePdfBatch, planPdfBatches, type PdfBatch } from "@/lib/ai/stage3/document-batches";
+import { useDocumentExtraction, type ScanSelection } from "./use-document-extraction";
+import { DocumentProcessingReview } from "./document-processing-review";
 
 type ByokStatus = {
   enabled?: boolean; connected?: boolean; state?: string;
@@ -118,6 +120,7 @@ export function ProcessingCopilot({
   // Never store the original PDF, model key or source excerpts in browser storage.
   const documentRun = useRef<LargeDocumentRun|null>(null);
   const [pdfProgress, setPdfProgress] = useState<PdfProgress|null>(null);
+  const documentScan=useDocumentExtraction(projectId,sourceId,assetId);
   const turnCounter = useRef(0);
   const mounted = useRef(true);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -152,7 +155,7 @@ export function ProcessingCopilot({
   const onConnectionStatusChange = useCallback((next: ByokStatus) => { setByok(next); setStatusError(""); }, []);
   const connected = isNvidiaByokConnection(byok);
   const contextValid = validCopilotContext(effectiveContext,pageCount);
-  const canSend = connected && contextValid && !working;
+  const canSend = connected && contextValid && !working && !documentScan.working;
 
   async function submit(mode:"ask"|"analyse"|"extract",prompt:string,resume=false) {
     if(!canSend || (mode==="ask" && !prompt.trim())) {
@@ -320,6 +323,14 @@ export function ProcessingCopilot({
       }
     }
   }
+  function startDocumentExtraction(){
+    const target:ScanSelection=effectiveContext.kind==="pages"?
+      {kind:"pages",pageStart:effectiveContext.pageStart,pageEnd:effectiveContext.pageEnd}:
+      effectiveContext.kind==="page"?
+        {kind:"pages",pageStart:effectiveContext.page,pageEnd:effectiveContext.page}:
+        {kind:"document"};
+    void documentScan.start(target);
+  }
   function onSubmit(event:FormEvent<HTMLFormElement>){
     event.preventDefault();void submit("ask",question);
   }
@@ -386,6 +397,10 @@ export function ProcessingCopilot({
             className="rounded border border-[var(--amber-dark)] bg-[var(--amber-tint)] px-3 py-1.5 text-xs font-semibold text-[var(--amber-soft)] hover:bg-[var(--amber-glow)] disabled:opacity-40">
             Extract candidates
           </button>
+          <button type="button" disabled={!canSend} onClick={startDocumentExtraction}
+            className="rounded border border-[var(--amber-dark)] bg-[var(--amber-tint)] px-3 py-1.5 text-xs font-semibold text-[var(--amber-soft)] hover:bg-[var(--amber-glow)] disabled:opacity-40">
+            {effectiveContext.kind==="document"?"Extract whole PDF":"Scan selected pages"}
+          </button>
           <button type="button" disabled={!canSend} onClick={()=>void submit("analyse","")}
             className="rounded border border-[var(--amber-dark)] bg-[var(--amber-tint)] px-3 py-1.5 text-xs font-medium text-[var(--amber-soft)] hover:bg-[var(--amber-glow)] disabled:opacity-40">
             Analyse context
@@ -423,6 +438,15 @@ export function ProcessingCopilot({
       </div>:null}
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto bg-[var(--surface)]"
         aria-label="Copilot chat history">
+        {documentScan.view?<DocumentProcessingReview view={documentScan.view}
+          working={documentScan.working} dismissed={documentScan.dismissed}
+          onDismiss={documentScan.dismiss} onNavigate={onNavigate}
+          onReview={(candidate)=>{
+            if(onReviewCandidate)onReviewCandidate(candidate);
+            else if(candidate.verifiedSupport[0]?.page)
+              onNavigate(candidate.verifiedSupport[0].page,candidate.verifiedSupport[0].provenance.annotationId);
+          }}
+          onResume={(failed)=>void documentScan.resume(failed)} onCancel={documentScan.cancel}/>:null}
         <CopilotChat turns={turns} onNavigate={onNavigate}/>
         {candidateResult ? <CopilotCandidates result={candidateResult} dismissed={dismissedCandidates}
           onDismiss={(candidateId)=>setDismissedCandidates((current)=>new Set([...current,candidateId]))}
