@@ -363,7 +363,7 @@ export function ProcessingCopilot({
         <span className="ml-2 text-[var(--amber-soft)]">
           {pdfProgress.status==="complete"?"Complete":pdfProgress.status==="paused"?"Paused · results retained":"Reading in verified batches…"}
         </span>
-        {pdfProgress.status==="paused" && documentRun.current && !working ?
+        {pdfProgress.status==="paused" && !working ?
           <button type="button" className="ml-3 underline text-[var(--amber-soft)]"
             onClick={()=>{const run=documentRun.current;if(run)void submit(run.mode,run.prompt,true);}}>
             Continue Entire PDF
