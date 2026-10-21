@@ -14,7 +14,7 @@ export class WebReadError extends Error {
 const blocked=/^(?:localhost|.*\.(?:local|localhost|internal|test|invalid|onion)|metadata\.google\.internal)$/i;
 /** Fail closed even before DNS. Each request, including redirects, revalidates DNS. */
 export function safeWebUrl(value:string):URL{
-  if(value.length>2048||/[\u0000-\u001f\u007f]/.test(value)||/%25/i.test(value))
+  if(value.length>2048||/[\u0000-\u001f\u007f]/.test(value)||/%25|%(?:0[0-9a-f]|1[0-9a-f]|7f)/i.test(value))
     throw new WebReadError("web_url_blocked");
   let url:URL;try{url=new URL(value);}catch{throw new WebReadError("web_url_blocked");}
   const host=url.hostname.toLowerCase().replace(/\.$/,"");
@@ -54,6 +54,7 @@ export async function readPublicWebPage(rawUrl:string):Promise<ReadWebPage>{
       const dispatcher=new Agent({connect:{
         timeout:3000,servername:current.hostname,lookup:createPinnedLookup(address),
       }});
+      let bodyToDispose:{destroy:()=>void}|null=null;
       try{
         const res=await request(current,{
           dispatcher,method:"GET",
@@ -62,6 +63,7 @@ export async function readPublicWebPage(rawUrl:string):Promise<ReadWebPage>{
             "accept-encoding":"identity"},
           headersTimeout:5000,signal:abort.signal,maxRedirections:0,
         });
+        bodyToDispose=res.body;
         if([301,302,303,307,308].includes(res.statusCode)){
           if(redirects>=3)throw new WebReadError("web_redirect_blocked");
           const target=res.headers.location;
@@ -110,7 +112,11 @@ export async function readPublicWebPage(rawUrl:string):Promise<ReadWebPage>{
         if(text.length<40)throw new WebReadError("web_no_text");
         return {url:current.toString(),title,domain:current.hostname,
           contentType:mime,retrievedAt:new Date().toISOString(),text};
-      }finally{await dispatcher.close();}
+      }finally{
+        // Unconsumed error/redirect responses must not keep connections alive.
+        bodyToDispose?.destroy();
+        await dispatcher.close();
+      }
     }
     throw new WebReadError("web_redirect_blocked");
   }catch(error){

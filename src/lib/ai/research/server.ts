@@ -6,8 +6,6 @@ import {validateProviderModel} from "@/lib/ai/byok/providers";
 import {getAiConfig} from "@/lib/ai/config";
 import {assertStage3QuotaReservation} from "@/lib/ai/stage3/usage-quota";
 import {noStore} from "@/lib/ai/byok/security";
-import {ResearchGatewayError} from "./provider";
-import {WebReadError} from "./safe-fetch";
 import type {requireOwnedProject} from "@/lib/projects/ownership";
 
 type Owned=Awaited<ReturnType<typeof requireOwnedProject>>;
