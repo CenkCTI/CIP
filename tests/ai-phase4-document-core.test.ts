@@ -68,7 +68,11 @@ describe("AI Phase 4 deterministic review aggregation",()=>{
     expect(()=>aggregateDocumentCandidates(responses,1)).toThrow(DocumentCandidateLimit);
   });
   it("preserves case of potentially case-sensitive URL paths",()=>{
-    const url=(id:string,value:string):Stage3Candidate=>({...indicator(id,5),indicatorType:"URL",value});
+    const url=(id:string,value:string):Stage3Candidate=>({
+      kind:"INDICATOR",derivation:"EXTRACTED",indicatorType:"URL",value,
+      sourceSupport:[{source_token:support(5).sourceToken,quote:support(5).quote}],
+      verifiedSupport:[support(5)],caveats:[],candidateId:id,status:"NOT_SAVED",
+    });
     expect(aggregateDocumentCandidates([res(url("a","https://test.invalid/A")),
       res(url("b","https://test.invalid/a"))]).candidates).toHaveLength(2);
   });
