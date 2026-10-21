@@ -36,6 +36,14 @@ describe("AI Phase 4 review queue",()=>{
       if(url==="/api/ai/byok/status")return {ok:true,json:async()=>({
         connected:true,providerId:"nvidia_nim",model:"nvidia/nemotron-3-super-120b-a12b"})};
       if(url.endsWith("/prepare"))return {ok:true,json:async()=>({manifest})};
+      if(url.endsWith("/aggregate")){
+        const input=JSON.parse(String(options?.body));
+        expect(input.chunks).toHaveLength(3);
+        return {ok:true,json:async()=>({result:{discarded:0,warnings:[],
+          candidates:[{...candidate(1),candidateId:"INDICATOR:DOMAIN:example.com",
+            verifiedSupport:[support(1),support(11)]}],
+        }})};
+      }
       if(url.endsWith("/chunk")){
         const {chunkId,sourceId:s,assetId:a}=JSON.parse(String(options?.body));
         expect([s,a]).toEqual([sourceId,assetId]);
@@ -62,7 +70,7 @@ describe("AI Phase 4 review queue",()=>{
     fireEvent.click(screen.getByRole("button",{name:"Review in Process"}));
     expect(props.onReviewCandidate).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls.every(([url])=>url==="/api/ai/byok/status" ||
-      url.endsWith("/prepare")||url.endsWith("/chunk"))).toBe(true);
+      url.endsWith("/prepare")||url.endsWith("/chunk")||url.endsWith("/aggregate"))).toBe(true);
     fireEvent.click(screen.getByRole("button",{name:"Dismiss"}));
     expect(screen.queryByText("example.com")).toBeNull();
   });
@@ -73,6 +81,9 @@ describe("AI Phase 4 review queue",()=>{
       if(url==="/api/ai/byok/status")return {ok:true,json:async()=>({
         connected:true,providerId:"nvidia_nim"})};
       if(url.endsWith("/prepare"))return {ok:true,json:async()=>({manifest})};
+      if(url.endsWith("/aggregate"))return {ok:true,json:async()=>({
+        result:{candidates:[],discarded:0,warnings:[]},
+      })};
       if(url.endsWith("/chunk")){
         const {chunkId}=JSON.parse(String(options?.body));attempts.push(chunkId);
         if(chunkId===ids[1] && limited){limited=false;return {ok:false,status:429,
