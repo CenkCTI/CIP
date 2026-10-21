@@ -226,6 +226,80 @@ describe("Stage 3 Processing Copilot UI",()=>{
     expect(covered).toEqual(Array.from({length:9},(_,i)=>i+1));
   });
 
+
+  it("recovers malformed NVIDIA output by subdividing the failed batch without losing pages",async()=>{
+    const covered:number[]=[];
+    const attempts:string[]=[];
+    fetchMock.mockImplementation(async(url:string,options?:RequestInit)=>{
+      if(url==="/api/ai/byok/status")return {ok:true,json:async()=>({
+        connected:true,providerId:"nvidia_nim",model:"nvidia/nemotron-3-super-120b-a12b",
+      })};
+      const {context}=JSON.parse(String(options?.body));
+      if(context.kind==="document")return {ok:false,status:413,json:async()=>({code:"pdf_document_too_large",stage:"source"})};
+      attempts.push(`${context.pageStart}-${context.pageEnd}`);
+      if(context.pageEnd-context.pageStart>=4)
+        return {ok:false,status:422,json:async()=>({code:"malformed_output",stage:"nvidia"})};
+      for(let page=context.pageStart;page<=context.pageEnd;page++)covered.push(page);
+      return {ok:true,status:200,json:async()=>({result:{...verified,
+        summary:`Pages ${context.pageStart} to ${context.pageEnd} passed verification`}})};
+    });
+    render(<ProcessingCopilot {...props} pageCount={12}/>);
+    await screen.findByText("NVIDIA connected");
+    fireEvent.click(screen.getByRole("button",{name:"Analyse context"}));
+    await screen.findByText(/12 \/ 12 pages processed/);
+    expect(attempts).toEqual(["1-8","1-4","5-8","9-12"]);
+    expect(covered).toEqual(Array.from({length:12},(_,i)=>i+1));
+    expect(screen.queryByTestId("copilot-error-diagnostic")).toBeNull();
+  });
+
+  it("falls back to the whole-document batch planner if a direct NVIDIA answer is malformed",async()=>{
+    const scopes:string[]=[];
+    fetchMock.mockImplementation(async(url:string,options?:RequestInit)=>{
+      if(url==="/api/ai/byok/status")return {ok:true,json:async()=>({
+        connected:true,providerId:"nvidia_nim",model:"nvidia/nemotron-3-super-120b-a12b",
+      })};
+      const {context}=JSON.parse(String(options?.body));
+      scopes.push(context.kind);
+      if(context.kind==="document")return {ok:false,status:422,json:async()=>({code:"malformed_output",stage:"nvidia"})};
+      return {ok:true,status:200,json:async()=>({result:verified})};
+    });
+    render(<ProcessingCopilot {...props} pageCount={4}/>);
+    await screen.findByText("NVIDIA connected");
+    fireEvent.click(screen.getByRole("button",{name:"Analyse context"}));
+    await screen.findByText(/4 \/ 4 pages processed/);
+    expect(scopes).toEqual(["document","pages"]);
+  });
+
+  it("keeps a one-page malformed result unprocessed and allows explicit retry",async()=>{
+    let failure=true;
+    const covered:number[]=[];
+    fetchMock.mockImplementation(async(url:string,options?:RequestInit)=>{
+      if(url==="/api/ai/byok/status")return {ok:true,json:async()=>({
+        connected:true,providerId:"nvidia_nim",model:"nvidia/nemotron-3-super-120b-a12b",
+      })};
+      const {context}=JSON.parse(String(options?.body));
+      if(context.kind==="document")return {ok:false,status:413,json:async()=>({code:"pdf_document_too_large"})};
+      if(context.pageStart===1 && context.pageEnd===1 && failure){
+        failure=false;
+        return {ok:false,status:422,json:async()=>({code:"malformed_output",stage:"nvidia"})};
+      }
+      if(context.pageStart===1 && context.pageEnd!==1)
+        return {ok:false,status:422,json:async()=>({code:"nvidia_output_exhausted",stage:"nvidia"})};
+      for(let p=context.pageStart;p<=context.pageEnd;p++)covered.push(p);
+      return {ok:true,status:200,json:async()=>({result:verified})};
+    });
+    render(<ProcessingCopilot {...props} pageCount={3}/>);
+    await screen.findByText("NVIDIA connected");
+    fireEvent.click(screen.getByRole("button",{name:"Analyse context"}));
+    await screen.findByRole("button",{name:"Continue Entire PDF"});
+    expect(screen.getByText(/0 \/ 3 pages processed/)).toBeTruthy();
+    expect(covered).toEqual([]);
+    expect(screen.getByTestId("copilot-error-diagnostic").textContent).toContain("code=malformed_output");
+    fireEvent.click(screen.getByRole("button",{name:"Continue Entire PDF"}));
+    await screen.findByText(/3 \/ 3 pages processed/);
+    expect(covered).toEqual([1,2,3]);
+  });
+
   it("requires NVIDIA and reuses BYOK panel, without exposing an API key input in Copilot", async()=>{
     fetchMock.mockResolvedValue({ok:true,json:async()=>({connected:false,enabled:true,state:"disconnected"})});
     render(<ProcessingCopilot {...props}/>);

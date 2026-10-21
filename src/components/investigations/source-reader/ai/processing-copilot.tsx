@@ -33,7 +33,7 @@ const SAFE_ERRORS: Record<string,string> = {
   quota_unavailable:"CİTEM could not reach its usage reservation gate. This is a server/database configuration issue, not an NVIDIA rate limit.",
   provider_rate_limited:"NVIDIA has rate-limited this request.",
   nvidia_output_exhausted:"The model reached its output limit. Try a narrower question.",
-  malformed_output:"NVIDIA could not provide valid, source-grounded JSON after a repair attempt. Try selecting 1–2 relevant pages and ask a more specific question.",
+  malformed_output:"NVIDIA returned invalid source-grounded JSON twice. CİTEM automatically narrows Entire PDF batches; if a single page still fails, choose that page or a different NVIDIA model. Failed pages remain unread.",
   invalid_request:"Choose a valid context and question.",
   bad_origin:"Request rejected due to origin validation.",
   request_failed:"CİTEM could not complete processing. Check the diagnostic code below.",
@@ -225,7 +225,8 @@ export function ProcessingCopilot({
           }catch(cause){
             const code=(cause as {code?:string}).code;
             if(captured.kind!=="document" ||
-                (code!=="pdf_document_too_large" && code!=="context_too_large"))throw cause;
+                (code!=="pdf_document_too_large" && code!=="context_too_large" &&
+                 code!=="malformed_output" && code!=="nvidia_output_exhausted"))throw cause;
           }
         }
         if(captured.kind!=="document" || pageCount===null || pageCount<1){
@@ -246,12 +247,18 @@ export function ProcessingCopilot({
         try{
           response=await requestPart({kind:"pages",...part},false);
         }catch(cause){
-          // A dense page range can exceed the input cap; divide and retry without
-          // losing completed pages or silently skipping an oversized segment.
+          // A dense passage can exceed the input/output caps or produce invalid JSON.
+          // Retry at smaller scope without claiming any failed page was processed.
+          // Quota/network/auth errors are NOT splittable and must pause the run.
           const code=(cause as {code?:string}).code;
-          if(code==="context_too_large"){
+          if(code==="context_too_large" || code==="malformed_output" ||
+             code==="nvidia_output_exhausted"){
             const halves=dividePdfBatch(part);
-            if(halves){run.queue.splice(0,1,...halves);continue;}
+            if(halves){
+              run.queue.splice(0,1,...halves);
+              setDiagnostic(null);
+              continue;
+            }
           }
           throw cause;
         }
@@ -370,7 +377,7 @@ export function ProcessingCopilot({
             Continue Entire PDF
           </button>:null}
         {pdfProgress.status!=="complete" ? <p className="mt-1 text-[11px]">
-          Each batch is cited separately. Rate limits may pause the run; unfinished pages are never reported as read.
+          Each batch is cited separately. Invalid JSON is retried on fewer pages; quota errors pause the run. Unverified pages never count as read.
         </p>:null}
       </div>:null}
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto bg-[var(--surface)]"
