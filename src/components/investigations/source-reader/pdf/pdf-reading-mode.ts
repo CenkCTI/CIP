@@ -62,7 +62,7 @@ function mostlyWhiteSamples(
     if(r>235&&g>235&&b>235)white++;
     seen++;
   }
-  return white>=Math.ceil(seen*.9);
+  return white>=Math.ceil(seen*.75);
 }
 
 /** Returns null if original colors must be preserved for the whole page.
