@@ -6,14 +6,19 @@ import {
   type PdfOperationBounds,
 } from "../src/components/investigations/source-reader/pdf/pdf-reading-mode";
 
-function recordedBox(coords:Array<[number,number,number,number]|null>):PdfOperationBounds{
+function recordedBox(
+  coords:Array<[number,number,number,number]|null>,
+  width=20,height=20,
+):PdfOperationBounds{
+  // Our synthetic inputs use image-space pixels; PDF.js BBoxReader returns
+  // normalized fractions, never absolute pixel values.
   return {
     length:coords.length,
     isEmpty:(i)=>coords[i]===null,
-    minX:(i)=>coords[i]![0],
-    minY:(i)=>coords[i]![1],
-    maxX:(i)=>coords[i]![2],
-    maxY:(i)=>coords[i]![3],
+    minX:(i)=>coords[i]![0]/width,
+    minY:(i)=>coords[i]![1]/height,
+    maxX:(i)=>coords[i]![2]/width,
+    maxY:(i)=>coords[i]![3]/height,
   };
 }
 const ops={fill:1,showText:2,paintImageXObject:3,stroke:4};
@@ -44,7 +49,7 @@ describe("CİTEM PDF mixed-content reading appearance",()=>{
       original[k]=245;original[k+1]=176;original[k+2]=163;
     }
     const imageBefore=original.slice((2*width+4)*4,(2*width+7)*4);
-    const boxes=recordedBox([null,[4,2,7,5],null]);
+    const boxes=recordedBox([null,[4,2,7,5],null],width,height);
     const regions=pdfArtworkRegions([2,3,2],ops,boxes,original,width,height);
     expect(regions).not.toBeNull();
     expect(recolorPdfPagePixels(original,width,height,"night",regions!)).toBe(true);
