@@ -145,7 +145,7 @@ function PdfPage({
       setFocusState(null);
       if(!focusRequest?.quote||!near||!textEpoch||!shellRef.current||!textRef.current)return;
       const layer=textRef.current,page=shellRef.current;
-      if(!layer.textContent?.trim())return;
+      if(!layer.textContent?.trim()){setFocusState("not_found");return;}
       const range=locatePdfEvidence(layer,focusRequest.quote);
       if(!range){setFocusState("not_found");return;}
       const rects=quoteRangeRects(range,page);
