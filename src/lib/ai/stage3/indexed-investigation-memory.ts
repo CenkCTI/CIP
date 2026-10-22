@@ -92,6 +92,15 @@ export async function readProjectMemoryEvents(owned:Owned,limit=40):Promise<Memo
   if(error)throw new InvestigationIndexError("index_database_unavailable");
   return (data??[]) as MemoryEvent[];
 }
+export async function readProjectAnalystNotes(owned:Owned){
+  const {data,error}=await owned.supabase.from("copilot_memory_profiles")
+    .select("source_id,notes").eq("project_id",owned.projectId).eq("owner_id",owned.user.id)
+    .neq("notes","").limit(12);
+  if(error)throw new InvestigationIndexError("index_database_unavailable");
+  return (data??[]).map(v=>({
+    source_id:String(v.source_id),notes:String(v.notes??"").slice(0,450),
+  }));
+}
 export function eventMemoryHints(events:MemoryEvent[],question:string){
   const words=(question.toLocaleLowerCase("tr-TR").match(/[\p{L}\p{N}]{4,}/gu)??[]).slice(0,14);
   const scored=events.map((event,i)=>({
@@ -99,7 +108,12 @@ export function eventMemoryHints(events:MemoryEvent[],question:string){
   })).sort((a,b)=>b.score-a.score||a.i-b.i);
   return scored.slice(0,6).map(({event})=>({
     type:event.kind,question:event.question.slice(0,250),
-    prior_unverified_analysis:event.summary.slice(0,700),
+    prior_unverified_analysis:(event.summary+"\n"+
+      (Array.isArray(event.hypothesis_notes)?
+        "Hypotheses (not verified): "+event.hypothesis_notes.slice(0,3).map((h,i)=>{
+          const item=h as {title?:unknown;rationale?:unknown};
+          return (i+1)+". "+String(item.title??"").slice(0,80)+": "+String(item.rationale??"").slice(0,160);
+        }).join(" | "):"")).slice(0,950),
     date:event.created_at,
   }));
 }
@@ -124,12 +138,18 @@ export type AnalysisEventInput={
 };
 export async function saveInvestigationEvent(owned:Owned,input:AnalysisEventInput){
   const raw=input.result;
-  const evidence=Array.isArray(raw.evidence)?raw.evidence.slice(0,8):
-    Array.isArray(raw.verifiedSupport)?raw.verifiedSupport.slice(0,8):[];
+  const pdfEvidence=Array.isArray(raw.evidence)?raw.evidence:
+    Array.isArray(raw.verifiedSupport)?raw.verifiedSupport:[];
+  const webEvidence=Array.isArray(raw.webEvidence)?raw.webEvidence:[];
+  const evidence=[...pdfEvidence,...webEvidence].slice(0,8);
   const hypotheses=Array.isArray(raw.hypotheses)?raw.hypotheses.slice(0,3):[];
   const summary=typeof raw.summary==="string"?raw.summary.slice(0,5800):
     Array.isArray(raw.candidates)?
-      "Extracted "+raw.candidates.length+" unverified candidates (analyst review required).":"";
+      ("Extracted "+raw.candidates.length+" unverified candidates (analyst review required): "+
+        raw.candidates.slice(0,12).map((item)=>{
+          const c=item as {value?:unknown;name?:unknown;kind?:unknown};
+          return String(c.value??c.name??c.kind??"candidate").slice(0,90);
+        }).join(", ")).slice(0,5800):"";
   const {error}=await createAdminClient().from("copilot_investigation_events").insert({
     project_id:owned.projectId,owner_id:owned.user.id,
     source_id:input.sourceId,asset_id:input.assetId,kind:input.kind,

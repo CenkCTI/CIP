@@ -6,7 +6,7 @@ import {stage3RequestSchema} from "@/lib/ai/stage3/schemas";
 import {createStage3ReadContext,loadStage3DocumentContext} from "@/lib/ai/stage3/context";
 import {selectMemoryHints,readInvestigationMemory,readProjectMemoryTurns,saveInvestigationTurn,CopilotMemoryError} from "@/lib/ai/stage3/investigation-memory";
 import {runAnalystReasoning} from "@/lib/ai/stage3/analyst-reasoning";
-import {ensureIndexedOriginalPDF,retrieveOwnedEvidence,readProjectMemoryEvents,eventMemoryHints,
+import {ensureIndexedOriginalPDF,retrieveOwnedEvidence,readProjectMemoryEvents,readProjectAnalystNotes,eventMemoryHints,
   saveInvestigationEvent} from "@/lib/ai/stage3/indexed-investigation-memory";
 import {loadSelectedComparisonPages} from "@/lib/ai/research/comparison-fetch";
 import {requireResearchByok,withResearchQuota,researchError} from "@/lib/ai/research/server";
@@ -40,10 +40,11 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
     const asset=await reader.readAsset(input.sourceId,input.assetId);
     if(asset.state!=="READY"||asset.asset_role!=="ORIGINAL")return noStore({
       code:"unsupported_asset",error:"An owned ready original PDF is required."},{status:422});
-    const [memory,projectTurns,events]=await Promise.all([
+    const [memory,projectTurns,events,projectNotes]=await Promise.all([
       readInvestigationMemory(owned,input.sourceId,input.assetId),
       readProjectMemoryTurns(owned),
       readProjectMemoryEvents(owned),
+      readProjectAnalystNotes(owned),
     ]);
     // The current original is indexed once; subsequent questions retrieve the
     // relevant page excerpts without re-parsing the PDF. Indexing failures
@@ -72,10 +73,13 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
     const spans=[...pageSpans,...indexedSpans].slice(0,16);
     const history=selectMemoryHints(projectTurns,input.question);
     const eventHistory=eventMemoryHints(events,input.question);
+    const investigationNotes=[memory.notes,...projectNotes.filter(item=>
+      item.source_id!==input.sourceId).map(item=>"Other source "+item.source_id.slice(0,8)+": "+item.notes)]
+      .filter(Boolean).join("\n").slice(0,4000);
     const language=input.responseLanguage==="auto"?
       (/[çğıöşü]/i.test(input.question)||/\b(neden|nasıl|amacı|hipotez|analiz)\b/i.test(input.question)?"tr":"en"):
       input.responseLanguage;
-    const reservedChars=JSON.stringify({question:input.question,spans,history,eventHistory,notes:memory.notes}).length+
+    const reservedChars=JSON.stringify({question:input.question,spans,history,eventHistory,notes:investigationNotes}).length+
       (input.webResearch?8000:0);
     const result=await withResearchQuota(owned,reservedChars,async()=>{
       let pages:Awaited<ReturnType<typeof loadSelectedComparisonPages>>["pages"]=[];
@@ -89,7 +93,7 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
           researchWarning="Some selected web pages were unreadable; they were not treated as evidence.";
       }
       const analysis=await runAnalystReasoning({
-        question:input.question,language,notes:memory.notes,history,eventHistory,spans,webPages:pages,
+        question:input.question,language,notes:investigationNotes,history,eventHistory,spans,webPages:pages,
       },messages=>byokChat("nvidia_nim",credential.model,credential.apiKey,messages,"generation"));
       if(researchWarning)analysis.warnings.push(researchWarning);
       if(input.webResearch&&!pages.length)
