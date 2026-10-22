@@ -1,60 +1,65 @@
-# CİTEM — PDF Reading Modes (mixed-content aware)
+# CİTEM — Native PDF Reading Modes
 
-The native Source Reader offers exactly **Orijinal**, **Koyu Yeşil**, and
-**Gece Siyahı**. Default: Original. Browser preference:
-`citem:pdf-reading-mode:v1` (localStorage).
+The Source Reader has exactly **Orijinal**, **Koyu Yeşil**, and
+**Gece Siyahı**. Original is the initial mode. The last selection persists in
+browser localStorage under `citem:pdf-reading-mode:v1`.
 
-| Mode | Neutral white canvas background | Neutral black text |
+| Mode | Reader background | Reader foreground |
 | --- | --- | --- |
-| Orijinal | original | original |
+| Orijinal | Original PDF | Original PDF |
 | Koyu Yeşil | `#182b25` | `#e6eee9` |
 | Gece Siyahı | `#151719` | `#e3e6e8` |
 
-## How the PDF is rendered
+## Render architecture and source fidelity
 
-- Use the normal PDF.js renderer to draw each page *unchanged*.
-- With `recordOperations:true`, collect PDF.js drawing bounds for raster
-  pictures, image masks, charts and vector artwork.
-- Match the bounds to the PDF.js operator list and convert its normalized
-  0–1 BBoxReader coordinates into canvas pixels (the previous implementation
-  mistakenly treated the fractions as pixels). If the list cannot be verified,
-  preserve the **entire original page** instead of guessing.
-- Read canvas pixels **only in the user's browser**. Recolor **all**
-  pixels outside protected artwork bounds through a single grayscale luminance
-  mapping: white -> selected dark background, black -> readable light foreground,
-  intermediate tones blended. This also removes blue/orange LCD/subpixel
-  antialiasing artifacts that otherwise appear as ghosted letter outlines.
-  Source-colored vector regions are protected by PDF.js artwork bounds.
-- Preserve the original RGB of every pixel inside protected artwork rectangles,
-  including white portions of charts and pale heatmap cells.
-- Extremely large pages, all-image scans, unsafe operator lists, uninspectable
-  canvas data and excessive artwork complexity remain Original with a visible
-  explanation. Full-page white vector background fills may be skipped to let
-  normal PDF text/background darken.
+CİTEM lets PDF.js draw the original source page normally, retaining PDF
+selection/search, exact page coordinates and annotations. The appearance mode
+transforms **only the in-browser canvas pixels**, never the source document.
 
-**Limitations:** Source-colored text **outside** protected graphics is
-recolored to a readable neutral monochrome; hyperlinks may lose their
-original blue tint. Rasterized text inside a protected image retains the
-source colors, and bounding rectangles may preserve overlapping text.
-Artwork preservation is conservative and is not perfect object segmentation.
+To preserve visual art while retaining legible text:
 
-## Source integrity
+1. Request PDF.js `recordOperations:true` and the corresponding operator
+   list. Image, image mask and shading boundaries are identified via its
+   normalized (0–1) canvas coordinates, then converted to canvas pixels.
+2. Preserve all pixels inside **raster artwork** regions exactly, including
+   white pixels, captions embedded into images, and chart cells.
+3. The PDF.js text layer is transparent but provides accurate client
+   rectangles for native text spans. Those rectangles (including hyperlinked
+   text) are turned into a text coverage mask. In that mask, use luminance
+   mapping even for colored source glyphs, eliminating cyan/orange subpixel
+   fringe effects and unreadable dark-blue links.
+4. Outside text and raster masks, white/neutral source background becomes the
+   dark page color and neutral lines become accessible light tones.
+   Source-colored vector illustration pixels are kept when distinguishable
+   from neutrals, rather than preserving a whole vector bounding rectangle,
+   which previously left white stripes/boxes on table-of-contents pages.
+5. When the page is scanned, predominantly a full-page bitmap, too large, or
+   its actual image bounds cannot be established, **fail closed** to Original
+   with a visible label. A pure text/vector page does *not* require bitmap
+   bounds and must not fall back merely because recorded box data is absent.
 
-No PDF bytes, private Storage assets, annotation fragments, PDF coordinates,
-source citations, AI-derived evidence or annotated exports are altered.
-The PDF.js text layer remains intact, preserving selection, search and the
-five-second Evidence Focus HUD. No server-side processing or migration.
+## Trade-offs and exactness
 
-## Browser acceptance before merging
+Hyperlink text colors can change for accessibility. Source-colored vector
+illustrations retain their pigments if sufficiently chromatic; neutral vector
+drawing colors may be contrast-adjusted. Large image rectangles are protected,
+which may also preserve native text laid over them; full-page scans remain
+original. This is a conservative display transformation rather than a
+content-aware, lossless reauthoring of every PDF graphic primitive.
 
-1. Open a text-only PDF; change Original -> Green -> Night, zoom, select
-   passages, and verify colors and text fidelity.
-2. Open a PDF with inline graphs and photographs (e.g. Storm-0558 report);
-   ensure the *surrounding page and text* turn dark and the heatmap/photo RGB
-   stays exactly the same within image bounds.
-3. Open a fully scanned page and a full-page photo. They should remain Original
-   and show a non-blocking appearance fallback label.
-4. Check multi-page PDFs, rotation, intermittent pages, virtualized renders,
-   annotation overlays and AI citation navigation.
-5. Reload and open another PDF; verify mode preference is reused.
-6. Export an annotated PDF and compare unchanged original source bytes.
+There are no database migrations, external requests, annotation changes or
+changes to private PDF source / exported PDF bytes.
+
+## Regression / manual acceptance
+
+- NIST CSF 2.0 sample: the front-matter page, acknowledgements, table of
+  contents, section body and footnotes should all darken if text/vector-based.
+- Hyperlink ink and background strips must remain readable on dark mode.
+- White rectangles and other non-raster vector paths must not generate
+  untouched white strips around list headings and table rows.
+- A PDF with a heatmap/photo must preserve image-region RGB.
+- Confirm zoom, underlining/annotation save and selection, navigation across
+  multiple pages, scroll restoration and AI evidence focus preserve the
+  preferred mode. If a source is renewed after annotation save, verify the
+  page re-renders in the saved preference.
+- Full-page scans with uncertain images may display Original plus a notice.
