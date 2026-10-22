@@ -114,6 +114,7 @@ export function ProcessingCopilot({
   const [useSource,setUseSource]=useState(true);
   const [memoryNotes,setMemoryNotes]=useState("");
   const [memoryStatus,setMemoryStatus]=useState("");
+  const [memoryReady,setMemoryReady]=useState(false);
   const [notesOpen,setNotesOpen]=useState(false);
   const [responseLanguage, setResponseLanguage] = useState<"auto" | "tr" | "en">("auto");
   const [turns, setTurns] = useState<CopilotTurn[]>([]);
@@ -162,7 +163,8 @@ export function ProcessingCopilot({
   const onConnectionStatusChange = useCallback((next: ByokStatus) => { setByok(next); setStatusError(""); }, []);
   const connected = isNvidiaByokConnection(byok);
   const contextValid = validCopilotContext(effectiveContext,pageCount);
-  const canSend = connected && contextValid && !working && !documentScan.working;
+  const canSend = connected && contextValid && !working && !documentScan.working &&
+    (!analystChat || memoryReady);
   const memoryUrl=`/api/projects/${projectId}/ai/processing/memory`;
   useEffect(()=>{
     if(!analystChat)return;
@@ -181,9 +183,13 @@ export function ProcessingCopilot({
           prompt:entry.question,mode:"analyst",result:entry.result,
         })));
         turnCounter.current=(body.turns??[]).length;
+        setMemoryReady(true);
         setMemoryStatus("Investigation memory loaded");
       }catch(error){
-        if(!abort.signal.aborted)setMemoryStatus(error instanceof Error?error.message:"Memory unavailable");
+        if(!abort.signal.aborted){
+          setMemoryReady(false);
+          setMemoryStatus(error instanceof Error?error.message:"Memory unavailable");
+        }
       }
     }
     void load();
@@ -388,6 +394,7 @@ export function ProcessingCopilot({
         prompt:prompt.trim(),result:data.result!,
       }]);
       setMemoryStatus(data.saved?"Conversation saved to this investigation":"Conversation not saved");
+      setWebResearch(false); // each search requires explicit opt-in again
       setQuestion("");
     }catch(error){
       if(!abort.signal.aborted)setError(error instanceof Error?error.message:"Analyst chat failed");
@@ -556,7 +563,11 @@ export function ProcessingCopilot({
       </div>
       <div className="shrink-0 border-t border-[var(--line-neutral)] px-4 pt-3 text-xs">
         <label className="flex items-center gap-2">
-          <input type="checkbox" checked={analystChat} onChange={e=>setAnalystChat(e.target.checked)}/>
+          <input type="checkbox" checked={analystChat} onChange={e=>{
+            setMemoryReady(false);
+            setMemoryStatus(e.target.checked?"Loading investigation memory…":"");
+            setAnalystChat(e.target.checked);
+          }}/>
           <span className="font-semibold text-[var(--amber-soft)]">Analyst chat · persistent investigation memory</span>
         </label>
         {analystChat ? <div className="mt-2 space-y-2 rounded-lg border border-[var(--line-neutral)] p-3">
@@ -575,6 +586,7 @@ export function ProcessingCopilot({
               maxLength={4000} rows={3} aria-label="Investigation memory notes"
               className="w-full rounded border border-[var(--line)] bg-[var(--surface-input)] p-2"
               placeholder="Analyst-owned context, assumptions, working questions…"/>
+            <p className="text-[11px] text-[var(--muted)]">Saved notes are included in NVIDIA analyst requests. Do not enter passwords or other secrets.</p>
             <div className="flex items-center gap-3">
               <button type="button" className="text-[var(--amber-soft)] underline" onClick={()=>void saveNotes()}>Save notes</button>
               <button type="button" className="text-[var(--muted-strong)] underline" onClick={()=>void clearMemory()}>Clear saved chat</button>

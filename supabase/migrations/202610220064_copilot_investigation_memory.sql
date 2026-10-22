@@ -12,7 +12,8 @@ create table public.copilot_memory_profiles (
   unique(project_id,source_id,asset_id,owner_id),
   unique(project_id,id,owner_id),
   foreign key(project_id,source_id) references public.sources(project_id,id) on delete cascade,
-  foreign key(project_id,asset_id) references public.source_assets(project_id,id) on delete cascade
+  foreign key(project_id,source_id,asset_id)
+    references public.source_assets(project_id,source_id,id) on delete cascade
 );
 create index copilot_memory_profiles_owner_idx on public.copilot_memory_profiles(owner_id,project_id);
 
