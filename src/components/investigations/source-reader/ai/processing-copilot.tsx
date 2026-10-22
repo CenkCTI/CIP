@@ -441,7 +441,7 @@ export function ProcessingCopilot({
         data-testid="copilot-research-dock">
         <ControlledWebResearch key={sourceId+":"+assetId} projectId={projectId}
           sourceId={sourceId} assetId={assetId}
-          context={effectiveContext} connected={connected}/>
+          context={effectiveContext} connected={connected} onNavigate={onNavigate}/>
       </div>
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto bg-[var(--surface)]"
         aria-label="Copilot chat history">

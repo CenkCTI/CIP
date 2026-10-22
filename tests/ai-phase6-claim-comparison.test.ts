@@ -1,0 +1,183 @@
+import {describe,it,expect} from "vitest";
+import {readFileSync} from "node:fs";
+import {claimComparisonRequestSchema,claimComparisonModelSchema,
+  verifyClaimComparison,classifyPdfExcerpt} from "@/lib/ai/research/claim-comparison";
+import {safeWebUrl,WebReadError} from "@/lib/ai/research/safe-fetch";
+import {loadSelectedComparisonPages} from "@/lib/ai/research/comparison-fetch";
+import {selectRelevantWebPassages} from "@/lib/ai/research/evidence-passages";
+
+const sourceId="49429515-bc04-4539-ae53-69f0b47157cb";
+const assetId="49429615-bc04-4539-ae53-69f0b47157cb";
+const request={sourceId,assetId,context:{kind:"page" as const,page:11},
+  question:"Compare the claim about African digital television services.",
+  urls:["https://example.org/report"],byokConsent:true as const};
+const span={token:"DOC_P011_C01",text:"China is the leading provider of digital television services in all of Africa.",
+  page:11,sourceId,assetId};
+const page={url:"https://example.org/report",title:"African television report",
+  domain:"example.org",retrievedAt:"2026-10-22T12:00:00Z",contentType:"text/html" as const,
+  text:"StarTimes is the second largest TV provider in Africa, after DStv."};
+const model={
+  claim:{paraphrase:"China leads digital television services across Africa.",
+    source_token:"DOC_P011_C01",
+    quote:"China is the leading provider of digital television services in all of Africa."},
+  comparisons:[{source_token:"WEB_001",relationship:"contradicts" as const,
+    quote:"StarTimes is the second largest TV provider in Africa, after DStv.",
+    explanation:"The ranking appears different, but market metrics may differ.",
+    limitation:"Provider versus company comparison needs more evidence."}],
+  openQuestions:["Which metric defines the leading provider?"],
+};
+
+describe("AI Phase 6 grounded claim comparison",()=>{
+  it("accepts only analyst-selected sources and a scoped PDF context",()=>{
+    expect(claimComparisonRequestSchema.safeParse(request).success).toBe(true);
+    for(const invalid of [
+      {...request,context:{kind:"document"}},
+      {...request,byokConsent:false},
+      {...request,sourceText:"FAKE PDF CONTENT"},
+      {...request,webText:"FAKE WEB CONTENT"},
+      {...request,autonomousSearch:true},
+      {...request,urls:Array(4).fill(page.url)},
+      {...request,urls:[page.url,page.url]},
+      {...request,sourceId:"not-a-uuid"},
+    ])expect(claimComparisonRequestSchema.safeParse(invalid).success).toBe(false);
+    expect(()=>safeWebUrl("https://127.0.0.1/private")).toThrow();
+  });
+  it("verifies PDF and web quotations independently with server-side texts",()=>{
+    const parsed=claimComparisonModelSchema.parse(model);
+    const result=verifyClaimComparison(parsed,[span],[page]);
+    expect(result).not.toBeNull();
+    expect(result?.pdfClaim.page).toBe(11);
+    expect(result?.pdfClaim.sourceId).toBe(sourceId);
+    expect(result?.rows[0]).toMatchObject({
+      sourceToken:"WEB_001",relationship:"contradicts",verifiedQuote:true,evidenceStatus:"verified",
+      url:page.url,quote:model.comparisons[0].quote,
+    });
+    expect(result?.status).toBe("analyst_review_required");
+    expect(result?.warnings.join(" ")).toMatch(/not validated conclusions/i);
+  });
+  it("fails closed for nonexistent PDF quote or spoofed PDF token",()=>{
+    expect(verifyClaimComparison(claimComparisonModelSchema.parse({
+      ...model,claim:{...model.claim,quote:"Unsupported source claim sentence."},
+    }),[span],[page])).toBeNull();
+    expect(verifyClaimComparison(claimComparisonModelSchema.parse({
+      ...model,claim:{...model.claim,source_token:"DOC_P002_C01"},
+    }),[span],[page])).toBeNull();
+  });
+  it("downgrades hallucinated WEB quotations instead of claiming corroboration",()=>{
+    const result=verifyClaimComparison(claimComparisonModelSchema.parse({
+      ...model,comparisons:[{...model.comparisons[0],
+        relationship:"supports",quote:"A made-up quote about the company."}],
+    }),[span],[page]);
+    expect(result?.rows[0]).toMatchObject({
+      relationship:"insufficient_evidence",verifiedQuote:false,quote:null,
+      evidenceStatus:"rejected_quote",
+    });
+    expect(result?.discarded).toBe(1);
+  });
+  it("does not transfer a valid quote to a different web source",()=>{
+    const other={...page,url:"https://second.example.org/report",domain:"second.example.org",
+      text:"This other report discusses a different subject."};
+    const result=verifyClaimComparison(claimComparisonModelSchema.parse({
+      ...model,comparisons:[{...model.comparisons[0],source_token:"WEB_002"}],
+    }),[span],[page,other]);
+    expect(result?.rows[0].relationship).toBe("insufficient_evidence");
+    expect(result?.rows[1].relationship).toBe("insufficient_evidence");
+  });
+  it("does not turn a reporter's cited question into an established PDF claim",()=>{
+    const quoted="Your reports cites examples of China being the leading provider of digital television services in all of Africa.";
+    expect(classifyPdfExcerpt(quoted)).toBe("attributed_or_question");
+    const out=verifyClaimComparison(claimComparisonModelSchema.parse({
+      ...model,
+      claim:{...model.claim,paraphrase:"China led Africa through StarTimes",quote:quoted},
+    }),[{...span,text:quoted}], [page]);
+    expect(out?.pdfClaim.originKind).toBe("attributed_or_question");
+    expect(out?.pdfClaim.paraphrase).not.toContain("StarTimes");
+    expect(out?.warnings.join(" ")).toMatch(/attributed statement or question/i);
+  });
+  it("distinguishes missing quotes from invalid quotations, never interprets missing as proof of absence",()=>{
+    const out=verifyClaimComparison(claimComparisonModelSchema.parse({
+      ...model,comparisons:[{...model.comparisons[0],quote:null,
+        relationship:"insufficient_evidence"}],
+    }),[span],[page]);
+    expect(out?.rows[0]).toMatchObject({
+      verifiedQuote:false,evidenceStatus:"no_quote",relationship:"insufficient_evidence",
+    });
+    expect(out?.discarded).toBe(0);
+    expect(out?.warnings.join(" ")).toMatch(/do NOT prove/i);
+  });
+  it("continues on recoverable web failures and keeps original source URLs",async()=>{
+    const urls=["https://paywall.example.org/report","https://example.org/report","https://archive.example.org/paper"];
+    const reader=async(url:string)=>{
+      if(url===urls[0])throw new WebReadError("web_fetch_failed");
+      if(url===urls[2])throw new WebReadError("web_timeout");
+      return page;
+    };
+    const out=await loadSelectedComparisonPages(urls,reader);
+    expect(out.pages).toHaveLength(1);
+    expect(out.pages[0].url).toBe(page.url);
+    expect(out.skippedSources).toEqual([
+      {url:urls[0],reason:"unavailable"},{url:urls[2],reason:"timeout"},
+    ]);
+    const result=verifyClaimComparison(claimComparisonModelSchema.parse(model),[span],out.pages);
+    expect(result?.rows[0].url).toBe(page.url);
+  });
+  it("fails closed for unsafe URLs, private DNS or restricted redirects",async()=>{
+    for(const code of ["web_url_blocked","web_dns_blocked","web_redirect_blocked"] as const){
+      const reader=async(_url:string):Promise<typeof page>=>{throw new WebReadError(code);};
+      await expect(loadSelectedComparisonPages([page.url],reader)).rejects.toMatchObject({code});
+    }
+  });
+  it("returns an empty set of pages if every selected public site was unavailable",async()=>{
+    const out=await loadSelectedComparisonPages([page.url,"https://journal.example.org/report"],
+      async(_url)=>{throw new WebReadError("web_fetch_failed");});
+    expect(out.pages).toHaveLength(0);
+    expect(out.skippedSources).toHaveLength(2);
+  });
+  it("provides verified contextual text without promoting a no-quote result to supporting evidence",()=>{
+    const context="StarTimes has distributors in 37 countries, serving 13 million DVB subscribers as of 2020.";
+    const text="Jump to content. Menu and navigation labels. "+context+" Other information.";
+    const web={...page,text};
+    const ranked=selectRelevantWebPassages(text,
+      "StarTimes digital television Africa subscribers 2023",
+      "China being the leading provider of digital television services in all of Africa.");
+    expect(ranked.some(p=>p.includes("StarTimes has distributors"))).toBe(true);
+    expect(ranked.every(p=>text.includes(p))).toBe(true);
+    const modelNoQuote=claimComparisonModelSchema.parse({...model,
+      comparisons:[{...model.comparisons[0],quote:null,relationship:"insufficient_evidence"}]});
+    const outcome=verifyClaimComparison(modelNoQuote,[span],[web],[ranked]);
+    expect(outcome?.rows[0].contextExcerpt).toContain("StarTimes has distributors");
+    expect(outcome?.rows[0]).toMatchObject({verifiedQuote:false,
+      relationship:"insufficient_evidence",quote:null,evidenceStatus:"no_quote"});
+  });
+  it("ranks country-level 2023 figures as context without declaring operator market share",()=>{
+    const content="Contact us. Digital research. Nigeria leads Africa in pay TV subscribers, with 9.69 million, followed closely by South Africa, which has 9.28 million. Together, both countries account for nearly 40% of the continent total pay TV subscribers in 2023.";
+    const candidates=selectRelevantWebPassages(content,
+      "Who leads the digital television pay TV market in Africa in 2023 by subscribers?",
+      "China leading provider of digital television services across Africa");
+    expect(candidates.length).toBeGreaterThan(0);
+    expect(candidates.every(q=>content.includes(q))).toBe(true);
+    expect(candidates.join(" ")).toMatch(/Nigeria|South Africa/);
+  });
+  it("never exposes an unverified context excerpt or invents context for unrelated pages",()=>{
+    expect(selectRelevantWebPassages("A recipe for lemon cake involves flour and sugar.",
+      "StarTimes African TV operator subscribers 2023",
+      "Digital television China Africa")).toEqual([]);
+    const missing=verifyClaimComparison(claimComparisonModelSchema.parse({...model,
+      comparisons:[{...model.comparisons[0],quote:null,
+        relationship:"insufficient_evidence"}]}),
+      [span],[page],[["a sentence nowhere in the actual page"]]);
+    expect(missing?.rows[0].contextExcerpt).toBeNull();
+  });
+  it("endpoint only reads owned project source and externally selected URLs",()=>{
+    const path="src/app/api/projects/[id]/ai/processing/research/compare/route.ts";
+    const source=readFileSync(path,"utf8");
+    expect(source).toContain("requireOwnedProject");
+    expect(source).toContain("loadStage3DocumentContext");
+    expect(source).toContain("loadSelectedComparisonPages");
+    expect(source).toContain("if(!pages.length)");
+    expect(source).toContain("verifyClaimComparison");
+    expect(source).not.toMatch(/(?:supabase|db)\.(?:insert|update|delete|upsert)\s*\(/);
+    expect(source).not.toContain("createSourceClaimFromAnnotation");
+  });
+});
+

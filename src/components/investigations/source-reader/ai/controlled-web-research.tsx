@@ -1,5 +1,7 @@
 "use client";
 import {useState} from "react";
+import {ClaimComparisonReview} from "./claim-comparison-review";
+import type {ClaimComparisonOutcome} from "@/lib/ai/research/claim-comparison";
 import type {CopilotContext} from "./copilot-context-selector";
 import type {ResearchSearchResult,ResearchEvidence} from "@/lib/ai/research/types";
 
@@ -8,8 +10,9 @@ type Synthesis={
   differences:string[];unansweredQuestions:string[];warnings:string[];
 };
 type ErrorPayload={code?:string;error?:string};
-export function ControlledWebResearch({projectId,sourceId,assetId,context,connected}:{
+export function ControlledWebResearch({projectId,sourceId,assetId,context,connected,onNavigate}:{
   projectId:string;sourceId:string;assetId:string;context:CopilotContext;connected:boolean;
+  onNavigate?:(page:number,annotationId?:string)=>void;
 }){
   const [open,setOpen]=useState(false);
   const [question,setQuestion]=useState("");
@@ -17,7 +20,11 @@ export function ControlledWebResearch({projectId,sourceId,assetId,context,connec
   const [approved,setApproved]=useState<Set<number>>(()=>new Set());
   const [results,setResults]=useState<ResearchSearchResult[]>([]);
   const [synthesis,setSynthesis]=useState<Synthesis|null>(null);
-  const [busy,setBusy]=useState<"plan"|"search"|"read"|null>(null);
+  const [compareSelection,setCompareSelection]=useState<Set<number>>(()=>new Set());
+  const [comparison,setComparison]=useState<ClaimComparisonOutcome|null>(null);
+  const [comparisonContext,setComparisonContext]=useState("");
+  const [busy,setBusy]=useState<"plan"|"search"|"read"|"compare"|null>(null);
+  const contextKey=JSON.stringify({sourceId,assetId,context});
   const [error,setError]=useState("");
   const base="/api/projects/"+projectId+"/";
   async function post<T>(url:string,data:unknown):Promise<T>{
@@ -29,7 +36,8 @@ export function ControlledWebResearch({projectId,sourceId,assetId,context,connec
   }
   async function runPlan(){
     if(busy||context.kind==="document"||!connected)return;
-    setBusy("plan");setError("");setSynthesis(null);setResults([]);
+    setBusy("plan");setError("");setSynthesis(null);setComparison(null);
+    setCompareSelection(new Set());setResults([]);
     try{
       const out=await post<{queries:string[]}>("ai/processing/research/plan",{
         sourceId,assetId,context,question:question.trim(),byokConsent:true,
@@ -41,6 +49,7 @@ export function ControlledWebResearch({projectId,sourceId,assetId,context,connec
   async function runSearch(){
     if(busy||!approved.size)return;
     setBusy("search");setError("");setResults([]);setSynthesis(null);
+    setComparison(null);setCompareSelection(new Set());
     try{
       const selection=queries.filter((_,i)=>approved.has(i));
       const out=await post<{results:ResearchSearchResult[]}>("research/search",{queries:selection});
@@ -59,6 +68,21 @@ export function ControlledWebResearch({projectId,sourceId,assetId,context,connec
       });
       setSynthesis(out.result);
     }catch(e){setError(e instanceof Error?e.message:"Cannot read this public page.");}
+    finally{setBusy(null);}
+  }
+  async function runCompare(){
+    if(busy||!connected||context.kind==="document"||!compareSelection.size)return;
+    const selection=results.filter((_,i)=>compareSelection.has(i)).slice(0,3);
+    const requestContext=contextKey;
+    setBusy("compare");setError("");setComparison(null);
+    try{
+      const out=await post<{result:ClaimComparisonOutcome}>("ai/processing/research/compare",{
+        sourceId,assetId,context,question:question.trim()||
+          "Assess the selected PDF claim against these outside sources.",
+        urls:selection.map(item=>item.url),byokConsent:true,
+      });
+      setComparison(out.result);setComparisonContext(requestContext);
+    }catch(e){setError(e instanceof Error?e.message:"Claim comparison could not be verified.");}
     finally{setBusy(null);}
   }
   const prefill=(result:ResearchSearchResult)=>{
@@ -111,9 +135,37 @@ export function ControlledWebResearch({projectId,sourceId,assetId,context,connec
         </button>
       </div>:null}
       {results.length>0?<div className="space-y-2" data-testid="web-research-results">
+        <div className="rounded border border-[var(--line-neutral)] p-3">
+          <p className="font-semibold">AI Faz 6 · Claim-centric comparison</p>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            Select up to 3 external sources below, then explicitly compare them
+            against the current PDF page or annotation. For stronger comparison, choose
+            2–3 reports using different methods, rather than only an encyclopedia entry.
+            A missing quotation means not verified, not necessarily unsupported.
+            No automatic verdict or Source writes.
+          </p>
+          <button type="button" onClick={()=>void runCompare()}
+            disabled={busy!==null||!connected||context.kind==="document"||!compareSelection.size}
+            className="mt-2 rounded border border-[var(--amber-dark)] bg-[var(--amber-tint)] px-3 py-2 text-xs font-semibold text-[var(--amber-soft)] disabled:opacity-50">
+            {busy==="compare"?"Comparing selected sources…":
+              "Compare selected with PDF ("+compareSelection.size+"/3)"}
+          </button>
+        </div>
         <p className="text-xs font-semibold">Search results · external leads, not evidence</p>
         {results.map((r,i)=><article key={r.url+"-"+i}
           className="rounded border border-[var(--line-neutral)] p-3 text-xs">
+          <label className="mb-2 flex items-center gap-2 font-medium">
+            <input type="checkbox" aria-label={"Compare: "+r.title}
+              checked={compareSelection.has(i)}
+              disabled={!compareSelection.has(i)&&compareSelection.size>=3}
+              onChange={e=>setCompareSelection(current=>{
+                const next=new Set(current);
+                if(e.target.checked&&next.size<3)next.add(i);
+                if(!e.target.checked)next.delete(i);
+                return next;
+              })}/>
+            Include in PDF comparison
+          </label>
           <p className="font-semibold">{r.title}</p>
           <p className="mt-1 break-all text-[var(--muted)]">{r.domain}</p>
           <p className="mt-1">{r.snippet}</p>
@@ -136,6 +188,8 @@ export function ControlledWebResearch({projectId,sourceId,assetId,context,connec
           </div>
         </article>)}
       </div>:null}
+      {comparison&&comparisonContext===contextKey?
+        <ClaimComparisonReview result={comparison} onNavigate={onNavigate}/>:null}
       {synthesis?<section className="rounded border border-[var(--line-neutral)] p-3 text-xs"
         data-testid="web-research-synthesis">
         <p className="mb-2 font-semibold">External reporting · analyst review required</p>
