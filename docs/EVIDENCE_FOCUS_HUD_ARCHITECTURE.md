@@ -44,13 +44,13 @@ Phase 5 / Phase 6 external source lead or verified WEB excerpt
 
 ## Visual timeline: exactly 5000 ms
 
-- 0–600ms: subtle military-green focus strip and a small left-side guide appear (no enclosing box).
-- 600–1600ms: a thin muted-olive underline reveals left-to-right.
+- 0–600ms: a clearly visible but soft military-green highlight band appears (no enclosing box or corner markers).
+- 600–1600ms: a 3px, fully rounded muted-olive underline grows left-to-right, with a soft non-neon glow.
 - 1600–3400ms: restrained luminous hold, no strobe.
 - 3400–5000ms: continuous, progressive fade to full transparency.
 - On completion, remove transient layer entirely (no permanent highlight).
-- Focus-specific palette uses desaturated military/olive green (`#748b6e`, `#91a18a`, `rgba(95,116,94,...)`), not yellow/amber. No full bounding border, corner brackets, or neon glow. Overlay remains `pointer-events:none` and behind annotation/editor controls.
-- `prefers-reduced-motion`: disable underline sweep and keep a stationary green indication that fades to zero within the same five-second duration.
+- Focus-specific palette uses desaturated military/olive green (`#819877`, `#a5b59f`, `rgba(95,116,94,...)`), not yellow/amber. The 3px pill-shaped line is deliberately stronger and softer, with restrained blur; there is no full bounding border or corner brackets. Overlay remains `pointer-events:none` and behind annotation/editor controls.
+- `prefers-reduced-motion`: disable horizontal movement; show the same rounded static line and progressively fade it within five seconds (not an abrupt disappearance).
 - Web accessibility: explicit native keyboard-activatable button with concise focus label; text remains readable and source-type labels stay unchanged. No flashing effects.
 
 ## Security, privacy & performance

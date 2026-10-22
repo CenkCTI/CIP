@@ -13,6 +13,13 @@ describe("Evidence Focus 5-second transient web highlight",()=>{
     expect(segment).toContain("citem-evidence-strip-5s 5s");
     expect(css).toContain(".citem-evidence-inline-active{animation:citem-evidence-web-5s 5s");
     expect(css).toContain(".citem-evidence-focus-trigger");
+    const underline=css.match(/\.citem-evidence-focus-segment::after,\s*\.citem-evidence-inline-active::after\{([^}]+)\}/)?.[1]??"";
+    expect(underline).toContain("height:3px");
+    expect(underline).toContain("border-radius:999px");
+    expect(underline).toContain("box-shadow:0 0 7px");
+    expect(underline).toContain("citem-evidence-underline-soft-5s 5s");
+    expect(css).not.toContain(".citem-evidence-focus-segment::before{");
+    expect(css).toContain("citem-evidence-underline-reduced-5s 5s");
     expect(css).not.toContain("#e5b65c");
     expect(css).not.toContain("citem-evidence-hud-5s");
     expect(css).not.toContain("corner brackets signal acquisition");
