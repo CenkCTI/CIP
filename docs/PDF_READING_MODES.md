@@ -17,9 +17,12 @@ The native Source Reader offers exactly **Orijinal**, **Koyu Yeşil**, and
   pictures, image masks, charts and vector artwork.
 - Match the bounds to the PDF.js operator list. If the list cannot be verified,
   preserve the **entire original page** instead of guessing.
-- Read canvas pixels **only in the user's browser**. Recolor near-neutral
-  grayscale pixels outside protected artwork bounds: white -> selected dark
-  background, black -> readable light foreground, intermediate grays blended.
+- Read canvas pixels **only in the user's browser**. Recolor **all**
+  pixels outside protected artwork bounds through a single grayscale luminance
+  mapping: white -> selected dark background, black -> readable light foreground,
+  intermediate tones blended. This also removes blue/orange LCD/subpixel
+  antialiasing artifacts that otherwise appear as ghosted letter outlines.
+  Source-colored vector regions are protected by PDF.js artwork bounds.
 - Preserve the original RGB of every pixel inside protected artwork rectangles,
   including white portions of charts and pale heatmap cells.
 - Extremely large pages, all-image scans, unsafe operator lists, uninspectable
@@ -27,10 +30,11 @@ The native Source Reader offers exactly **Orijinal**, **Koyu Yeşil**, and
   explanation. Full-page white vector background fills may be skipped to let
   normal PDF text/background darken.
 
-**Limitations:** Colorized/rasterized text outside a detectable text region is
-not guaranteed to recolor, and a bounding rectangle may also preserve some
-text overlapping artwork. Artwork preservation is conservative and avoids
-claiming mathematically perfect object segmentation.
+**Limitations:** Source-colored text **outside** protected graphics is
+recolored to a readable neutral monochrome; hyperlinks may lose their
+original blue tint. Rasterized text inside a protected image retains the
+source colors, and bounding rectangles may preserve overlapping text.
+Artwork preservation is conservative and is not perfect object segmentation.
 
 ## Source integrity
 
