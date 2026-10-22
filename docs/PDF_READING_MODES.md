@@ -15,7 +15,9 @@ The native Source Reader offers exactly **Orijinal**, **Koyu Yeşil**, and
 - Use the normal PDF.js renderer to draw each page *unchanged*.
 - With `recordOperations:true`, collect PDF.js drawing bounds for raster
   pictures, image masks, charts and vector artwork.
-- Match the bounds to the PDF.js operator list. If the list cannot be verified,
+- Match the bounds to the PDF.js operator list and convert its normalized
+  0–1 BBoxReader coordinates into canvas pixels (the previous implementation
+  mistakenly treated the fractions as pixels). If the list cannot be verified,
   preserve the **entire original page** instead of guessing.
 - Read canvas pixels **only in the user's browser**. Recolor **all**
   pixels outside protected artwork bounds through a single grayscale luminance
