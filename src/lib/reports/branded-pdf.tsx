@@ -3,14 +3,17 @@ import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 
 import { ensureCitemReportFonts, CITEM_REPORT_FONT_FAMILY } from "./pdf-fonts";
 import type { ReportDoc } from "./schema";
-import { REPORT_PDF_COLORS as C, tiptapToPdfElements } from "./render";
+import { reportPdfColors, tiptapToPdfElements, type ReportPdfColors } from "./render";
+import type { ReportPdfAppearance } from "./pdf-appearance";
 import { attributionDisclaimer } from "./versioning";
 
 type Row = Record<string, unknown>;
 
-const s = StyleSheet.create({
+function createBrandedPdfStyles(C:ReportPdfColors,appearance:ReportPdfAppearance){
+  const coverText=appearance==="original"?C.white:C.ink;
+  return StyleSheet.create({
   cover: {
-    height: 841.89, backgroundColor: C.charcoal, color: C.white, fontFamily: CITEM_REPORT_FONT_FAMILY,
+    height: 841.89, backgroundColor: C.charcoal, color: coverText, fontFamily: CITEM_REPORT_FONT_FAMILY,
     paddingHorizontal: 54, paddingTop: 53, paddingBottom: 42,
   },
   coverAccent: {
@@ -24,7 +27,7 @@ const s = StyleSheet.create({
   coverBrandSub: { fontSize: 9, letterSpacing: 2, marginTop: 8, color: "#B4B8B9" },
   coverKicker: { fontSize: 10, letterSpacing: 2, color: C.amberLight, marginBottom: 14 },
   coverTitle: {
-    fontWeight: 700, lineHeight: 1.2, color: C.white,
+    fontWeight: 700, lineHeight: 1.2, color: coverText,
     marginBottom: 25,
   },
   coverType: { fontSize: 11, lineHeight: 1.7, color: "#CFD0CD" },
@@ -36,7 +39,7 @@ const s = StyleSheet.create({
   coverMetaLabel: {
     color: C.amberLight, fontSize: 8, letterSpacing: 1.4, marginBottom: 7,
   },
-  coverMetaValue: { color: C.white, fontSize: 10.4, lineHeight: 1.5 },
+  coverMetaValue: { color: coverText, fontSize: 10.4, lineHeight: 1.5 },
   coverWarning: {
     borderLeftWidth: 3, borderLeftColor: C.amber, marginTop: 23,
     paddingLeft: 10, paddingVertical: 3,
@@ -72,7 +75,7 @@ const s = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 17.2, fontWeight: 700, lineHeight: 1.3,
-    color: C.charcoal, marginBottom: 10,
+    color: appearance==="original"?C.charcoal:C.ink, marginBottom: 10,
   },
   sectionRule: { height: 2, width: 42, backgroundColor: C.amber, marginBottom: 15 },
   metaBox: {
@@ -100,7 +103,8 @@ const s = StyleSheet.create({
     padding: 12, marginTop: 6, color: C.ink, fontSize: 9.3, lineHeight: 1.5,
   },
   empty: { color: C.secondary, fontSize: 9.6, marginBottom: 10 },
-});
+  });
+}
 
 export const REPORT_PDF_SECTIONS = [
   ["Executive summary", "executive_summary_snapshot"],
@@ -134,16 +138,17 @@ export function reportPdfMetadata(record:Row,versioned:boolean) {
   };
 }
 
-function SectionHeading({number,title}:{number:string;title:string}){
-  return <View style={s.section} minPresenceAhead={95}>
-    <Text style={s.sectionKicker}>{number} / INTELLIGENCE PRODUCT</Text>
-    <Text style={s.sectionTitle}>{title}</Text>
-    <View style={s.sectionRule}/>
+function SectionHeading({number,title,styles}:{number:string;title:string;styles:ReturnType<typeof createBrandedPdfStyles>}){
+  return <View style={styles.section} minPresenceAhead={95}>
+    <Text style={styles.sectionKicker}>{number} / INTELLIGENCE PRODUCT</Text>
+    <Text style={styles.sectionTitle}>{title}</Text>
+    <View style={styles.sectionRule}/>
   </View>;
 }
 
-export function BrandedReportPdf({record,content,versioned}:{record:Row;content:ReportDoc;versioned:boolean}){
+export function BrandedReportPdf({record,content,versioned,appearance="original"}:{record:Row;content:ReportDoc;versioned:boolean;appearance?:ReportPdfAppearance}){
   ensureCitemReportFonts();
+  const s=createBrandedPdfStyles(reportPdfColors(appearance),appearance);
   const meta=reportPdfMetadata(record,versioned);
   const refs=versioned && Array.isArray(record.report_version_references)
     ? record.report_version_references.filter((x):x is Row=>x!==null && typeof x==="object" && !Array.isArray(x))
@@ -193,7 +198,7 @@ export function BrandedReportPdf({record,content,versioned}:{record:Row;content:
       </View>
       <Text fixed style={s.footerNo} render={({pageNumber,totalPages})=>
         `PAGE ${pageNumber} / ${totalPages}`}/>
-      <SectionHeading number="00" title="Document information"/>
+      <SectionHeading styles={s} number="00" title="Document information"/>
       <View style={s.metaBox}>
         <View style={s.metaRow}><Text style={s.metaKey}>Product type</Text><Text style={s.metaValue}>{meta.type}</Text></View>
         <View style={s.metaRow}><Text style={s.metaKey}>Status</Text><Text style={s.metaValue}>{meta.status}</Text></View>
@@ -203,16 +208,16 @@ export function BrandedReportPdf({record,content,versioned}:{record:Row;content:
         {meta.author ? <View style={s.metaRow}><Text style={s.metaKey}>Analyst record ID</Text><Text style={s.metaValue}>{meta.author}</Text></View>:null}
       </View>
       {versioned ? <>
-        <SectionHeading number="01" title="Analytical assessment"/>
+        <SectionHeading styles={s} number="01" title="Analytical assessment"/>
         {REPORT_PDF_SECTIONS.map(([heading,key])=><View key={key} style={s.assessment}>
           <Text style={s.assessmentLabel}>{heading}</Text>
           <Text style={s.assessmentValue}>{value(record[key])}</Text>
         </View>)}
       </>:null}
-      <SectionHeading number={versioned?"02":"01"} title={versioned?"Frozen report content":"Report content"}/>
-      <View style={{marginBottom:20}}>{tiptapToPdfElements(content)}</View>
+      <SectionHeading styles={s} number={versioned?"02":"01"} title={versioned?"Frozen report content":"Report content"}/>
+      <View style={{marginBottom:20}}>{tiptapToPdfElements(content,appearance)}</View>
       {versioned ? <>
-        <SectionHeading number="03" title="Referenced-record appendix"/>
+        <SectionHeading styles={s} number="03" title="Referenced-record appendix"/>
         {refs.length ? refs.map((r,index)=><View key={index} style={s.reference}>
           <Text style={s.referenceType}>{label(r.reference_type)}</Text>
           <Text style={s.referenceTitle}>{value(r.label_snapshot)}</Text>
@@ -220,7 +225,7 @@ export function BrandedReportPdf({record,content,versioned}:{record:Row;content:
           <Text style={s.referenceMeta}>Frozen state: {value(r.state_snapshot)}</Text>
         </View>):<Text style={s.empty}>No references included in this version.</Text>}
         {record.product_type_snapshot==="ATTRIBUTION_ASSESSMENT" ? <>
-          <SectionHeading number="04" title="Attribution disclaimer"/>
+          <SectionHeading styles={s} number="04" title="Attribution disclaimer"/>
           <Text style={s.disclaimer}>{attributionDisclaimer}</Text>
         </>:null}
       </>:null}
