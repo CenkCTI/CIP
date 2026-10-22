@@ -66,9 +66,10 @@ function mostlyWhiteSamples(
 }
 
 /** Returns null if original colors must be preserved for the whole page.
- * For PDF.js 5.4.x, recordedBBoxes is from render({recordOperations:true})
- * and coordinates are *canvas device pixels*, aligned with the operator list.
- * Verify operator-list length rather than guessing when alignment is unknown.
+ * PDF.js 5.4.x recordedBBoxes from render({recordOperations:true}) uses
+ * NORMALIZED 0..1 canvas fractions, quantized to 1/256; multiply x/y by the
+ * actual canvas device dimensions before masking. Operator indices must align
+ * exactly with getOperatorList(); never guess when they do not.
  */
 export function pdfArtworkRegions(
   fnArray:readonly number[]|undefined,
@@ -87,8 +88,12 @@ export function pdfArtworkRegions(
     const operation=fnArray[i];
     if(!images.has(operation)&&!vectors.has(operation))continue;
     if(boxes.isEmpty(i))continue;
-    const l=boxes.minX(i),t=boxes.minY(i),r=boxes.maxX(i),b=boxes.maxY(i);
-    if(![l,t,r,b].every(Number.isFinite))return null;
+    const fractions=[boxes.minX(i),boxes.minY(i),boxes.maxX(i),boxes.maxY(i)];
+    if(!fractions.every(Number.isFinite)||fractions.some(value=>value<0||value>1.004))return null;
+    const [l,t,r,b]=[
+      fractions[0]*width,fractions[1]*height,
+      fractions[2]*width,fractions[3]*height,
+    ];
     const rect={
       left:Math.max(0,Math.floor(l)-2),top:Math.max(0,Math.floor(t)-2),
       right:Math.min(width,Math.ceil(r)+2),bottom:Math.min(height,Math.ceil(b)+2),
