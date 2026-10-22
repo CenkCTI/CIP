@@ -38,38 +38,17 @@ const IMAGE_OPERATORS=[
   "paintImageXObjectGroup","paintJpegXObject",
   "shadingFill",
 ] as const;
-const VECTOR_OPERATORS=[
-  "constructPath", "stroke","closeStroke","fill","eoFill","fillStroke",
-  "eoFillStroke","closeFillStroke","closeEOFillStroke",
-  "paintFormXObjectBegin","paintFormXObjectEnd",
-] as const;
 const MAX_RENDER_PIXELS=8_000_000;
 const MAX_ARTWORK_REGIONS=2500;
 
-/** Detect an explicit full-page white vector fill (paper backdrop). Such a
- * fill must not prevent the remaining actual text from being recolored.
- * All image/shading operations remain protected even when page-sized.
- */
-function mostlyWhiteSamples(
-  rgba:Uint8ClampedArray,width:number,height:number,rect:PdfArtworkRegion,
-):boolean{
-  let white=0,seen=0;
-  for(let sy=1;sy<=4;sy++)for(let sx=1;sx<=4;sx++){
-    const x=Math.min(width-1,Math.max(0,Math.floor(rect.left+(rect.right-rect.left)*sx/5)));
-    const y=Math.min(height-1,Math.max(0,Math.floor(rect.top+(rect.bottom-rect.top)*sy/5)));
-    const offset=(y*width+x)*4;
-    const r=rgba[offset],g=rgba[offset+1],b=rgba[offset+2];
-    if(r>235&&g>235&&b>235)white++;
-    seen++;
-  }
-  return white>=Math.ceil(seen*.75);
-}
-
-/** Returns null if original colors must be preserved for the whole page.
- * PDF.js 5.4.x recordedBBoxes from render({recordOperations:true}) uses
- * NORMALIZED 0..1 canvas fractions, quantized to 1/256; multiply x/y by the
- * actual canvas device dimensions before masking. Operator indices must align
- * exactly with getOperatorList(); never guess when they do not.
+/** Only actual bitmap, mask, and shading operations are fully immutable.
+ * Broad vector bounding boxes often include white paths behind hyperlinked
+ * text and entire tables of contents, so preserving those rectangles wholesale
+ * leaves visible white stripes. Instead, graphics drawn as vector paths are
+ * contrast-treated pixelwise by recolorPdfPagePixels.
+ *
+ * Bounding boxes from PDF.js 5.4.x are normalized canvas fractions. Source
+ * page pixels and PDF annotation geometry are never written to storage.
  */
 export function pdfArtworkRegions(
   fnArray:readonly number[]|undefined,
@@ -79,15 +58,14 @@ export function pdfArtworkRegions(
   width:number,height:number,
 ):PdfArtworkRegion[]|null{
   if(!fnArray||!ops||!boxes||!fnArray.length||fnArray.length!==boxes.length)return null;
-  if(typeof ops.paintImageXObject!=="number"||typeof ops.fill!=="number")return null;
+  if(typeof ops.paintImageXObject!=="number")return null;
   if(width<=0||height<=0||width*height>MAX_RENDER_PIXELS||rgba.length!==width*height*4)return null;
   const images=new Set<number>(IMAGE_OPERATORS.map(x=>ops[x]).filter((v):v is number=>typeof v==="number"));
-  const vectors=new Set<number>(VECTOR_OPERATORS.map(x=>ops[x]).filter((v):v is number=>typeof v==="number"));
   const result:PdfArtworkRegion[]=[];
   for(let i=0;i<fnArray.length;i++){
-    const operation=fnArray[i];
-    if(!images.has(operation)&&!vectors.has(operation))continue;
-    if(boxes.isEmpty(i))continue;
+    if(!images.has(fnArray[i]))continue;
+    // Empty image paint extents are not inspectable; keep the original page.
+    if(boxes.isEmpty(i))return null;
     const fractions=[boxes.minX(i),boxes.minY(i),boxes.maxX(i),boxes.maxY(i)];
     if(!fractions.every(Number.isFinite)||fractions.some(value=>value<0||value>1.004))return null;
     const [l,t,r,b]=[
@@ -98,27 +76,26 @@ export function pdfArtworkRegions(
       left:Math.max(0,Math.floor(l)-2),top:Math.max(0,Math.floor(t)-2),
       right:Math.min(width,Math.ceil(r)+2),bottom:Math.min(height,Math.ceil(b)+2),
     };
-    if(rect.right<=rect.left||rect.bottom<=rect.top)continue;
-    const area=(rect.right-rect.left)*(rect.bottom-rect.top);
-    // A large, plain white path is commonly the PDF's background layer.
-    if(!images.has(operation)&&area>=width*height*.85&&mostlyWhiteSamples(rgba,width,height,rect))continue;
+    if(rect.right<=rect.left||rect.bottom<=rect.top)return null;
     result.push(rect);
     if(result.length>MAX_ARTWORK_REGIONS)return null;
   }
   return result;
 }
 
-/** Recolor the entire unprotected PDF page with a single luminance value
- * per pixel. PDF.js/browser subpixel glyph antialiasing can contain cyan and
- * orange RGB fringes even when the source text is black. Exempting 'colored'
- * pixels creates visible multicolor shadows around every letter on dark pages.
- * Converting all unprotected pixels to luminance removes those RGB fringes.
- * Vector and raster image rectangles remain byte-for-byte unchanged.
- * Unknown full-page scans remain Original.
+/** Apply a legible dark reader presentation, with three distinct surfaces:
+ * - raster/shading pixels: immutable, original RGB and alpha
+ * - native PDF text rectangles: force single-luminance conversion to prevent
+ *   cyan/orange glyph fringes and make blue hyperlinks readable
+ * - remaining vector/neutral page pixels: convert neutral backgrounds/lines,
+ *   but preserve source-colored chart strokes outside textual rectangles
+ *
+ * Fully scanned pages remain Original rather than modifying their images.
  */
 export function recolorPdfPagePixels(
   rgba:Uint8ClampedArray,width:number,height:number,
   mode:PdfReadingMode,regions:readonly PdfArtworkRegion[],
+  textRects:readonly PdfArtworkRegion[]=[],
 ):boolean{
   if(mode==="original")return true;
   if(width<=0||height<=0||width*height>MAX_RENDER_PIXELS||rgba.length!==width*height*4)return false;
@@ -128,10 +105,16 @@ export function recolorPdfPagePixels(
       mask.fill(1,y*width+rect.left,y*width+rect.right);
     }
   }
-  // A full-page image/scan must remain unchanged; do not pretend dark mode is applied.
   let preserved=0;
   for(let i=0;i<mask.length;i++)preserved+=mask[i];
   if(preserved>=mask.length*.96)return false;
+
+  const textMask=new Uint8Array(width*height);
+  for(const rect of textRects){
+    const left=Math.max(0,Math.floor(rect.left)),top=Math.max(0,Math.floor(rect.top));
+    const right=Math.min(width,Math.ceil(rect.right)),bottom=Math.min(height,Math.ceil(rect.bottom));
+    for(let y=top;y<bottom;y++)textMask.fill(1,y*width+left,y*width+right);
+  }
 
   const parse=(hex:string)=>[1,3,5].map(index=>Number.parseInt(hex.slice(index,index+2),16));
   const foreground=parse(PDF_READING_COLORS[mode].foreground);
@@ -139,12 +122,13 @@ export function recolorPdfPagePixels(
   for(let p=0,k=0;p<mask.length;p++,k+=4){
     if(mask[p])continue;
     const r=rgba[k],g=rgba[k+1],b=rgba[k+2];
-    // One luminance for all three channels is essential: transparent source
-    // glyph antialiasing can have strong per-channel (LCD/subpixel) fringes.
-    // Never skip pixels based on chroma: that was causing orange/cyan ghosting.
-    const tone=(r*0.2126+g*0.7152+b*0.0722)/255;
+    const high=Math.max(r,g,b),low=Math.min(r,g,b);
+    const luminance=(r*.2126+g*.7152+b*.0722)/255;
+    // Graphic pixels, such as colored vector chart bars, keep their source
+    // RGB. Text regions are deliberately exempt from this protection.
+    if(!textMask[p] && high-low>42 && high>95)continue;
     for(let c=0;c<3;c++){
-      rgba[k+c]=Math.round(foreground[c]*(1-tone)+background[c]*tone);
+      rgba[k+c]=Math.round(foreground[c]*(1-luminance)+background[c]*luminance);
     }
   }
   return true;
