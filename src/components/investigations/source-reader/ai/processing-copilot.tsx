@@ -100,7 +100,7 @@ export function ProcessingCopilot({
   projectId: string; sourceId: string; assetId: string; sourceTitle: string;
   selectedAnnotationId: string | null; activePage: number; pageCount: number | null;
   onClose: () => void;
-  onNavigate: (page: number, annotationId?: string) => void;
+  onNavigate: (page: number, annotationId?: string, quote?: string) => void;
   onReviewCandidate?: (candidate: Stage3Candidate) => void;
 }) {
   const windowState = useCopilotWindow();
@@ -451,7 +451,8 @@ export function ProcessingCopilot({
           onReview={(candidate)=>{
             if(onReviewCandidate)onReviewCandidate(candidate);
             else if(candidate.verifiedSupport[0]?.page)
-              onNavigate(candidate.verifiedSupport[0].page,candidate.verifiedSupport[0].provenance.annotationId);
+              onNavigate(candidate.verifiedSupport[0].page,candidate.verifiedSupport[0].provenance.annotationId,
+                candidate.verifiedSupport[0].quote);
           }}
           onResume={(failed)=>void documentScan.resume(failed)} onCancel={documentScan.cancel}/>:null}
         <CopilotChat turns={turns} onNavigate={onNavigate}/>
@@ -459,7 +460,9 @@ export function ProcessingCopilot({
           onDismiss={(candidateId)=>setDismissedCandidates((current)=>new Set([...current,candidateId]))}
           onReview={(candidate)=>{
             if(onReviewCandidate) onReviewCandidate(candidate);
-            else if(candidate.verifiedSupport[0]?.page) onNavigate(candidate.verifiedSupport[0].page,candidate.verifiedSupport[0].provenance.annotationId);
+            else if(candidate.verifiedSupport[0]?.page)
+              onNavigate(candidate.verifiedSupport[0].page,candidate.verifiedSupport[0].provenance.annotationId,
+                candidate.verifiedSupport[0].quote);
           }} onNavigate={onNavigate}/> : null}
       </div>
       <form onSubmit={onSubmit}

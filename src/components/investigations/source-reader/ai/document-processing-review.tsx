@@ -9,7 +9,7 @@ const candidateKinds=["SOURCE_CLAIM","INDICATOR","TIMELINE","MALWARE","CVE","MIT
 export function DocumentProcessingReview({view,working,dismissed,onDismiss,onReview,onNavigate,onResume,onCancel}:{
   view:DocumentScanView;working:boolean;dismissed:Set<string>;
   onDismiss:(id:string)=>void;onReview:(candidate:Stage3Candidate)=>void;
-  onNavigate:(page:number,annotationId?:string)=>void;
+  onNavigate:(page:number,annotationId?:string,quote?:string)=>void;
   onResume:(retryFailed:boolean)=>void;onCancel:()=>void;
 }){
   const [filter,setFilter]=useState("ALL");
