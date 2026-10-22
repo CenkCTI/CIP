@@ -57,10 +57,13 @@ export function pdfArtworkRegions(
   rgba:Uint8ClampedArray,
   width:number,height:number,
 ):PdfArtworkRegion[]|null{
-  if(!fnArray||!ops||!boxes||!fnArray.length||fnArray.length!==boxes.length)return null;
-  if(typeof ops.paintImageXObject!=="number")return null;
+  if(!fnArray||!ops||!fnArray.length||typeof ops.paintImageXObject!=="number")return null;
   if(width<=0||height<=0||width*height>MAX_RENDER_PIXELS||rgba.length!==width*height*4)return null;
   const images=new Set<number>(IMAGE_OPERATORS.map(x=>ops[x]).filter((v):v is number=>typeof v==="number"));
+  // No image operators: text-only or vector-only pages are safe even when
+  // PDF.js does not provide recorded operation boxes.
+  if(!fnArray.some(id=>images.has(id)))return [];
+  if(!boxes||fnArray.length!==boxes.length)return null;
   const result:PdfArtworkRegion[]=[];
   for(let i=0;i<fnArray.length;i++){
     if(!images.has(fnArray[i]))continue;
