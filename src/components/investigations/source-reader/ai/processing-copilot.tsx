@@ -467,7 +467,7 @@ export function ProcessingCopilot({
         <button type="button" title="Copilot preferences and BYOK" aria-label="Copilot settings"
           aria-expanded={showConnection} aria-controls="citem-copilot-settings"
           className="rounded-lg border border-transparent px-3 py-1.5 text-[11px] font-semibold text-[var(--amber-soft)] hover:border-[var(--line)] hover:bg-[var(--amber-tint)]"
-          onClick={()=>{setShowConnection(v=>!v);void refreshStatus();}}>
+          onClick={()=>setShowConnection(v=>!v)}>
           ⚙ Settings
         </button>
         {!windowState.mobile ? <button type="button" className="rounded px-2 py-1.5 text-xs hover:bg-[var(--amber-tint)]"
