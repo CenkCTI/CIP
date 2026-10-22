@@ -56,7 +56,8 @@ export function verifyClaimComparison(model:ClaimComparisonModel,
     const quote=candidate?.quote??null;
     const verifiedQuote=Boolean(quote&&normalizedQuote(page.text).includes(normalizedQuote(quote)));
     if(quote&&!verifiedQuote)discarded++;
-    const relationship=verifiedQuote&&candidate?.relationship!=="insufficient_evidence"
+    const relationship:ClaimComparisonResult["rows"][number]["relationship"]=
+      verifiedQuote&&candidate?.relationship!=="insufficient_evidence"
       ?candidate!.relationship:"insufficient_evidence";
     return {sourceToken:token,url:page.url,title:page.title,domain:page.domain,
       retrievedAt:page.retrievedAt,relationship,
