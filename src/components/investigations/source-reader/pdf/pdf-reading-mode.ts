@@ -39,7 +39,7 @@ const IMAGE_OPERATORS=[
   "shadingFill",
 ] as const;
 const VECTOR_OPERATORS=[
-  "stroke","closeStroke","fill","eoFill","fillStroke",
+  "constructPath", "stroke","closeStroke","fill","eoFill","fillStroke",
   "eoFillStroke","closeFillStroke","closeEOFillStroke",
   "paintFormXObjectBegin","paintFormXObjectEnd",
 ] as const;
