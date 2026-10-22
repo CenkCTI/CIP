@@ -13,12 +13,12 @@ describe("Persistent investigator memory and consent",()=>{
     const api=readFileSync("src/app/api/projects/[id]/ai/processing/analyst-chat/route.ts","utf8");
     const client=readFileSync("src/components/investigations/source-reader/ai/processing-copilot.tsx","utf8");
     expect(api).toContain("webResearch:z.boolean().default(false)");
-    expect(api).toContain("getResearchProvider().search(query");
     expect(api).toContain("loadSelectedComparisonPages");
+    expect(api).toContain("selectedUrls");
     expect(api).toContain("saveInvestigationTurn");
     expect(api).toContain("readInvestigationMemory");
     expect(client).toContain("setAnalystChat");
-    expect(client).toContain("Research web for this message");
+    expect(client).toContain("Web research");
     expect(client).toContain("Include selected PDF evidence");
     expect(client).toContain("Clear saved chat");
   });

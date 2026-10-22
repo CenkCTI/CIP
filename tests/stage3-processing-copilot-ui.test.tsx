@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
+import type { ReactElement } from "react";
 import { ProcessingCopilot, validCopilotContext } from "@/components/investigations/source-reader/ai/processing-copilot";
 import { clampCopilotGeometry, COPILOT_WINDOW_KEY } from "@/components/investigations/source-reader/ai/use-copilot-window";
 import { CopilotChat } from "@/components/investigations/source-reader/ai/copilot-chat";
@@ -32,6 +33,15 @@ beforeEach(()=>{
   vi.stubGlobal("fetch",fetchMock);
 });
 
+/** Regression tests exercise the previous strict source-only workflow. */
+function renderLegacy(element:ReactElement){
+  const rendered=render(element);
+  fireEvent.click(screen.getByRole("button",{name:"Copilot settings"}));
+  fireEvent.click(screen.getByLabelText(/Analyst chat · persistent investigation memory/));
+  fireEvent.click(screen.getByRole("button",{name:"Close settings"}));
+  return rendered;
+}
+
 function mockConnected(){
   fetchMock.mockImplementation(async (url:string,options?:RequestInit)=>{
     if (url==="/api/ai/byok/status") return {ok:true,json:async()=>({enabled:true,connected:true,
@@ -45,7 +55,7 @@ function mockConnected(){
 describe("Stage 3 Processing Copilot UI",()=>{
   it("uses the existing BYOK session and sends a bounded, ID-only PDF context",async()=>{
     mockConnected();
-    render(<ProcessingCopilot {...props}/>);
+    renderLegacy(<ProcessingCopilot {...props}/>);
     await screen.findByText("NVIDIA connected");
     const question=screen.getByLabelText(/Ask about Entire PDF/);
     fireEvent.change(question,{target:{value:"What does this source report?"}});
@@ -66,7 +76,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
 
   it("lets the analyst explicitly select Turkish while leaving the source text under server control",async()=>{
     mockConnected();
-    render(<ProcessingCopilot {...props}/>);
+    renderLegacy(<ProcessingCopilot {...props}/>);
     await screen.findByText("NVIDIA connected");
     fireEvent.change(screen.getByLabelText("Response language"),{target:{value:"tr"}});
     fireEvent.change(screen.getByLabelText(/Ask about Entire PDF/),{target:{value:"Explain the passage"}});
@@ -79,7 +89,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
 
   it("uses a compact context bar, hides evidence by default and retains CİTEM branding",async()=>{
     mockConnected();
-    render(<ProcessingCopilot {...props}/>);
+    renderLegacy(<ProcessingCopilot {...props}/>);
     await screen.findByText("NVIDIA connected");
     const dialog=screen.getByRole("dialog",{name:"AI Processing Copilot"});
     expect(dialog.className).toContain("var(--surface-panel)");
@@ -107,7 +117,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
 
   it("switches the default full PDF to the currently displayed page when the analyst requests it",async()=>{
     mockConnected();
-    render(<ProcessingCopilot {...props}/>);
+    renderLegacy(<ProcessingCopilot {...props}/>);
     await screen.findByText("NVIDIA connected");
     fireEvent.click(screen.getByRole("button",{name:/Change context/}));
     fireEvent.click(screen.getByLabelText(/Current page/));
@@ -138,7 +148,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
       }
       throw Error("Unexpected request");
     });
-    render(<ProcessingCopilot {...props} onReviewCandidate={onReviewCandidate}/>);
+    renderLegacy(<ProcessingCopilot {...props} onReviewCandidate={onReviewCandidate}/>);
     await screen.findByText("NVIDIA connected");
     fireEvent.click(screen.getByRole("button",{name:"Extract candidates"}));
     await screen.findByText("The campaign targeted Polish institutions.");
@@ -166,7 +176,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
       return {ok:true,status:200,json:async()=>({result:{...verified,
         summary:`Pages ${pageStart}-${pageEnd} reviewed`}})};
     });
-    render(<ProcessingCopilot {...props} pageCount={16}/>);
+    renderLegacy(<ProcessingCopilot {...props} pageCount={16}/>);
     await screen.findByText("NVIDIA connected");
     fireEvent.click(screen.getByRole("button",{name:"Analyse context"}));
     await screen.findByText(/16 \/ 16 pages processed/);
@@ -193,7 +203,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
       return {ok:true,status:200,json:async()=>({result:{...verified,
         summary:`Pages ${pageStart}-${pageEnd} processed`}})};
     });
-    render(<ProcessingCopilot {...props} pageCount={205}/>);
+    renderLegacy(<ProcessingCopilot {...props} pageCount={205}/>);
     await screen.findByText("NVIDIA connected");
     fireEvent.click(screen.getByRole("button",{name:"Analyse context"}));
     await screen.findByRole("button",{name:"Continue Entire PDF"});
@@ -219,7 +229,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
       return {ok:true,status:200,json:async()=>({result:{...verified,
         summary:`Pages ${context.pageStart}-${context.pageEnd} read`}})};
     });
-    render(<ProcessingCopilot {...props} pageCount={9}/>);
+    renderLegacy(<ProcessingCopilot {...props} pageCount={9}/>);
     await screen.findByText("NVIDIA connected");
     fireEvent.click(screen.getByRole("button",{name:"Analyse context"}));
     await screen.findByText(/9 \/ 9 pages processed/);
@@ -243,7 +253,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
       return {ok:true,status:200,json:async()=>({result:{...verified,
         summary:`Pages ${context.pageStart} to ${context.pageEnd} passed verification`}})};
     });
-    render(<ProcessingCopilot {...props} pageCount={12}/>);
+    renderLegacy(<ProcessingCopilot {...props} pageCount={12}/>);
     await screen.findByText("NVIDIA connected");
     fireEvent.click(screen.getByRole("button",{name:"Analyse context"}));
     await screen.findByText(/12 \/ 12 pages processed/);
@@ -263,7 +273,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
       if(context.kind==="document")return {ok:false,status:422,json:async()=>({code:"malformed_output",stage:"nvidia"})};
       return {ok:true,status:200,json:async()=>({result:verified})};
     });
-    render(<ProcessingCopilot {...props} pageCount={4}/>);
+    renderLegacy(<ProcessingCopilot {...props} pageCount={4}/>);
     await screen.findByText("NVIDIA connected");
     fireEvent.click(screen.getByRole("button",{name:"Analyse context"}));
     await screen.findByText(/4 \/ 4 pages processed/);
@@ -288,7 +298,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
       for(let p=context.pageStart;p<=context.pageEnd;p++)covered.push(p);
       return {ok:true,status:200,json:async()=>({result:verified})};
     });
-    render(<ProcessingCopilot {...props} pageCount={3}/>);
+    renderLegacy(<ProcessingCopilot {...props} pageCount={3}/>);
     await screen.findByText("NVIDIA connected");
     fireEvent.click(screen.getByRole("button",{name:"Analyse context"}));
     await screen.findByRole("button",{name:"Retry flagged pages"});
@@ -318,7 +328,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
       for(let p=pageStart;p<=pageEnd;p++)succeeded.push(p);
       return {ok:true,status:200,json:async()=>({result:verified})};
     });
-    render(<ProcessingCopilot {...props} pageCount={10}/>);
+    renderLegacy(<ProcessingCopilot {...props} pageCount={10}/>);
     await screen.findByText("NVIDIA connected");
     fireEvent.click(screen.getByRole("button",{name:"Analyse context"}));
     await screen.findByText(/10 \/ 10 pages processed/);
@@ -335,7 +345,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
       if(context.kind==="document")return {ok:false,status:422,json:async()=>({code:"analysis_language_mismatch",stage:"nvidia"})};
       return {ok:false,status:422,json:async()=>({code:"analysis_language_mismatch",stage:"nvidia"})};
     });
-    render(<ProcessingCopilot {...props} pageCount={3}/>);
+    renderLegacy(<ProcessingCopilot {...props} pageCount={3}/>);
     await screen.findByText("NVIDIA connected");
     fireEvent.click(screen.getByRole("button",{name:"Analyse context"}));
     await screen.findByRole("button",{name:"Retry flagged pages"});
@@ -363,7 +373,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
       return {ok:true,status:200,json:async()=>({result:{...verified,
         summary:`Valid pages ${pageStart}-${pageEnd}`}})};
     });
-    render(<ProcessingCopilot {...props} pageCount={34}/>);
+    renderLegacy(<ProcessingCopilot {...props} pageCount={34}/>);
     await screen.findByText("NVIDIA connected");
     fireEvent.click(screen.getByRole("button",{name:"Analyse context"}));
     await screen.findByRole("button",{name:"Retry flagged pages"});
@@ -395,7 +405,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
       }
       return {ok:true,status:200,json:async()=>({result:verified})};
     });
-    render(<ProcessingCopilot {...props} pageCount={17}/>);
+    renderLegacy(<ProcessingCopilot {...props} pageCount={17}/>);
     await screen.findByText("NVIDIA connected");
     fireEvent.click(screen.getByRole("button",{name:"Analyse context"}));
     await screen.findByRole("button",{name:"Continue Entire PDF"});
@@ -408,8 +418,10 @@ describe("Stage 3 Processing Copilot UI",()=>{
 
   it("requires NVIDIA and reuses BYOK panel, without exposing an API key input in Copilot", async()=>{
     fetchMock.mockResolvedValue({ok:true,json:async()=>({connected:false,enabled:true,state:"disconnected"})});
-    render(<ProcessingCopilot {...props}/>);
+    renderLegacy(<ProcessingCopilot {...props}/>);
     await screen.findByText("NVIDIA not connected");
+    fireEvent.click(screen.getByRole("button",{name:"Copilot settings"}));
+    fireEvent.click(screen.getByText(/NVIDIA BYOK ·/));
     expect(screen.getByTestId("existing-byok-panel").textContent).toContain("nvidia_nim");
     expect(screen.getByRole("button",{name:/^Ask$/}).hasAttribute("disabled")).toBe(true);
     expect(document.querySelector('input[type="password"]')).toBeNull();
@@ -418,7 +430,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
 
   it("allows annotation selection, page range, docking and closing",async()=>{
     mockConnected();
-    render(<ProcessingCopilot {...props}/>);
+    renderLegacy(<ProcessingCopilot {...props}/>);
     await screen.findByText("NVIDIA connected");
     fireEvent.click(screen.getByRole("button",{name:/Change context/}));
     fireEvent.click(screen.getByLabelText(/Current annotation/));
