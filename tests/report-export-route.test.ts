@@ -70,6 +70,14 @@ describe("report export route", () => {
     });
     expect(res.status).toBe(400);
   });
+  it("rejects invalid PDF appearance independently of signed-in project ownership",async()=>{
+    const {GET}=await import("@/app/api/projects/[id]/reports/[reportId]/export/[format]/route");
+    const res=await GET(new Request("http://test/?appearance=invalid-dark"),{
+      params:Promise.resolve({id:"p1",reportId:"r1",format:"pdf"}),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({error:"Unsupported PDF appearance."});
+  });
   it("requires project ownership without leaking report details", async () => {
     project = { id: "p1", owner_id: "other" };
     const { GET } =
