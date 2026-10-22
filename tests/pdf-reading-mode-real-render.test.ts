@@ -39,7 +39,9 @@ describe("PDF.js real page operator-bounds acceptance",()=>{
       const regions=pdfArtworkRegions(operationList.fnArray,pdfjs.OPS,boxes,
         source.data,canvas.width,canvas.height);
       expect(regions).not.toBeNull();
-      expect(regions!.length).toBeGreaterThan(0);
+      // The chart is vector artwork, not a bitmap. Avoid masking a broad
+      // rectangular area of the page: chromatic vector ink is preserved.
+      expect(regions).toEqual([]);
       expect(recolorPdfPagePixels(source.data,canvas.width,canvas.height,"night",regions!)).toBe(true);
       const i=(y:number,x:number)=>(y*canvas.width+x)*4;
       // Original white page -> night charcoal.
