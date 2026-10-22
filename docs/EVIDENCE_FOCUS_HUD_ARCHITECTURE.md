@@ -44,12 +44,12 @@ Phase 5 / Phase 6 external source lead or verified WEB excerpt
 
 ## Visual timeline: exactly 5000 ms
 
-- 0–600ms: a clearly visible but soft military-green highlight band appears (no enclosing box or corner markers).
-- 600–1600ms: a 3px, fully rounded muted-olive underline grows left-to-right, with a soft non-neon glow.
+- 0–600ms: a clearly visible dark-emerald translucent band appears, with rounded 9px ends and a faint inner glass sheen (no enclosing border or target brackets).
+- 600–1600ms: a 3px, fully rounded emerald-green underline grows left-to-right. A mint-toned center and controlled two-layer glow provide a futuristic optical focus.
 - 1600–3400ms: restrained luminous hold, no strobe.
 - 3400–5000ms: continuous, progressive fade to full transparency.
 - On completion, remove transient layer entirely (no permanent highlight).
-- Focus-specific palette uses desaturated military/olive green (`#819877`, `#a5b59f`, `rgba(95,116,94,...)`), not yellow/amber. The 3px pill-shaped line is deliberately stronger and softer, with restrained blur; there is no full bounding border or corner brackets. Overlay remains `pointer-events:none` and behind annotation/editor controls.
+- Focus palette now combines deep forest emerald (`rgba(12,51,31,.30)`) with a saturated green rim (`#2e9b61`) and pale mint core (`#a7edc0`) instead of yellow/amber. The darker translucent band stays readable over a white PDF page; rounded corners and gentle emission replace the flat marker appearance. No enclosing border, backdrop-filter blur on source text, or corner brackets. Overlay remains `pointer-events:none` and does not alter selection or annotations.
 - `prefers-reduced-motion`: disable horizontal movement; show the same rounded static line and progressively fade it within five seconds (not an abrupt disappearance).
 - Web accessibility: explicit native keyboard-activatable button with concise focus label; text remains readable and source-type labels stay unchanged. No flashing effects.
 
