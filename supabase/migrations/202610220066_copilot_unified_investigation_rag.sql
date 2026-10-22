@@ -73,6 +73,10 @@ revoke all on public.copilot_document_indexes,public.copilot_document_chunks,
 grant select on public.copilot_document_indexes to authenticated;
 grant select on public.copilot_document_chunks to authenticated;
 grant select on public.copilot_investigation_events to authenticated;
+-- Trusted server writes use the already configured service role; BYPASSRLS
+-- does not substitute for explicit table privileges on every environment.
+grant select,insert,update,delete on public.copilot_document_indexes,
+ public.copilot_document_chunks,public.copilot_investigation_events to service_role;
 
 create policy copilot_document_indexes_select on public.copilot_document_indexes
  for select to authenticated using(owner_id=(select auth.uid()) and public.project_is_owned(project_id));
