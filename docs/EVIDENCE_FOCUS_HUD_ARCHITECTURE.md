@@ -2,8 +2,8 @@
 
 ## Baseline, delivery and dependency
 
-- Feature branch `feat/ui-evidence-focus-hud`, independent PR **stacked on** Phase 6 (`feat/ai-phase6-claim-centric-corroboration`) so PDF Stage 3, Phase 5 WEB_001 and Phase 6 claim comparisons can all receive the same focus behavior.
-- Merge sequence: accept/merge Phase 6 PR #78, then retarget/rebase this PR onto main. Do not merge a child PR while parent is an unreviewed draft.
+- Feature branch `feat/ui-evidence-focus-hud`, separate PR #79 targeting `main`.
+- Phase 6 PR #78 was merged into `main` on 2026-10-22; the former stacked dependency no longer exists. Keep PR #79 in Draft pending checks and real-PDF browser acceptance.
 - All operations are client-side, ephemeral and presentation-only. No database schema or server API changes. No new network calls, no source edits, no local storage of citations.
 
 ## Architecture & data flow
@@ -83,9 +83,17 @@ Phase 5 / Phase 6 external source lead or verified WEB excerpt
 
 ## Delivery / release strategy (ADR-EF-001)
 
-The initial PR is temporarily tested against `main` to activate workflows that
-trigger on pull requests into `main`. This CI-only retarget exposes Phase 6
-parent commits in the PR diff; after successful validation, restore the
-feature-branch base `feat/ai-phase6-claim-centric-corroboration`. The resulting
-stacked PR remains independently reviewable. CI verifies the feature commit
-but does not replace in-browser manual acceptance on actual PDFs.
+PR #78 has been merged. PR #79 now targets `main` directly and must **not**
+be retargeted to the defunct parent feature branch. Run normal CI against
+`main`. Keep the PR in Draft until the native PDF.js viewer has been
+exercised against real documents and animation timing, zoom, page loading,
+selection and keyboard navigation have been checked in a browser.
+
+## Explicit scope boundary
+
+Web focus targets an excerpt already displayed inside CİTEM; it does **not**
+locate a sentence in the full HTML body of a third-party site. Verified WEB
+quotes, topically relevant unverified context, and Brave search leads retain
+their distinct evidence labels. A secure full-page reader would require a
+separate server-backed, permissioned implementation and should not be
+represented as delivered by this PR.
