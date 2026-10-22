@@ -432,6 +432,9 @@ begin
   or has_function_privilege('anon','public.copilot_search_document_chunks(uuid,text,integer)','EXECUTE')
  then raise exception 'Anonymous investigation memory access';end if;
 end $acl$;
+-- Test-only Supabase scaffold: authenticated can resolve auth.uid() (production
+-- Supabase already grants schema USAGE; this fixture must model that contract).
+grant usage on schema auth to authenticated;
 -- Trusted server workflow writes original-derived material before user read checks.
 insert into public.copilot_document_indexes(id,project_id,source_id,asset_id,owner_id,asset_sha256,status,chunk_count,page_count,indexed_at)
 values('91000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001',
