@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ReactElement } from "react";
 import { ProcessingCopilot, isNvidiaByokConnection } from "@/components/investigations/source-reader/ai/processing-copilot";
 
 const projectId="29429515-bc04-4539-ae53-69f0b47157cb";
@@ -27,6 +28,14 @@ beforeEach(()=>{
   vi.stubGlobal("fetch",fetchMock);
 });
 
+function renderLegacy(element:ReactElement){
+  const rendered=render(element);
+  fireEvent.click(screen.getByRole("button",{name:"Copilot settings"}));
+  fireEvent.click(screen.getByLabelText(/Analyst chat · persistent investigation memory/));
+  fireEvent.click(screen.getByRole("button",{name:"Close settings"}));
+  return rendered;
+}
+
 function connectAfterDisconnected() {
   fetchMock.mockImplementation(async (url:string,options?:RequestInit)=>{
     if (url==="/api/ai/byok/status") return {ok:true,json:async()=>({connected:false,enabled:true,providers:[]})};
@@ -47,10 +56,12 @@ function connectAfterDisconnected() {
 describe("NVIDIA BYOK to Copilot send integration",()=>{
   it("connects with the existing panel and enables Ask immediately without a page refresh",async()=>{
     connectAfterDisconnected();
-    render(<ProcessingCopilot {...props}/>);
+    renderLegacy(<ProcessingCopilot {...props}/>);
     await screen.findByText("NVIDIA not connected");
     const ask=screen.getByRole("button",{name:/^Ask$/});
     expect(ask.hasAttribute("disabled")).toBe(true);
+    fireEvent.click(screen.getByRole("button",{name:"Copilot settings"}));
+    fireEvent.click(screen.getByText(/NVIDIA BYOK ·/));
     const modelSelect=screen.getByLabelText("BYOK model ID") as HTMLSelectElement;
     expect(modelSelect.tagName).toBe("SELECT");
     expect(modelSelect.value).toBe(model);
@@ -84,7 +95,7 @@ describe("NVIDIA BYOK to Copilot send integration",()=>{
       if(url===requestUrl)return {ok:false,json:async()=>({code:"rate_limited",error:"Quota exceeded"})};
       throw Error("Unexpected fetch");
     });
-    render(<ProcessingCopilot {...props}/>);
+    renderLegacy(<ProcessingCopilot {...props}/>);
     await screen.findByText("NVIDIA connected");
     const question=screen.getByLabelText(/Ask about Entire PDF/);
     fireEvent.change(question,{target:{value:"Why did this happen?"}});
@@ -103,7 +114,7 @@ describe("NVIDIA BYOK to Copilot send integration",()=>{
       }
       throw Error("Unexpected fetch");
     });
-    render(<ProcessingCopilot {...props}/>);
+    renderLegacy(<ProcessingCopilot {...props}/>);
     await screen.findByText("NVIDIA connected");
     const question=screen.getByLabelText(/Ask about Entire PDF/);
     const ask=screen.getByRole("button",{name:/^Ask$/});
@@ -135,7 +146,7 @@ describe("NVIDIA BYOK to Copilot send integration",()=>{
       })};
       throw Error("Unexpected fetch");
     });
-    render(<ProcessingCopilot {...props}/>);
+    renderLegacy(<ProcessingCopilot {...props}/>);
     await screen.findByText("NVIDIA connected");
     fireEvent.change(screen.getByLabelText(/Ask about Entire PDF/),{target:{value:"Explain this campaign."}});
     fireEvent.click(screen.getByRole("button",{name:/^Ask$/}));
@@ -153,7 +164,7 @@ describe("NVIDIA BYOK to Copilot send integration",()=>{
       })};
       throw Error("Unexpected fetch");
     });
-    render(<ProcessingCopilot {...props}/>);
+    renderLegacy(<ProcessingCopilot {...props}/>);
     await screen.findByText("NVIDIA connected");
     fireEvent.change(screen.getByLabelText(/Ask about Entire PDF/),{target:{value:"Summarize."}});
     fireEvent.click(screen.getByRole("button",{name:/^Ask$/}));
@@ -172,7 +183,7 @@ describe("NVIDIA BYOK to Copilot send integration",()=>{
       if (url===requestUrl) return {ok:false,status:502,json:async()=>{throw new SyntaxError("not JSON")}};
       throw Error("Unexpected fetch");
     });
-    render(<ProcessingCopilot {...props}/>);
+    renderLegacy(<ProcessingCopilot {...props}/>);
     await screen.findByText("NVIDIA connected");
     fireEvent.change(screen.getByLabelText(/Ask about Entire PDF/),{target:{value:"Summarize."}});
     fireEvent.click(screen.getByRole("button",{name:/^Ask$/}));

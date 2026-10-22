@@ -71,7 +71,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
     fireEvent.click(screen.getByText("Source excerpts · 1"));
     fireEvent.click(screen.getByRole("button",{name:"Go to PDF page 5"}));
     expect(props.onNavigate).toHaveBeenCalledWith(5,undefined,"phishing was reported");
-    expect(screen.getByText(/Enter: send/)).toBeTruthy();
+    expect(screen.getByText(/Enter to send/)).toBeTruthy();
   });
 
   it("lets the analyst explicitly select Turkish while leaving the source text under server control",async()=>{
