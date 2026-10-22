@@ -3,6 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { createSourceAnnotationV2 } from "@/app/projects/[id]/source-collection-actions";
+import {
+  containsProtectedPdfArtwork,
+  PDF_READING_COLORS,
+  PDF_READING_MODE_OPTIONS,
+  PDF_READING_MODE_STORAGE_KEY,
+  parsePdfReadingMode,
+  pdfRenderPageColors,
+  type PdfReadingMode,
+} from "./pdf-reading-mode";
 import {locatePdfEvidence,quoteRangeRects,type EvidenceFocusRequest,
   type EvidenceRect} from "@/lib/collection/evidence-focus";
 import {
@@ -26,11 +35,13 @@ type PdfPageLike={
   getViewport(options:{scale:number}):PdfViewportLike;
   render(options:{canvas:HTMLCanvasElement;viewport:PdfViewportLike;transform?:number[]}):PdfRenderTask;
   streamTextContent(options?:Record<string,unknown>):unknown;
+  getOperatorList():Promise<{fnArray:number[]}>;
 };
 type PdfDocumentLike={numPages:number;getPage(page:number):Promise<PdfPageLike>;destroy?:()=>Promise<void>};
 type PdfLoadingTask={promise:Promise<PdfDocumentLike>;destroy?:()=>void};
 type PdfJsLike={
   GlobalWorkerOptions:{workerSrc:string};
+  OPS:Record<string,number>;
   getDocument(options:Record<string,unknown>):PdfLoadingTask;
   TextLayer:new(options:{container:HTMLDivElement;textContentSource:unknown;viewport:PdfViewportLike})=>{render():Promise<void>;cancel():void};
 };
@@ -66,9 +77,9 @@ function annotationLabel(value:unknown){
 }
 
 function PdfPage({
-  pdf,pdfjs,pageNumber,scale,annotations,fragments,regionMode,onViewport,onRegion,onAnnotationClick,focusRequest,
+  pdf,pdfjs,pageNumber,scale,readingMode,annotations,fragments,regionMode,onViewport,onRegion,onAnnotationClick,focusRequest,
 }:{
-  pdf:PdfDocumentLike;pdfjs:PdfJsLike;pageNumber:number;scale:number;annotations:Row[];fragments:Row[];regionMode:boolean;
+  pdf:PdfDocumentLike;pdfjs:PdfJsLike;pageNumber:number;scale:number;readingMode:PdfReadingMode;annotations:Row[];fragments:Row[];regionMode:boolean;
   onViewport:(page:number,viewport:PdfViewportLike,base:PdfViewportLike)=>void;
   onRegion:(fragment:FragmentDraft,left:number,top:number)=>void;
   onAnnotationClick:(id:string)=>void;
@@ -85,6 +96,8 @@ function PdfPage({
   const [regionStart,setRegionStart]=useState<{x:number;y:number}|null>(null);
   const [regionBox,setRegionBox]=useState<{left:number;top:number;width:number;height:number}|null>(null);
   const [textEpoch,setTextEpoch]=useState(0);
+  const [renderedMode,setRenderedMode]=useState<PdfReadingMode>("original");
+  const [protectedArtwork,setProtectedArtwork]=useState(false);
   const [focusRects,setFocusRects]=useState<EvidenceRect[]>([]);
   const [focusState,setFocusState]=useState<"matched"|"not_found"|null>(null);
   const displayViewport=useMemo(()=>pdfPage?pdfPage.getViewport({scale}):null,[pdfPage,scale]);
@@ -120,20 +133,46 @@ function PdfPage({
   useEffect(()=>{
     if(!near||!pdfPage||!displayViewport||!canvasRef.current||!textRef.current)return;
     const page=pdfPage,viewport=displayViewport,canvas=canvasRef.current,textLayer=textRef.current;
-    const ratio=Math.max(1,window.devicePixelRatio||1);
-    canvas.width=Math.floor(viewport.width*ratio);canvas.height=Math.floor(viewport.height*ratio);
-    canvas.style.width=`${viewport.width}px`;canvas.style.height=`${viewport.height}px`;
-    textLayer.replaceChildren();
-    textLayer.style.width=`${viewport.width}px`;textLayer.style.height=`${viewport.height}px`;
-    textLayer.style.setProperty("--total-scale-factor",String(viewport.scale));
-    const renderTask=page.render({canvas,viewport,transform:ratio===1?undefined:[ratio,0,0,ratio,0,0]});
-    const layer=new pdfjs.TextLayer({container:textLayer,textContentSource:page.streamTextContent({includeMarkedContent:true}),viewport});
     let stopped=false;
-    Promise.all([renderTask.promise,layer.render()])
-      .then(()=>{if(!stopped)setTextEpoch(n=>n+1);})
-      .catch(()=>{if(!stopped)setError("PDF sayfası görüntülenemedi.");});
-    return()=>{stopped=true;try{renderTask.cancel?.();}catch{}try{layer.cancel();}catch{}};
-  },[near,pdfjs,pdfPage,displayViewport]);
+    let renderTask:PdfRenderTask|null=null;
+    let layer:{cancel():void}|null=null;
+
+    // PDF.js high-contrast rendering can recolor images and vector drawings.
+    // Fail closed to the exact source rendering for any visual content.
+    const render=async()=>{
+      let mustPreserveArtwork=false;
+      if(readingMode!=="original"){
+        try{
+          const operations=await page.getOperatorList();
+          mustPreserveArtwork=containsProtectedPdfArtwork(operations.fnArray,pdfjs.OPS);
+        }catch{mustPreserveArtwork=true;}
+      }
+      if(stopped)return;
+      const effectiveMode=mustPreserveArtwork?"original":readingMode;
+      setRenderedMode(effectiveMode);
+      setProtectedArtwork(mustPreserveArtwork);
+      const ratio=Math.max(1,window.devicePixelRatio||1);
+      canvas.width=Math.floor(viewport.width*ratio);canvas.height=Math.floor(viewport.height*ratio);
+      canvas.style.width=`${viewport.width}px`;canvas.style.height=`${viewport.height}px`;
+      textLayer.replaceChildren();
+      textLayer.style.width=`${viewport.width}px`;textLayer.style.height=`${viewport.height}px`;
+      textLayer.style.setProperty("--total-scale-factor",String(viewport.scale));
+      const pageColors=pdfRenderPageColors(effectiveMode);
+      renderTask=page.render({
+        canvas,viewport,transform:ratio===1?undefined:[ratio,0,0,ratio,0,0],
+        ...(pageColors?{pageColors,background:pageColors.background}:{}),
+      });
+      layer=new pdfjs.TextLayer({container:textLayer,textContentSource:page.streamTextContent({includeMarkedContent:true}),viewport});
+      try{
+        await Promise.all([renderTask.promise,layer.render()]);
+        if(!stopped){setError("");setTextEpoch(n=>n+1);}
+      }catch{
+        if(!stopped)setError("PDF sayfası görüntülenemedi.");
+      }
+    };
+    void render();
+    return()=>{stopped=true;try{renderTask?.cancel?.();}catch{}try{layer?.cancel();}catch{}};
+  },[near,pdfjs,pdfPage,displayViewport,readingMode]);
 
   // Resolve after PDF.js text layer render; a page jump alone isn't enough.
   useEffect(()=>{
@@ -179,7 +218,7 @@ function PdfPage({
       ref={shellRef}
       className="citem-pdf-page"
       data-pdf-page-number={pageNumber}
-      style={{width:size.width,height:size.height}}
+      style={{width:size.width,height:size.height,background:PDF_READING_COLORS[renderedMode].background}}
       onClick={(event)=>{
         if(regionMode||!viewportRef.current)return;
         const selection=window.getSelection();if(selection&&!selection.isCollapsed)return;
@@ -241,6 +280,10 @@ function PdfPage({
       >{regionBox?<div className="citem-pdf-region-draft" style={regionBox}/>:null}</div>:null}
     </div>
     <div className="citem-pdf-page-number">Sayfa {pageNumber}</div>
+    {protectedArtwork&&readingMode!=="original"?<span
+      className="citem-pdf-artwork-safety"
+      title="Bu sayfada görsel veya vektör grafik var. Renkleri korumak için orijinal görünüm kullanılıyor."
+    >Görseller korundu · Orijinal sayfa</span>:null}
     {focusState==="not_found"&&focusRequest?.quote?
       <p role="status" className="max-w-[520px] px-2 text-center text-xs text-amber-300">
         Page opened. Exact cited wording could not be located in the rendered PDF text layer.
@@ -276,6 +319,16 @@ export function PdfSourceViewer({
   const [error,setError]=useState("");
   const [scale,setScale]=useState(1.2);
   const [regionMode,setRegionMode]=useState(false);
+  const [readingMode,setReadingMode]=useState<PdfReadingMode>("original");
+
+  useEffect(()=>{
+    try{setReadingMode(parsePdfReadingMode(window.localStorage.getItem(PDF_READING_MODE_STORAGE_KEY)));}
+    catch{setReadingMode("original");}
+  },[]);
+  const changeReadingMode=(value:PdfReadingMode)=>{
+    setReadingMode(value);
+    try{window.localStorage.setItem(PDF_READING_MODE_STORAGE_KEY,value);}catch{}
+  };
   const [selection,setSelection]=useState<SelectionDraft|null>(null);
   const [editor,setEditor]=useState<EditorDraft|null>(null);
   const [comment,setComment]=useState("");
@@ -566,6 +619,13 @@ export function PdfSourceViewer({
         <button type="button" className="citem-button-ghost" onClick={()=>setScale(v=>Math.min(2.5,Number((v+.15).toFixed(2))))}>+</button>
         <button type="button" className="citem-button-ghost" onClick={()=>setScale(1.2)}>Varsayılan</button>
       </div>
+      <label className="citem-pdf-reading-label">
+        PDF Görünümü
+        <select className="citem-pdf-reading-select" aria-label="PDF görünüm modu" value={readingMode}
+          onChange={event=>changeReadingMode(parsePdfReadingMode(event.currentTarget.value))}>
+          {PDF_READING_MODE_OPTIONS.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
+      </label>
       <button type="button" className={regionMode?"citem-button":"citem-button-ghost"} onClick={()=>{setRegionMode(v=>!v);setSelection(null);setEditor(null);window.getSelection()?.removeAllRanges();}}>
         {regionMode?"Bölge seçimi açık":"Bölge seç"}
       </button>
@@ -579,7 +639,7 @@ export function PdfSourceViewer({
       onScroll={()=>{persistViewState();reportActivePage();}}
     >
       {Array.from({length:pdf.numPages},(_,index)=><PdfPage
-        key={index+1} pdf={pdf} pdfjs={pdfjs} pageNumber={index+1} scale={scale}
+        key={index+1} pdf={pdf} pdfjs={pdfjs} pageNumber={index+1} scale={scale} readingMode={readingMode}
         annotations={annotations} fragments={fragments} regionMode={regionMode}
         focusRequest={jumpToPage?.page===index+1?jumpToPage:null}
         onViewport={handleViewport}
