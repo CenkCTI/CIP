@@ -46,4 +46,20 @@ describe("Evidence Focus exact native PDF text targeting",()=>{
     }]});
     expect(quoteRangeRects(r!,page)).toEqual([{left:50,top:40,width:250,height:18}]);
   });
+  it("clips targeting overlays on all four page edges without stretching glyphs",()=>{
+    const page=document.createElement("section");
+    const range=document.createRange();
+    Object.defineProperty(page,"getBoundingClientRect",{value:()=>({
+      left:100,top:80,width:600,height:800,right:700,bottom:880,
+    })});
+    Object.defineProperty(range,"getClientRects",{value:()=>[
+      {left:95,top:75,right:155,bottom:95,width:60,height:20},
+      {left:680,top:870,right:715,bottom:900,width:35,height:30},
+      {left:710,top:100,right:720,bottom:120,width:10,height:20},
+    ]});
+    expect(quoteRangeRects(range,page)).toEqual([
+      {left:0,top:0,width:55,height:15},
+      {left:580,top:790,width:20,height:10},
+    ]);
+  });
 });
