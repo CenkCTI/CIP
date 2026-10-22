@@ -6,7 +6,6 @@ import {stage3RequestSchema} from "@/lib/ai/stage3/schemas";
 import {createStage3ReadContext,loadStage3DocumentContext} from "@/lib/ai/stage3/context";
 import {selectMemoryHints,readInvestigationMemory,readProjectMemoryTurns,saveInvestigationTurn,CopilotMemoryError} from "@/lib/ai/stage3/investigation-memory";
 import {runAnalystReasoning} from "@/lib/ai/stage3/analyst-reasoning";
-import {getResearchProvider} from "@/lib/ai/research/provider";
 import {loadSelectedComparisonPages} from "@/lib/ai/research/comparison-fetch";
 import {requireResearchByok,withResearchQuota,researchError} from "@/lib/ai/research/server";
 
@@ -19,8 +18,14 @@ const inputSchema=z.object({
   responseLanguage:z.enum(["auto","tr","en"]).default("auto"),
   useSource:z.boolean().default(true),
   webResearch:z.boolean().default(false),
+  selectedUrls:z.array(z.string().url().max(2048)).max(2).default([]),
   byokConsent:z.literal(true),
-}).strict();
+}).strict().refine(v=>!v.webResearch||v.selectedUrls.length>0,{
+  message:"Select at least one web search result before researching.",
+  path:["selectedUrls"],
+}).refine(v=>v.webResearch||v.selectedUrls.length===0,{
+  message:"Web sources require explicit research consent.",path:["webResearch"],
+});
 export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
   try{
     validateOrigin(req);
@@ -51,17 +56,12 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
       let pages:Awaited<ReturnType<typeof loadSelectedComparisonPages>>["pages"]=[];
       let researchWarning="";
       if(input.webResearch){
-        // Search is explicitly permitted by the UI checkbox for THIS message.
-        // Never send private PDF text or stored conversations to Brave; query only analyst text.
-        const query=input.question.trim().slice(0,180);
-        const hits=await getResearchProvider().search(query.length>=5?query:query+" cyber intelligence");
-        const selection=hits.slice(0,2);
-        if(selection.length){
-          const loaded=await loadSelectedComparisonPages(selection.map(x=>x.url));
-          pages=loaded.pages;
-          if(loaded.skippedSources.length)
-            researchWarning="Some externally discovered pages were unreadable; they were not treated as evidence.";
-        }else researchWarning="No web search results were returned.";
+        // Only explicitly selected results from the in-chat search stage are read.
+        // No automatic hidden Brave searches, and no PDF or notes sent to Brave.
+        const loaded=await loadSelectedComparisonPages([...new Set(input.selectedUrls)]);
+        pages=loaded.pages;
+        if(loaded.skippedSources.length)
+          researchWarning="Some selected web pages were unreadable; they were not treated as evidence.";
       }
       const analysis=await runAnalystReasoning({
         question:input.question,language,notes:memory.notes,history,spans,webPages:pages,
@@ -73,7 +73,7 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
     });
     // If memory persistence fails, do not silently claim a conversation was saved.
     await saveInvestigationTurn(owned,input.sourceId,input.assetId,input.question,
-      {context:input.context,useSource:input.useSource},result,input.webResearch);
+      {context:input.context,useSource:input.useSource,webResearch:input.webResearch},result,input.webResearch);
     return noStore({result,saved:true,notice:"Analysis is provisional. Memory is not a verified evidence source; only analyst-approved actions write intelligence records."});
   }catch(error){
     if(error instanceof CopilotMemoryError)return noStore({
