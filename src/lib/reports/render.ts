@@ -5,6 +5,7 @@ const PdfText = Text as unknown as React.ElementType;
 const PdfView = View as unknown as React.ElementType;
 const PdfLink = Link as unknown as React.ElementType;
 import type { ReportDoc } from "./schema";
+import { DARK_REPORT_PDF_PALETTES, type ReportPdfAppearance } from "./pdf-appearance";
 import { isSafeHttpUrl } from "./schema";
 export const escapeHtml = (s: string) =>
   s.replace(
@@ -224,7 +225,13 @@ export const REPORT_PDF_COLORS = {
   white: "#FFFFFF",
 } as const;
 
-export const pdfStyles: Record<string, PdfStyle> = StyleSheet.create({
+export type ReportPdfColors = Record<keyof typeof REPORT_PDF_COLORS,string>;
+export function reportPdfColors(appearance:ReportPdfAppearance="original"):ReportPdfColors {
+  return appearance==="original" ? REPORT_PDF_COLORS : DARK_REPORT_PDF_PALETTES[appearance];
+}
+function createPdfStyles(colors:ReportPdfColors):Record<string,PdfStyle> {
+  const REPORT_PDF_COLORS=colors;
+  return StyleSheet.create({
   h1: {
     color: REPORT_PDF_COLORS.charcoal, fontSize: 19, lineHeight: 1.3,
     marginTop: 20, marginBottom: 11, paddingBottom: 8,
@@ -273,8 +280,10 @@ export const pdfStyles: Record<string, PdfStyle> = StyleSheet.create({
   },
   th: { fontWeight: 700, backgroundColor: REPORT_PDF_COLORS.panel },
   link: { color: REPORT_PDF_COLORS.amberDark, textDecoration: "underline" },
-});
-function pdfInline(ns?: TNode[], keyPrefix = "i"): React.ReactNode[] {
+  });
+}
+export const pdfStyles:Record<string,PdfStyle>=createPdfStyles(REPORT_PDF_COLORS);
+function pdfInline(ns?: TNode[], keyPrefix = "i", styles:Record<string,PdfStyle>=pdfStyles): React.ReactNode[] {
   return (ns ?? []).flatMap((n, i): React.ReactNode[] => {
     if (n.type === "hardBreak")
       return [React.createElement(Text, { key: `${keyPrefix}-${i}` }, "\n")];
@@ -282,11 +291,11 @@ function pdfInline(ns?: TNode[], keyPrefix = "i"): React.ReactNode[] {
     const child: React.ReactNode = n.text ?? "";
     const style: PdfStyle[] = (n.marks ?? []).flatMap((m) =>
       m.type === "bold"
-        ? [pdfStyles.bold]
+        ? [styles.bold]
         : m.type === "italic"
-          ? [pdfStyles.italic]
+          ? [styles.italic]
           : m.type === "code"
-            ? [pdfStyles.code]
+            ? [styles.code]
             : [],
     );
     const link = (n.marks ?? []).find((m) => m.type === "link");
@@ -298,7 +307,7 @@ function pdfInline(ns?: TNode[], keyPrefix = "i"): React.ReactNode[] {
           {
             key: `${keyPrefix}-${i}`,
             src: href,
-            style: [...style, pdfStyles.link],
+            style: [...style, styles.link],
           },
           child,
         ),
@@ -314,13 +323,14 @@ function pdfBlock(
   depth = 0,
   ordered = false,
   index = 1,
+  styles:Record<string,PdfStyle>=pdfStyles,
 ): React.ReactNode {
   switch (n.type) {
     case "paragraph":
       return React.createElement(
         PdfText,
-        { key, style: pdfStyles.p },
-        pdfInline(n.content, key),
+        { key, style: styles.p },
+        pdfInline(n.content, key, styles),
       );
     case "heading":
       return React.createElement(
@@ -330,28 +340,28 @@ function pdfBlock(
           minPresenceAhead: 52,
           style:
             Number(n.attrs?.level) === 1
-              ? pdfStyles.h1
+              ? styles.h1
               : Number(n.attrs?.level) === 2
-                ? pdfStyles.h2
-                : pdfStyles.h3,
+                ? styles.h2
+                : styles.h3,
         },
-        pdfInline(n.content, key),
+        pdfInline(n.content, key, styles),
       );
     case "bulletList":
       return React.createElement(
         PdfView,
-        { key, style: pdfStyles.list },
+        { key, style: styles.list },
         children(n).map((c, i) =>
-          pdfBlock(c, `${key}-${i}`, depth, false, i + 1),
+          pdfBlock(c, `${key}-${i}`, depth, false, i + 1, styles),
         ),
       );
     case "orderedList": {
       const start = Number(n.attrs?.start) || 1;
       return React.createElement(
         PdfView,
-        { key, style: pdfStyles.list },
+        { key, style: styles.list },
         children(n).map((c, i) =>
-          pdfBlock(c, `${key}-${i}`, depth, true, start + i),
+          pdfBlock(c, `${key}-${i}`, depth, true, start + i, styles),
         ),
       );
     }
@@ -359,30 +369,30 @@ function pdfBlock(
       const [first, ...rest] = children(n);
       return React.createElement(
         PdfView,
-        { key, style: [pdfStyles.li, { marginLeft: depth * 13 }] },
+        { key, style: [styles.li, { marginLeft: depth * 13 }] },
         React.createElement(
           PdfText,
-          { style: pdfStyles.bullet },
+          { style: styles.bullet },
           ordered ? `${index}.` : "•",
         ),
         React.createElement(
           PdfView,
-          { style: pdfStyles.liText },
-          first ? pdfBlock(first, `${key}-first`, depth) : null,
-          rest.map((r, i) => pdfBlock(r, `${key}-r${i}`, depth + 1)),
+          { style: styles.liText },
+          first ? pdfBlock(first, `${key}-first`, depth, false, 1, styles) : null,
+          rest.map((r, i) => pdfBlock(r, `${key}-r${i}`, depth + 1, false, 1, styles)),
         ),
       );
     }
     case "blockquote":
       return React.createElement(
         PdfView,
-        { key, style: pdfStyles.quote },
-        children(n).map((c, i) => pdfBlock(c, `${key}-${i}`, depth)),
+        { key, style: styles.quote },
+        children(n).map((c, i) => pdfBlock(c, `${key}-${i}`, depth, false, 1, styles)),
       );
     case "codeBlock":
       return React.createElement(
         PdfText,
-        { key, style: pdfStyles.codeBlock },
+        { key, style: styles.codeBlock },
         children(n)
           .map((c) => c.text ?? "")
           .join(""),
@@ -390,14 +400,14 @@ function pdfBlock(
     case "table":
       return React.createElement(
         PdfView,
-        { key, style: pdfStyles.table, wrap: true },
+        { key, style: styles.table, wrap: true },
         children(n).map((r, i) => pdfBlock(r, `${key}-${i}`, depth)),
       );
     case "tableRow":
       return React.createElement(
         PdfView,
-        { key, style: pdfStyles.row },
-        children(n).map((c, i) => pdfBlock(c, `${key}-${i}`, depth)),
+        { key, style: styles.row },
+        children(n).map((c, i) => pdfBlock(c, `${key}-${i}`, depth, false, 1, styles)),
       );
     case "tableCell":
     case "tableHeader":
@@ -405,9 +415,9 @@ function pdfBlock(
         PdfView,
         {
           key,
-          style: [pdfStyles.cell, n.type === "tableHeader" ? pdfStyles.th : {}],
+          style: [styles.cell, n.type === "tableHeader" ? styles.th : {}],
         },
-        children(n).map((c, i) => pdfBlock(c, `${key}-${i}`, depth)),
+        children(n).map((c, i) => pdfBlock(c, `${key}-${i}`, depth, false, 1, styles)),
       );
     case "hardBreak":
       return React.createElement(PdfText, { key }, "\n");
@@ -415,6 +425,7 @@ function pdfBlock(
       return null;
   }
 }
-export function tiptapToPdfElements(doc: ReportDoc) {
-  return children(doc as TNode).map((n, i) => pdfBlock(n, `b-${i}`));
+export function tiptapToPdfElements(doc: ReportDoc, appearance:ReportPdfAppearance="original") {
+  const styles=appearance==="original"?pdfStyles:createPdfStyles(reportPdfColors(appearance));
+  return children(doc as TNode).map((n,i)=>pdfBlock(n,`b-${i}`,0,false,1,styles));
 }
