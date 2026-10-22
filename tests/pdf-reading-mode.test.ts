@@ -80,7 +80,7 @@ describe("CİTEM PDF mixed-content reading appearance",()=>{
     const imageBefore=[...data.slice((width+4)*4,(width+5)*4)];
     expect(recolorPdfPagePixels(data,width,height,"forest",[
       {left:4,top:1,right:5,bottom:2},
-    ])).toBe(true);
+    ],[{left:0,top:0,right:4,bottom:2}])).toBe(true);
     const color=(x:number,y:number)=>[...data.slice((y*width+x)*4,(y*width+x)*4+3)];
     for(const x of [1,2,3]){
       const rgb=color(x,0);
@@ -94,12 +94,34 @@ describe("CİTEM PDF mixed-content reading appearance",()=>{
     expect([...data.slice((width+4)*4,(width+5)*4)]).toEqual(imageBefore);
   });
 
+  it("darkens a white vector-backed hyperlink without altering colorful vector graphics",()=>{
+    const width=8,height=5,data=new Uint8ClampedArray(width*height*4);
+    for(let i=0;i<data.length;i+=4){
+      data[i]=255;data[i+1]=255;data[i+2]=255;data[i+3]=255;
+    }
+    const set=(x:number,y:number,r:number,g:number,b:number)=>{
+      const i=(y*width+x)*4;data[i]=r;data[i+1]=g;data[i+2]=b;
+    };
+    // Pale hyperlink box with dark blue ink should not stay white or dark blue.
+    set(2,2,20,55,175);
+    // Red vector chart bar is outside text bounds and must retain its RGB.
+    set(6,3,245,64,46);
+    expect(recolorPdfPagePixels(data,width,height,"forest",[],
+      [{left:1,top:1,right:4,bottom:4}])).toBe(true);
+    const rgb=(x:number,y:number)=>[...data.slice((y*width+x)*4,(y*width+x)*4+3)];
+    expect(rgb(0,0)).toEqual([24,43,37]);
+    expect(rgb(3,2)).toEqual([24,43,37]);
+    expect(rgb(2,2)).not.toEqual([20,55,175]);
+    expect(rgb(6,3)).toEqual([245,64,46]);
+  });
+
   it("protects vector charts and scanned pages, and never guesses a mismatched operator list",()=>{
     const data=new Uint8ClampedArray(20*20*4).fill(255);
     const vectorRegions=pdfArtworkRegions([2,4],ops,
       recordedBox([null,[3,3,12,8]]),data,20,20);
-    expect(vectorRegions).toHaveLength(1);
-    expect(vectorRegions![0].left).toBe(1);
+    // Vector shapes must not preserve wide white rectangles surrounding URLs.
+    expect(vectorRegions).toEqual([]);
+    expect(pdfArtworkRegions([2,4],ops,null,data,20,20)).toEqual([]);
     expect(pdfArtworkRegions([3,2],ops,recordedBox([null]),data,20,20)).toBeNull();
     expect(pdfArtworkRegions([3],ops,null,data,20,20)).toBeNull();
     expect(pdfArtworkRegions([3],{},recordedBox([[0,0,20,20]]),data,20,20)).toBeNull();
@@ -118,7 +140,7 @@ describe("CİTEM PDF mixed-content reading appearance",()=>{
     const viewer=readFileSync("src/components/investigations/source-reader/pdf/pdf-source-viewer.tsx","utf8");
     expect(viewer).toContain("recordOperations:canProcess");
     expect(viewer).toContain("pdfArtworkRegions(operations.fnArray,pdfjs.OPS,page.recordedBBoxes");
-    expect(viewer).toContain("recolorPdfPagePixels(original.data,canvas.width,canvas.height,readingMode,regions)");
+    expect(viewer).toContain("recolorPdfPagePixels(original.data,canvas.width,canvas.height,readingMode,regions,textBounds)");
     expect(viewer).toContain("window.localStorage.setItem(PDF_READING_MODE_STORAGE_KEY,value)");
     expect(viewer).toContain("clientRectToPdfQuad");
     expect(viewer).toContain("locatePdfEvidence");
