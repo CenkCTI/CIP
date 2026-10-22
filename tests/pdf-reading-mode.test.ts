@@ -54,6 +54,41 @@ describe("CİTEM PDF mixed-content reading appearance",()=>{
     expect([...original.slice((2*width+4)*4,(2*width+7)*4)]).toEqual([...imageBefore]);
     expect(sample(4,3)).toEqual([245,176,163]);
   });
+  it("eliminates chromatic LCD antialiasing fringes around dark-mode text",()=>{
+    const width=5,height=2;
+    const data=new Uint8ClampedArray(width*height*4);
+    for(let i=0;i<data.length;i+=4){
+      data[i]=255;data[i+1]=255;data[i+2]=255;data[i+3]=255;
+    }
+    const put=(x:number,y:number,r:number,g:number,b:number)=>{
+      const i=(y*width+x)*4;
+      data[i]=r;data[i+1]=g;data[i+2]=b;
+    };
+    // These blue and orange tones are representative of PDF glyph subpixel
+    // fringes in the reported browser screenshot, NOT authored colored art.
+    put(1,0,245,198,136);
+    put(2,0,112,185,249);
+    put(3,0,181,214,235);
+    put(0,1,0,0,0);
+    // Actual colored figures/heatmaps must remain untouched within their bounds.
+    put(4,1,250,110,45);
+    const imageBefore=[...data.slice((width+4)*4,(width+5)*4)];
+    expect(recolorPdfPagePixels(data,width,height,"forest",[
+      {left:4,top:1,right:5,bottom:2},
+    ])).toBe(true);
+    const color=(x:number,y:number)=>[...data.slice((y*width+x)*4,(y*width+x)*4+3)];
+    for(const x of [1,2,3]){
+      const rgb=color(x,0);
+      // Foreground/background are both near neutral, regardless of any
+      // aggressively colored source antialiasing pixel.
+      expect(Math.max(...rgb)-Math.min(...rgb)).toBeLessThan(20);
+      expect(rgb).not.toEqual([[245,198,136],[112,185,249],[181,214,235]][x-1]);
+    }
+    expect(color(0,1)).toEqual([230,238,233]);
+    expect(color(0,0)).toEqual([24,43,37]);
+    expect([...data.slice((width+4)*4,(width+5)*4)]).toEqual(imageBefore);
+  });
+
   it("protects vector charts and scanned pages, and never guesses a mismatched operator list",()=>{
     const data=new Uint8ClampedArray(20*20*4).fill(255);
     const vectorRegions=pdfArtworkRegions([2,4],ops,
