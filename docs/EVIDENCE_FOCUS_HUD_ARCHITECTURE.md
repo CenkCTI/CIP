@@ -79,3 +79,13 @@ Phase 5 / Phase 6 external source lead or verified WEB excerpt
 - Blind fuzzy nearest-text selection: can highlight an unrelated sentence with falsely elevated confidence.
 - Loading third-party sites into a same-origin iframe: CSP, X-Frame-Options and origin-security issues; cannot reliably target text.
 - Canvas bitmap highlight: brittle under zoom, PDF text selection and native geometry changes.
+
+
+## Delivery / release strategy (ADR-EF-001)
+
+The initial PR is temporarily tested against `main` to activate workflows that
+trigger on pull requests into `main`. This CI-only retarget exposes Phase 6
+parent commits in the PR diff; after successful validation, restore the
+feature-branch base `feat/ai-phase6-claim-centric-corroboration`. The resulting
+stacked PR remains independently reviewable. CI verifies the feature commit
+but does not replace in-browser manual acceptance on actual PDFs.
