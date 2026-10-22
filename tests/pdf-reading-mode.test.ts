@@ -36,7 +36,7 @@ describe("CİTEM PDF mixed-content reading appearance",()=>{
       original[p]=255;original[p+1]=255;original[p+2]=255;original[p+3]=255;
     }
     // Black letters outside image region.
-    let k=(6*width+2)*4;
+    let k=(8*width+1)*4;
     original[k]=0;original[k+1]=0;original[k+2]=0;
     // Illustrated image at x=4..6,y=2..4, including light-colored cells.
     for(let y=2;y<5;y++)for(let x=4;x<7;x++){
@@ -50,7 +50,7 @@ describe("CİTEM PDF mixed-content reading appearance",()=>{
     expect(recolorPdfPagePixels(original,width,height,"night",regions!)).toBe(true);
     const sample=(x:number,y:number)=>[...original.slice((y*width+x)*4,(y*width+x)*4+3)];
     expect(sample(0,0)).toEqual([21,23,25]);
-    expect(sample(2,6)).toEqual([227,230,232]);
+    expect(sample(1,8)).toEqual([227,230,232]);
     expect([...original.slice((2*width+4)*4,(2*width+7)*4)]).toEqual([...imageBefore]);
     expect(sample(4,3)).toEqual([245,176,163]);
   });
