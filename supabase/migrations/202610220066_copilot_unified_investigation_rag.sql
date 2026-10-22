@@ -68,31 +68,18 @@ alter table public.copilot_document_chunks enable row level security;
 alter table public.copilot_investigation_events enable row level security;
 revoke all on public.copilot_document_indexes,public.copilot_document_chunks,
  public.copilot_investigation_events from public,anon,authenticated;
-grant select,insert,update,delete on public.copilot_document_indexes to authenticated;
-grant select,insert,delete on public.copilot_document_chunks to authenticated;
-grant select,insert,delete on public.copilot_investigation_events to authenticated;
+-- Derived source text must be written only by trusted server-side workflows.
+-- Authenticated Data API clients get RLS-protected read access, but no writes.
+grant select on public.copilot_document_indexes to authenticated;
+grant select on public.copilot_document_chunks to authenticated;
+grant select on public.copilot_investigation_events to authenticated;
 
 create policy copilot_document_indexes_select on public.copilot_document_indexes
  for select to authenticated using(owner_id=(select auth.uid()) and public.project_is_owned(project_id));
-create policy copilot_document_indexes_insert on public.copilot_document_indexes
- for insert to authenticated with check(owner_id=(select auth.uid()) and public.project_is_owned(project_id));
-create policy copilot_document_indexes_update on public.copilot_document_indexes
- for update to authenticated using(owner_id=(select auth.uid()) and public.project_is_owned(project_id))
- with check(owner_id=(select auth.uid()) and public.project_is_owned(project_id));
-create policy copilot_document_indexes_delete on public.copilot_document_indexes
- for delete to authenticated using(owner_id=(select auth.uid()) and public.project_is_owned(project_id));
 create policy copilot_document_chunks_select on public.copilot_document_chunks
  for select to authenticated using(owner_id=(select auth.uid()) and public.project_is_owned(project_id));
-create policy copilot_document_chunks_insert on public.copilot_document_chunks
- for insert to authenticated with check(owner_id=(select auth.uid()) and public.project_is_owned(project_id));
-create policy copilot_document_chunks_delete on public.copilot_document_chunks
- for delete to authenticated using(owner_id=(select auth.uid()) and public.project_is_owned(project_id));
 create policy copilot_investigation_events_select on public.copilot_investigation_events
  for select to authenticated using(owner_id=(select auth.uid()) and public.project_is_owned(project_id));
-create policy copilot_investigation_events_insert on public.copilot_investigation_events
- for insert to authenticated with check(owner_id=(select auth.uid()) and public.project_is_owned(project_id));
-create policy copilot_investigation_events_delete on public.copilot_investigation_events
- for delete to authenticated using(owner_id=(select auth.uid()) and public.project_is_owned(project_id));
 
 -- Keyword search uses OR between lexical terms, limiting across PDFs and
 -- diversifying per asset. No SQL fragment from the model enters the query.

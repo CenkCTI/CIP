@@ -1,6 +1,7 @@
 import "server-only";
 import {createHash} from "node:crypto";
 import type {requireOwnedProject} from "@/lib/projects/ownership";
+import {createAdminClient} from "@/lib/supabase/admin";
 import {createStage3ReadContext,type Stage3AiReadContext} from "./context";
 import {extractPdfPages} from "./pdf-text";
 import type {Stage3Span} from "./provenance";
@@ -43,8 +44,10 @@ export async function ensureIndexedOriginalPDF(owned:Owned,sourceId:string,asset
   const bytes=await reader.downloadOriginalPdf(asset.storage_path);
   if(createHash("sha256").update(new Uint8Array(bytes)).digest("hex")!==fingerprint)
     throw new InvestigationIndexError("index_metadata_mismatch");
-  // A single independent index generation; no raw PDF or storage URL goes to AI.
-  const data=await owned.supabase.from("copilot_document_indexes").upsert({
+  // Only the trusted backend may write original-derived evidence. The session
+  // user has SELECT-only RLS access, never direct write privileges to this cache.
+  const writeDb=createAdminClient();
+  const data=await writeDb.from("copilot_document_indexes").upsert({
     project_id:owned.projectId,owner_id:owned.user.id,source_id:sourceId,asset_id:assetId,
     asset_sha256:fingerprint,status:"PROCESSING",chunk_count:0,page_count:0,indexed_at:new Date().toISOString(),
   },{onConflict:"project_id,asset_id,owner_id"}).select("id").single();
@@ -54,7 +57,7 @@ export async function ensureIndexedOriginalPDF(owned:Owned,sourceId:string,asset
     const pages=await extractPdfPages(bytes,"all",{maxDocumentPages:200,maxDocumentChars:500_000});
     const chunks=splitPagesForIndex(pages);
     if(!chunks.length)throw new InvestigationIndexError("index_failed");
-    const removed=await owned.supabase.from("copilot_document_chunks").delete()
+    const removed=await writeDb.from("copilot_document_chunks").delete()
       .eq("project_id",owned.projectId).eq("owner_id",owned.user.id).eq("index_id",id);
     if(removed.error)throw new InvestigationIndexError("index_database_unavailable");
     for(let i=0;i<chunks.length;i+=75){
@@ -62,16 +65,16 @@ export async function ensureIndexedOriginalPDF(owned:Owned,sourceId:string,asset
         ...chunk,project_id:owned.projectId,owner_id:owned.user.id,
         index_id:id,source_id:sourceId,asset_id:assetId,
       }));
-      const inserted=await owned.supabase.from("copilot_document_chunks").insert(batch);
+      const inserted=await writeDb.from("copilot_document_chunks").insert(batch);
       if(inserted.error)throw new InvestigationIndexError("index_database_unavailable");
     }
-    const ready=await owned.supabase.from("copilot_document_indexes").update({
+    const ready=await writeDb.from("copilot_document_indexes").update({
       status:"READY",chunk_count:chunks.length,page_count:pages.length,indexed_at:new Date().toISOString(),
     }).eq("id",id).eq("project_id",owned.projectId).eq("owner_id",owned.user.id);
     if(ready.error)throw new InvestigationIndexError("index_database_unavailable");
     return {cached:false,chunks:chunks.length,pages:pages.length};
   }catch(error){
-    await owned.supabase.from("copilot_document_indexes").update({status:"ERROR"})
+    await writeDb.from("copilot_document_indexes").update({status:"ERROR"})
       .eq("id",id).eq("project_id",owned.projectId).eq("owner_id",owned.user.id);
     throw error;
   }
@@ -126,7 +129,7 @@ export async function saveInvestigationEvent(owned:Owned,input:AnalysisEventInpu
   const summary=typeof raw.summary==="string"?raw.summary.slice(0,5800):
     Array.isArray(raw.candidates)?
       "Extracted "+raw.candidates.length+" unverified candidates (analyst review required).":"";
-  const {error}=await owned.supabase.from("copilot_investigation_events").insert({
+  const {error}=await createAdminClient().from("copilot_investigation_events").insert({
     project_id:owned.projectId,owner_id:owned.user.id,
     source_id:input.sourceId,asset_id:input.assetId,kind:input.kind,
     question:(input.question??"").slice(0,1500),summary,

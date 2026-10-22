@@ -432,8 +432,7 @@ begin
   or has_function_privilege('anon','public.copilot_search_document_chunks(uuid,text,integer)','EXECUTE')
  then raise exception 'Anonymous investigation memory access';end if;
 end $acl$;
-set role authenticated;
-select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
+-- Trusted server workflow writes original-derived material before user read checks.
 insert into public.copilot_document_indexes(id,project_id,source_id,asset_id,owner_id,asset_sha256,status,chunk_count,page_count,indexed_at)
 values('91000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001',
 '30000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001',
@@ -446,6 +445,8 @@ insert into public.copilot_investigation_events(project_id,owner_id,source_id,as
 values('20000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001',
 '30000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001',
 'ANALYSE','Provisional source-grounded APT28 assessment.');
+set role authenticated;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
 do $owner$ begin
  if (select count(*) from public.copilot_search_document_chunks(
  '20000000-0000-4000-8000-000000000001','APT28 strategic objective',10))<>1
