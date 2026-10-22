@@ -24,7 +24,10 @@ describe("Evidence Focus 5-second transient web highlight",()=>{
     expect(underline).toContain("citem-evidence-underline-soft-5s 5s");
     expect(css).toContain(".citem-evidence-focus-segment::before{");
     expect(css).toContain("border-radius:inherit");
-    expect(css).not.toContain("backdrop-filter:blur");
+    // Other CİTEM surfaces may legitimately blur their own backdrops.
+    // Only the evidence focus overlay must avoid blurring source PDF text.
+    const evidenceStyles=css.slice(css.indexOf("/* CİTEM Evidence Focus"));
+    expect(evidenceStyles).not.toContain("backdrop-filter:blur");
     expect(css).toContain("citem-evidence-underline-reduced-5s 5s");
     expect(css).toContain("citem-evidence-web-reduced-5s 5s");
     expect(css).toContain("pointer-events:none");
