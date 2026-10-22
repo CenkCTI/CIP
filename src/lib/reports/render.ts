@@ -231,15 +231,17 @@ export function reportPdfColors(appearance:ReportPdfAppearance="original"):Repor
 }
 function createPdfStyles(colors:ReportPdfColors):Record<string,PdfStyle> {
   const REPORT_PDF_COLORS=colors;
+  // Original headings retain the current charcoal; dark output needs light ink.
+  const headingInk=colors.paper==="#FCFBF8"?colors.charcoal:colors.ink;
   return StyleSheet.create({
   h1: {
-    color: REPORT_PDF_COLORS.charcoal, fontSize: 19, lineHeight: 1.3,
+    color: headingInk, fontSize: 19, lineHeight: 1.3,
     marginTop: 20, marginBottom: 11, paddingBottom: 8,
     borderBottomWidth: 2, borderBottomColor: REPORT_PDF_COLORS.amber,
     fontWeight: 700,
   },
   h2: {
-    color: REPORT_PDF_COLORS.charcoal, fontSize: 14, lineHeight: 1.32,
+    color: headingInk, fontSize: 14, lineHeight: 1.32,
     marginTop: 16, marginBottom: 9, fontWeight: 700,
     borderLeftWidth: 3, borderLeftColor: REPORT_PDF_COLORS.amber,
     paddingLeft: 10,
