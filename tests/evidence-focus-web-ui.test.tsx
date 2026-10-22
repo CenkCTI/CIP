@@ -1,3 +1,4 @@
+import {readFileSync} from "node:fs";
 import {act,render,fireEvent,screen} from "@testing-library/react";
 import {describe,it,expect,vi,afterEach} from "vitest";
 import {EvidenceTextFocus} from "@/components/investigations/source-reader/ai/evidence-text-focus";
@@ -5,6 +6,18 @@ import {ClaimComparisonReview} from "@/components/investigations/source-reader/a
 afterEach(()=>vi.useRealTimers());
 
 describe("Evidence Focus 5-second transient web highlight",()=>{
+  it("keeps PDF and WEB focus minimalist, muted green, borderless and exactly five seconds",()=>{
+    const css=readFileSync("src/app/globals.css","utf8");
+    const segment=css.match(/\.citem-evidence-focus-segment\{([^}]+)\}/)?.[1]??"";
+    expect(segment).toContain("border:0");
+    expect(segment).toContain("citem-evidence-strip-5s 5s");
+    expect(css).toContain(".citem-evidence-inline-active{animation:citem-evidence-web-5s 5s");
+    expect(css).toContain(".citem-evidence-focus-trigger");
+    expect(css).not.toContain("#e5b65c");
+    expect(css).not.toContain("citem-evidence-hud-5s");
+    expect(css).not.toContain("corner brackets signal acquisition");
+    expect(css).toContain("@media(prefers-reduced-motion:reduce)");
+  });
   it("activates on click and fully removes emphasis after exactly 5000 ms; replays",()=>{
     vi.useFakeTimers();
     render(<EvidenceTextFocus label="Focus WEB_001 excerpt">

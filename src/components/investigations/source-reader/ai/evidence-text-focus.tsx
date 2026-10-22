@@ -23,7 +23,7 @@ export function EvidenceTextFocus({children,label="Focus excerpt",kind="evidence
     </div>
     <button type="button"
       aria-label={label}
-      className="mt-1 rounded border border-[var(--amber-dark)] px-2 py-1 text-[11px] font-semibold text-[var(--amber-soft)] hover:bg-[var(--amber-tint)]"
+      className="citem-evidence-focus-trigger"
       onClick={()=>{
         setActive(true);
         setNonce(v=>v+1);

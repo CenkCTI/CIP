@@ -44,13 +44,13 @@ Phase 5 / Phase 6 external source lead or verified WEB excerpt
 
 ## Visual timeline: exactly 5000 ms
 
-- 0–600ms: gentle appearance / corner brackets signal acquisition.
-- 600–1600ms: horizontal amber-to-muted-green underline reveals left-to-right.
+- 0–600ms: subtle military-green focus strip and a small left-side guide appear (no enclosing box).
+- 600–1600ms: a thin muted-olive underline reveals left-to-right.
 - 1600–3400ms: restrained luminous hold, no strobe.
 - 3400–5000ms: continuous, progressive fade to full transparency.
 - On completion, remove transient layer entirely (no permanent highlight).
-- Default palette uses CİTEM amber + low-intensity military green, pointer-events:none and z-index above PDF canvas/text but not annotation/editor controls.
-- `prefers-reduced-motion`: no scanning/sweeping; use static indication that fades at the five-second mark, preserving the same duration.
+- Focus-specific palette uses desaturated military/olive green (`#748b6e`, `#91a18a`, `rgba(95,116,94,...)`), not yellow/amber. No full bounding border, corner brackets, or neon glow. Overlay remains `pointer-events:none` and behind annotation/editor controls.
+- `prefers-reduced-motion`: disable underline sweep and keep a stationary green indication that fades to zero within the same five-second duration.
 - Web accessibility: explicit native keyboard-activatable button with concise focus label; text remains readable and source-type labels stay unchanged. No flashing effects.
 
 ## Security, privacy & performance
