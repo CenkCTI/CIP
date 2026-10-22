@@ -7,7 +7,7 @@ import type {ResearchSearchResult} from "@/lib/ai/research/types";
 
 type ResearchStep="planning"|"suggestions"|"searching"|"results"|"analysing"|"complete";
 type Response<T>=T&{error?:string;code?:string};
-export type ResearchSession={id:number;question:string;context:CopilotContext};
+export type ResearchSession={id:number;question:string;context:CopilotContext;sourceId:string;assetId:string};
 export function CopilotResearchConversation({projectId,sourceId,assetId,session,
   responseLanguage,useSource,onNavigate}:{
     projectId:string;sourceId:string;assetId:string;session:ResearchSession;

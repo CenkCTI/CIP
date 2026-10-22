@@ -433,7 +433,7 @@ export function ProcessingCopilot({
       const selected:CopilotContext=effectiveContext.kind==="document"
         ?{kind:"page",page:activePage}:effectiveContext;
       setResearchSessions(previous=>[...previous,{
-        id:++researchCounter.current,question:value.trim().slice(0,1500),context:selected,
+        id:++researchCounter.current,question:value.trim().slice(0,1500),context:selected,sourceId,assetId,
       }]);
       setError("");setQuestion("");
     }else if(analystChat)void askAnalyst(value);
@@ -621,8 +621,8 @@ export function ProcessingCopilot({
                 candidate.verifiedSupport[0].quote);
           }}
           onResume={(failed)=>void documentScan.resume(failed)} onCancel={documentScan.cancel}/>:null}
-        <CopilotChat turns={turns} onNavigate={onNavigate}/>
-        {researchSessions.map(session=><CopilotResearchConversation
+        {(turns.length>0||researchSessions.length===0)?<CopilotChat turns={turns} onNavigate={onNavigate}/>:null}
+        {researchSessions.filter(session=>session.sourceId===sourceId&&session.assetId===assetId).map(session=><CopilotResearchConversation
           key={session.id} projectId={projectId} sourceId={sourceId} assetId={assetId}
           session={session} responseLanguage={responseLanguage} useSource={useSource}
           onNavigate={onNavigate}/>)}
