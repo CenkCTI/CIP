@@ -100,7 +100,7 @@ describe("AI Phase 5 deliberate web search UI",()=>{
     fireEvent.click(screen.getByRole("button",{name:"Read with AI: Outside report"}));
     await screen.findByText("External reporting describes similar operations.");
     expect(screen.getByText("Specific quote from the report")).toBeTruthy();
-    expect(screen.getByText(/WEB_001/)).toBeTruthy();
+    expect(screen.getByRole("link",{name:/WEB_001.*example\.org/})).toBeTruthy();
     expect(calls).toHaveLength(3);
   });
   it("requires page or annotation to suggest queries",()=>{

@@ -1,6 +1,7 @@
 "use client";
 import type {ClaimComparisonOutcome} from "@/lib/ai/research/claim-comparison";
 import type {SkippedComparisonSource} from "@/lib/ai/research/comparison-fetch";
+import {EvidenceTextFocus} from "./evidence-text-focus";
 
 const statusNames={unavailable:"Site unavailable or access denied",timeout:"Fetch timed out",
   unsupported:"Unsupported content type",too_large:"Content exceeds size limit",
@@ -19,7 +20,7 @@ function SkippedSources({sources}:{sources:SkippedComparisonSource[]}){
 }
 
 export function ClaimComparisonReview({result,onNavigate}:{
-  result:ClaimComparisonOutcome;onNavigate?:(page:number,annotationId?:string)=>void;
+  result:ClaimComparisonOutcome;onNavigate?:(page:number,annotationId?:string,quote?:string)=>void;
 }){
   if(result.status==="sources_unavailable"){
     return <section data-testid="claim-comparison-review" aria-label="Claim comparison review"
@@ -49,7 +50,7 @@ export function ClaimComparisonReview({result,onNavigate}:{
         <span>{result.pdfClaim.sourceToken} · PDF {result.pdfClaim.page==null?"annotation":"p."+result.pdfClaim.page}</span>
         {result.pdfClaim.page!=null&&onNavigate?
           <button type="button" className="underline" onClick={()=>
-            onNavigate(result.pdfClaim.page!,result.pdfClaim.annotationId)}>
+            onNavigate(result.pdfClaim.page!,result.pdfClaim.annotationId,result.pdfClaim.quote)}>
             Go to PDF evidence
           </button>:null}
       </div>
@@ -64,7 +65,9 @@ export function ClaimComparisonReview({result,onNavigate}:{
           className="mt-1 block break-all text-[var(--amber-soft)]">{row.title} · {row.domain} ↗</a>
         <p className="mt-1 text-[var(--muted)]">Retrieved {row.retrievedAt}</p>
         {row.verifiedQuote&&row.quote?
-          <blockquote className="mt-2 border-l-2 border-[var(--amber-dark)] pl-2">{row.quote}</blockquote>:
+          <EvidenceTextFocus label={"Focus "+row.sourceToken+" evidence"}>
+            <blockquote className="mt-2 border-l-2 border-[var(--amber-dark)] pl-2">{row.quote}</blockquote>
+          </EvidenceTextFocus>:
           <p className="mt-2">{row.evidenceStatus==="rejected_quote"?
             "An AI-proposed web quotation could not be verified against the fetched page.":
             "The AI did not provide a direct quotation for this source."}
@@ -74,9 +77,11 @@ export function ClaimComparisonReview({result,onNavigate}:{
           <div className="mt-2 rounded border border-[var(--line-neutral)] p-2"
             data-testid="web-context-excerpt">
             <p className="font-semibold">Topically related source text · not corroboration</p>
-            <blockquote className="mt-1 border-l-2 border-[var(--amber-dark)] pl-2">
-              {row.contextExcerpt}
-            </blockquote>
+            <EvidenceTextFocus kind="context" label={"Focus "+row.sourceToken+" context"}>
+              <blockquote className="mt-1 border-l-2 border-[var(--amber-dark)] pl-2">
+                {row.contextExcerpt}
+              </blockquote>
+            </EvidenceTextFocus>
             <p className="mt-1 text-[var(--muted)]">
               Lexically selected from the fetched page. This excerpt does not verify the original PDF proposition.
             </p>

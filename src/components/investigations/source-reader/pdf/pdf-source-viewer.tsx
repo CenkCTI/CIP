@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { createSourceAnnotationV2 } from "@/app/projects/[id]/source-collection-actions";
+import {locatePdfEvidence,quoteRangeRects,type EvidenceFocusRequest,
+  type EvidenceRect} from "@/lib/collection/evidence-focus";
 import {
   clientRectToPdfQuad,
   mergeClientRects,
@@ -64,12 +66,13 @@ function annotationLabel(value:unknown){
 }
 
 function PdfPage({
-  pdf,pdfjs,pageNumber,scale,annotations,fragments,regionMode,onViewport,onRegion,onAnnotationClick,
+  pdf,pdfjs,pageNumber,scale,annotations,fragments,regionMode,onViewport,onRegion,onAnnotationClick,focusRequest,
 }:{
   pdf:PdfDocumentLike;pdfjs:PdfJsLike;pageNumber:number;scale:number;annotations:Row[];fragments:Row[];regionMode:boolean;
   onViewport:(page:number,viewport:PdfViewportLike,base:PdfViewportLike)=>void;
   onRegion:(fragment:FragmentDraft,left:number,top:number)=>void;
   onAnnotationClick:(id:string)=>void;
+  focusRequest?:EvidenceFocusRequest|null;
 }){
   const shellRef=useRef<HTMLDivElement>(null);
   const canvasRef=useRef<HTMLCanvasElement>(null);
@@ -81,6 +84,9 @@ function PdfPage({
   const [error,setError]=useState("");
   const [regionStart,setRegionStart]=useState<{x:number;y:number}|null>(null);
   const [regionBox,setRegionBox]=useState<{left:number;top:number;width:number;height:number}|null>(null);
+  const [textEpoch,setTextEpoch]=useState(0);
+  const [focusRects,setFocusRects]=useState<EvidenceRect[]>([]);
+  const [focusState,setFocusState]=useState<"matched"|"not_found"|null>(null);
   const displayViewport=useMemo(()=>pdfPage?pdfPage.getViewport({scale}):null,[pdfPage,scale]);
   const size=displayViewport?{width:displayViewport.width,height:displayViewport.height}:{width:612,height:792};
 
@@ -123,9 +129,41 @@ function PdfPage({
     const renderTask=page.render({canvas,viewport,transform:ratio===1?undefined:[ratio,0,0,ratio,0,0]});
     const layer=new pdfjs.TextLayer({container:textLayer,textContentSource:page.streamTextContent({includeMarkedContent:true}),viewport});
     let stopped=false;
-    Promise.all([renderTask.promise,layer.render()]).catch(()=>{if(!stopped)setError("PDF sayfası görüntülenemedi.");});
+    Promise.all([renderTask.promise,layer.render()])
+      .then(()=>{if(!stopped)setTextEpoch(n=>n+1);})
+      .catch(()=>{if(!stopped)setError("PDF sayfası görüntülenemedi.");});
     return()=>{stopped=true;try{renderTask.cancel?.();}catch{}try{layer.cancel();}catch{}};
   },[near,pdfjs,pdfPage,displayViewport]);
+
+  // Resolve after PDF.js text layer render; a page jump alone isn't enough.
+  useEffect(()=>{
+    let timeout:number|undefined;
+    // The frame waits for committed DOM; avoids cascading React effects and
+    // properly cancels outdated focus operations.
+    const frame=window.requestAnimationFrame(()=>{
+      setFocusRects([]);
+      setFocusState(null);
+      if(!focusRequest?.quote||!near||!textEpoch||!shellRef.current||!textRef.current)return;
+      const layer=textRef.current,page=shellRef.current;
+      if(!layer.textContent?.trim()){setFocusState("not_found");return;}
+      const range=locatePdfEvidence(layer,focusRequest.quote);
+      if(!range){setFocusState("not_found");return;}
+      const rects=quoteRangeRects(range,page);
+      if(!rects.length){setFocusState("not_found");return;}
+      setFocusRects(rects);
+      setFocusState("matched");
+      const parent=range.startContainer.parentElement;
+      if(parent&&typeof parent.scrollIntoView==="function"){
+        const reduced=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+        parent.scrollIntoView({behavior:reduced?"auto":"smooth",block:"center"});
+      }
+      timeout=window.setTimeout(()=>{setFocusRects([]);setFocusState(null);},5000);
+    });
+    return()=>{
+      window.cancelAnimationFrame(frame);
+      if(timeout!==undefined)window.clearTimeout(timeout);
+    };
+  },[focusRequest?.nonce,focusRequest?.quote,near,textEpoch]);
 
   const annotationById=useMemo(()=>new Map(annotations.map(a=>[s(a.id),a])),[annotations]);
   const pageFragments=fragments.filter(f=>Number(f.page_number)===pageNumber);
@@ -155,6 +193,11 @@ function PdfPage({
     >
       {near?<canvas ref={canvasRef} className="citem-pdf-canvas" />:<div className="citem-pdf-placeholder">Sayfa {pageNumber}</div>}
       {near?<div ref={textRef} className="citem-pdf-text-layer" />:null}
+      {focusRects.length>0?<div className="citem-evidence-focus-layer"
+        data-testid="pdf-evidence-focus" aria-hidden="true" key={focusRequest?.nonce}>
+        {focusRects.map((rect,i)=><span key={i} className="citem-evidence-focus-segment"
+          style={{left:rect.left,top:rect.top,width:rect.width,height:rect.height}}/>)}
+      </div>:null}
       {near&&displayViewport?<svg className="citem-pdf-annotation-layer" width={size.width} height={size.height} viewBox={`0 0 ${size.width} ${size.height}`} aria-hidden>
         {pageFragments.flatMap((fragment)=>{
           const annotation=annotationById.get(s(fragment.annotation_id));if(!annotation)return[];
@@ -198,6 +241,10 @@ function PdfPage({
       >{regionBox?<div className="citem-pdf-region-draft" style={regionBox}/>:null}</div>:null}
     </div>
     <div className="citem-pdf-page-number">Sayfa {pageNumber}</div>
+    {focusState==="not_found"&&focusRequest?.quote?
+      <p role="status" className="max-w-[520px] px-2 text-center text-xs text-amber-300">
+        Page opened. Exact cited wording could not be located in the rendered PDF text layer.
+      </p>:null}
     {error?<p className="mt-2 text-xs text-red-300">{error}</p>:null}
   </div>;
 }
@@ -211,7 +258,7 @@ export function PdfSourceViewer({
   onAnnotationCreated?:(payload:PdfAnnotationCreated)=>void;
   onActivePageChange?:(page:number)=>void;
   onPageCountChange?:(pages:number)=>void;
-  jumpToPage?:{page:number;nonce:number}|null;
+  jumpToPage?:EvidenceFocusRequest|null;
 }){
   const rootRef=useRef<HTMLDivElement>(null);
   const pagesRef=useRef<HTMLDivElement>(null);
@@ -534,6 +581,7 @@ export function PdfSourceViewer({
       {Array.from({length:pdf.numPages},(_,index)=><PdfPage
         key={index+1} pdf={pdf} pdfjs={pdfjs} pageNumber={index+1} scale={scale}
         annotations={annotations} fragments={fragments} regionMode={regionMode}
+        focusRequest={jumpToPage?.page===index+1?jumpToPage:null}
         onViewport={handleViewport}
         onRegion={(fragment,left,top)=>{
           setRegionMode(false);setGapIds(defaultGapIds);setRequirementIds(defaultRequirementIds);setComment("");

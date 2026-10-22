@@ -62,7 +62,7 @@ describe("AI Phase 6 explicit compare + grounded review",()=>{
     expect(screen.getByText("Quoted PDF evidence")).toBeTruthy();
     expect(screen.getByText("External source quote")).toBeTruthy();
     fireEvent.click(screen.getByRole("button",{name:"Go to PDF evidence"}));
-    expect(navigate).toHaveBeenCalledWith(11,undefined);
+    expect(navigate).toHaveBeenCalledWith(11,undefined,"Quoted PDF evidence");
   });
   it("shows unreadable sources without claiming contradiction or support",async()=>{
     const sources=[sample(1),sample(2)];

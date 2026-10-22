@@ -1317,3 +1317,105 @@ html[data-citem-sidebar="collapsed"] .citem-sidebar {
 .citem-pdf-selection-toolbar button:last-child{border-right:0}.citem-pdf-selection-toolbar button:hover{background:rgba(185,130,47,.12);color:#f2cf8d}
 .citem-pdf-annotation-editor{position:fixed;z-index:90;width:min(360px,calc(100vw - 24px));max-height:min(500px,calc(100vh - 24px));overflow:auto;border:1px solid rgba(185,130,47,.35);padding:1rem;background:#111518;box-shadow:0 18px 48px rgba(0,0,0,.55)}
 @media(max-width:767px){.citem-pdf-toolbar{top:0;align-items:stretch;flex-direction:column}.citem-pdf-pages{max-height:72vh;padding:.6rem}.citem-pdf-annotation-editor{left:12px!important;top:12px!important}}
+
+
+/* CİTEM Evidence Focus — dark emerald glass accent for exact quotations.
+   Presentation only: no boxed border, text mutation, or pointer capture. */
+.citem-evidence-focus-layer{
+  position:absolute;inset:0;z-index:5;pointer-events:none;overflow:hidden;
+}
+.citem-evidence-focus-segment{
+  position:absolute;box-sizing:border-box;border:0;border-radius:9px;
+  background:linear-gradient(135deg,
+    rgba(12,51,31,.30) 0%,
+    rgba(21,77,46,.25) 58%,
+    rgba(61,143,91,.19) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(182,242,202,.15),
+    inset 0 -1px 0 rgba(13,83,46,.20),
+    0 2px 9px rgba(9,52,27,.10);
+  animation:citem-evidence-strip-5s 5s ease-out forwards;
+}
+.citem-evidence-focus-segment::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;
+  pointer-events:none;
+  background:linear-gradient(180deg,rgba(175,239,193,.11),transparent 60%);
+}
+.citem-evidence-focus-segment::after,
+.citem-evidence-inline-active::after{
+  content:"";position:absolute;left:2px;right:2px;bottom:-2px;height:3px;
+  pointer-events:none;border-radius:999px;
+  background:linear-gradient(90deg,
+    rgba(35,118,70,.60) 0%,
+    #2e9b61 19%,
+    #a7edc0 50%,
+    #2e9b61 81%,
+    rgba(35,118,70,.60) 100%);
+  box-shadow:
+    0 0 9px rgba(46,164,93,.38),
+    0 0 18px rgba(25,103,60,.20);
+  transform-origin:left center;
+  animation:citem-evidence-underline-soft-5s 5s ease-in-out forwards;
+}
+.citem-evidence-inline-root{position:relative;min-width:0}
+.citem-evidence-inline-text{position:relative;border-radius:8px}
+.citem-evidence-inline-active{animation:citem-evidence-web-5s 5s ease-out forwards}
+.citem-evidence-focus-trigger{
+  display:inline-flex;align-items:center;min-height:28px;margin-top:4px;
+  padding:4px 9px;border:1px solid rgba(57,133,85,.54);border-radius:8px;
+  color:#a7e5ba;background:rgba(17,73,44,.14);
+  font-size:11px;font-weight:600;
+  transition:background-color .15s ease,border-color .15s ease;
+}
+.citem-evidence-focus-trigger:hover{
+  background:rgba(30,112,67,.23);border-color:rgba(90,185,125,.77);
+}
+.citem-evidence-focus-trigger:focus-visible{
+  outline:2px solid #89d5a4;outline-offset:2px;
+}
+@keyframes citem-evidence-strip-5s{
+  0%{opacity:0}
+  12%{opacity:1}
+  68%{opacity:.94}
+  100%{opacity:0}
+}
+@keyframes citem-evidence-underline-soft-5s{
+  0%{transform:scaleX(0);opacity:0}
+  20%{transform:scaleX(.94);opacity:.96}
+  32%{transform:scaleX(1);opacity:1}
+  70%{transform:scaleX(1);opacity:.90}
+  100%{transform:scaleX(1);opacity:0}
+}
+@keyframes citem-evidence-web-5s{
+  0%{background:transparent;box-shadow:none}
+  12%{
+    background:linear-gradient(135deg,rgba(12,51,31,.26),rgba(34,107,65,.19));
+    box-shadow:inset 0 1px 0 rgba(182,242,202,.14),0 0 8px rgba(14,74,38,.12);
+  }
+  68%{
+    background:linear-gradient(135deg,rgba(12,51,31,.22),rgba(34,107,65,.16));
+    box-shadow:inset 0 1px 0 rgba(182,242,202,.10),0 0 6px rgba(14,74,38,.08);
+  }
+  100%{background:transparent;box-shadow:none}
+}
+@media(prefers-reduced-motion:reduce){
+  .citem-evidence-focus-segment{animation:citem-evidence-reduced-5s 5s linear forwards}
+  .citem-evidence-focus-segment::after,
+  .citem-evidence-inline-active::after{
+    animation:citem-evidence-underline-reduced-5s 5s linear forwards;
+    transform:none;
+  }
+  .citem-evidence-inline-active{animation:citem-evidence-web-reduced-5s 5s linear forwards}
+  .citem-evidence-focus-trigger{transition:none}
+}
+@keyframes citem-evidence-reduced-5s{
+  0%{opacity:.85}70%{opacity:.85}100%{opacity:0}
+}
+@keyframes citem-evidence-underline-reduced-5s{
+  0%{opacity:.8}70%{opacity:.8}100%{opacity:0}
+}
+@keyframes citem-evidence-web-reduced-5s{
+  0%{background:rgba(12,51,31,.23)}
+  70%{background:rgba(12,51,31,.23)}
+  100%{background:transparent}
+}

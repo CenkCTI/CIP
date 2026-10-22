@@ -1,6 +1,7 @@
 "use client";
 import {useState} from "react";
 import {ClaimComparisonReview} from "./claim-comparison-review";
+import {EvidenceTextFocus} from "./evidence-text-focus";
 import type {ClaimComparisonOutcome} from "@/lib/ai/research/claim-comparison";
 import type {CopilotContext} from "./copilot-context-selector";
 import type {ResearchSearchResult,ResearchEvidence} from "@/lib/ai/research/types";
@@ -12,7 +13,7 @@ type Synthesis={
 type ErrorPayload={code?:string;error?:string};
 export function ControlledWebResearch({projectId,sourceId,assetId,context,connected,onNavigate}:{
   projectId:string;sourceId:string;assetId:string;context:CopilotContext;connected:boolean;
-  onNavigate?:(page:number,annotationId?:string)=>void;
+  onNavigate?:(page:number,annotationId?:string,quote?:string)=>void;
 }){
   const [open,setOpen]=useState(false);
   const [question,setQuestion]=useState("");
@@ -168,7 +169,10 @@ export function ControlledWebResearch({projectId,sourceId,assetId,context,connec
           </label>
           <p className="font-semibold">{r.title}</p>
           <p className="mt-1 break-all text-[var(--muted)]">{r.domain}</p>
-          <p className="mt-1">{r.snippet}</p>
+          <EvidenceTextFocus kind="lead" label={"Focus search lead "+(i+1)}>
+            <p className="mt-1">{r.snippet}</p>
+            <p className="mt-1 text-[10px] text-[var(--muted)]">Brave search snippet · not verified evidence</p>
+          </EvidenceTextFocus>
           <div className="mt-3 flex flex-wrap items-center gap-2 text-[var(--amber-soft)]">
             <a href={r.url} target="_blank" rel="noopener noreferrer"
               className="inline-flex min-h-9 items-center rounded border border-[var(--line)] px-3 py-2 font-medium hover:border-[var(--amber-dark)]">
@@ -196,7 +200,9 @@ export function ControlledWebResearch({projectId,sourceId,assetId,context,connec
         <p className="whitespace-pre-wrap">{synthesis.summary}</p>
         {synthesis.evidence.map((e,i)=><div className="mt-3" key={e.sourceToken+"-"+i}>
           <p>{e.statement}</p>
-          <blockquote className="mt-1 border-l-2 border-[var(--amber-dark)] pl-2">{e.quote}</blockquote>
+          <EvidenceTextFocus label={"Focus "+e.sourceToken+" excerpt"}>
+            <blockquote className="mt-1 border-l-2 border-[var(--amber-dark)] pl-2">{e.quote}</blockquote>
+          </EvidenceTextFocus>
           <a href={e.url} target="_blank" rel="noopener noreferrer"
             className="mt-1 block break-all text-[var(--amber-soft)]">
             {e.sourceToken} · {e.domain} · retrieved {e.retrievedAt} ↗

@@ -24,7 +24,7 @@ export type CopilotTurn = {
 
 export function CopilotChat({ turns, onNavigate }: {
   turns: CopilotTurn[];
-  onNavigate: (page: number, annotationId?: string) => void;
+  onNavigate: (page: number, annotationId?: string, quote?: string) => void;
 }) {
   if (!turns.length) return <div className="flex h-full min-h-48 flex-col items-center justify-center gap-3 px-8 text-center">
     <span aria-hidden="true" className="grid h-12 w-12 place-items-center rounded-full border border-[var(--line)] bg-[var(--amber-tint)] text-xl text-[var(--amber-soft)]">✦</span>
@@ -74,7 +74,7 @@ export function CopilotChat({ turns, onNavigate }: {
               {item.page !== null && item.page >= 1
                 ? <button type="button"
                   className="rounded border border-[var(--line)] px-2.5 py-1 text-[11px] text-[var(--amber-soft)] hover:border-[var(--line-hover)] hover:bg-[var(--amber-tint)]"
-                  onClick={() => onNavigate(item.page!, item.provenance.annotationId)}
+                  onClick={() => onNavigate(item.page!, item.provenance.annotationId,item.quote)}
                   aria-label={`Go to PDF page ${item.page}`}>
                   [{item.kind === "ANNOTATION" ? "ANN" : "DOC"} p.{item.page}] ↗
                 </button>

@@ -560,7 +560,8 @@ export function SourceReaderWorkspace({
   const [aiReviewNotice, setAiReviewNotice] = useState("");
   const [activePdfPage, setActivePdfPage] = useState(1);
   const [pdfPageCount, setPdfPageCount] = useState<number | null>(null);
-  const [copilotPageJump, setCopilotPageJump] = useState<{page:number;nonce:number}|null>(null);
+  const [copilotPageJump, setCopilotPageJump] = useState<
+    {page:number;nonce:number;quote?:string;annotationId?:string}|null>(null);
   const [editingComment, setEditingComment] = useState("");
   const [editingGapIds, setEditingGapIds] = useState<string[]>([]);
   const [editingRequirementIds, setEditingRequirementIds] = useState<string[]>([]);
@@ -663,6 +664,16 @@ export function SourceReaderWorkspace({
     }
     return counts;
   }, [liveAnnotations]);
+
+  // Keep callbacks after memoized derived data so the React Compiler can
+  // preserve the stable annotation computation and its dependency graph.
+  function focusPdfEvidence(page:number,annotationId?:string,quote?:string){
+    setCopilotPageJump(prev=>({page,annotationId,quote,nonce:(prev?.nonce??0)+1}));
+    if(annotationId && liveAnnotations.some(a=>s(a.id)===annotationId)){
+      setFocusedAnnotationId(annotationId);setExpandedAnnotationId(annotationId);
+      setPanel("annotations");
+    }
+  }
 
   useEffect(() => {
     if (panel !== "annotations" || !focusedAnnotationId) return;
@@ -1174,13 +1185,12 @@ export function SourceReaderWorkspace({
                           <button
                             type="button"
                             className="text-xs text-amber-300"
-                            onClick={() =>
-                              document
-                                .querySelector<HTMLElement>(
-                                  `[data-pdf-page-number="${s(annotation.page_number)}"]`,
-                                )
-                                ?.scrollIntoView({ behavior: "smooth", block: "start" })
-                            }
+                            onClick={() => focusPdfEvidence(
+                              Number(annotation.page_number),
+                              s(annotation.id),
+                              s(annotation.anchor_kind)==="TEXT"
+                                ?s(annotation.selected_text).slice(0,1400):undefined,
+                            )}
                           >
                             PDF'de göster
                           </button>
@@ -1254,7 +1264,7 @@ export function SourceReaderWorkspace({
             const chosen=matching ?? liveAnnotations.find((annotation)=>
               sources.some((evidence)=>evidence.provenance.annotationId===s(annotation.id)));
             const page=sources[0]?.page;
-            if(page) setCopilotPageJump({page,nonce:Date.now()});
+            if(page) focusPdfEvidence(page,sources[0]?.provenance.annotationId,sources[0]?.quote);
             setPanel("annotations");
             if(chosen){
               setFocusedAnnotationId(s(chosen.id));
@@ -1266,13 +1276,8 @@ export function SourceReaderWorkspace({
               setAiReviewNotice("No matching text annotation exists. Select and annotate the quoted passage on the PDF, then review the AI candidate. No record was created.");
             }
           }}
-          onNavigate={(page, annotationId) => {
-            setCopilotPageJump({ page, nonce: Date.now() });
-            if (annotationId && liveAnnotations.some((annotation) => s(annotation.id) === annotationId)) {
-              setFocusedAnnotationId(annotationId);
-              setExpandedAnnotationId(annotationId);
-              setPanel("annotations");
-            }
+          onNavigate={(page, annotationId, quote) => {
+            focusPdfEvidence(page,annotationId,quote);
           }}
         />
       ) : null}

@@ -26,7 +26,7 @@ export function CopilotCandidates({result,dismissed,onDismiss,onReview,onNavigat
   dismissed:Set<string>;
   onDismiss:(id:string)=>void;
   onReview:(candidate:Stage3Candidate)=>void;
-  onNavigate:(page:number,annotationId?:string)=>void;
+  onNavigate:(page:number,annotationId?:string,quote?:string)=>void;
 }){
   const active=result.candidates.filter((candidate)=>!dismissed.has(candidate.candidateId));
   return <section aria-label="AI candidate suggestions" className="mx-auto w-full max-w-3xl space-y-3 p-4 sm:p-6">
@@ -74,7 +74,7 @@ export function CopilotCandidates({result,dismissed,onDismiss,onReview,onNavigat
             <blockquote className="border-l-2 border-[var(--amber)] pl-2 text-xs leading-5 text-[var(--foreground)]">{evidence.quote}</blockquote>
             {evidence.page ? <button type="button"
               className="text-xs text-[var(--amber-soft)] underline underline-offset-2"
-              onClick={()=>onNavigate(evidence.page!,evidence.provenance.annotationId)}>
+              onClick={()=>onNavigate(evidence.page!,evidence.provenance.annotationId,evidence.quote)}>
               PDF page {evidence.page} ↗
             </button>:null}
           </div>)}
@@ -85,7 +85,8 @@ export function CopilotCandidates({result,dismissed,onDismiss,onReview,onNavigat
           onClick={()=>onDismiss(candidate.candidateId)}>Dismiss</button>
         {candidate.kind==="UNANSWERED_QUESTION"
           ? <button type="button" className="rounded border border-[var(--amber-dark)] px-3 py-1.5 text-xs text-[var(--amber-soft)]"
-              onClick={()=>{const page=candidate.verifiedSupport[0]?.page;if(page)onNavigate(page);}}>
+              onClick={()=>{const evidence=candidate.verifiedSupport[0];if(evidence?.page)
+                onNavigate(evidence.page,evidence.provenance.annotationId,evidence.quote);}}>
               View source
             </button>
           : <button type="button" className="rounded border border-[var(--amber-dark)] bg-[var(--amber-tint)] px-3 py-1.5 text-xs font-semibold text-[var(--amber-soft)] hover:bg-[var(--amber-glow)]"
