@@ -64,7 +64,7 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
     // With indexed evidence, preserve current-page context only when user
     // explicitly chose a smaller scope, and never silently send an entire PDF.
     const includePage=input.useSource && (!indexedSpans.length||
-      input.context.kind==="annotation"||input.context.kind==="page_range");
+      input.context.kind==="annotation"||input.context.kind==="pages"||input.context.kind==="page");
     const pageSpans=includePage?(await loadStage3DocumentContext(reader,{
       sourceId:input.sourceId,assetId:input.assetId,context:input.context,
       mode:"ask",question:input.question,byokConsent:true,
