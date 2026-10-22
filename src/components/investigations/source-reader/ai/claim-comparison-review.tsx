@@ -2,24 +2,25 @@
 import type {ClaimComparisonOutcome} from "@/lib/ai/research/claim-comparison";
 import type {SkippedComparisonSource} from "@/lib/ai/research/comparison-fetch";
 
+const statusNames={unavailable:"Site unavailable or access denied",timeout:"Fetch timed out",
+  unsupported:"Unsupported content type",too_large:"Content exceeds size limit",
+  no_text:"No readable text found"} as const;
+function SkippedSources({sources}:{sources:SkippedComparisonSource[]}){
+  return <div data-testid="unreadable-comparison-sources" className="space-y-2">
+    <p className="font-semibold">Selected sources that could not be read</p>
+    {sources.map(item=><div key={item.url} className="rounded border border-[var(--line-neutral)] p-2">
+      <a href={item.url} rel="noopener noreferrer" target="_blank"
+        className="break-all text-[var(--amber-soft)]">{item.url} ↗</a>
+      <p className="mt-1 text-[var(--muted-strong)]">{statusNames[item.reason]}</p>
+    </div>)}
+    <p>Unreadable sources were excluded, not counted as evidence for or against the claim.
+      Choose another public HTML source or retry a different report.</p>
+  </div>;
+}
+
 export function ClaimComparisonReview({result,onNavigate}:{
   result:ClaimComparisonOutcome;onNavigate?:(page:number,annotationId?:string)=>void;
 }){
-  const statusNames={unavailable:"Site unavailable or access denied",timeout:"Fetch timed out",
-    unsupported:"Unsupported content type",too_large:"Content exceeds size limit",
-    no_text:"No readable text found"} as const;
-  function SkippedSources({sources}:{sources:SkippedComparisonSource[]}){
-    return <div data-testid="unreadable-comparison-sources" className="space-y-2">
-      <p className="font-semibold">Selected sources that could not be read</p>
-      {sources.map(item=><div key={item.url} className="rounded border border-[var(--line-neutral)] p-2">
-        <a href={item.url} rel="noopener noreferrer" target="_blank"
-          className="break-all text-[var(--amber-soft)]">{item.url} ↗</a>
-        <p className="mt-1 text-[var(--muted-strong)]">{statusNames[item.reason]}</p>
-      </div>)}
-      <p>Unreadable sources were excluded, not counted as evidence for or against the claim.
-        Choose another public HTML source or retry a different report.</p>
-    </div>;
-  }
   if(result.status==="sources_unavailable"){
     return <section data-testid="claim-comparison-review" aria-label="Claim comparison review"
       className="space-y-3 rounded border border-[var(--amber-dark)] p-3 text-xs">
