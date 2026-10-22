@@ -4,6 +4,7 @@ import {claimComparisonRequestSchema,claimComparisonModelSchema,
   verifyClaimComparison,classifyPdfExcerpt} from "@/lib/ai/research/claim-comparison";
 import {safeWebUrl,WebReadError} from "@/lib/ai/research/safe-fetch";
 import {loadSelectedComparisonPages} from "@/lib/ai/research/comparison-fetch";
+import {selectRelevantWebPassages} from "@/lib/ai/research/evidence-passages";
 
 const sourceId="49429515-bc04-4539-ae53-69f0b47157cb";
 const assetId="49429615-bc04-4539-ae53-69f0b47157cb";
@@ -132,6 +133,41 @@ describe("AI Phase 6 grounded claim comparison",()=>{
     expect(out.pages).toHaveLength(0);
     expect(out.skippedSources).toHaveLength(2);
   });
+  it("provides verified contextual text without promoting a no-quote result to supporting evidence",()=>{
+    const context="StarTimes has distributors in 37 countries, serving 13 million DVB subscribers as of 2020.";
+    const text="Jump to content. Menu and navigation labels. "+context+" Other information.";
+    const web={...page,text};
+    const ranked=selectRelevantWebPassages(text,
+      "StarTimes digital television Africa subscribers 2023",
+      "China being the leading provider of digital television services in all of Africa.");
+    expect(ranked.some(p=>p.includes("StarTimes has distributors"))).toBe(true);
+    expect(ranked.every(p=>text.includes(p))).toBe(true);
+    const modelNoQuote=claimComparisonModelSchema.parse({...model,
+      comparisons:[{...model.comparisons[0],quote:null,relationship:"insufficient_evidence"}]});
+    const outcome=verifyClaimComparison(modelNoQuote,[span],[web],[ranked]);
+    expect(outcome?.rows[0].contextExcerpt).toContain("StarTimes has distributors");
+    expect(outcome?.rows[0]).toMatchObject({verifiedQuote:false,
+      relationship:"insufficient_evidence",quote:null,evidenceStatus:"no_quote"});
+  });
+  it("ranks country-level 2023 figures as context without declaring operator market share",()=>{
+    const content="Contact us. Digital research. Nigeria leads Africa in pay TV subscribers, with 9.69 million, followed closely by South Africa, which has 9.28 million. Together, both countries account for nearly 40% of the continent total pay TV subscribers in 2023.";
+    const candidates=selectRelevantWebPassages(content,
+      "Who leads the digital television pay TV market in Africa in 2023 by subscribers?",
+      "China leading provider of digital television services across Africa");
+    expect(candidates.length).toBeGreaterThan(0);
+    expect(candidates.every(q=>content.includes(q))).toBe(true);
+    expect(candidates.join(" ")).toMatch(/Nigeria|South Africa/);
+  });
+  it("never exposes an unverified context excerpt or invents context for unrelated pages",()=>{
+    expect(selectRelevantWebPassages("A recipe for lemon cake involves flour and sugar.",
+      "StarTimes African TV operator subscribers 2023",
+      "Digital television China Africa")).toEqual([]);
+    const missing=verifyClaimComparison(claimComparisonModelSchema.parse({...model,
+      comparisons:[{...model.comparisons[0],quote:null,
+        relationship:"insufficient_evidence"}]}),
+      [span],[page],[["a sentence nowhere in the actual page"]]);
+    expect(missing?.rows[0].contextExcerpt).toBeNull();
+  });
   it("endpoint only reads owned project source and externally selected URLs",()=>{
     const path="src/app/api/projects/[id]/ai/processing/research/compare/route.ts";
     const source=readFileSync(path,"utf8");
@@ -144,3 +180,4 @@ describe("AI Phase 6 grounded claim comparison",()=>{
     expect(source).not.toContain("createSourceClaimFromAnnotation");
   });
 });
+

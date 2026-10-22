@@ -5,6 +5,7 @@ import {validateOrigin,readJsonLimited,noStore} from "@/lib/ai/byok/security";
 import {requireOwnedProject} from "@/lib/projects/ownership";
 import {createStage3ReadContext,loadStage3DocumentContext} from "@/lib/ai/stage3/context";
 import {loadSelectedComparisonPages} from "@/lib/ai/research/comparison-fetch";
+import {selectRelevantWebPassages} from "@/lib/ai/research/evidence-passages";
 import {requireResearchByok,withResearchQuota,researchError} from "@/lib/ai/research/server";
 import {claimComparisonRequestSchema,claimComparisonModelSchema,
   verifyClaimComparison} from "@/lib/ai/research/claim-comparison";
@@ -32,13 +33,19 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
     if(!pages.length)return noStore({result:{
       status:"sources_unavailable" as const,skippedSources},
       notice:"No selected public web page was readable. No AI comparison or domain writes occurred."});
+    // Give the model short topical passages instead of an undifferentiated
+    // first-8k-character web slice. Every excerpt remains verified against
+    // the original server-fetched page, not against the LLM response.
+    const relevant=pages.map(p=>selectRelevantWebPassages(
+      p.text,input.question,spans.map(s=>s.text.slice(0,600)).join(" "),3));
     const context={
       analystQuestion:input.question,
       SOURCE_PDF:{title:pdf.sourceTitle,
         excerpts:spans.map(s=>({source_token:s.token,page:s.page,text:s.text}))},
       UNTRUSTED_WEB_DATA:pages.map((p,i)=>({
         source_token:"WEB_"+String(i+1).padStart(3,"0"),
-        url:p.url,title:p.title,retrieved_at:p.retrievedAt,text:p.text,
+        url:p.url,title:p.title,retrieved_at:p.retrievedAt,
+        evidence_passages:relevant[i],
       })),
     };
     const result=await withResearchQuota(owned,JSON.stringify(context).length,async()=>{
@@ -51,7 +58,11 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
           "causes, dates, or mechanisms absent from the PDF quotation. For each supplied WEB token, compare "+
           "whether the text explicitly supports, contradicts, qualifies, or lacks direct evidence for that claim. "+
           "Use precise short verbatim quotes from the matching WEB text; use null and insufficient_evidence "+
-          "when no direct excerpt exists. Compare like-for-like country coverage, provider vs company, date and "+
+          "when no topical excerpt exists. Even when a page cannot establish the ranking, quote one "+
+          "EXACT relevant context passage if available, set insufficient_evidence and explain why "+
+          "country totals, older numbers, or other metrics cannot establish provider leadership. "+
+          "Quote must be copied from evidence_passages without altering words. "+
+          "Compare like-for-like country coverage, provider vs company, date and "+
           "market metric; do not label projections for a different year or country as direct contradictions. "+
           "If an external excerpt directly addresses the same proposition, copy it EXACTLY even when it supports "+
           "only a narrower claim. Do not claim causal attribution, overall truth or source independence. "+
@@ -65,7 +76,7 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
       let model;
       try{model=claimComparisonModelSchema.parse(extractOneJsonObject(raw));}
       catch{throw new AiError("malformed_output");}
-      const verified=verifyClaimComparison(model,spans,pages);
+      const verified=verifyClaimComparison(model,spans,pages,relevant);
       if(!verified)throw new AiError("malformed_output");
       if(pdf.spans.length>spans.length)
         verified.warnings.push("PDF excerpts were truncated to a bounded context. Other pages were not assessed.");

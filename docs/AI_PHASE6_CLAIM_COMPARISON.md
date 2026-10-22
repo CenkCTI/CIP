@@ -70,3 +70,22 @@ abort an otherwise valid 2–3 source analysis.
 - Unsafe addresses, private DNS destinations and prohibited redirects remain
   fatal security errors. No website blocking controls are bypassed.
 - Unreadable sources are **not** treated as evidence of absence.
+
+## Claim evidence retrieval quality fix (live 2026-10-22)
+
+A follow-up test selected Wikipedia StarTimes, Intelpoint 2023 country pay-TV figures,
+and a DOI/SAGE article. The first two pages were read, but the model returned
+no direct quotation for either. The DOI source was inaccessible (reported as skipped).
+
+The Phase 6 path now scores short, **verbatim source-text passages** against the
+analyst question and bounded PDF evidence. The model receives those topical
+excerpts instead of the first 8,000 characters of each page. All proposed
+quotes are STILL checked against original server-fetched text. If the model
+provides no valid direct quote, the UI can show one independently verified,
+lexically relevant **background excerpt** for analyst review, explicitly marked
+*not corroboration*. This does not change inferred relationship labels or
+convert country-level 2023 data into operator-level market share evidence.
+
+The retrieval is a heuristic and may miss relevant text, especially paywalled
+or highly dynamic webpages, or content beyond the existing bounded fetch.
+No fallback evidence is invented, and there are no new external API calls.

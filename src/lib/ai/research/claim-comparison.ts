@@ -38,7 +38,7 @@ export type ClaimComparisonResult={
   rows:Array<{sourceToken:string;url:string;title:string;domain:string;
     retrievedAt:string;relationship:"supports"|"contradicts"|"qualifies"|"insufficient_evidence";
     quote:string|null;explanation:string;limitation:string;verifiedQuote:boolean;
-    evidenceStatus:"verified"|"no_quote"|"rejected_quote"}>;
+    evidenceStatus:"verified"|"no_quote"|"rejected_quote";contextExcerpt:string|null}>;
   openQuestions:string[];discarded:number;warnings:string[];status:"analyst_review_required";
   skippedSources:SkippedComparisonSource[];
 };
@@ -60,7 +60,7 @@ export function classifyPdfExcerpt(quote:string):"attributed_or_question"|"uncla
  * Relationship and paraphrase remain MODEL OPINION, never automatic corroboration. */
 export function verifyClaimComparison(model:ClaimComparisonModel,
   pdfSpans:Pick<Stage3Span,"token"|"text"|"sourceId"|"assetId"|"page"|"annotationId">[],
-  pages:ReadWebPage[]):ClaimComparisonResult|null{
+  pages:ReadWebPage[],relevanceExcerpts:string[][]=[]):ClaimComparisonResult|null{
   const span=pdfSpans.find(s=>s.token===model.claim.source_token);
   if(!span||!normalizedQuote(span.text).includes(normalizedQuote(model.claim.quote)))return null;
   const originKind=classifyPdfExcerpt(model.claim.quote);
@@ -76,8 +76,13 @@ export function verifyClaimComparison(model:ClaimComparisonModel,
     const relationship:ClaimComparisonResult["rows"][number]["relationship"]=
       verifiedQuote&&candidate?.relationship!=="insufficient_evidence"
       ?candidate!.relationship:"insufficient_evidence";
+    // Context excerpts are separate from AI evidence and can NEVER upgrade a
+    // comparison's relationship. Verify again against the fetched page text.
+    const possibleContext=relevanceExcerpts[i]?.[0]??"";
+    const contextExcerpt=!verifiedQuote&&possibleContext&&
+      page.text.includes(possibleContext)?possibleContext:null;
     return {sourceToken:token,url:page.url,title:page.title,domain:page.domain,
-      retrievedAt:page.retrievedAt,relationship,
+      retrievedAt:page.retrievedAt,relationship,contextExcerpt,
       quote:verifiedQuote?quote:null,
       explanation:verifiedQuote
         ?candidate?.explanation??"Analyst review required."

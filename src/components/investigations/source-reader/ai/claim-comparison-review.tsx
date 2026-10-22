@@ -70,6 +70,17 @@ export function ClaimComparisonReview({result,onNavigate}:{
             "The AI did not provide a direct quotation for this source."}
             {" "}This does not establish whether the page contains relevant evidence.
           </p>}
+        {!row.verifiedQuote&&row.contextExcerpt?
+          <div className="mt-2 rounded border border-[var(--line-neutral)] p-2"
+            data-testid="web-context-excerpt">
+            <p className="font-semibold">Topically related source text · not corroboration</p>
+            <blockquote className="mt-1 border-l-2 border-[var(--amber-dark)] pl-2">
+              {row.contextExcerpt}
+            </blockquote>
+            <p className="mt-1 text-[var(--muted)]">
+              Lexically selected from the fetched page. This excerpt does not verify the original PDF proposition.
+            </p>
+          </div>:null}
         <p className="mt-2">{row.explanation}</p>
         {row.limitation?<p className="mt-1 text-[var(--muted)]">Limitation: {row.limitation}</p>:null}
       </article>)}
