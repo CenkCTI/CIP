@@ -534,7 +534,7 @@ export function ProcessingCopilot({
             <summary className="cursor-pointer text-xs font-semibold text-[var(--foreground)]">
               NVIDIA BYOK · {connected?"Connected":"Connect to continue"}
             </summary>
-            <div className="mt-3"><ByokConnectionPanel scope="user" defaultProviderId="nvidia_nim" autoLoad={true}
+            <div className="mt-3"><ByokConnectionPanel scope="user" defaultProviderId="nvidia_nim" autoLoad={false} initialStatus={byok??undefined}
               onStatusChange={onConnectionStatusChange}/></div>
           </details>
         </div>
