@@ -10,7 +10,7 @@ import type { Stage3Candidate, Stage3CandidateResponse } from "@/lib/ai/stage3/c
 import { dividePdfBatch, planPdfBatches, type PdfBatch } from "@/lib/ai/stage3/document-batches";
 import { useDocumentExtraction, type ScanSelection } from "./use-document-extraction";
 import { DocumentProcessingReview } from "./document-processing-review";
-import { ControlledWebResearch } from "./controlled-web-research";
+import { CopilotResearchConversation, type ResearchSession } from "./copilot-research-conversation";
 
 type ByokStatus = {
   enabled?: boolean; connected?: boolean; state?: string;
@@ -107,10 +107,13 @@ export function ProcessingCopilot({
   const [byok, setByok] = useState<ByokStatus | null>(null);
   const [statusError, setStatusError] = useState("");
   const [showConnection, setShowConnection] = useState(false);
+  const [researchMode,setResearchMode]=useState(false);
+  const [researchSessions,setResearchSessions]=useState<ResearchSession[]>([]);
+  const researchCounter=useRef(0);
   const [context, setContext] = useState<CopilotContext>({kind:"document"});
   const [question, setQuestion] = useState("");
-  const [analystChat,setAnalystChat]=useState(false);
-  const [webResearch,setWebResearch]=useState(false);
+  const [analystChat,setAnalystChat]=useState(true);
+  const [webResearch,setWebResearch]=useState(true);
   const [useSource,setUseSource]=useState(true);
   const [memoryNotes,setMemoryNotes]=useState("");
   const [memoryStatus,setMemoryStatus]=useState("");
@@ -163,8 +166,8 @@ export function ProcessingCopilot({
   const onConnectionStatusChange = useCallback((next: ByokStatus) => { setByok(next); setStatusError(""); }, []);
   const connected = isNvidiaByokConnection(byok);
   const contextValid = validCopilotContext(effectiveContext,pageCount);
-  const canSend = connected && contextValid && !working && !documentScan.working &&
-    (!analystChat || memoryReady);
+  const canProcess = connected && contextValid && !working && !documentScan.working;
+  const canSend = canProcess && (!analystChat || memoryReady);
   const memoryUrl=`/api/projects/${projectId}/ai/processing/memory`;
   useEffect(()=>{
     if(!analystChat)return;
@@ -197,7 +200,7 @@ export function ProcessingCopilot({
   },[analystChat,projectId,sourceId,assetId,memoryUrl]);
 
   async function submit(mode:"ask"|"analyse"|"extract",prompt:string,resume=false) {
-    if(!canSend || (mode==="ask" && !prompt.trim())) {
+    if(!canProcess || (mode==="ask" && !prompt.trim())) {
       if(!connected)setError("Connect NVIDIA NIM before sending a message.");
       else if(!contextValid)setError("Select the entire PDF, a valid PDF page, a text annotation or 1–10 consecutive pages.");
       return;
@@ -384,7 +387,7 @@ export function ProcessingCopilot({
         signal:abort.signal,
         body:JSON.stringify({sourceId,assetId,context:selected,
           question:prompt.trim().slice(0,1500),responseLanguage,
-          useSource,webResearch,byokConsent:true}),
+          useSource,webResearch:false,byokConsent:true}),
       });
       const data=await response.json() as {result?:CopilotResult;saved?:boolean;error?:string;code?:string};
       if(!response.ok||!data.result)throw new Error(data.error||data.code||"Analyst chat failed");
@@ -394,7 +397,6 @@ export function ProcessingCopilot({
         prompt:prompt.trim(),result:data.result!,
       }]);
       setMemoryStatus(data.saved?"Conversation saved to this investigation":"Conversation not saved");
-      setWebResearch(false); // each search requires explicit opt-in again
       setQuestion("");
     }catch(error){
       if(!abort.signal.aborted)setError(error instanceof Error?error.message:"Analyst chat failed");
@@ -425,7 +427,16 @@ export function ProcessingCopilot({
     }catch(error){setMemoryStatus(error instanceof Error?error.message:"Clear failed");}
   }
   function sendQuestion(value:string){
-    if(analystChat)void askAnalyst(value);
+    if(!canSend||!value.trim())return;
+    if(researchMode){
+      if(!webResearch){setError("Enable Web Research in settings first.");return;}
+      const selected:CopilotContext=effectiveContext.kind==="document"
+        ?{kind:"page",page:activePage}:effectiveContext;
+      setResearchSessions(previous=>[...previous,{
+        id:++researchCounter.current,question:value.trim().slice(0,1500),context:selected,
+      }]);
+      setError("");setQuestion("");
+    }else if(analystChat)void askAnalyst(value);
     else void submit("ask",value);
   }
   function onSubmit(event:FormEvent<HTMLFormElement>){
@@ -436,7 +447,7 @@ export function ProcessingCopilot({
   return <section
     role="dialog" aria-label="AI Processing Copilot" aria-modal="false"
     data-testid="stage3-processing-copilot"
-    className="fixed z-[70] flex flex-col overflow-hidden border border-[var(--line)] bg-[var(--surface-panel)] text-[var(--foreground)] shadow-[0_24px_72px_rgba(0,0,0,0.65)] md:rounded-lg"
+    className="fixed z-[70] flex flex-col overflow-hidden border border-[var(--line)] bg-[var(--surface-panel)] text-[var(--foreground)] shadow-[0_24px_72px_rgba(0,0,0,0.65)] md:rounded-xl"
     style={windowState.style}
   >
     <header className="flex min-h-14 touch-none select-none items-center justify-between gap-3 border-b border-[var(--line-neutral)] bg-[var(--surface-raised)] px-4"
@@ -453,10 +464,11 @@ export function ProcessingCopilot({
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1 text-[var(--muted-strong)]">
-        <button type="button" title="NVIDIA connection settings" aria-label="BYOK settings"
-          className="rounded px-2 py-1.5 text-[11px] text-[var(--amber-soft)] hover:bg-[var(--amber-tint)]"
-          onClick={()=>{setShowConnection((v)=>!v);void refreshStatus();}}>
-          {showConnection ? "Hide settings" : "BYOK"}
+        <button type="button" title="Copilot preferences and BYOK" aria-label="Copilot settings"
+          aria-expanded={showConnection} aria-controls="citem-copilot-settings"
+          className="rounded-lg border border-transparent px-3 py-1.5 text-[11px] font-semibold text-[var(--amber-soft)] hover:border-[var(--line)] hover:bg-[var(--amber-tint)]"
+          onClick={()=>{setShowConnection(v=>!v);void refreshStatus();}}>
+          ⚙ Settings
         </button>
         {!windowState.mobile ? <button type="button" className="rounded px-2 py-1.5 text-xs hover:bg-[var(--amber-tint)]"
           aria-label={windowState.geometry.minimized?"Restore Copilot":"Minimize Copilot"}
@@ -469,13 +481,68 @@ export function ProcessingCopilot({
       </div>
     </header>
     {!isMinimized ? <>
-      {!connected || showConnection ? <div className="max-h-[45%] shrink-0 overflow-y-auto border-b border-[var(--line-neutral)] bg-[var(--surface-input)] px-4 py-3">
-        <ByokConnectionPanel scope="user" defaultProviderId="nvidia_nim" autoLoad={true}
-          onStatusChange={onConnectionStatusChange}/>
-        {!connected ? <p className="mt-2 text-xs text-[var(--amber-soft)]">
-          Choose an NVIDIA NIM model to enable source processing.
-        </p> : null}
-      </div> : null}
+      {showConnection ? <div id="citem-copilot-settings" role="region" aria-label="Copilot preferences"
+        className="absolute right-3 top-14 z-20 max-h-[min(75vh,610px)] w-[min(95%,460px)] overflow-y-auto rounded-2xl border border-[var(--line)] bg-[var(--surface-raised)] p-4 shadow-[0_16px_50px_rgba(0,0,0,0.65)]"
+        data-testid="copilot-settings-popover">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-xs font-semibold uppercase tracking-widest text-[var(--amber-soft)]">Copilot preferences</h3>
+          <button type="button" onClick={()=>setShowConnection(false)} aria-label="Close settings"
+            className="rounded px-2 py-1 text-xs text-[var(--muted-strong)] hover:bg-[var(--amber-tint)]">Done ×</button>
+        </div>
+        <div className="space-y-3">
+          <div className="rounded-xl border border-[var(--line-neutral)] p-3">
+            <p className="mb-2 text-xs font-semibold text-[var(--foreground)]">Intelligence memory</p>
+            <label className="flex items-center gap-2 text-xs">
+              <input type="checkbox" checked={analystChat} onChange={event=>{
+                setMemoryReady(false);setMemoryStatus(event.target.checked?"Loading investigation memory…":"");
+                setAnalystChat(event.target.checked);
+              }}/>
+              Analyst chat · persistent investigation memory
+            </label>
+            <label className="mt-3 flex items-center gap-2 text-xs">
+              <input type="checkbox" checked={useSource} onChange={event=>setUseSource(event.target.checked)}/>
+              Include selected PDF evidence
+            </label>
+            <label className="mt-3 flex items-center gap-2 text-xs">
+              <input type="checkbox" checked={webResearch} onChange={event=>{
+                setWebResearch(event.target.checked);
+                if(!event.target.checked)setResearchMode(false);
+              }}/>
+              Enable Web Research mode
+            </label>
+            <p className="mt-2 text-[11px] leading-relaxed text-[var(--muted)]">
+              Preferences start enabled. Web searches are sent only after you explicitly press Search selected.
+            </p>
+            {analystChat ? <div className="mt-3 space-y-2 border-t border-[var(--line-neutral)] pt-3">
+              <label htmlFor="citem-memory-notes" className="text-xs font-medium text-[var(--muted-strong)]">Investigation notes</label>
+              <textarea id="citem-memory-notes" value={memoryNotes}
+                onChange={event=>setMemoryNotes(event.target.value)}
+                maxLength={4000} rows={3} aria-label="Investigation memory notes"
+                className="w-full rounded-lg border border-[var(--line)] bg-[var(--surface-input)] p-2 text-xs"
+                placeholder="Working hypotheses, assumptions and research questions…"/>
+              <p className="text-[10px] text-[var(--muted)]">
+                Notes are stored in the investigation and sent to NVIDIA for Analyst chat. Do not enter secrets.
+              </p>
+              <div className="flex items-center gap-3 text-xs">
+                <button type="button" onClick={()=>void saveNotes()} className="text-[var(--amber-soft)] underline">Save notes</button>
+                <button type="button" onClick={()=>void clearMemory()} className="text-[var(--muted-strong)] underline">Clear saved chat</button>
+              </div>
+              <p role="status" className="text-[11px] text-[var(--muted)]">{memoryStatus}</p>
+            </div>:null}
+          </div>
+          <details className="rounded-xl border border-[var(--line-neutral)] p-3">
+            <summary className="cursor-pointer text-xs font-semibold text-[var(--foreground)]">
+              NVIDIA BYOK · {connected?"Connected":"Connect to continue"}
+            </summary>
+            <div className="mt-3"><ByokConnectionPanel scope="user" defaultProviderId="nvidia_nim" autoLoad={true}
+              onStatusChange={onConnectionStatusChange}/></div>
+          </details>
+        </div>
+      </div>:null}
+      {!connected ? <button type="button" onClick={()=>setShowConnection(true)}
+        className="mx-4 mt-3 rounded-lg border border-[var(--amber-dark)] bg-[var(--amber-tint)] px-3 py-2 text-xs text-[var(--amber-soft)]">
+        Connect NVIDIA NIM in Settings
+      </button> : null}
       <CopilotContextSelector context={effectiveContext} onChange={setContext}
         annotationId={selectedAnnotationId} activePage={activePage}
         totalPages={pageCount} sourceTitle={sourceTitle}/>
@@ -490,19 +557,27 @@ export function ProcessingCopilot({
           <option value="en">English</option>
         </select>
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <button type="button" disabled={!canSend} onClick={()=>void submit("extract","")}
+          <button type="button" disabled={!canProcess||!webResearch}
+            aria-pressed={researchMode}
+            onClick={()=>{setResearchMode(value=>!value);setError("");}}
+            className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${researchMode
+              ?"border-[var(--amber-strong)] bg-[var(--amber-tint)] text-[var(--amber-soft)]"
+              :"border-[var(--line)] text-[var(--muted-strong)] hover:border-[var(--amber-dark)]"} disabled:opacity-40`}>
+            Web research
+          </button>
+          <button type="button" disabled={!canProcess} onClick={()=>void submit("extract","")}
             className="rounded border border-[var(--amber-dark)] bg-[var(--amber-tint)] px-3 py-1.5 text-xs font-semibold text-[var(--amber-soft)] hover:bg-[var(--amber-glow)] disabled:opacity-40">
             Extract candidates
           </button>
-          <button type="button" disabled={!canSend} onClick={startDocumentExtraction}
+          <button type="button" disabled={!canProcess} onClick={startDocumentExtraction}
             className="rounded border border-[var(--amber-dark)] bg-[var(--amber-tint)] px-3 py-1.5 text-xs font-semibold text-[var(--amber-soft)] hover:bg-[var(--amber-glow)] disabled:opacity-40">
             {effectiveContext.kind==="document"?"Extract whole PDF":"Scan selected pages"}
           </button>
-          <button type="button" disabled={!canSend} onClick={()=>void submit("analyse","")}
+          <button type="button" disabled={!canProcess} onClick={()=>void submit("analyse","")}
             className="rounded border border-[var(--amber-dark)] bg-[var(--amber-tint)] px-3 py-1.5 text-xs font-medium text-[var(--amber-soft)] hover:bg-[var(--amber-glow)] disabled:opacity-40">
             Analyse context
           </button>
-          <button type="button" disabled={!canSend}
+          <button type="button" disabled={!canProcess}
             onClick={()=>void submit("ask","Explain this passage and its technical terminology using source evidence.")}
             className="rounded border border-[var(--line)] px-3 py-1.5 text-xs text-[var(--muted-strong)] hover:border-[var(--line-hover)] hover:text-[var(--foreground)] disabled:opacity-40">
             Explain passage
@@ -533,12 +608,7 @@ export function ProcessingCopilot({
           Each batch is cited separately. Unverifiable pages are flagged while other pages continue; only validated results count as analysed.
         </p>:null}
       </div>:null}
-      <div className="max-h-[45%] shrink-0 overflow-y-auto border-b border-[var(--line-neutral)] bg-[var(--surface-panel)]"
-        data-testid="copilot-research-dock">
-        <ControlledWebResearch key={sourceId+":"+assetId} projectId={projectId}
-          sourceId={sourceId} assetId={assetId}
-          context={effectiveContext} connected={connected} onNavigate={onNavigate}/>
-      </div>
+
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto bg-[var(--surface)]"
         aria-label="Copilot chat history">
         {documentScan.view?<DocumentProcessingReview view={documentScan.view}
@@ -552,6 +622,10 @@ export function ProcessingCopilot({
           }}
           onResume={(failed)=>void documentScan.resume(failed)} onCancel={documentScan.cancel}/>:null}
         <CopilotChat turns={turns} onNavigate={onNavigate}/>
+        {researchSessions.map(session=><CopilotResearchConversation
+          key={session.id} projectId={projectId} sourceId={sourceId} assetId={assetId}
+          session={session} responseLanguage={responseLanguage} useSource={useSource}
+          onNavigate={onNavigate}/>)}
         {candidateResult ? <CopilotCandidates result={candidateResult} dismissed={dismissedCandidates}
           onDismiss={(candidateId)=>setDismissedCandidates((current)=>new Set([...current,candidateId]))}
           onReview={(candidate)=>{
@@ -561,46 +635,11 @@ export function ProcessingCopilot({
                 candidate.verifiedSupport[0].quote);
           }} onNavigate={onNavigate}/> : null}
       </div>
-      <div className="shrink-0 border-t border-[var(--line-neutral)] px-4 pt-3 text-xs">
-        <label className="flex items-center gap-2">
-          <input type="checkbox" checked={analystChat} onChange={e=>{
-            setMemoryReady(false);
-            setMemoryStatus(e.target.checked?"Loading investigation memory…":"");
-            setAnalystChat(e.target.checked);
-          }}/>
-          <span className="font-semibold text-[var(--amber-soft)]">Analyst chat · persistent investigation memory</span>
-        </label>
-        {analystChat ? <div className="mt-2 space-y-2 rounded-lg border border-[var(--line-neutral)] p-3">
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={webResearch} onChange={e=>setWebResearch(e.target.checked)}/>
-            Research web for this message (Brave search; sends your question, not PDF or notes)
-          </label>
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={useSource} onChange={e=>setUseSource(e.target.checked)}/>
-            Include selected PDF evidence (default: current page for fast questions)
-          </label>
-          <button type="button" onClick={()=>setNotesOpen(v=>!v)}
-            className="text-[var(--amber-soft)] underline">{notesOpen?"Hide":"Edit"} investigation memory notes</button>
-          {notesOpen ? <div className="space-y-2">
-            <textarea value={memoryNotes} onChange={e=>setMemoryNotes(e.target.value)}
-              maxLength={4000} rows={3} aria-label="Investigation memory notes"
-              className="w-full rounded border border-[var(--line)] bg-[var(--surface-input)] p-2"
-              placeholder="Analyst-owned context, assumptions, working questions…"/>
-            <p className="text-[11px] text-[var(--muted)]">Saved notes are included in NVIDIA analyst requests. Do not enter passwords or other secrets.</p>
-            <div className="flex items-center gap-3">
-              <button type="button" className="text-[var(--amber-soft)] underline" onClick={()=>void saveNotes()}>Save notes</button>
-              <button type="button" className="text-[var(--muted-strong)] underline" onClick={()=>void clearMemory()}>Clear saved chat</button>
-            </div>
-          </div>:null}
-          {memoryStatus ? <p role="status" className="text-[var(--muted-strong)]">{memoryStatus}</p>:null}
-          <p className="text-[11px] text-[var(--muted)]">Hypotheses are AI suggestions, not verified facts. External research is opt-in. Source excerpts are verified where present.</p>
-        </div>:null}
-      </div>
       <form onSubmit={onSubmit}
         className="shrink-0 border-t border-[var(--line)] bg-[var(--surface-panel)] px-4 pb-3 pt-3">
         <label htmlFor="stage3-copilot-question"
           className="mb-1.5 block text-xs font-medium text-[var(--muted-strong)]">
-          Ask about {contextTitle(effectiveContext)}
+          {researchMode?"Research question":`Ask about ${contextTitle(effectiveContext)}`}
         </label>
         <div className="flex items-end gap-2 rounded-lg border border-[var(--line)] bg-[var(--surface-input)] p-2 focus-within:border-[var(--line-hover)]">
           <textarea id="stage3-copilot-question" value={question}
@@ -610,7 +649,8 @@ export function ProcessingCopilot({
                 event.preventDefault();sendQuestion(question);
               }
             }}
-            placeholder="Ask a question about the selected source…" maxLength={1500} rows={3}
+            placeholder={researchMode?"Ask a research question…":"Ask a question about the selected source…"}
+            maxLength={1500} rows={2}
             className="max-h-40 min-h-16 w-full flex-1 resize-y bg-transparent px-1.5 py-1 text-sm leading-relaxed text-[var(--foreground)] outline-none placeholder:text-[var(--muted)]"
             disabled={working}/>
           <div className="flex shrink-0 flex-col gap-1">
@@ -618,7 +658,7 @@ export function ProcessingCopilot({
               onClick={()=>inFlight.current?.abort()}>Cancel</button> : null}
             <button type="submit" disabled={!canSend || !question.trim()}
               className="rounded border border-[var(--amber-strong)] bg-[var(--amber-strong)] px-4 py-2 text-xs font-semibold text-[#171106] hover:bg-[var(--amber-soft)] disabled:opacity-40">
-              {working?"Asking…":analystChat?"Ask analyst":"Ask"}
+              {working?"Working…":researchMode?"Suggest searches":analystChat?"Ask analyst":"Ask"}
             </button>
           </div>
         </div>
@@ -630,7 +670,8 @@ export function ProcessingCopilot({
         </div> : null}
         {!contextValid ? <p role="alert" className="mt-2 text-xs text-[var(--danger)]">Select 1–10 consecutive valid pages.</p> : null}
         <p className="mt-2 text-[11px] text-[var(--muted)]">
-          Enter: send · Shift+Enter: new line · Source text shared with NVIDIA · No saved chat history
+          Enter to send · Shift+Enter for a new line · {analystChat?"Investigation memory on":"Legacy source-only mode"}
+          {researchMode?" · Web search requires confirmation":""}
         </p>
       </form>
     </> : null}
