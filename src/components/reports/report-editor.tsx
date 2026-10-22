@@ -1,3 +1,4 @@
+import { ReportPdfExportLink } from "@/components/reports/report-pdf-export-link";
 "use client";
 
 import { useMemo, useState } from "react";
@@ -241,7 +242,8 @@ function Exports({
     <div className="card">
       <h3 className="font-semibold text-white">Downloads</h3>
       <div className="mt-3 flex flex-wrap gap-2">
-        {["pdf", "md", "html"].map((format) => (
+        <ReportPdfExportLink href={`/api/projects/${projectId}/reports/${reportId}/export/pdf`} disabled={dirty}/>
+        {["md", "html"].map((format) => (
           <a
             key={format}
             className={`rounded border border-slate-700 px-3 py-2 text-sm ${dirty ? "cursor-not-allowed opacity-50" : "hover:border-amber-700"}`}
