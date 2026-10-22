@@ -137,22 +137,32 @@ function PdfPage({
 
   // Resolve after PDF.js text layer render; a page jump alone isn't enough.
   useEffect(()=>{
-    setFocusRects([]);
-    setFocusState(null);
-    if(!focusRequest?.quote||!near||!textEpoch||!shellRef.current||!textRef.current)return;
-    const layer=textRef.current,page=shellRef.current;
-    if(!layer.textContent?.trim())return;
-    const range=locatePdfEvidence(layer,focusRequest.quote);
-    if(!range){setFocusState("not_found");return;}
-    const rects=quoteRangeRects(range,page);
-    if(!rects.length){setFocusState("not_found");return;}
-    setFocusRects(rects);
-    setFocusState("matched");
-    const parent=range.startContainer.parentElement;
-    if(parent&&typeof parent.scrollIntoView==="function")
-      parent.scrollIntoView({behavior:window.matchMedia?.("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"center"});
-    const timeout=window.setTimeout(()=>{setFocusRects([]);setFocusState(null);},5000);
-    return()=>window.clearTimeout(timeout);
+    let timeout:number|undefined;
+    // The frame waits for committed DOM; avoids cascading React effects and
+    // properly cancels outdated focus operations.
+    const frame=window.requestAnimationFrame(()=>{
+      setFocusRects([]);
+      setFocusState(null);
+      if(!focusRequest?.quote||!near||!textEpoch||!shellRef.current||!textRef.current)return;
+      const layer=textRef.current,page=shellRef.current;
+      if(!layer.textContent?.trim())return;
+      const range=locatePdfEvidence(layer,focusRequest.quote);
+      if(!range){setFocusState("not_found");return;}
+      const rects=quoteRangeRects(range,page);
+      if(!rects.length){setFocusState("not_found");return;}
+      setFocusRects(rects);
+      setFocusState("matched");
+      const parent=range.startContainer.parentElement;
+      if(parent&&typeof parent.scrollIntoView==="function"){
+        const reduced=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+        parent.scrollIntoView({behavior:reduced?"auto":"smooth",block:"center"});
+      }
+      timeout=window.setTimeout(()=>{setFocusRects([]);setFocusState(null);},5000);
+    });
+    return()=>{
+      window.cancelAnimationFrame(frame);
+      if(timeout!==undefined)window.clearTimeout(timeout);
+    };
   },[focusRequest?.nonce,focusRequest?.quote,near,textEpoch]);
 
   const annotationById=useMemo(()=>new Map(annotations.map(a=>[s(a.id),a])),[annotations]);

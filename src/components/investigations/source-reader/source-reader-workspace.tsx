@@ -562,13 +562,6 @@ export function SourceReaderWorkspace({
   const [pdfPageCount, setPdfPageCount] = useState<number | null>(null);
   const [copilotPageJump, setCopilotPageJump] = useState<
     {page:number;nonce:number;quote?:string;annotationId?:string}|null>(null);
-  function focusPdfEvidence(page:number,annotationId?:string,quote?:string){
-    setCopilotPageJump(prev=>({page,annotationId,quote,nonce:(prev?.nonce??0)+1}));
-    if(annotationId && liveAnnotations.some(a=>s(a.id)===annotationId)){
-      setFocusedAnnotationId(annotationId);setExpandedAnnotationId(annotationId);
-      setPanel("annotations");
-    }
-  }
   const [editingComment, setEditingComment] = useState("");
   const [editingGapIds, setEditingGapIds] = useState<string[]>([]);
   const [editingRequirementIds, setEditingRequirementIds] = useState<string[]>([]);
@@ -589,6 +582,13 @@ export function SourceReaderWorkspace({
     ],
     [annotations, localAnnotations, serverAnnotationIds],
   );
+  function focusPdfEvidence(page:number,annotationId?:string,quote?:string){
+    setCopilotPageJump(prev=>({page,annotationId,quote,nonce:(prev?.nonce??0)+1}));
+    if(annotationId && liveAnnotations.some(a=>s(a.id)===annotationId)){
+      setFocusedAnnotationId(annotationId);setExpandedAnnotationId(annotationId);
+      setPanel("annotations");
+    }
+  }
   const liveAnnotationFragments = useMemo(
     () => [
       ...annotationFragments,

@@ -12,8 +12,6 @@ export function EvidenceTextFocus({children,label="Focus excerpt",kind="evidence
   const textRef=useRef<HTMLDivElement>(null);
   useEffect(()=>{
     if(!nonce)return;
-    setActive(true);
-    textRef.current?.scrollIntoView?.({behavior:"smooth",block:"center"});
     const timeout=window.setTimeout(()=>setActive(false),5000);
     return()=>window.clearTimeout(timeout);
   },[nonce]);
@@ -26,7 +24,11 @@ export function EvidenceTextFocus({children,label="Focus excerpt",kind="evidence
     <button type="button"
       aria-label={label}
       className="mt-1 rounded border border-[var(--amber-dark)] px-2 py-1 text-[11px] font-semibold text-[var(--amber-soft)] hover:bg-[var(--amber-tint)]"
-      onClick={()=>setNonce(v=>v+1)}>
+      onClick={()=>{
+        setActive(true);
+        setNonce(v=>v+1);
+        textRef.current?.scrollIntoView?.({behavior:"smooth",block:"center"});
+      }}>
       ◎ {label}
     </button>
   </div>;

@@ -480,7 +480,7 @@ describe("Window and integration hardening",()=>{
     expect(reader).toContain("<ProcessingCopilot");
     expect(reader).toContain("onActivePageChange={setActivePdfPage}");
     expect(reader).toContain("jumpToPage={copilotPageJump}");
-    expect(reader).toContain("onNavigate={(page, annotationId)");
+    expect(reader).toContain("onNavigate={(page, annotationId, quote)");
     expect(pdf).toContain("onPageCountChange");
     expect(pdf).toContain("reportActivePage");
     expect(pdf).toContain("scrollIntoView");
