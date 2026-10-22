@@ -68,10 +68,13 @@ export function quoteRangeRects(range:Range,page:HTMLElement):EvidenceRect[]{
   const origin=page.getBoundingClientRect();
   const rects:EvidenceRect[]=[];
   for(const rect of Array.from(range.getClientRects())){
+    // Clamp all four sides: clipped glyphs must not stretch beyond the page.
     const left=Math.max(0,rect.left-origin.left);
     const top=Math.max(0,rect.top-origin.top);
-    const width=Math.min(rect.width,Math.max(0,origin.width-left));
-    const height=Math.min(rect.height,Math.max(0,origin.height-top));
+    const right=Math.min(origin.width,rect.right-origin.left);
+    const bottom=Math.min(origin.height,rect.bottom-origin.top);
+    const width=right-left;
+    const height=bottom-top;
     if(width<2||height<2)continue;
     if(rects.some(r=>Math.abs(r.left-left)<1&&Math.abs(r.top-top)<1&&
        Math.abs(r.width-width)<1))continue;
