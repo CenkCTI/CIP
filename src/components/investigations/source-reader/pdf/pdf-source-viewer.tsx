@@ -4,13 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 
 import { createSourceAnnotationV2 } from "@/app/projects/[id]/source-collection-actions";
 import {
-  containsProtectedPdfArtwork,
   PDF_READING_COLORS,
+  pdfArtworkRegions,
+  recolorPdfPagePixels,
   PDF_READING_MODE_OPTIONS,
   PDF_READING_MODE_STORAGE_KEY,
   parsePdfReadingMode,
-  pdfRenderPageColors,
   type PdfReadingMode,
+  type PdfOperationBounds,
 } from "./pdf-reading-mode";
 import {locatePdfEvidence,quoteRangeRects,type EvidenceFocusRequest,
   type EvidenceRect} from "@/lib/collection/evidence-focus";
@@ -33,7 +34,8 @@ type PdfViewportLike={
 type PdfRenderTask={promise:Promise<void>;cancel?:()=>void};
 type PdfPageLike={
   getViewport(options:{scale:number}):PdfViewportLike;
-  render(options:{canvas:HTMLCanvasElement;viewport:PdfViewportLike;transform?:number[]}):PdfRenderTask;
+  render(options:{canvas:HTMLCanvasElement;viewport:PdfViewportLike;transform?:number[];recordOperations?:boolean}):PdfRenderTask;
+  recordedBBoxes:PdfOperationBounds|null;
   streamTextContent(options?:Record<string,unknown>):unknown;
   getOperatorList():Promise<{fnArray:number[]}>;
 };
@@ -97,7 +99,7 @@ function PdfPage({
   const [regionBox,setRegionBox]=useState<{left:number;top:number;width:number;height:number}|null>(null);
   const [textEpoch,setTextEpoch]=useState(0);
   const [renderedMode,setRenderedMode]=useState<PdfReadingMode>("original");
-  const [protectedArtwork,setProtectedArtwork]=useState(false);
+  const [appearanceFallback,setAppearanceFallback]=useState(false);
   const [focusRects,setFocusRects]=useState<EvidenceRect[]>([]);
   const [focusState,setFocusState]=useState<"matched"|"not_found"|null>(null);
   const displayViewport=useMemo(()=>pdfPage?pdfPage.getViewport({scale}):null,[pdfPage,scale]);
@@ -137,35 +139,49 @@ function PdfPage({
     let renderTask:PdfRenderTask|null=null;
     let layer:{render():Promise<void>;cancel():void}|null=null;
 
-    // PDF.js high-contrast rendering can recolor images and vector drawings.
-    // Fail closed to the exact source rendering for any visual content.
+    // Render the authentic PDF once, then recolor neutral pixels only outside
+    // PDF.js-recorded image/vector bounds. Existing text/annotation DOM stays intact.
     const render=async()=>{
-      let mustPreserveArtwork=false;
-      if(readingMode!=="original"){
-        try{
-          const operations=await page.getOperatorList();
-          mustPreserveArtwork=containsProtectedPdfArtwork(operations.fnArray,pdfjs.OPS);
-        }catch{mustPreserveArtwork=true;}
-      }
-      if(stopped)return;
-      const effectiveMode=mustPreserveArtwork?"original":readingMode;
-      setRenderedMode(effectiveMode);
-      setProtectedArtwork(mustPreserveArtwork);
       const ratio=Math.max(1,window.devicePixelRatio||1);
       canvas.width=Math.floor(viewport.width*ratio);canvas.height=Math.floor(viewport.height*ratio);
       canvas.style.width=`${viewport.width}px`;canvas.style.height=`${viewport.height}px`;
       textLayer.replaceChildren();
       textLayer.style.width=`${viewport.width}px`;textLayer.style.height=`${viewport.height}px`;
       textLayer.style.setProperty("--total-scale-factor",String(viewport.scale));
-      const pageColors=pdfRenderPageColors(effectiveMode);
+      const canProcess=readingMode!=="original"&&canvas.width*canvas.height<=8_000_000;
+      const originalMode=readingMode==="original";
       renderTask=page.render({
         canvas,viewport,transform:ratio===1?undefined:[ratio,0,0,ratio,0,0],
-        ...(pageColors?{pageColors,background:pageColors.background}:{}),
+        recordOperations:canProcess,
       });
       layer=new pdfjs.TextLayer({container:textLayer,textContentSource:page.streamTextContent({includeMarkedContent:true}),viewport});
       try{
         await Promise.all([renderTask.promise,layer.render()]);
-        if(!stopped){setError("");setTextEpoch(n=>n+1);}
+        if(stopped)return;
+        let recolored=false;
+        if(canProcess){
+          try{
+            const ctx=canvas.getContext("2d",{willReadFrequently:true});
+            if(ctx){
+              const original=ctx.getImageData(0,0,canvas.width,canvas.height);
+              const operations=await page.getOperatorList();
+              if(stopped)return;
+              const regions=pdfArtworkRegions(operations.fnArray,pdfjs.OPS,page.recordedBBoxes,
+                original.data,canvas.width,canvas.height);
+              if(regions){
+                recolored=recolorPdfPagePixels(original.data,canvas.width,canvas.height,readingMode,regions);
+                if(recolored)ctx.putImageData(original,0,0);
+              }
+            }
+          }catch{
+            // If inspection or canvas pixels fail, the unmodified PDF stays visible.
+          }
+        }
+        if(stopped)return;
+        setRenderedMode(recolored?readingMode:"original");
+        setAppearanceFallback(!originalMode&&!recolored);
+        setError("");
+        setTextEpoch(n=>n+1);
       }catch{
         if(!stopped)setError("PDF sayfası görüntülenemedi.");
       }
@@ -280,10 +296,10 @@ function PdfPage({
       >{regionBox?<div className="citem-pdf-region-draft" style={regionBox}/>:null}</div>:null}
     </div>
     <div className="citem-pdf-page-number">Sayfa {pageNumber}</div>
-    {protectedArtwork&&readingMode!=="original"?<span
-      className="citem-pdf-artwork-safety"
-      title="Bu sayfada görsel veya vektör grafik var. Renkleri korumak için orijinal görünüm kullanılıyor."
-    >Görseller korundu · Orijinal sayfa</span>:null}
+    {appearanceFallback&&readingMode!=="original"?<span
+      className="citem-pdf-artwork-safety" role="status"
+      title="Sayfanın görsel bölgeleri güvenilir biçimde ayrılamadı; kaynak görünümü korundu."
+    >Bu sayfa güvenle karartılamadı · Orijinal görünüm</span>:null}
     {focusState==="not_found"&&focusRequest?.quote?
       <p role="status" className="max-w-[520px] px-2 text-center text-xs text-amber-300">
         Page opened. Exact cited wording could not be located in the rendered PDF text layer.
