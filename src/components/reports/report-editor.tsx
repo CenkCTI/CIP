@@ -1,5 +1,6 @@
-import { ReportPdfExportLink } from "@/components/reports/report-pdf-export-link";
 "use client";
+
+import { ReportPdfExportLink } from "@/components/reports/report-pdf-export-link";
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
