@@ -50,22 +50,30 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
     // relevant page excerpts without re-parsing the PDF. Indexing failures
     // never cause fabricated evidence; fallback uses the original PDF reader.
     let indexedCurrent=false;
+    let indexReason:string|null=null;
     if(input.useSource){
       try{
         const indexed=await ensureIndexedOriginalPDF(owned,input.sourceId,input.assetId,reader);
-        indexedCurrent=indexed.cached||indexed.chunks>0;
-      }catch{indexedCurrent=false;}
+        indexedCurrent=Boolean(indexed.cached||indexed.chunks>0);
+        if(indexed.processing)indexReason="INDEX_PROCESSING";
+      }catch(error){
+        indexedCurrent=false;
+        indexReason=error instanceof Error?error.message:"INDEX_UNAVAILABLE";
+      }
     }
     let indexedSpans:Awaited<ReturnType<typeof retrieveOwnedEvidence>>=[];
     if(input.useSource){
       try{indexedSpans=await retrieveOwnedEvidence(owned,input.question,events);}
-      catch{indexedSpans=[];}
+      catch{indexedSpans=[];indexReason??="RETRIEVAL_UNAVAILABLE";}
     }
     // The active page is a fallback for newly uploaded or non-indexable PDFs.
     // With indexed evidence, preserve current-page context only when user
     // explicitly chose a smaller scope, and never silently send an entire PDF.
-    const includePage=input.useSource && (!indexedSpans.length||
-      input.context.kind==="annotation"||input.context.kind==="pages"||input.context.kind==="page");
+    // Do not relabel a 45k-character legacy document cap as full-document RAG.
+    // A failed entire-document index must not silently become page-one evidence.
+    const includePage=input.useSource && input.context.kind!=="document" &&
+      (!indexedSpans.length||input.context.kind==="annotation"||
+       input.context.kind==="pages"||input.context.kind==="page");
     const pageSpans=includePage?(await loadStage3DocumentContext(reader,{
       sourceId:input.sourceId,assetId:input.assetId,context:input.context,
       mode:"ask",question:input.question,byokConsent:true,
@@ -96,6 +104,15 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
         question:input.question,language,notes:investigationNotes,history,eventHistory,spans,webPages:pages,
       },messages=>byokChat("nvidia_nim",credential.model,credential.apiKey,messages,"generation"));
       if(researchWarning)analysis.warnings.push(researchWarning);
+      if(input.useSource&&!indexedCurrent)
+        analysis.warnings.push("INDEX_UNAVAILABLE: Current PDF could not be fully indexed ("+
+          (indexReason??"NO_READY_INDEX")+"). Results, if any, may come from other indexed sources.");
+      if(input.useSource&&!indexedSpans.length&&pageSpans.length)
+        analysis.warnings.push("FALLBACK_CURRENT_PAGE: Only the selected original page/range is available; this is not Entire PDF analysis.");
+      if(input.useSource&&input.context.kind==="document"&&!indexedSpans.length)
+        analysis.warnings.push("INSUFFICIENT_RETRIEVAL: Entire PDF evidence is unavailable. No page was silently substituted.");
+      if(input.useSource&&indexedSpans.length)
+        analysis.warnings.push("LEXICAL_ONLY: Indexed passages were found by keyword matching, not multilingual semantic search.");
       if(input.webResearch&&!pages.length)
         analysis.warnings.push("Web research did not provide readable evidence. Analysis is based only on PDF or general model knowledge.");
       return analysis;
@@ -108,9 +125,13 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
       await saveInvestigationEvent(owned,{kind:input.webResearch?"WEB_RESEARCH":"ASSESSMENT",
         sourceId:input.sourceId,assetId:input.assetId,question:input.question,
         result:result as unknown as Record<string,unknown>,
-        context:{selected:input.context,indexedCurrent,sourceCount:indexedSpans.length}});
+        context:{selected:input.context,indexedCurrent,sourceCount:indexedSpans.length,indexReason}});
     }catch{unifiedSaved=false;}
     return noStore({result,saved:true,unifiedSaved,
+      retrieval:{status:!input.useSource?"DISABLED":indexedSpans.length?"LEXICAL_ONLY":
+        pageSpans.length?"FALLBACK_CURRENT_PAGE":"INDEX_UNAVAILABLE",
+        indexReason,entireDocumentAvailable:indexedCurrent&&indexedSpans.length>0,
+        returnedPassages:indexedSpans.length},
       notice:unifiedSaved?"Verified source references and provisional analysis are indexed in investigation history.":
         "Chat was saved but the unified investigation timeline is temporarily unavailable."});
   }catch(error){

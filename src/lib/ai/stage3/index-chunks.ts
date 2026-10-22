@@ -16,8 +16,12 @@ export function splitPagesForIndex(pages:{page:number;text:string}[],size=1800,o
   return out;
 }
 export function memorySearchQuery(question:string,history:string[]):string{
+  // Conservative SEARCH-ONLY concepts. Expansion never constitutes evidence or
+  // a translation of an assertion; original quotes remain immutable.
+  const isPurpose=/stratejik|amac[ıi]|niyet|casusluk|strategic|purpose|objective|espionnage/i.test(question);
+  const frenchSearchAliases=isPurpose?["espionnage","renseignement","objectifs","ciblage"]:[];
   // Follow-ups frequently omit the campaign name: use recent event titles and
   // a bounded set of actor / CVE identifiers to restore the referent.
   const clues=history.join(" ").match(/\b(?:APT\d{1,3}|CVE-\d{4}-\d{4,7}|Storm-\d{3,6}|ANSSI|CERT|GRU|NATO)\b/gi)??[];
-  return [question.slice(0,700),...new Set(clues.map(s=>s.toUpperCase()))].slice(0,13).join(" ").slice(0,1000);
+  return [question.slice(0,700),...frenchSearchAliases,...new Set(clues.map(s=>s.toUpperCase()))].slice(0,13).join(" ").slice(0,1000);
 }

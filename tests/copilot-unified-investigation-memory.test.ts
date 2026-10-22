@@ -2,6 +2,37 @@ import {readFileSync} from "node:fs";
 import {describe,it,expect} from "vitest";
 import {splitPagesForIndex,memorySearchQuery} from "@/lib/ai/stage3/index-chunks";
 describe("Unified investigation memory RAG",()=>{
+  it("projects authoritative SHA-256 into the owned original asset reader",()=>{
+    const reader=readFileSync("src/lib/ai/stage3/context.ts","utf8");
+    const indexer=readFileSync("src/lib/ai/stage3/indexed-investigation-memory.ts","utf8");
+    expect(reader).toContain("storage_path,size_bytes,sha256");
+    expect(indexer).toContain('asset.sha256');
+    expect(indexer).toContain('copilot_publish_document_index_v2');
+  });
+  it("keeps incomplete indexes out of READY until an atomic token-bound publication",()=>{
+    const sql=readFileSync("supabase/migrations/202610230067_copilot_index_atomic_publish.sql","utf8");
+    expect(sql).toContain("for update of i");
+    expect(sql).toContain("i.claim_token=p_claim_token");
+    expect(sql).toContain("count(distinct page_number)");
+    expect(sql).toContain("status='READY'");
+    expect(sql).toContain("revoke all on function public.copilot_publish_document_index_v2");
+    expect(sql).toContain("to service_role");
+  });
+  it("adds conservative TR-FR lexical aliases without claiming semantic RAG",()=>{
+    const q=memorySearchQuery("Bu saldırıların stratejik amacı ne olabilir?",["APT28"]);
+    expect(q).toContain("espionnage");
+    expect(q).toContain("renseignement");
+    expect(q).toContain("APT28");
+    const unrelated=memorySearchQuery("CVE-2023-23397",[]);
+    expect(unrelated).not.toContain("espionnage");
+  });
+  it("shows degraded retrieval explicitly instead of claiming entire PDF analysis",()=>{
+    const analyst=readFileSync("src/app/api/projects/[id]/ai/processing/analyst-chat/route.ts","utf8");
+    expect(analyst).toContain("FALLBACK_CURRENT_PAGE");
+    expect(analyst).toContain("INDEX_UNAVAILABLE");
+    expect(analyst).toContain("LEXICAL_ONLY");
+    expect(analyst).toContain('input.context.kind!=="document"');
+  });
   it("splits pages into original-text overlapping citations",()=>{
     const content="APT28 ".repeat(700);
     const chunks=splitPagesForIndex([{page:1,text:content},{page:2,text:"ANSSI details strategic collection"}],1500,100);

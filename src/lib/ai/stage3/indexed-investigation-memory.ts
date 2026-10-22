@@ -18,6 +18,10 @@ type Asset={state?:unknown;asset_role?:unknown;sha256?:unknown;storage_path?:unk
   mime_type?:unknown;original_filename?:unknown;size_bytes?:unknown};
 const isPDF=(a:Asset)=>String(a.mime_type??"").toLowerCase()==="application/pdf"||
   String(a.original_filename??"").toLowerCase().endsWith(".pdf");
+/**
+ * A READY index is an atomic, token-owned snapshot of all extracted PDF pages.
+ * The v2 RPCs require forward migration 067. No partial chunk set is published.
+ */
 export async function ensureIndexedOriginalPDF(owned:Owned,sourceId:string,assetId:string,
   reader:Stage3AiReadContext=createStage3ReadContext(owned)){
   await reader.readSource(sourceId);
@@ -28,55 +32,61 @@ export async function ensureIndexedOriginalPDF(owned:Owned,sourceId:string,asset
     (typeof asset.size_bytes==="number"&&asset.size_bytes>50*1024*1024)){
     throw new InvestigationIndexError("invalid_index_source");
   }
-  const query=()=>owned.supabase.from("copilot_document_indexes").select("id,status,asset_sha256,chunk_count,indexed_at")
+  const existing=await owned.supabase.from("copilot_document_indexes")
+    .select("id,status,asset_sha256,chunk_count,page_count,indexed_at")
     .eq("project_id",owned.projectId).eq("owner_id",owned.user.id)
     .eq("source_id",sourceId).eq("asset_id",assetId).maybeSingle();
-  const existing=await query();
   if(existing.error)throw new InvestigationIndexError("index_database_unavailable");
-  const cached=existing.data as IndexedRow|null;
-  if(cached?.status==="READY"&&cached.asset_sha256===fingerprint&&cached.chunk_count>0)
-    return {cached:true,chunks:cached.chunk_count};
+  const cached=existing.data as (IndexedRow&{page_count:number})|null;
+  if(cached?.status==="READY"&&cached.asset_sha256===fingerprint&&
+    cached.chunk_count>0&&cached.page_count>0){
+    // A stale/partially populated READY record must not be trusted as complete.
+    const counted=await owned.supabase.from("copilot_document_chunks")
+      .select("id",{count:"exact",head:true})
+      .eq("project_id",owned.projectId).eq("owner_id",owned.user.id)
+      .eq("index_id",cached.id);
+    if(counted.error)throw new InvestigationIndexError("index_database_unavailable");
+    if(counted.count===cached.chunk_count)
+      return {cached:true,chunks:cached.chunk_count,pages:cached.page_count};
+  }
   if(cached?.status==="PROCESSING"&&cached.asset_sha256===fingerprint&&
     cached.indexed_at&&Date.now()-new Date(cached.indexed_at).getTime()<240_000){
-    // Concurrent requests must never expose half-populated chunks.
     return {cached:false,processing:true,chunks:0};
   }
   const bytes=await reader.downloadOriginalPdf(asset.storage_path);
   if(createHash("sha256").update(new Uint8Array(bytes)).digest("hex")!==fingerprint)
     throw new InvestigationIndexError("index_metadata_mismatch");
-  // Only the trusted backend may write original-derived evidence. The session
-  // user has SELECT-only RLS access, never direct write privileges to this cache.
+  // Parse before claiming to avoid holding an index lease while extracting.
+  const pages=await extractPdfPages(bytes,"all",{maxDocumentPages:200,maxDocumentChars:500_000});
+  const chunks=splitPagesForIndex(pages);
+  if(!pages.length||!chunks.length||new Set(chunks.map(c=>c.page_number)).size!==pages.length)
+    throw new InvestigationIndexError("index_failed");
   const writeDb=createAdminClient();
-  const claim=await writeDb.rpc("copilot_claim_document_index",{
+  const claim=await writeDb.rpc("copilot_claim_document_index_v2",{
     p_project_id:owned.projectId,p_owner_id:owned.user.id,
     p_source_id:sourceId,p_asset_id:assetId,p_sha:fingerprint,
   });
   if(claim.error)throw new InvestigationIndexError("index_database_unavailable");
-  if(!claim.data)return {cached:false,processing:true,chunks:0};
-  const id=String(claim.data);
+  const token=(claim.data as {index_id:string;claim_token:string}[]|null)?.[0];
+  if(!token)return {cached:false,processing:true,chunks:0};
   try{
-    const pages=await extractPdfPages(bytes,"all",{maxDocumentPages:200,maxDocumentChars:500_000});
-    const chunks=splitPagesForIndex(pages);
-    if(!chunks.length)throw new InvestigationIndexError("index_failed");
-    const removed=await writeDb.from("copilot_document_chunks").delete()
-      .eq("project_id",owned.projectId).eq("owner_id",owned.user.id).eq("index_id",id);
-    if(removed.error)throw new InvestigationIndexError("index_database_unavailable");
-    for(let i=0;i<chunks.length;i+=75){
-      const batch=chunks.slice(i,i+75).map(chunk=>({
-        ...chunk,project_id:owned.projectId,owner_id:owned.user.id,
-        index_id:id,source_id:sourceId,asset_id:assetId,
-      }));
-      const inserted=await writeDb.from("copilot_document_chunks").insert(batch);
-      if(inserted.error)throw new InvestigationIndexError("index_database_unavailable");
-    }
-    const ready=await writeDb.from("copilot_document_indexes").update({
-      status:"READY",chunk_count:chunks.length,page_count:pages.length,indexed_at:new Date().toISOString(),
-    }).eq("id",id).eq("project_id",owned.projectId).eq("owner_id",owned.user.id);
-    if(ready.error)throw new InvestigationIndexError("index_database_unavailable");
+    // One PostgreSQL transaction checks the SHA, lease, all pages, chunk count
+    // and writes the full snapshot before marking it READY.
+    const published=await writeDb.rpc("copilot_publish_document_index_v2",{
+      p_index_id:token.index_id,p_claim_token:token.claim_token,
+      p_project_id:owned.projectId,p_owner_id:owned.user.id,
+      p_source_id:sourceId,p_asset_id:assetId,p_sha:fingerprint,
+      p_page_count:pages.length,p_chunks:chunks,
+    });
+    if(published.error)throw new InvestigationIndexError("index_database_unavailable");
+    if(published.data!==true)throw new InvestigationIndexError("index_failed");
     return {cached:false,chunks:chunks.length,pages:pages.length};
   }catch(error){
-    await writeDb.from("copilot_document_indexes").update({status:"ERROR"})
-      .eq("id",id).eq("project_id",owned.projectId).eq("owner_id",owned.user.id);
+    // A timed-out worker cannot mark a newer owner's claim as ERROR.
+    await writeDb.rpc("copilot_fail_document_index_v2",{
+      p_index_id:token.index_id,p_claim_token:token.claim_token,
+      p_project_id:owned.projectId,p_owner_id:owned.user.id,
+    });
     throw error;
   }
 }

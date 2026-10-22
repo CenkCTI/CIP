@@ -44,8 +44,10 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
         errors.push({assetId:task.id,reason:error instanceof InvestigationIndexError?error.code:"index_failed"});
       }
     }
-    return noStore({indexed,errors,completed:tasks.length===0 || errors.length===0,
-      message:errors.length?"Some PDF indexes could not be created. The original files remain intact.":"Index prepared."});
+    return noStore({indexed,errors,completed:errors.length===0&&
+      indexed.every(item=>!item.processing),
+      message:errors.length?"Some PDF indexes could not be created. The original files remain intact.":
+        indexed.some(item=>item.processing)?"INDEX_PROCESSING: Index still being prepared.":"Index prepared."});
   }catch(error){
     if(error instanceof z.ZodError)return noStore({code:"invalid_request",error:"Invalid index request."},{status:400});
     if(error instanceof Error&&error.message==="bad_origin")return noStore({code:"bad_origin",error:"Invalid request origin."},{status:403});
