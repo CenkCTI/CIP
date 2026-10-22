@@ -1,34 +1,54 @@
-# CİTEM — PDF Reading Modes
+# CİTEM — PDF Reading Modes (mixed-content aware)
 
 The native Source Reader offers exactly **Orijinal**, **Koyu Yeşil**, and
-**Gece Siyahı**. It defaults to the original document appearance until the
-reader chooses a mode. The choice is saved in browser localStorage under
-`citem:pdf-reading-mode:v1` and reused for subsequent PDFs.
+**Gece Siyahı**. Default: Original. Browser preference:
+`citem:pdf-reading-mode:v1` (localStorage).
 
-| Mode | Background | Foreground |
+| Mode | Neutral white canvas background | Neutral black text |
 | --- | --- | --- |
-| Orijinal | source-defined | source-defined |
+| Orijinal | original | original |
 | Koyu Yeşil | `#182b25` | `#e6eee9` |
 | Gece Siyahı | `#151719` | `#e3e6e8` |
 
-## Safe artwork handling
+## How the PDF is rendered
 
-PDF.js `pageColors` high-contrast render may change pictures and drawings,
-so we do not invert the canvas or apply CSS color filters. On dark modes each
-page is inspected via the PDF.js operator list. **Text-only** pages may use
-the dark colors. Pages containing image/graphics/vector operators, or pages
-whose operations cannot be inspected, are displayed **in their entirety in
-original colors** with a small notice. This is a deliberate conservative
-fallback, not full mixed-content recoloring. It protects visual fidelity.
+- Use the normal PDF.js renderer to draw each page *unchanged*.
+- With `recordOperations:true`, collect PDF.js drawing bounds for raster
+  pictures, image masks, charts and vector artwork.
+- Match the bounds to the PDF.js operator list. If the list cannot be verified,
+  preserve the **entire original page** instead of guessing.
+- Read canvas pixels **only in the user's browser**. Recolor near-neutral
+  grayscale pixels outside protected artwork bounds: white -> selected dark
+  background, black -> readable light foreground, intermediate grays blended.
+- Preserve the original RGB of every pixel inside protected artwork rectangles,
+  including white portions of charts and pale heatmap cells.
+- Extremely large pages, all-image scans, unsafe operator lists, uninspectable
+  canvas data and excessive artwork complexity remain Original with a visible
+  explanation. Full-page white vector background fills may be skipped to let
+  normal PDF text/background darken.
 
-The immutable source PDF, annotations, citations, PDF selection layer,
-annotation quad geometry, AI evidence focus, and annotated PDF exports
-remain unchanged. No database or storage mutation is added.
+**Limitations:** Colorized/rasterized text outside a detectable text region is
+not guaranteed to recolor, and a bounding rectangle may also preserve some
+text overlapping artwork. Artwork preservation is conservative and avoids
+claiming mathematically perfect object segmentation.
 
-## Manual acceptance
-1. Switch the three modes on a text-only PDF and confirm dark backgrounds
-   and light text; reload and open another document to confirm persistence.
-2. Open photographed, scanned and vector-heavy PDFs: the page stays original
-   with the artwork-protection notice, and photos/charts stay unchanged.
-3. Verify zoom, page scrolling, selection, markup, citation navigation,
-   evidence-focus HUD, and exports across mixed multi-page PDFs.
+## Source integrity
+
+No PDF bytes, private Storage assets, annotation fragments, PDF coordinates,
+source citations, AI-derived evidence or annotated exports are altered.
+The PDF.js text layer remains intact, preserving selection, search and the
+five-second Evidence Focus HUD. No server-side processing or migration.
+
+## Browser acceptance before merging
+
+1. Open a text-only PDF; change Original -> Green -> Night, zoom, select
+   passages, and verify colors and text fidelity.
+2. Open a PDF with inline graphs and photographs (e.g. Storm-0558 report);
+   ensure the *surrounding page and text* turn dark and the heatmap/photo RGB
+   stays exactly the same within image bounds.
+3. Open a fully scanned page and a full-page photo. They should remain Original
+   and show a non-blocking appearance fallback label.
+4. Check multi-page PDFs, rotation, intermittent pages, virtualized renders,
+   annotation overlays and AI citation navigation.
+5. Reload and open another PDF; verify mode preference is reused.
+6. Export an annotated PDF and compare unchanged original source bytes.
