@@ -1182,13 +1182,12 @@ export function SourceReaderWorkspace({
                           <button
                             type="button"
                             className="text-xs text-amber-300"
-                            onClick={() =>
-                              document
-                                .querySelector<HTMLElement>(
-                                  `[data-pdf-page-number="${s(annotation.page_number)}"]`,
-                                )
-                                ?.scrollIntoView({ behavior: "smooth", block: "start" })
-                            }
+                            onClick={() => focusPdfEvidence(
+                              Number(annotation.page_number),
+                              s(annotation.id),
+                              s(annotation.anchor_kind)==="TEXT"
+                                ?s(annotation.selected_text).slice(0,1400):undefined,
+                            )}
                           >
                             PDF'de göster
                           </button>
