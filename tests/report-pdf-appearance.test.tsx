@@ -20,8 +20,8 @@ const fixture=parseJsonDoc({type:"doc",attrs:{version:1},content:[
   {type:"paragraph",content:[{type:"text",text:"Evidence from CERT Polska and NIST CSF 2.0."}]},
   {type:"paragraph",content:[{type:"text",text:"Source link",marks:[{type:"link",attrs:{href:"https://www.nist.gov/cyberframework"}}]}]},
   {type:"table",content:[
-    {type:"tableRow",content:[{type:"tableHeader",content:[{type:"paragraph",content:[{type:"text",text:"Evidence"}]}]}]},
-    {type:"tableRow",content:[{type:"tableCell",content:[{type:"paragraph",content:[{type:"text",text:"Reviewed"}]}]}]},
+    {type:"tableRow",content:[{type:"tableHeader",attrs:{colspan:1,rowspan:1,colwidth:null},content:[{type:"paragraph",content:[{type:"text",text:"Evidence"}]}]}]},
+    {type:"tableRow",content:[{type:"tableCell",attrs:{colspan:1,rowspan:1,colwidth:null},content:[{type:"paragraph",content:[{type:"text",text:"Reviewed"}]}]}]},
   ]},
 ]});
 if(!fixture.success)throw Error("Invalid report fixture");
