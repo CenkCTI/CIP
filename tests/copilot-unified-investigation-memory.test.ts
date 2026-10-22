@@ -13,7 +13,7 @@ describe("Unified investigation memory RAG",()=>{
     const sql=readFileSync("supabase/migrations/202610230067_copilot_index_atomic_publish.sql","utf8");
     expect(sql).toContain("for update of i");
     expect(sql).toContain("i.claim_token=p_claim_token");
-    expect(sql).toContain("count(distinct page_number)");
+    expect(sql).toContain("count(distinct x.page_number)");
     expect(sql).toContain("status='READY'");
     expect(sql).toContain("revoke all on function public.copilot_publish_document_index_v2");
     expect(sql).toContain("to service_role");

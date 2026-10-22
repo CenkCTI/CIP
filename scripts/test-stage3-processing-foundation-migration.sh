@@ -473,4 +473,69 @@ end $foreign$;
 reset role;
 SQL
 
+
+# Migration 067: exercise transactional publication against the PostgreSQL
+# fixture without uploading any real document or touching production.
+"${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" <<'SQL' >/dev/null
+do $atomic$
+declare
+ claimed record;
+ allowed boolean;
+begin
+ if has_function_privilege('anon',
+   'public.copilot_publish_document_index_v2(uuid,uuid,uuid,uuid,uuid,uuid,text,integer,jsonb)','EXECUTE')
+  or has_function_privilege('authenticated',
+   'public.copilot_publish_document_index_v2(uuid,uuid,uuid,uuid,uuid,uuid,text,integer,jsonb)','EXECUTE')
+ then raise exception 'Untrusted role can publish derived document index';end if;
+ select * into claimed from public.copilot_claim_document_index_v2(
+  '20000000-0000-4000-8000-000000000001',
+  '10000000-0000-4000-8000-000000000001',
+  '30000000-0000-4000-8000-000000000001',
+  '40000000-0000-4000-8000-000000000001',repeat('a',64));
+ if claimed.index_id is null or claimed.claim_token is null then
+  raise exception 'Valid original SHA index claim failed';
+ end if;
+ -- Incomplete page set is rejected and cannot publish READY.
+ select public.copilot_publish_document_index_v2(
+ claimed.index_id,claimed.claim_token,
+ '20000000-0000-4000-8000-000000000001',
+ '10000000-0000-4000-8000-000000000001',
+ '30000000-0000-4000-8000-000000000001',
+ '40000000-0000-4000-8000-000000000001',repeat('a',64),2,
+ '[{"page_number":1,"chunk_number":1,"content":"APT28 espionnage"}]'::jsonb
+ ) into allowed;
+ if allowed then raise exception 'Missing PDF page was published'; end if;
+ if (select status from public.copilot_document_indexes where id=claimed.index_id)<>'PROCESSING'
+ then raise exception 'Index became READY after incomplete publication'; end if;
+ -- An unrelated/stale token cannot publish.
+ select public.copilot_publish_document_index_v2(
+ claimed.index_id,'11111111-1111-4111-8111-111111111111',
+ '20000000-0000-4000-8000-000000000001',
+ '10000000-0000-4000-8000-000000000001',
+ '30000000-0000-4000-8000-000000000001',
+ '40000000-0000-4000-8000-000000000001',repeat('a',64),2,
+ '[{"page_number":1,"chunk_number":1,"content":"APT28 espionnage"},{"page_number":2,"chunk_number":1,"content":"Résumé corroborating details"}]'::jsonb
+ ) into allowed;
+ if allowed then raise exception 'Invalid lease token published index'; end if;
+ -- Exact complete page set and SHA may publish atomically.
+ select public.copilot_publish_document_index_v2(
+ claimed.index_id,claimed.claim_token,
+ '20000000-0000-4000-8000-000000000001',
+ '10000000-0000-4000-8000-000000000001',
+ '30000000-0000-4000-8000-000000000001',
+ '40000000-0000-4000-8000-000000000001',repeat('a',64),2,
+ '[{"page_number":1,"chunk_number":1,"content":"APT28 espionnage"},{"page_number":2,"chunk_number":1,"content":"Résumé corroborating details"}]'::jsonb
+ ) into allowed;
+ if not allowed then raise exception 'Complete atomic index was rejected'; end if;
+ if (select status<>'READY' or page_count<>2 or chunk_count<>2 or claim_token is not null
+     from public.copilot_document_indexes where id=claimed.index_id)
+  or (select count(*) from public.copilot_document_chunks where index_id=claimed.index_id)<>2
+ then raise exception 'READY index had incomplete persisted chunks'; end if;
+ if public.copilot_fail_document_index_v2(claimed.index_id,claimed.claim_token,
+  '20000000-0000-4000-8000-000000000001',
+  '10000000-0000-4000-8000-000000000001')
+ then raise exception 'Completed index could be invalidated by stale lease'; end if;
+end $atomic$;
+SQL
+
 echo "Stage 3 processing foundation, Source Claim and Copilot unified memory migration tests passed."

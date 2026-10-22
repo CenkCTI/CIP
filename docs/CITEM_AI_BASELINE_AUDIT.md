@@ -48,3 +48,6 @@ C: distinguish quote match from entailment, classify source assertion vs inferen
 D: durable hypothesis version memory, intent routing and approved/SSRF-safe fetched web evidence.
 E: threat model, 50–80 human-reviewed gold questions, PG RLS/adversarial tests, timing/cost and canary rollback.
 All require separate review and none may silently authorize production migrations or external document transfer.
+
+## PostgreSQL lexical control (read-only, 2026-10-23)
+A source-style French sentence containing `APT28` and `espionnage` was queried using PostgreSQL `simple`: `stratejik amaç` = no match, `espionnage` = match, `APT28` = match. This verifies a lexical-language mismatch on a synthetic sentence; it is not an end-to-end PDF retrieval benchmark.
