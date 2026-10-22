@@ -109,6 +109,12 @@ export function ProcessingCopilot({
   const [showConnection, setShowConnection] = useState(false);
   const [context, setContext] = useState<CopilotContext>({kind:"document"});
   const [question, setQuestion] = useState("");
+  const [analystChat,setAnalystChat]=useState(false);
+  const [webResearch,setWebResearch]=useState(false);
+  const [useSource,setUseSource]=useState(true);
+  const [memoryNotes,setMemoryNotes]=useState("");
+  const [memoryStatus,setMemoryStatus]=useState("");
+  const [notesOpen,setNotesOpen]=useState(false);
   const [responseLanguage, setResponseLanguage] = useState<"auto" | "tr" | "en">("auto");
   const [turns, setTurns] = useState<CopilotTurn[]>([]);
   const [candidateResult, setCandidateResult] = useState<Stage3CandidateResponse|null>(null);
@@ -157,6 +163,32 @@ export function ProcessingCopilot({
   const connected = isNvidiaByokConnection(byok);
   const contextValid = validCopilotContext(effectiveContext,pageCount);
   const canSend = connected && contextValid && !working && !documentScan.working;
+  const memoryUrl=`/api/projects/${projectId}/ai/processing/memory`;
+  useEffect(()=>{
+    if(!analystChat)return;
+    const abort=new AbortController();
+    async function load(){
+      try{
+        const query=new URLSearchParams({sourceId,assetId});
+        const response=await fetch(memoryUrl+"?"+query,{cache:"no-store",signal:abort.signal});
+        const body=await response.json() as {notes?:string;error?:string;
+          turns?:{id:string;question:string;result:CopilotResult;context?:{context?:CopilotContext};created_at:string}[]};
+        if(!response.ok)throw new Error(body.error||"Memory unavailable");
+        if(abort.signal.aborted)return;
+        setMemoryNotes(body.notes??"");
+        setTurns((body.turns??[]).map((entry,index)=>({
+          id:index+1,context:entry.context?.context??{kind:"page",page:activePage},
+          prompt:entry.question,mode:"analyst",result:entry.result,
+        })));
+        turnCounter.current=(body.turns??[]).length;
+        setMemoryStatus("Investigation memory loaded");
+      }catch(error){
+        if(!abort.signal.aborted)setMemoryStatus(error instanceof Error?error.message:"Memory unavailable");
+      }
+    }
+    void load();
+    return()=>abort.abort();
+  },[analystChat,projectId,sourceId,assetId,memoryUrl]);
 
   async function submit(mode:"ask"|"analyse"|"extract",prompt:string,resume=false) {
     if(!canSend || (mode==="ask" && !prompt.trim())) {
@@ -332,8 +364,65 @@ export function ProcessingCopilot({
         {kind:"document"};
     void documentScan.start(target);
   }
+  async function askAnalyst(prompt:string){
+    if(!canSend||!prompt.trim())return;
+    setWorking(true);setError("");setDiagnostic(null);setMemoryStatus("");
+    const abort=new AbortController();inFlight.current=abort;
+    // Default quick chat uses the currently displayed PDF page, not a silent
+    // whole-document sample. Explicit page-range selections remain respected.
+    const selected:CopilotContext=effectiveContext.kind==="document"
+      ?{kind:"page",page:activePage}:effectiveContext;
+    try{
+      const response=await fetch(`/api/projects/${projectId}/ai/processing/analyst-chat`,{
+        method:"POST",headers:{"content-type":"application/json"},cache:"no-store",
+        signal:abort.signal,
+        body:JSON.stringify({sourceId,assetId,context:selected,
+          question:prompt.trim().slice(0,1500),responseLanguage,
+          useSource,webResearch,byokConsent:true}),
+      });
+      const data=await response.json() as {result?:CopilotResult;saved?:boolean;error?:string;code?:string};
+      if(!response.ok||!data.result)throw new Error(data.error||data.code||"Analyst chat failed");
+      if(abort.signal.aborted)return;
+      setTurns(previous=>[...previous,{
+        id:++turnCounter.current,context:selected,mode:"analyst" as const,
+        prompt:prompt.trim(),result:data.result!,
+      }]);
+      setMemoryStatus(data.saved?"Conversation saved to this investigation":"Conversation not saved");
+      setQuestion("");
+    }catch(error){
+      if(!abort.signal.aborted)setError(error instanceof Error?error.message:"Analyst chat failed");
+    }finally{
+      if(inFlight.current===abort){inFlight.current=null;setWorking(false);}
+    }
+  }
+  async function saveNotes(){
+    setMemoryStatus("");
+    try{
+      const response=await fetch(memoryUrl,{
+        method:"PATCH",headers:{"content-type":"application/json"},
+        body:JSON.stringify({sourceId,assetId,notes:memoryNotes}),
+      });
+      if(!response.ok)throw new Error("Notes were not saved");
+      setMemoryStatus("Memory notes saved");
+    }catch(error){setMemoryStatus(error instanceof Error?error.message:"Save failed");}
+  }
+  async function clearMemory(){
+    setMemoryStatus("");
+    try{
+      const response=await fetch(memoryUrl,{
+        method:"DELETE",headers:{"content-type":"application/json"},
+        body:JSON.stringify({sourceId,assetId}),
+      });
+      if(!response.ok)throw new Error("Conversation was not cleared");
+      setTurns([]);turnCounter.current=0;setMemoryStatus("Conversation cleared; notes retained");
+    }catch(error){setMemoryStatus(error instanceof Error?error.message:"Clear failed");}
+  }
+  function sendQuestion(value:string){
+    if(analystChat)void askAnalyst(value);
+    else void submit("ask",value);
+  }
   function onSubmit(event:FormEvent<HTMLFormElement>){
-    event.preventDefault();void submit("ask",question);
+    event.preventDefault();sendQuestion(question);
   }
   const isMinimized=windowState.geometry.minimized && !windowState.mobile;
 
@@ -465,6 +554,36 @@ export function ProcessingCopilot({
                 candidate.verifiedSupport[0].quote);
           }} onNavigate={onNavigate}/> : null}
       </div>
+      <div className="shrink-0 border-t border-[var(--line-neutral)] px-4 pt-3 text-xs">
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={analystChat} onChange={e=>setAnalystChat(e.target.checked)}/>
+          <span className="font-semibold text-[var(--amber-soft)]">Analyst chat · persistent investigation memory</span>
+        </label>
+        {analystChat ? <div className="mt-2 space-y-2 rounded-lg border border-[var(--line-neutral)] p-3">
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={webResearch} onChange={e=>setWebResearch(e.target.checked)}/>
+            Research web for this message (Brave search; sends your question, not PDF or notes)
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={useSource} onChange={e=>setUseSource(e.target.checked)}/>
+            Include selected PDF evidence (default: current page for fast questions)
+          </label>
+          <button type="button" onClick={()=>setNotesOpen(v=>!v)}
+            className="text-[var(--amber-soft)] underline">{notesOpen?"Hide":"Edit"} investigation memory notes</button>
+          {notesOpen ? <div className="space-y-2">
+            <textarea value={memoryNotes} onChange={e=>setMemoryNotes(e.target.value)}
+              maxLength={4000} rows={3} aria-label="Investigation memory notes"
+              className="w-full rounded border border-[var(--line)] bg-[var(--surface-input)] p-2"
+              placeholder="Analyst-owned context, assumptions, working questions…"/>
+            <div className="flex items-center gap-3">
+              <button type="button" className="text-[var(--amber-soft)] underline" onClick={()=>void saveNotes()}>Save notes</button>
+              <button type="button" className="text-[var(--muted-strong)] underline" onClick={()=>void clearMemory()}>Clear saved chat</button>
+            </div>
+          </div>:null}
+          {memoryStatus ? <p role="status" className="text-[var(--muted-strong)]">{memoryStatus}</p>:null}
+          <p className="text-[11px] text-[var(--muted)]">Hypotheses are AI suggestions, not verified facts. External research is opt-in. Source excerpts are verified where present.</p>
+        </div>:null}
+      </div>
       <form onSubmit={onSubmit}
         className="shrink-0 border-t border-[var(--line)] bg-[var(--surface-panel)] px-4 pb-3 pt-3">
         <label htmlFor="stage3-copilot-question"
@@ -476,7 +595,7 @@ export function ProcessingCopilot({
             onChange={(event)=>setQuestion(event.currentTarget.value)}
             onKeyDown={(event)=>{
               if(event.key==="Enter" && !event.shiftKey && !event.nativeEvent.isComposing){
-                event.preventDefault();void submit("ask",question);
+                event.preventDefault();sendQuestion(question);
               }
             }}
             placeholder="Ask a question about the selected source…" maxLength={1500} rows={3}
@@ -487,7 +606,7 @@ export function ProcessingCopilot({
               onClick={()=>inFlight.current?.abort()}>Cancel</button> : null}
             <button type="submit" disabled={!canSend || !question.trim()}
               className="rounded border border-[var(--amber-strong)] bg-[var(--amber-strong)] px-4 py-2 text-xs font-semibold text-[#171106] hover:bg-[var(--amber-soft)] disabled:opacity-40">
-              {working?"Asking…":"Ask"}
+              {working?"Asking…":analystChat?"Ask analyst":"Ask"}
             </button>
           </div>
         </div>
