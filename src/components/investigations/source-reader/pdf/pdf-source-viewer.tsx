@@ -78,6 +78,31 @@ function annotationLabel(value:unknown){
   return "Bölge";
 }
 
+/** PDF.js text layer spans retain native PDF positioning but are transparent.
+ * Their client rectangles locate glyph antialiasing and PDF hyperlinks so the
+ * dark reader can neutralize chromatic fringes without touching image pixels.
+ */
+function nativePdfTextBounds(
+  textLayer:HTMLDivElement,canvas:HTMLCanvasElement,
+):{left:number;top:number;right:number;bottom:number}[]{
+  const page=canvas.getBoundingClientRect();
+  if(!page.width||!page.height)return [];
+  const sx=canvas.width/page.width,sy=canvas.height/page.height;
+  const padding=Math.max(1,Math.ceil(Math.max(sx,sy)*1.5));
+  const bounds:{left:number;top:number;right:number;bottom:number}[]=[];
+  for(const span of textLayer.querySelectorAll("span")){
+    if(!span.textContent?.trim() || span.classList.contains("markedContent"))continue;
+    const rect=span.getBoundingClientRect();
+    if(rect.width<=0||rect.height<=0)continue;
+    const left=Math.max(0,Math.floor((rect.left-page.left)*sx)-padding);
+    const top=Math.max(0,Math.floor((rect.top-page.top)*sy)-padding);
+    const right=Math.min(canvas.width,Math.ceil((rect.right-page.left)*sx)+padding);
+    const bottom=Math.min(canvas.height,Math.ceil((rect.bottom-page.top)*sy)+padding);
+    if(right>left&&bottom>top)bounds.push({left,top,right,bottom});
+  }
+  return bounds;
+}
+
 function PdfPage({
   pdf,pdfjs,pageNumber,scale,readingMode,annotations,fragments,regionMode,onViewport,onRegion,onAnnotationClick,focusRequest,
 }:{
@@ -169,7 +194,8 @@ function PdfPage({
               const regions=pdfArtworkRegions(operations.fnArray,pdfjs.OPS,page.recordedBBoxes,
                 original.data,canvas.width,canvas.height);
               if(regions){
-                recolored=recolorPdfPagePixels(original.data,canvas.width,canvas.height,readingMode,regions);
+                const textBounds=nativePdfTextBounds(textLayer,canvas);
+                recolored=recolorPdfPagePixels(original.data,canvas.width,canvas.height,readingMode,regions,textBounds);
                 if(recolored)ctx.putImageData(original,0,0);
               }
             }
