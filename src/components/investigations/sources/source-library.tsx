@@ -18,7 +18,9 @@ type Row = Record<string, unknown>;
 const s = (value: unknown) => String(value ?? "");
 const initial: SourceCollectionActionState = {};
 
+type WebPrefill={url:string;title:string;publisher:string;rationale:string};
 type Props = {
+  webPrefill?: WebPrefill | null;
   projectId: string;
   sources: Row[];
   gaps: Row[];
@@ -70,13 +72,14 @@ function ContextChoices({
   );
 }
 
-function SourceMetadataFields() {
+function SourceMetadataFields({prefill}:{prefill?:WebPrefill|null}={}) {
   return (
     <>
       <div className="grid gap-3 md:grid-cols-2">
         <label className="text-sm text-stone-300 md:col-span-2">
           Başlık
-          <input className="field mt-1" name="title" required maxLength={240} />
+          <input className="field mt-1" name="title" required maxLength={240}
+            defaultValue={prefill?.title??""}/>
         </label>
         <label className="text-sm text-stone-300">
           Kaynak türü
@@ -88,7 +91,8 @@ function SourceMetadataFields() {
         </label>
         <label className="text-sm text-stone-300">
           Yayıncı / kurum
-          <input className="field mt-1" name="publisher" maxLength={240} />
+          <input className="field mt-1" name="publisher" maxLength={240}
+            defaultValue={prefill?.publisher??""}/>
         </label>
         <label className="text-sm text-stone-300">
           Yayın tarihi
@@ -101,6 +105,7 @@ function SourceMetadataFields() {
             name="collection_rationale"
             required
             maxLength={4000}
+            defaultValue={prefill?.rationale??""}
             placeholder="Bu materyalin hangi intelligence question, information gap veya collection requirement için gerekli olduğunu açıklayın."
           />
         </label>
@@ -117,10 +122,12 @@ function UrlSourceForm({
   projectId,
   gaps,
   requirements,
+  prefill,
 }: {
   projectId: string;
   gaps: Row[];
   requirements: Row[];
+  prefill?:WebPrefill|null;
 }) {
   const [state, action, pending] = useActionState(
     createCollectionUrlSource.bind(null, projectId),
@@ -128,7 +135,7 @@ function UrlSourceForm({
   );
   return (
     <form action={action} className="space-y-4">
-      <SourceMetadataFields />
+      <SourceMetadataFields prefill={prefill}/>
       <label className="block text-sm text-stone-300">
         URL
         <input
@@ -138,6 +145,7 @@ function UrlSourceForm({
           required
           maxLength={2048}
           placeholder="https://..."
+          defaultValue={prefill?.url??""}
         />
       </label>
       <ContextChoices gaps={gaps} requirements={requirements} />
@@ -307,6 +315,7 @@ function FileSourceForm({
 }
 
 export function SourceLibrary({
+  webPrefill,
   projectId,
   sources,
   gaps,
@@ -318,7 +327,7 @@ export function SourceLibrary({
   annotationCounts,
   unprocessedAnnotationCounts,
 }: Props) {
-  const [mode, setMode] = useState<"url" | "file">("file");
+  const [mode, setMode] = useState<"url" | "file">(webPrefill?"url":"file");
   const [query, setQuery] = useState("");
   const [linkFilter, setLinkFilter] = useState<"all" | "linked" | "unlinked">("all");
 
@@ -383,7 +392,8 @@ export function SourceLibrary({
           {mode === "file" ? (
             <FileSourceForm projectId={projectId} gaps={gaps} requirements={requirements} />
           ) : (
-            <UrlSourceForm projectId={projectId} gaps={gaps} requirements={requirements} />
+            <UrlSourceForm projectId={projectId} gaps={gaps} requirements={requirements}
+              prefill={webPrefill}/>
           )}
         </div>
       </section>
