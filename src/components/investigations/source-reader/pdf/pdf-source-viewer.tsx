@@ -322,8 +322,11 @@ export function PdfSourceViewer({
   const [readingMode,setReadingMode]=useState<PdfReadingMode>("original");
 
   useEffect(()=>{
-    try{setReadingMode(parsePdfReadingMode(window.localStorage.getItem(PDF_READING_MODE_STORAGE_KEY)));}
-    catch{setReadingMode("original");}
+    const frame=window.requestAnimationFrame(()=>{
+      try{setReadingMode(parsePdfReadingMode(window.localStorage.getItem(PDF_READING_MODE_STORAGE_KEY)));}
+      catch{setReadingMode("original");}
+    });
+    return()=>window.cancelAnimationFrame(frame);
   },[]);
   const changeReadingMode=(value:PdfReadingMode)=>{
     setReadingMode(value);
