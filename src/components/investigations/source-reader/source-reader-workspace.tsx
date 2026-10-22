@@ -582,13 +582,6 @@ export function SourceReaderWorkspace({
     ],
     [annotations, localAnnotations, serverAnnotationIds],
   );
-  function focusPdfEvidence(page:number,annotationId?:string,quote?:string){
-    setCopilotPageJump(prev=>({page,annotationId,quote,nonce:(prev?.nonce??0)+1}));
-    if(annotationId && liveAnnotations.some(a=>s(a.id)===annotationId)){
-      setFocusedAnnotationId(annotationId);setExpandedAnnotationId(annotationId);
-      setPanel("annotations");
-    }
-  }
   const liveAnnotationFragments = useMemo(
     () => [
       ...annotationFragments,
@@ -671,6 +664,16 @@ export function SourceReaderWorkspace({
     }
     return counts;
   }, [liveAnnotations]);
+
+  // Keep callbacks after memoized derived data so the React Compiler can
+  // preserve the stable annotation computation and its dependency graph.
+  function focusPdfEvidence(page:number,annotationId?:string,quote?:string){
+    setCopilotPageJump(prev=>({page,annotationId,quote,nonce:(prev?.nonce??0)+1}));
+    if(annotationId && liveAnnotations.some(a=>s(a.id)===annotationId)){
+      setFocusedAnnotationId(annotationId);setExpandedAnnotationId(annotationId);
+      setPanel("annotations");
+    }
+  }
 
   useEffect(() => {
     if (panel !== "annotations" || !focusedAnnotationId) return;
