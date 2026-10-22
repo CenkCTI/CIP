@@ -40,6 +40,7 @@ describe("AI Phase 6 explicit compare + grounded review",()=>{
             verifiedQuote:true,evidenceStatus:"verified"}],
           openQuestions:["Which definition?"],discarded:0,
           warnings:["Relationships are AI suggestions."],status:"analyst_review_required",
+          skippedSources:[],
         }})};
       }
       throw Error("Unexpected request "+url);
