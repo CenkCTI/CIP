@@ -125,3 +125,28 @@ begin
 end $$;
 revoke all on function public.copilot_search_document_chunks(uuid,text,integer) from public,anon;
 grant execute on function public.copilot_search_document_chunks(uuid,text,integer) to authenticated;
+
+-- Atomic claim prevents two requests from deleting/overwriting each other's
+-- exact-PDF evidence cache. Available only to server-side service role.
+create function public.copilot_claim_document_index(
+ p_project_id uuid,p_owner_id uuid,p_source_id uuid,p_asset_id uuid,p_sha text)
+returns uuid language plpgsql security invoker set search_path=''
+as $$
+declare claimed uuid;
+begin
+ insert into public.copilot_document_indexes(
+  project_id,owner_id,source_id,asset_id,asset_sha256,status,chunk_count,page_count,indexed_at
+ ) values(p_project_id,p_owner_id,p_source_id,p_asset_id,p_sha,
+  'PROCESSING',0,0,now())
+ on conflict(project_id,asset_id,owner_id) do update set
+  asset_sha256=excluded.asset_sha256,status='PROCESSING',chunk_count=0,
+  page_count=0,indexed_at=now()
+ where public.copilot_document_indexes.status<>'PROCESSING'
+   or public.copilot_document_indexes.indexed_at<now()-interval '4 minutes'
+ returning id into claimed;
+ return claimed;
+end $$;
+revoke all on function public.copilot_claim_document_index(uuid,uuid,uuid,uuid,text)
+ from public,anon,authenticated;
+grant execute on function public.copilot_claim_document_index(uuid,uuid,uuid,uuid,text)
+ to service_role;

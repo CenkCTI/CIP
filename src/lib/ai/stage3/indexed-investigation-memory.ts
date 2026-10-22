@@ -47,12 +47,13 @@ export async function ensureIndexedOriginalPDF(owned:Owned,sourceId:string,asset
   // Only the trusted backend may write original-derived evidence. The session
   // user has SELECT-only RLS access, never direct write privileges to this cache.
   const writeDb=createAdminClient();
-  const data=await writeDb.from("copilot_document_indexes").upsert({
-    project_id:owned.projectId,owner_id:owned.user.id,source_id:sourceId,asset_id:assetId,
-    asset_sha256:fingerprint,status:"PROCESSING",chunk_count:0,page_count:0,indexed_at:new Date().toISOString(),
-  },{onConflict:"project_id,asset_id,owner_id"}).select("id").single();
-  if(data.error||!data.data)throw new InvestigationIndexError("index_database_unavailable");
-  const id=(data.data as {id:string}).id;
+  const claim=await writeDb.rpc("copilot_claim_document_index",{
+    p_project_id:owned.projectId,p_owner_id:owned.user.id,
+    p_source_id:sourceId,p_asset_id:assetId,p_sha:fingerprint,
+  });
+  if(claim.error)throw new InvestigationIndexError("index_database_unavailable");
+  if(!claim.data)return {cached:false,processing:true,chunks:0};
+  const id=String(claim.data);
   try{
     const pages=await extractPdfPages(bytes,"all",{maxDocumentPages:200,maxDocumentChars:500_000});
     const chunks=splitPagesForIndex(pages);
