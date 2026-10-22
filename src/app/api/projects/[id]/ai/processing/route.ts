@@ -17,6 +17,7 @@ import { runStage3CandidateExtraction } from "@/lib/ai/stage3/candidate-workflow
 import { attachStage3CandidateMatches } from "@/lib/ai/stage3/matching";
 import { assertStage3AnalysisComplete } from "@/lib/ai/stage3/analysis-quality";
 import { assertStage3QuotaReservation } from "@/lib/ai/stage3/usage-quota";
+import {saveInvestigationEvent} from "@/lib/ai/stage3/indexed-investigation-memory";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -133,9 +134,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       await owned.supabase.rpc("complete_ai_usage_event",{
         p_event_id:eventId,p_status:"SUCCEEDED",p_output_chars:JSON.stringify(enriched).length,
       });
+      // Preserve source-only processing behaviour if the memory index migration
+      // is not deployed. Never misrepresent AI output as analyst-approved data.
+      let memorySaved=true;
+      try{
+        await saveInvestigationEvent(owned,{sourceId:request.sourceId,assetId:request.assetId,
+          kind:request.mode==="analyse"?"ANALYSE":request.mode==="extract"?"EXTRACT":"ASK",
+          question:request.mode==="ask"?request.question??"":"",
+          result:enriched as unknown as Record<string,unknown>,context:request.context});
+      }catch{memorySaved=false;}
       return noStore({
-        result:enriched, provider:"nvidia_nim", model:credential.model,
-        notice:"AI suggestions only. The analyst must review evidence and explicitly save all domain records.",
+        result:enriched, provider:"nvidia_nim", model:credential.model,memorySaved,
+        notice:memorySaved?"AI suggestions stored in investigation history, not verified findings.":
+          "AI suggestions only. Unified memory was not saved; review before relying on this result.",
       });
     } catch (e) {
       await owned.supabase.rpc("complete_ai_usage_event",{

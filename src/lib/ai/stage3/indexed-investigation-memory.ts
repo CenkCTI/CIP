@@ -12,7 +12,7 @@ export class InvestigationIndexError extends Error {
     super(code);
   }
 }
-type IndexedRow={id:string;status:string;asset_sha256:string;chunk_count:number};
+type IndexedRow={id:string;status:string;asset_sha256:string;chunk_count:number;indexed_at:string|null};
 type Asset={state?:unknown;asset_role?:unknown;sha256?:unknown;storage_path?:unknown;
   mime_type?:unknown;original_filename?:unknown;size_bytes?:unknown};
 const isPDF=(a:Asset)=>String(a.mime_type??"").toLowerCase()==="application/pdf"||
@@ -27,7 +27,7 @@ export async function ensureIndexedOriginalPDF(owned:Owned,sourceId:string,asset
     (typeof asset.size_bytes==="number"&&asset.size_bytes>50*1024*1024)){
     throw new InvestigationIndexError("invalid_index_source");
   }
-  const query=()=>owned.supabase.from("copilot_document_indexes").select("id,status,asset_sha256,chunk_count")
+  const query=()=>owned.supabase.from("copilot_document_indexes").select("id,status,asset_sha256,chunk_count,indexed_at")
     .eq("project_id",owned.projectId).eq("owner_id",owned.user.id)
     .eq("source_id",sourceId).eq("asset_id",assetId).maybeSingle();
   const existing=await query();
@@ -35,7 +35,8 @@ export async function ensureIndexedOriginalPDF(owned:Owned,sourceId:string,asset
   const cached=existing.data as IndexedRow|null;
   if(cached?.status==="READY"&&cached.asset_sha256===fingerprint&&cached.chunk_count>0)
     return {cached:true,chunks:cached.chunk_count};
-  if(cached?.status==="PROCESSING"&&cached.asset_sha256===fingerprint){
+  if(cached?.status==="PROCESSING"&&cached.asset_sha256===fingerprint&&
+    cached.indexed_at&&Date.now()-new Date(cached.indexed_at).getTime()<240_000){
     // Concurrent requests must never expose half-populated chunks.
     return {cached:false,processing:true,chunks:0};
   }
@@ -45,7 +46,7 @@ export async function ensureIndexedOriginalPDF(owned:Owned,sourceId:string,asset
   // A single independent index generation; no raw PDF or storage URL goes to AI.
   const data=await owned.supabase.from("copilot_document_indexes").upsert({
     project_id:owned.projectId,owner_id:owned.user.id,source_id:sourceId,asset_id:assetId,
-    asset_sha256:fingerprint,status:"PROCESSING",chunk_count:0,page_count:0,indexed_at:null,
+    asset_sha256:fingerprint,status:"PROCESSING",chunk_count:0,page_count:0,indexed_at:new Date().toISOString(),
   },{onConflict:"project_id,asset_id,owner_id"}).select("id").single();
   if(data.error||!data.data)throw new InvestigationIndexError("index_database_unavailable");
   const id=(data.data as {id:string}).id;
@@ -90,7 +91,7 @@ export async function readProjectMemoryEvents(owned:Owned,limit=40):Promise<Memo
 export function eventMemoryHints(events:MemoryEvent[],question:string){
   const words=(question.toLocaleLowerCase("tr-TR").match(/[\p{L}\p{N}]{4,}/gu)??[]).slice(0,14);
   const scored=events.map((event,i)=>({
-    event,i,score:words.reduce((v,w)=>v+(event.question+" "+event.summary).toLocaleLowerCase("tr-TR").includes(w)?v+1:v,0),
+    event,i,score:words.reduce((v,w)=>v+((event.question+" "+event.summary).toLocaleLowerCase("tr-TR").includes(w)?1:0),0),
   })).sort((a,b)=>b.score-a.score||a.i-b.i);
   return scored.slice(0,6).map(({event})=>({
     type:event.kind,question:event.question.slice(0,250),
@@ -129,8 +130,8 @@ export async function saveInvestigationEvent(owned:Owned,input:AnalysisEventInpu
     project_id:owned.projectId,owner_id:owned.user.id,
     source_id:input.sourceId,asset_id:input.assetId,kind:input.kind,
     question:(input.question??"").slice(0,1500),summary,
-    source_evidence:JSON.parse(JSON.stringify(evidence).slice(0,11000)) as unknown[],
-    hypothesis_notes:JSON.parse(JSON.stringify(hypotheses).slice(0,9000)) as unknown[],
+    source_evidence:JSON.stringify(evidence).length<=11000?evidence:[],
+    hypothesis_notes:JSON.stringify(hypotheses).length<=9000?hypotheses:[],
     metadata:{context:input.context??{},verifiedQuotesMayRequireRechecking:true},
   });
   if(error)throw new InvestigationIndexError("index_database_unavailable");
