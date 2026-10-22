@@ -12,7 +12,8 @@ This **separate Draft PR** extends the Source Reader Copilot; it does not expand
 - **No secrets or PDFs in browser persistence:** authenticated PostgREST RLS and server endpoints only; the NVIDIA BYOK cookie is not copied into memory or AI response. No vector database or uncontrolled autonomous web tool.
 
 ## Database migration and rollout
-1. Apply **migration `202610220064_copilot_investigation_memory.sql`** on the intended environment, after existing migration 063. **Do not deploy the UI without the migration.**
+1. Apply **migration `202610220064_copilot_investigation_memory.sql`**, followed by **`202610220065_copilot_memory_acl_hardening.sql`**, on the intended environment after migration 063. Both migrations are required: Supabase's default table grants can include `anon`, so 065 explicitly revokes broad access and preserves owner-scoped authenticated RLS.
+   - The connected `CIP` Supabase database had migrations 064 and 065 applied on 2026-10-22, with a rollback-only owner write/read smoke check and an access-control check. This does **not** imply other environments have been migrated. **Do not deploy the UI to other environments without both migrations.**
 2. Ensure the preexisting `BRAVE_SEARCH_API_KEY` server setting is configured for optional web searches.
 3. Check project-owner separation, source/asset mismatch, cross-user data denial, deletion and data retention. Confirm the `source-assets` immutable original remains unchanged.
 4. Validate Turkish and English hypothesis reasoning with real BYOK models and source-grounded PDF documents; ensure unsupported source tokens and fabricated quotations are rejected.

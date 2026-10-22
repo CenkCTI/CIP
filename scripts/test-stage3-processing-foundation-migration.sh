@@ -349,8 +349,22 @@ SQL
 # Stage 3 source processing schema. Apply it ONLY AFTER those prerequisites.
 "${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" \
   -f "$ROOT/supabase/migrations/202610220064_copilot_investigation_memory.sql" >/dev/null
+"${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" \
+  -f "$ROOT/supabase/migrations/202610220065_copilot_memory_acl_hardening.sql" >/dev/null
 
 "${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" <<'SQL' >/dev/null
+do $acl$
+begin
+  if has_table_privilege('anon','public.copilot_memory_profiles','SELECT')
+    or has_table_privilege('anon','public.copilot_memory_profiles','INSERT')
+    or has_table_privilege('anon','public.copilot_memory_turns','SELECT')
+    or has_table_privilege('anon','public.copilot_memory_turns','INSERT')
+  then raise exception 'Anonymous role inherited Copilot memory privileges'; end if;
+  if not has_table_privilege('authenticated','public.copilot_memory_profiles','SELECT')
+    or not has_table_privilege('authenticated','public.copilot_memory_turns','INSERT')
+  then raise exception 'Authenticated memory privileges are unavailable'; end if;
+end $acl$;
+
 set role authenticated;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
 
