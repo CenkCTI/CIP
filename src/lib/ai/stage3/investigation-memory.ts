@@ -26,6 +26,17 @@ export async function readInvestigationMemory(owned:Owned,sourceId:string,assetI
   if(error)throw new CopilotMemoryError();
   return {profileId:profile.id,notes:profile.notes,turns:(data??[]) as MemoryRow[]};
 }
+/** Project-wide conversational history for continuity across the investigation's sources.
+ * This is unverified conversational context and is never used as quote evidence.
+ */
+export async function readProjectMemoryTurns(owned:Owned){
+  const {data,error}=await owned.supabase.from("copilot_memory_turns")
+    .select("id,question,context,result,web_research,created_at")
+    .eq("project_id",owned.projectId).eq("owner_id",owned.user.id)
+    .order("created_at",{ascending:false}).limit(60);
+  if(error)throw new CopilotMemoryError();
+  return (data??[]) as MemoryRow[];
+}
 /** Only bounded conversational hints; never treat previous AI answers as verified evidence. */
 export function selectMemoryHints(turns:MemoryRow[],question:string){
   const terms=(question.toLocaleLowerCase("tr-TR").match(/[\p{L}\p{N}]{4,}/gu)??[]).slice(0,12);

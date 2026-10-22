@@ -4,7 +4,7 @@ import {validateOrigin,readJsonLimited,noStore} from "@/lib/ai/byok/security";
 import {requireOwnedProject} from "@/lib/projects/ownership";
 import {stage3RequestSchema} from "@/lib/ai/stage3/schemas";
 import {createStage3ReadContext,loadStage3DocumentContext} from "@/lib/ai/stage3/context";
-import {selectMemoryHints,readInvestigationMemory,saveInvestigationTurn,CopilotMemoryError} from "@/lib/ai/stage3/investigation-memory";
+import {selectMemoryHints,readInvestigationMemory,readProjectMemoryTurns,saveInvestigationTurn,CopilotMemoryError} from "@/lib/ai/stage3/investigation-memory";
 import {runAnalystReasoning} from "@/lib/ai/stage3/analyst-reasoning";
 import {getResearchProvider} from "@/lib/ai/research/provider";
 import {loadSelectedComparisonPages} from "@/lib/ai/research/comparison-fetch";
@@ -33,12 +33,15 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
     const asset=await reader.readAsset(input.sourceId,input.assetId);
     if(asset.state!=="READY"||asset.asset_role!=="ORIGINAL")return noStore({
       code:"unsupported_asset",error:"An owned ready original PDF is required."},{status:422});
-    const memory=await readInvestigationMemory(owned,input.sourceId,input.assetId);
+    const [memory,projectTurns]=await Promise.all([
+      readInvestigationMemory(owned,input.sourceId,input.assetId),
+      readProjectMemoryTurns(owned),
+    ]);
     const spans=input.useSource?(await loadStage3DocumentContext(reader,{
       sourceId:input.sourceId,assetId:input.assetId,context:input.context,
       mode:"ask",question:input.question,byokConsent:true,
     })).spans:[];
-    const history=selectMemoryHints(memory.turns,input.question);
+    const history=selectMemoryHints(projectTurns,input.question);
     const language=input.responseLanguage==="auto"?
       (/[çğıöşü]/i.test(input.question)||/\b(neden|nasıl|amacı|hipotez|analiz)\b/i.test(input.question)?"tr":"en"):
       input.responseLanguage;
