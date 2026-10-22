@@ -70,6 +70,7 @@ describe("AI Phase 4 review queue",()=>{
     fireEvent.click(screen.getByRole("button",{name:"Review in Process"}));
     expect(props.onReviewCandidate).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls.every(([url])=>url==="/api/ai/byok/status" ||
+      url.includes("/ai/processing/memory?")||
       url.endsWith("/prepare")||url.endsWith("/chunk")||url.endsWith("/aggregate"))).toBe(true);
     fireEvent.click(screen.getByRole("button",{name:"Dismiss"}));
     expect(screen.queryByText("example.com")).toBeNull();

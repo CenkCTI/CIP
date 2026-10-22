@@ -17,25 +17,27 @@ const fetchMock=vi.fn();
 beforeEach(()=>{vi.clearAllMocks();fetchMock.mockReset();vi.stubGlobal("fetch",fetchMock);});
 
 describe("AI Phase 5 panel discoverability",()=>{
-  it("docks a visible research toggle outside the scrollable chat transcript",()=>{
+  it("exposes research as a mode in the normal composer instead of a separate dock",async()=>{
     fetchMock.mockImplementation(async(url:string)=>{
       if(url==="/api/ai/byok/status")return {ok:true,json:async()=>({
         connected:true,providerId:"nvidia_nim",
         model:"nvidia/nemotron-3-super-120b-a12b",
       })};
+      if(url.includes("/ai/processing/memory?"))return {ok:true,json:async()=>({
+        notes:"",turns:[],
+      })};
       throw Error("Unexpected "+url);
     });
     render(<ProcessingCopilot {...props} sourceTitle="Test source" selectedAnnotationId={null}
       activePage={6} pageCount={20} onClose={vi.fn()} onNavigate={vi.fn()}/>);
-    const dock=screen.getByTestId("copilot-research-dock");
-    const history=screen.getByLabelText("Copilot chat history");
-    const toggle=screen.getByRole("button",{name:/Controlled Web Research/});
-    expect(dock.contains(toggle)).toBe(true);
-    expect(history.contains(dock)).toBe(false);
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    fireEvent.click(toggle);
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    await screen.findByText("NVIDIA connected");
+    expect(screen.queryByTestId("copilot-research-dock")).toBeNull();
+    const mode=screen.getByRole("button",{name:"Web research"});
+    expect(mode.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(mode);
+    expect(mode.getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByText("Research question")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Ask a research question…")).toBeTruthy();
   });
 });
 describe("AI Phase 5 deliberate web search UI",()=>{
