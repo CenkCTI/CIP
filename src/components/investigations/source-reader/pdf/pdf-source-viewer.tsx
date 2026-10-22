@@ -3,6 +3,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { createSourceAnnotationV2 } from "@/app/projects/[id]/source-collection-actions";
+import {
+  PDF_READING_COLORS,
+  pdfArtworkRegions,
+  recolorPdfPagePixels,
+  PDF_READING_MODE_OPTIONS,
+  PDF_READING_MODE_STORAGE_KEY,
+  parsePdfReadingMode,
+  type PdfReadingMode,
+  type PdfOperationBounds,
+} from "./pdf-reading-mode";
 import {locatePdfEvidence,quoteRangeRects,type EvidenceFocusRequest,
   type EvidenceRect} from "@/lib/collection/evidence-focus";
 import {
@@ -24,13 +34,16 @@ type PdfViewportLike={
 type PdfRenderTask={promise:Promise<void>;cancel?:()=>void};
 type PdfPageLike={
   getViewport(options:{scale:number}):PdfViewportLike;
-  render(options:{canvas:HTMLCanvasElement;viewport:PdfViewportLike;transform?:number[]}):PdfRenderTask;
+  render(options:{canvas:HTMLCanvasElement;viewport:PdfViewportLike;transform?:number[];recordOperations?:boolean}):PdfRenderTask;
+  recordedBBoxes:PdfOperationBounds|null;
   streamTextContent(options?:Record<string,unknown>):unknown;
+  getOperatorList():Promise<{fnArray:number[]}>;
 };
 type PdfDocumentLike={numPages:number;getPage(page:number):Promise<PdfPageLike>;destroy?:()=>Promise<void>};
 type PdfLoadingTask={promise:Promise<PdfDocumentLike>;destroy?:()=>void};
 type PdfJsLike={
   GlobalWorkerOptions:{workerSrc:string};
+  OPS:Record<string,number>;
   getDocument(options:Record<string,unknown>):PdfLoadingTask;
   TextLayer:new(options:{container:HTMLDivElement;textContentSource:unknown;viewport:PdfViewportLike})=>{render():Promise<void>;cancel():void};
 };
@@ -65,10 +78,35 @@ function annotationLabel(value:unknown){
   return "Bölge";
 }
 
+/** PDF.js text layer spans retain native PDF positioning but are transparent.
+ * Their client rectangles locate glyph antialiasing and PDF hyperlinks so the
+ * dark reader can neutralize chromatic fringes without touching image pixels.
+ */
+function nativePdfTextBounds(
+  textLayer:HTMLDivElement,canvas:HTMLCanvasElement,
+):{left:number;top:number;right:number;bottom:number}[]{
+  const page=canvas.getBoundingClientRect();
+  if(!page.width||!page.height)return [];
+  const sx=canvas.width/page.width,sy=canvas.height/page.height;
+  const padding=Math.max(1,Math.ceil(Math.max(sx,sy)*1.5));
+  const bounds:{left:number;top:number;right:number;bottom:number}[]=[];
+  for(const span of textLayer.querySelectorAll("span")){
+    if(!span.textContent?.trim() || span.classList.contains("markedContent"))continue;
+    const rect=span.getBoundingClientRect();
+    if(rect.width<=0||rect.height<=0)continue;
+    const left=Math.max(0,Math.floor((rect.left-page.left)*sx)-padding);
+    const top=Math.max(0,Math.floor((rect.top-page.top)*sy)-padding);
+    const right=Math.min(canvas.width,Math.ceil((rect.right-page.left)*sx)+padding);
+    const bottom=Math.min(canvas.height,Math.ceil((rect.bottom-page.top)*sy)+padding);
+    if(right>left&&bottom>top)bounds.push({left,top,right,bottom});
+  }
+  return bounds;
+}
+
 function PdfPage({
-  pdf,pdfjs,pageNumber,scale,annotations,fragments,regionMode,onViewport,onRegion,onAnnotationClick,focusRequest,
+  pdf,pdfjs,pageNumber,scale,readingMode,annotations,fragments,regionMode,onViewport,onRegion,onAnnotationClick,focusRequest,
 }:{
-  pdf:PdfDocumentLike;pdfjs:PdfJsLike;pageNumber:number;scale:number;annotations:Row[];fragments:Row[];regionMode:boolean;
+  pdf:PdfDocumentLike;pdfjs:PdfJsLike;pageNumber:number;scale:number;readingMode:PdfReadingMode;annotations:Row[];fragments:Row[];regionMode:boolean;
   onViewport:(page:number,viewport:PdfViewportLike,base:PdfViewportLike)=>void;
   onRegion:(fragment:FragmentDraft,left:number,top:number)=>void;
   onAnnotationClick:(id:string)=>void;
@@ -85,6 +123,8 @@ function PdfPage({
   const [regionStart,setRegionStart]=useState<{x:number;y:number}|null>(null);
   const [regionBox,setRegionBox]=useState<{left:number;top:number;width:number;height:number}|null>(null);
   const [textEpoch,setTextEpoch]=useState(0);
+  const [renderedMode,setRenderedMode]=useState<PdfReadingMode>("original");
+  const [appearanceFallback,setAppearanceFallback]=useState(false);
   const [focusRects,setFocusRects]=useState<EvidenceRect[]>([]);
   const [focusState,setFocusState]=useState<"matched"|"not_found"|null>(null);
   const displayViewport=useMemo(()=>pdfPage?pdfPage.getViewport({scale}):null,[pdfPage,scale]);
@@ -120,20 +160,61 @@ function PdfPage({
   useEffect(()=>{
     if(!near||!pdfPage||!displayViewport||!canvasRef.current||!textRef.current)return;
     const page=pdfPage,viewport=displayViewport,canvas=canvasRef.current,textLayer=textRef.current;
-    const ratio=Math.max(1,window.devicePixelRatio||1);
-    canvas.width=Math.floor(viewport.width*ratio);canvas.height=Math.floor(viewport.height*ratio);
-    canvas.style.width=`${viewport.width}px`;canvas.style.height=`${viewport.height}px`;
-    textLayer.replaceChildren();
-    textLayer.style.width=`${viewport.width}px`;textLayer.style.height=`${viewport.height}px`;
-    textLayer.style.setProperty("--total-scale-factor",String(viewport.scale));
-    const renderTask=page.render({canvas,viewport,transform:ratio===1?undefined:[ratio,0,0,ratio,0,0]});
-    const layer=new pdfjs.TextLayer({container:textLayer,textContentSource:page.streamTextContent({includeMarkedContent:true}),viewport});
     let stopped=false;
-    Promise.all([renderTask.promise,layer.render()])
-      .then(()=>{if(!stopped)setTextEpoch(n=>n+1);})
-      .catch(()=>{if(!stopped)setError("PDF sayfası görüntülenemedi.");});
-    return()=>{stopped=true;try{renderTask.cancel?.();}catch{}try{layer.cancel();}catch{}};
-  },[near,pdfjs,pdfPage,displayViewport]);
+    let renderTask:PdfRenderTask|null=null;
+    let layer:{render():Promise<void>;cancel():void}|null=null;
+
+    // Render the authentic PDF once, then recolor neutral pixels only outside
+    // PDF.js-recorded image/vector bounds. Existing text/annotation DOM stays intact.
+    const render=async()=>{
+      const ratio=Math.max(1,window.devicePixelRatio||1);
+      canvas.width=Math.floor(viewport.width*ratio);canvas.height=Math.floor(viewport.height*ratio);
+      canvas.style.width=`${viewport.width}px`;canvas.style.height=`${viewport.height}px`;
+      textLayer.replaceChildren();
+      textLayer.style.width=`${viewport.width}px`;textLayer.style.height=`${viewport.height}px`;
+      textLayer.style.setProperty("--total-scale-factor",String(viewport.scale));
+      const canProcess=readingMode!=="original"&&canvas.width*canvas.height<=8_000_000;
+      const originalMode=readingMode==="original";
+      renderTask=page.render({
+        canvas,viewport,transform:ratio===1?undefined:[ratio,0,0,ratio,0,0],
+        recordOperations:canProcess,
+      });
+      layer=new pdfjs.TextLayer({container:textLayer,textContentSource:page.streamTextContent({includeMarkedContent:true}),viewport});
+      try{
+        await Promise.all([renderTask.promise,layer.render()]);
+        if(stopped)return;
+        let recolored=false;
+        if(canProcess){
+          try{
+            const ctx=canvas.getContext("2d",{willReadFrequently:true});
+            if(ctx){
+              const original=ctx.getImageData(0,0,canvas.width,canvas.height);
+              const operations=await page.getOperatorList();
+              if(stopped)return;
+              const regions=pdfArtworkRegions(operations.fnArray,pdfjs.OPS,page.recordedBBoxes,
+                original.data,canvas.width,canvas.height);
+              if(regions){
+                const textBounds=nativePdfTextBounds(textLayer,canvas);
+                recolored=recolorPdfPagePixels(original.data,canvas.width,canvas.height,readingMode,regions,textBounds);
+                if(recolored)ctx.putImageData(original,0,0);
+              }
+            }
+          }catch{
+            // If inspection or canvas pixels fail, the unmodified PDF stays visible.
+          }
+        }
+        if(stopped)return;
+        setRenderedMode(recolored?readingMode:"original");
+        setAppearanceFallback(!originalMode&&!recolored);
+        setError("");
+        setTextEpoch(n=>n+1);
+      }catch{
+        if(!stopped)setError("PDF sayfası görüntülenemedi.");
+      }
+    };
+    void render();
+    return()=>{stopped=true;try{renderTask?.cancel?.();}catch{}try{layer?.cancel();}catch{}};
+  },[near,pdfjs,pdfPage,displayViewport,readingMode]);
 
   // Resolve after PDF.js text layer render; a page jump alone isn't enough.
   useEffect(()=>{
@@ -179,7 +260,7 @@ function PdfPage({
       ref={shellRef}
       className="citem-pdf-page"
       data-pdf-page-number={pageNumber}
-      style={{width:size.width,height:size.height}}
+      style={{width:size.width,height:size.height,background:PDF_READING_COLORS[renderedMode].background}}
       onClick={(event)=>{
         if(regionMode||!viewportRef.current)return;
         const selection=window.getSelection();if(selection&&!selection.isCollapsed)return;
@@ -241,6 +322,10 @@ function PdfPage({
       >{regionBox?<div className="citem-pdf-region-draft" style={regionBox}/>:null}</div>:null}
     </div>
     <div className="citem-pdf-page-number">Sayfa {pageNumber}</div>
+    {appearanceFallback&&readingMode!=="original"?<span
+      className="citem-pdf-artwork-safety" role="status"
+      title="Sayfanın görsel bölgeleri güvenilir biçimde ayrılamadı; kaynak görünümü korundu."
+    >Bu sayfa güvenle karartılamadı · Orijinal görünüm</span>:null}
     {focusState==="not_found"&&focusRequest?.quote?
       <p role="status" className="max-w-[520px] px-2 text-center text-xs text-amber-300">
         Page opened. Exact cited wording could not be located in the rendered PDF text layer.
@@ -276,6 +361,19 @@ export function PdfSourceViewer({
   const [error,setError]=useState("");
   const [scale,setScale]=useState(1.2);
   const [regionMode,setRegionMode]=useState(false);
+  const [readingMode,setReadingMode]=useState<PdfReadingMode>("original");
+
+  useEffect(()=>{
+    const frame=window.requestAnimationFrame(()=>{
+      try{setReadingMode(parsePdfReadingMode(window.localStorage.getItem(PDF_READING_MODE_STORAGE_KEY)));}
+      catch{setReadingMode("original");}
+    });
+    return()=>window.cancelAnimationFrame(frame);
+  },[]);
+  const changeReadingMode=(value:PdfReadingMode)=>{
+    setReadingMode(value);
+    try{window.localStorage.setItem(PDF_READING_MODE_STORAGE_KEY,value);}catch{}
+  };
   const [selection,setSelection]=useState<SelectionDraft|null>(null);
   const [editor,setEditor]=useState<EditorDraft|null>(null);
   const [comment,setComment]=useState("");
@@ -566,6 +664,13 @@ export function PdfSourceViewer({
         <button type="button" className="citem-button-ghost" onClick={()=>setScale(v=>Math.min(2.5,Number((v+.15).toFixed(2))))}>+</button>
         <button type="button" className="citem-button-ghost" onClick={()=>setScale(1.2)}>Varsayılan</button>
       </div>
+      <label className="citem-pdf-reading-label">
+        PDF Görünümü
+        <select className="citem-pdf-reading-select" aria-label="PDF görünüm modu" value={readingMode}
+          onChange={event=>changeReadingMode(parsePdfReadingMode(event.currentTarget.value))}>
+          {PDF_READING_MODE_OPTIONS.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
+      </label>
       <button type="button" className={regionMode?"citem-button":"citem-button-ghost"} onClick={()=>{setRegionMode(v=>!v);setSelection(null);setEditor(null);window.getSelection()?.removeAllRanges();}}>
         {regionMode?"Bölge seçimi açık":"Bölge seç"}
       </button>
@@ -579,7 +684,7 @@ export function PdfSourceViewer({
       onScroll={()=>{persistViewState();reportActivePage();}}
     >
       {Array.from({length:pdf.numPages},(_,index)=><PdfPage
-        key={index+1} pdf={pdf} pdfjs={pdfjs} pageNumber={index+1} scale={scale}
+        key={index+1} pdf={pdf} pdfjs={pdfjs} pageNumber={index+1} scale={scale} readingMode={readingMode}
         annotations={annotations} fragments={fragments} regionMode={regionMode}
         focusRequest={jumpToPage?.page===index+1?jumpToPage:null}
         onViewport={handleViewport}
