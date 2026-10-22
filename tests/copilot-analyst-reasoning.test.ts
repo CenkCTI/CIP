@@ -35,7 +35,7 @@ describe("Analyst mode evidence and hypothesis trust boundaries",()=>{
     const messages=makeAnalystMessages({question:"What may be the strategic goal?",language:"en",
       notes:"An analyst's ongoing hypothesis",history:[{question:"What happened?",previous_ai_response:"Tentative"}],
       spans:[span],webPages:[page]});
-    expect(messages[0].content).toContain("not verified evidence");
+    expect(messages[0].content).toContain("general model knowledge");
     expect(messages[0].content).toContain("Untrusted PDF");
     expect(messages[1].content).toContain("prior_conversation_UNTRUSTED");
     expect(messages[1].content).toContain("WEB_DATA_UNTRUSTED");
