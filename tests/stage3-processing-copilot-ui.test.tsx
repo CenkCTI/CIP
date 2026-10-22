@@ -60,7 +60,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
     expect(JSON.stringify(body)).not.toMatch(/apiKey|signedUrl|selectedText/);
     fireEvent.click(screen.getByText("Source excerpts · 1"));
     fireEvent.click(screen.getByRole("button",{name:"Go to PDF page 5"}));
-    expect(props.onNavigate).toHaveBeenCalledWith(5,undefined);
+    expect(props.onNavigate).toHaveBeenCalledWith(5,undefined,"phishing was reported");
     expect(screen.getByText(/Enter: send/)).toBeTruthy();
   });
 
@@ -458,7 +458,7 @@ describe("Stage 3 Processing Copilot UI",()=>{
     expect(item.getByText("phishing was reported")).toBeTruthy();
     fireEvent.click(item.getByText("Source excerpts · 1"));
     fireEvent.click(item.getByRole("button",{name:"Go to PDF page 5"}));
-    expect(onNavigate).toHaveBeenCalledWith(5,annotationId);
+    expect(onNavigate).toHaveBeenCalledWith(5,annotationId,"phishing was reported");
     expect(item.queryByText(/Save Candidate|Create Indicator/)).toBeNull();
   });
 });
