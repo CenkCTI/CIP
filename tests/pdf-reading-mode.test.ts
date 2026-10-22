@@ -1,43 +1,88 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe,expect,it } from "vitest";
 import {
-  containsProtectedPdfArtwork,PDF_READING_COLORS,PDF_READING_MODE_OPTIONS,
-  PDF_READING_MODE_STORAGE_KEY,parsePdfReadingMode,pdfRenderPageColors,
+  PDF_READING_COLORS,PDF_READING_MODE_OPTIONS,PDF_READING_MODE_STORAGE_KEY,
+  parsePdfReadingMode,pdfArtworkRegions,recolorPdfPagePixels,
+  type PdfOperationBounds,
 } from "../src/components/investigations/source-reader/pdf/pdf-reading-mode";
 
-describe("CİTEM PDF appearance",()=>{
-  it("supports only Original, Forest, Night and defaults to Original",()=>{
+function recordedBox(coords:Array<[number,number,number,number]|null>):PdfOperationBounds{
+  return {
+    length:coords.length,
+    isEmpty:(i)=>coords[i]===null,
+    minX:(i)=>coords[i]![0],
+    minY:(i)=>coords[i]![1],
+    maxX:(i)=>coords[i]![2],
+    maxY:(i)=>coords[i]![3],
+  };
+}
+const ops={fill:1,showText:2,paintImageXObject:3,stroke:4};
+
+describe("CİTEM PDF mixed-content reading appearance",()=>{
+  it("supports precisely three appearances and defaults to Original",()=>{
     expect(PDF_READING_MODE_OPTIONS.map(x=>x.label)).toEqual(["Orijinal","Koyu Yeşil","Gece Siyahı"]);
     expect(parsePdfReadingMode("forest")).toBe("forest");
     expect(parsePdfReadingMode("night")).toBe("night");
-    expect(parsePdfReadingMode("unexpected")).toBe("original");
     expect(parsePdfReadingMode(null)).toBe("original");
-    expect(PDF_READING_MODE_STORAGE_KEY).toMatch(/^citem:pdf-reading-mode:/);
+    expect(parsePdfReadingMode("invalid")).toBe("original");
+    expect(PDF_READING_MODE_STORAGE_KEY).toContain("citem:pdf-reading-mode:v1");
+    expect(PDF_READING_COLORS.forest.background).toBe("#182b25");
+    expect(PDF_READING_COLORS.night.background).toBe("#151719");
   });
-  it("uses PDF.js native foreground/background instead of CSS bitmap inversion",()=>{
-    expect(pdfRenderPageColors("original")).toBeUndefined();
-    expect(pdfRenderPageColors("forest")).toEqual(PDF_READING_COLORS.forest);
-    expect(pdfRenderPageColors("night")).toEqual(PDF_READING_COLORS.night);
+  it("recolors neutral page background and black text, preserving heatmap image RGB exactly",()=>{
+    const width=10,height=10;
+    const original=new Uint8ClampedArray(width*height*4);
+    for(let p=0;p<original.length;p+=4){
+      original[p]=255;original[p+1]=255;original[p+2]=255;original[p+3]=255;
+    }
+    // Black letters outside image region.
+    let k=(6*width+2)*4;
+    original[k]=0;original[k+1]=0;original[k+2]=0;
+    // Illustrated image at x=4..6,y=2..4, including light-colored cells.
+    for(let y=2;y<5;y++)for(let x=4;x<7;x++){
+      k=(y*width+x)*4;
+      original[k]=245;original[k+1]=176;original[k+2]=163;
+    }
+    const imageBefore=original.slice((2*width+4)*4,(2*width+7)*4);
+    const boxes=recordedBox([null,[4,2,7,5],null]);
+    const regions=pdfArtworkRegions([2,3,2],ops,boxes,original,width,height);
+    expect(regions).not.toBeNull();
+    expect(recolorPdfPagePixels(original,width,height,"night",regions!)).toBe(true);
+    const sample=(x:number,y:number)=>[...original.slice((y*width+x)*4,(y*width+x)*4+3)];
+    expect(sample(0,0)).toEqual([21,23,25]);
+    expect(sample(2,6)).toEqual([227,230,232]);
+    expect([...original.slice((2*width+4)*4,(2*width+7)*4)]).toEqual([...imageBefore]);
+    expect(sample(4,3)).toEqual([245,176,163]);
+  });
+  it("protects vector charts and scanned pages, and never guesses a mismatched operator list",()=>{
+    const data=new Uint8ClampedArray(20*20*4).fill(255);
+    const vectorRegions=pdfArtworkRegions([2,4],ops,
+      recordedBox([null,[3,3,12,8]]),data,20,20);
+    expect(vectorRegions).toHaveLength(1);
+    expect(vectorRegions![0].left).toBe(1);
+    expect(pdfArtworkRegions([3,2],ops,recordedBox([null]),data,20,20)).toBeNull();
+    expect(pdfArtworkRegions([3],ops,null,data,20,20)).toBeNull();
+    expect(pdfArtworkRegions([3],{},recordedBox([[0,0,20,20]]),data,20,20)).toBeNull();
+    const wholePage=pdfArtworkRegions([3],ops,recordedBox([[0,0,20,20]]),data,20,20);
+    expect(wholePage).toHaveLength(1);
+    expect(recolorPdfPagePixels(data,20,20,"forest",wholePage!)).toBe(false);
+  });
+  it("does not protect a plain white PDF vector page background",()=>{
+    const data=new Uint8ClampedArray(20*20*4).fill(255);
+    const regions=pdfArtworkRegions([1,2],ops,recordedBox([[0,0,20,20],null]),data,20,20);
+    expect(regions).toEqual([]);
+    expect(recolorPdfPagePixels(data,20,20,"forest",regions!)).toBe(true);
+    expect([...data.slice(0,3)]).toEqual([24,43,37]);
+  });
+  it("keeps original source, selected text, annotation geometry and AI evidence focus unmodified",()=>{
     const viewer=readFileSync("src/components/investigations/source-reader/pdf/pdf-source-viewer.tsx","utf8");
-    expect(viewer).toContain("pageColors,background:pageColors.background");
-    expect(viewer).not.toContain("filter:invert(");
+    expect(viewer).toContain("recordOperations:canProcess");
+    expect(viewer).toContain("pdfArtworkRegions(operations.fnArray,pdfjs.OPS,page.recordedBBoxes");
+    expect(viewer).toContain("recolorPdfPagePixels(original.data,canvas.width,canvas.height,readingMode,regions)");
     expect(viewer).toContain("window.localStorage.setItem(PDF_READING_MODE_STORAGE_KEY,value)");
-    expect(viewer).toContain("readingMode={readingMode}");
-  });
-  it("keeps image/vector pages original and fails closed on unknown operators",()=>{
-    const ops={constructPath:91,paintImageXObject:92,paintInlineImageXObject:93,shadingFill:94,fill:95,showText:96};
-    expect(containsProtectedPdfArtwork([96,96],ops)).toBe(false);
-    for(const id of [91,92,93,94,95])expect(containsProtectedPdfArtwork([96,id],ops)).toBe(true);
-    expect(containsProtectedPdfArtwork([],ops)).toBe(true);
-    expect(containsProtectedPdfArtwork([96],{})).toBe(true);
-    expect(containsProtectedPdfArtwork(undefined,ops)).toBe(true);
-  });
-  it("maintains evidence focus, PDF coordinates and optimistic annotation updates",()=>{
-    const viewer=readFileSync("src/components/investigations/source-reader/pdf/pdf-source-viewer.tsx","utf8");
-    expect(viewer).toContain('const effectiveMode=mustPreserveArtwork?"original":readingMode');
-    expect(viewer).toContain("setProtectedArtwork(mustPreserveArtwork)");
     expect(viewer).toContain("clientRectToPdfQuad");
     expect(viewer).toContain("locatePdfEvidence");
     expect(viewer).toContain("onAnnotationCreated?.({");
+    expect(viewer).not.toContain("filter:invert(");
   });
 });
