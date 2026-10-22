@@ -43,3 +43,13 @@ autonomous attribution engine.
 4. Try a weak event page; verify no direct evidence is disclosed rather than elevated to proof.
 5. Verify Source/Claim records remain unchanged until explicit normal Stage 2 action.
 6. Run CI, SSRF/cross-user security acceptance and inspect quote-verification failures.
+
+## Analyst acceptance correction (2026-10-22)
+
+A live test supplied only a Wikipedia StarTimes result and the compare action produced one PDF quote but no valid WEB quote. That is a **provenance-safe inconclusive result**, not evidence that the source contradicts or supports the PDF. The PDF excerpt (“Your reports cites examples...”) is a reporter's question/attribution, not an independent factual finding. This change:
+
+- Marks obvious questions and report attributions as such, preserving the literal PDF quotation.
+- Suppresses an AI paraphrase that would add unsupported StarTimes-specific details to that question.
+- Distinguishes `no_quote` from `rejected_quote` and labels both as unverified comparisons, never “no evidence exists.”
+- Clarifies that selecting 2–3 diverse external research reports improves the chance of corroboration but does not certify independence.
+- Keeps server-side verbatim matching and analyst-only approval boundaries intact.

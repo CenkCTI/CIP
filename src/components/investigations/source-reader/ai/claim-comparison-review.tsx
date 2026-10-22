@@ -13,7 +13,11 @@ export function ClaimComparisonReview({result,onNavigate}:{
       <p className="mt-1">Review the exact PDF and WEB excerpts before drawing conclusions.</p>
     </div>
     <div className="rounded border border-[var(--line-neutral)] p-3">
-      <p className="font-semibold">Claim candidate from the original PDF</p>
+      <p className="font-semibold">Proposition referenced in the original PDF</p>
+      {result.pdfClaim.originKind==="attributed_or_question"?
+        <p className="mt-1 font-semibold text-[var(--amber-soft)]">
+          Question / attributed claim — not an established fact
+        </p>:null}
       <p className="mt-1">{result.pdfClaim.paraphrase}</p>
       <blockquote className="mt-2 border-l-2 border-[var(--amber-dark)] pl-2">{result.pdfClaim.quote}</blockquote>
       <div className="mt-2 flex items-center gap-2 text-[var(--muted-strong)]">
@@ -29,13 +33,18 @@ export function ClaimComparisonReview({result,onNavigate}:{
       <p className="font-semibold">External source comparison</p>
       {result.rows.map(row=><article key={row.sourceToken}
         className="rounded border border-[var(--line-neutral)] p-3">
-        <p className="font-semibold">{row.sourceToken} · {labels[row.relationship]}</p>
+        <p className="font-semibold">{row.sourceToken} · {row.verifiedQuote?
+          labels[row.relationship]:"Comparison not verified"}</p>
         <a href={row.url} target="_blank" rel="noopener noreferrer"
           className="mt-1 block break-all text-[var(--amber-soft)]">{row.title} · {row.domain} ↗</a>
         <p className="mt-1 text-[var(--muted)]">Retrieved {row.retrievedAt}</p>
         {row.verifiedQuote&&row.quote?
           <blockquote className="mt-2 border-l-2 border-[var(--amber-dark)] pl-2">{row.quote}</blockquote>:
-          <p className="mt-2">No verified supporting web excerpt.</p>}
+          <p className="mt-2">{row.evidenceStatus==="rejected_quote"?
+            "An AI-proposed web quotation could not be verified against the fetched page.":
+            "The AI did not provide a direct quotation for this source."}
+            {" "}This does not establish whether the page contains relevant evidence.
+          </p>}
         <p className="mt-2">{row.explanation}</p>
         {row.limitation?<p className="mt-1 text-[var(--muted)]">Limitation: {row.limitation}</p>:null}
       </article>)}

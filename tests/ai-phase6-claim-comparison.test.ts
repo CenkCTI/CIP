@@ -1,7 +1,7 @@
 import {describe,it,expect} from "vitest";
 import {readFileSync} from "node:fs";
 import {claimComparisonRequestSchema,claimComparisonModelSchema,
-  verifyClaimComparison} from "@/lib/ai/research/claim-comparison";
+  verifyClaimComparison,classifyPdfExcerpt} from "@/lib/ai/research/claim-comparison";
 import {safeWebUrl} from "@/lib/ai/research/safe-fetch";
 
 const sourceId="49429515-bc04-4539-ae53-69f0b47157cb";
@@ -47,7 +47,7 @@ describe("AI Phase 6 grounded claim comparison",()=>{
     expect(result?.pdfClaim.page).toBe(11);
     expect(result?.pdfClaim.sourceId).toBe(sourceId);
     expect(result?.rows[0]).toMatchObject({
-      sourceToken:"WEB_001",relationship:"contradicts",verifiedQuote:true,
+      sourceToken:"WEB_001",relationship:"contradicts",verifiedQuote:true,evidenceStatus:"verified",
       url:page.url,quote:model.comparisons[0].quote,
     });
     expect(result?.status).toBe("analyst_review_required");
@@ -68,6 +68,7 @@ describe("AI Phase 6 grounded claim comparison",()=>{
     }),[span],[page]);
     expect(result?.rows[0]).toMatchObject({
       relationship:"insufficient_evidence",verifiedQuote:false,quote:null,
+      evidenceStatus:"rejected_quote",
     });
     expect(result?.discarded).toBe(1);
   });
@@ -79,6 +80,28 @@ describe("AI Phase 6 grounded claim comparison",()=>{
     }),[span],[page,other]);
     expect(result?.rows[0].relationship).toBe("insufficient_evidence");
     expect(result?.rows[1].relationship).toBe("insufficient_evidence");
+  });
+  it("does not turn a reporter's cited question into an established PDF claim",()=>{
+    const quoted="Your reports cites examples of China being the leading provider of digital television services in all of Africa.";
+    expect(classifyPdfExcerpt(quoted)).toBe("attributed_or_question");
+    const out=verifyClaimComparison(claimComparisonModelSchema.parse({
+      ...model,
+      claim:{...model.claim,paraphrase:"China led Africa through StarTimes",quote:quoted},
+    }),[{...span,text:quoted}], [page]);
+    expect(out?.pdfClaim.originKind).toBe("attributed_or_question");
+    expect(out?.pdfClaim.paraphrase).not.toContain("StarTimes");
+    expect(out?.warnings.join(" ")).toMatch(/attributed statement or question/i);
+  });
+  it("distinguishes missing quotes from invalid quotations, never interprets missing as proof of absence",()=>{
+    const out=verifyClaimComparison(claimComparisonModelSchema.parse({
+      ...model,comparisons:[{...model.comparisons[0],quote:null,
+        relationship:"insufficient_evidence"}],
+    }),[span],[page]);
+    expect(out?.rows[0]).toMatchObject({
+      verifiedQuote:false,evidenceStatus:"no_quote",relationship:"insufficient_evidence",
+    });
+    expect(out?.discarded).toBe(0);
+    expect(out?.warnings.join(" ")).toMatch(/do NOT prove/i);
   });
   it("endpoint only reads owned project source and externally selected URLs",()=>{
     const path="src/app/api/projects/[id]/ai/processing/research/compare/route.ts";

@@ -31,13 +31,13 @@ describe("AI Phase 6 explicit compare + grounded review",()=>{
         expect(body.urls).toEqual([sources[0].url,sources[1].url]);
         return {ok:true,json:async()=>({result:{
           pdfClaim:{paraphrase:"PDF source claim",quote:"Quoted PDF evidence",
-            sourceToken:"DOC_P011_C01",sourceId:props.sourceId,
+            sourceToken:"DOC_P011_C01",originKind:"unclassified",sourceId:props.sourceId,
             assetId:props.assetId,page:11},
           rows:[{sourceToken:"WEB_001",url:sources[0].url,title:"Outside report 1",
             domain:"example.org",retrievedAt:"2026-10-22T00:00:00Z",
             relationship:"qualifies",quote:"External source quote",
             explanation:"Needs review",limitation:"Different metrics",
-            verifiedQuote:true}],
+            verifiedQuote:true,evidenceStatus:"verified"}],
           openQuestions:["Which definition?"],discarded:0,
           warnings:["Relationships are AI suggestions."],status:"analyst_review_required",
         }})};

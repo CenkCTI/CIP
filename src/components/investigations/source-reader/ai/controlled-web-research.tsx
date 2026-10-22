@@ -139,7 +139,10 @@ export function ControlledWebResearch({projectId,sourceId,assetId,context,connec
           <p className="font-semibold">AI Faz 6 · Claim-centric comparison</p>
           <p className="mt-1 text-xs text-[var(--muted)]">
             Select up to 3 external sources below, then explicitly compare them
-            against the current PDF page or annotation. No automatic verdict or Source writes.
+            against the current PDF page or annotation. For stronger comparison, choose
+            2–3 reports using different methods, rather than only an encyclopedia entry.
+            A missing quotation means not verified, not necessarily unsupported.
+            No automatic verdict or Source writes.
           </p>
           <button type="button" onClick={()=>void runCompare()}
             disabled={busy!==null||!connected||context.kind==="document"||!compareSelection.size}
