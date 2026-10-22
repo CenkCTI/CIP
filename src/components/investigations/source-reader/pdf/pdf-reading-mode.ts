@@ -103,9 +103,13 @@ export function pdfArtworkRegions(
   return result;
 }
 
-/** Change neutral pixels only. Vector and raster image rectangles remain
- * byte-for-byte unchanged. Unknown full-page scans remain Original.
- * Returns false when the page cannot be recolored safely.
+/** Recolor the entire unprotected PDF page with a single luminance value
+ * per pixel. PDF.js/browser subpixel glyph antialiasing can contain cyan and
+ * orange RGB fringes even when the source text is black. Exempting 'colored'
+ * pixels creates visible multicolor shadows around every letter on dark pages.
+ * Converting all unprotected pixels to luminance removes those RGB fringes.
+ * Vector and raster image rectangles remain byte-for-byte unchanged.
+ * Unknown full-page scans remain Original.
  */
 export function recolorPdfPagePixels(
   rgba:Uint8ClampedArray,width:number,height:number,
@@ -130,9 +134,10 @@ export function recolorPdfPagePixels(
   for(let p=0,k=0;p<mask.length;p++,k+=4){
     if(mask[p])continue;
     const r=rgba[k],g=rgba[k+1],b=rgba[k+2];
-    // Leave source-defined colored marks and diagrams untouched.
-    if(Math.max(r,g,b)-Math.min(r,g,b)>25)continue;
-    const tone=(r+g+b)/765;
+    // One luminance for all three channels is essential: transparent source
+    // glyph antialiasing can have strong per-channel (LCD/subpixel) fringes.
+    // Never skip pixels based on chroma: that was causing orange/cyan ghosting.
+    const tone=(r*0.2126+g*0.7152+b*0.0722)/255;
     for(let c=0;c<3;c++){
       rgba[k+c]=Math.round(foreground[c]*(1-tone)+background[c]*tone);
     }
