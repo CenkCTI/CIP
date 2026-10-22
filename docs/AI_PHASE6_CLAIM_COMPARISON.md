@@ -53,3 +53,20 @@ A live test supplied only a Wikipedia StarTimes result and the compare action pr
 - Distinguishes `no_quote` from `rejected_quote` and labels both as unverified comparisons, never “no evidence exists.”
 - Clarifies that selecting 2–3 diverse external research reports improves the chance of corroboration but does not certify independence.
 - Keeps server-side verbatim matching and analyst-only approval boundaries intact.
+
+## Recoverable external-site failures
+
+Live testing surfaced `Unable to read web page.` when one of the selected websites was inaccessible.
+Comparison previously used `Promise.all`, making even one 403/paywall/timeout
+abort an otherwise valid 2–3 source analysis.
+
+- Recoverable website failures (unavailable, timeout, unsupported format, oversize,
+  no readable text) are individually reported and omitted from model input.
+- If at least one site is readable, the analyst-approved comparison proceeds with
+  only those successfully fetched sources. WEB tokens are assigned to this readable
+  subset and remain tied to the fetched URL.
+- If all sites fail, the endpoint reports `sources_unavailable` and **does not
+  call NVIDIA or create any intelligence records**.
+- Unsafe addresses, private DNS destinations and prohibited redirects remain
+  fatal security errors. No website blocking controls are bypassed.
+- Unreadable sources are **not** treated as evidence of absence.

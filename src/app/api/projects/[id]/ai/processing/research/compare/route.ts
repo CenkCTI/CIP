@@ -4,7 +4,7 @@ import {extractOneJsonObject} from "@/lib/ai/json";
 import {validateOrigin,readJsonLimited,noStore} from "@/lib/ai/byok/security";
 import {requireOwnedProject} from "@/lib/projects/ownership";
 import {createStage3ReadContext,loadStage3DocumentContext} from "@/lib/ai/stage3/context";
-import {readPublicWebPage} from "@/lib/ai/research/safe-fetch";
+import {loadSelectedComparisonPages} from "@/lib/ai/research/comparison-fetch";
 import {requireResearchByok,withResearchQuota,researchError} from "@/lib/ai/research/server";
 import {claimComparisonRequestSchema,claimComparisonModelSchema,
   verifyClaimComparison} from "@/lib/ai/research/claim-comparison";
@@ -26,8 +26,12 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
     const spans=pdf.spans.slice(0,6).map(s=>({...s,text:s.text.slice(0,3500)}));
     // URLs are analyst-selected. The reader DNS-pins every public HTTPS hop,
     // blocks private IPs/unsafe redirects and bounds size and time.
-    const pages=(await Promise.all(input.urls.map(readPublicWebPage)))
-      .map(p=>({...p,text:p.text.slice(0,8000)}));
+    const {pages,skippedSources}=await loadSelectedComparisonPages(input.urls);
+    // The model is never called if no selected public page was readable.
+    // This is a legitimate inconclusive outcome, not an unsupported finding.
+    if(!pages.length)return noStore({result:{
+      status:"sources_unavailable" as const,skippedSources},
+      notice:"No selected public web page was readable. No AI comparison or domain writes occurred."});
     const context={
       analystQuestion:input.question,
       SOURCE_PDF:{title:pdf.sourceTitle,
@@ -65,6 +69,9 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
       if(!verified)throw new AiError("malformed_output");
       if(pdf.spans.length>spans.length)
         verified.warnings.push("PDF excerpts were truncated to a bounded context. Other pages were not assessed.");
+      verified.skippedSources=skippedSources;
+      if(skippedSources.length)verified.warnings.push(
+        "Some selected web sources could not be read. They were excluded, not treated as lacking evidence.");
       return verified;
     });
     return noStore({result,notice:"No Source Claim, evidence or assessment was saved."});

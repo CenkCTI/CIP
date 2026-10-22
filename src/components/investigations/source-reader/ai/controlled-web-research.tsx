@@ -1,7 +1,7 @@
 "use client";
 import {useState} from "react";
 import {ClaimComparisonReview} from "./claim-comparison-review";
-import type {ClaimComparisonResult} from "@/lib/ai/research/claim-comparison";
+import type {ClaimComparisonOutcome} from "@/lib/ai/research/claim-comparison";
 import type {CopilotContext} from "./copilot-context-selector";
 import type {ResearchSearchResult,ResearchEvidence} from "@/lib/ai/research/types";
 
@@ -21,7 +21,7 @@ export function ControlledWebResearch({projectId,sourceId,assetId,context,connec
   const [results,setResults]=useState<ResearchSearchResult[]>([]);
   const [synthesis,setSynthesis]=useState<Synthesis|null>(null);
   const [compareSelection,setCompareSelection]=useState<Set<number>>(()=>new Set());
-  const [comparison,setComparison]=useState<ClaimComparisonResult|null>(null);
+  const [comparison,setComparison]=useState<ClaimComparisonOutcome|null>(null);
   const [comparisonContext,setComparisonContext]=useState("");
   const [busy,setBusy]=useState<"plan"|"search"|"read"|"compare"|null>(null);
   const contextKey=JSON.stringify({sourceId,assetId,context});
@@ -76,7 +76,7 @@ export function ControlledWebResearch({projectId,sourceId,assetId,context,connec
     const requestContext=contextKey;
     setBusy("compare");setError("");setComparison(null);
     try{
-      const out=await post<{result:ClaimComparisonResult}>("ai/processing/research/compare",{
+      const out=await post<{result:ClaimComparisonOutcome}>("ai/processing/research/compare",{
         sourceId,assetId,context,question:question.trim()||
           "Assess the selected PDF claim against these outside sources.",
         urls:selection.map(item=>item.url),byokConsent:true,

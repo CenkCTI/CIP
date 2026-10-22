@@ -2,7 +2,8 @@ import {describe,it,expect} from "vitest";
 import {readFileSync} from "node:fs";
 import {claimComparisonRequestSchema,claimComparisonModelSchema,
   verifyClaimComparison,classifyPdfExcerpt} from "@/lib/ai/research/claim-comparison";
-import {safeWebUrl} from "@/lib/ai/research/safe-fetch";
+import {safeWebUrl,WebReadError} from "@/lib/ai/research/safe-fetch";
+import {loadSelectedComparisonPages} from "@/lib/ai/research/comparison-fetch";
 
 const sourceId="49429515-bc04-4539-ae53-69f0b47157cb";
 const assetId="49429615-bc04-4539-ae53-69f0b47157cb";
@@ -103,12 +104,41 @@ describe("AI Phase 6 grounded claim comparison",()=>{
     expect(out?.discarded).toBe(0);
     expect(out?.warnings.join(" ")).toMatch(/do NOT prove/i);
   });
+  it("continues on recoverable web failures and keeps original source URLs",async()=>{
+    const urls=["https://paywall.example.org/report","https://example.org/report","https://archive.example.org/paper"];
+    const reader=async(url:string)=>{
+      if(url===urls[0])throw new WebReadError("web_fetch_failed");
+      if(url===urls[2])throw new WebReadError("web_timeout");
+      return page;
+    };
+    const out=await loadSelectedComparisonPages(urls,reader);
+    expect(out.pages).toHaveLength(1);
+    expect(out.pages[0].url).toBe(page.url);
+    expect(out.skippedSources).toEqual([
+      {url:urls[0],reason:"unavailable"},{url:urls[2],reason:"timeout"},
+    ]);
+    const result=verifyClaimComparison(claimComparisonModelSchema.parse(model),[span],out.pages);
+    expect(result?.rows[0].url).toBe(page.url);
+  });
+  it("fails closed for unsafe URLs, private DNS or restricted redirects",async()=>{
+    for(const code of ["web_url_blocked","web_dns_blocked","web_redirect_blocked"] as const){
+      const reader=async(_url:string):Promise<typeof page>=>{throw new WebReadError(code);};
+      await expect(loadSelectedComparisonPages([page.url],reader)).rejects.toMatchObject({code});
+    }
+  });
+  it("returns an empty set of pages if every selected public site was unavailable",async()=>{
+    const out=await loadSelectedComparisonPages([page.url,"https://journal.example.org/report"],
+      async(_url)=>{throw new WebReadError("web_fetch_failed");});
+    expect(out.pages).toHaveLength(0);
+    expect(out.skippedSources).toHaveLength(2);
+  });
   it("endpoint only reads owned project source and externally selected URLs",()=>{
     const path="src/app/api/projects/[id]/ai/processing/research/compare/route.ts";
     const source=readFileSync(path,"utf8");
     expect(source).toContain("requireOwnedProject");
     expect(source).toContain("loadStage3DocumentContext");
-    expect(source).toContain("readPublicWebPage");
+    expect(source).toContain("loadSelectedComparisonPages");
+    expect(source).toContain("if(!pages.length)");
     expect(source).toContain("verifyClaimComparison");
     expect(source).not.toMatch(/(?:supabase|db)\.(?:insert|update|delete|upsert)\s*\(/);
     expect(source).not.toContain("createSourceClaimFromAnnotation");

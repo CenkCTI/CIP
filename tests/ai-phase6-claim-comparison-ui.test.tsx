@@ -63,6 +63,32 @@ describe("AI Phase 6 explicit compare + grounded review",()=>{
     fireEvent.click(screen.getByRole("button",{name:"Go to PDF evidence"}));
     expect(navigate).toHaveBeenCalledWith(11,undefined);
   });
+  it("shows unreadable sources without claiming contradiction or support",async()=>{
+    const sources=[sample(1),sample(2)];
+    fetchMock.mockImplementation(async(url:string)=>{
+      if(url.endsWith("/plan"))return {ok:true,json:async()=>({queries:["Africa media providers 2023"]})};
+      if(url.endsWith("/search"))return {ok:true,json:async()=>({results:sources})};
+      if(url.endsWith("/compare"))return {ok:true,json:async()=>({result:{
+        status:"sources_unavailable",skippedSources:[
+          {url:sources[0].url,reason:"unavailable"},
+          {url:sources[1].url,reason:"timeout"}],
+      }})};
+      throw Error("Unexpected "+url);
+    });
+    render(<ControlledWebResearch {...props}/>);
+    fireEvent.click(screen.getByRole("button",{name:/Controlled Web Research/}));
+    fireEvent.click(screen.getByRole("button",{name:"Suggest searches"}));
+    await screen.findByTestId("web-search-suggestions");
+    fireEvent.click(screen.getByRole("button",{name:"Search selected"}));
+    await screen.findByText("Outside report 1");
+    fireEvent.click(screen.getByRole("checkbox",{name:"Compare: Outside report 1"}));
+    fireEvent.click(screen.getByRole("checkbox",{name:"Compare: Outside report 2"}));
+    fireEvent.click(screen.getByRole("button",{name:"Compare selected with PDF (2/3)"}));
+    await screen.findByText("No web pages could be read");
+    expect(screen.getByTestId("unreadable-comparison-sources")).toBeTruthy();
+    expect(screen.getByText("Fetch timed out")).toBeTruthy();
+    expect(screen.queryByText("Potential support")).toBeNull();
+  });
   it("prevents choosing more than 3 external sources for a comparison",async()=>{
     fetchMock.mockImplementation(async(url:string)=>{
       if(url.endsWith("/plan"))return {ok:true,json:async()=>({queries:["Chinese media Africa"]})};

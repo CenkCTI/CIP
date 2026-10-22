@@ -2,6 +2,7 @@ import {z} from "zod";
 import {researchContextSchema} from "./types";
 import {normalizedQuote, type Stage3Span} from "@/lib/ai/stage3/provenance";
 import type {ReadWebPage} from "./types";
+import type {SkippedComparisonSource} from "./comparison-fetch";
 
 export const claimComparisonRequestSchema=z.object({
   sourceId:z.string().uuid(),
@@ -39,6 +40,10 @@ export type ClaimComparisonResult={
     quote:string|null;explanation:string;limitation:string;verifiedQuote:boolean;
     evidenceStatus:"verified"|"no_quote"|"rejected_quote"}>;
   openQuestions:string[];discarded:number;warnings:string[];status:"analyst_review_required";
+  skippedSources:SkippedComparisonSource[];
+};
+export type ClaimComparisonOutcome=ClaimComparisonResult|{
+  status:"sources_unavailable";skippedSources:SkippedComparisonSource[];
 };
 
 /** Conservative signal that the excerpt reports SOMEONE ELSE'S proposition or a
@@ -87,7 +92,7 @@ export function verifyClaimComparison(model:ClaimComparisonModel,
       quote:model.claim.quote,originKind,
       sourceToken:span.token,sourceId:span.sourceId,assetId:span.assetId,
       page:span.page,...(span.annotationId?{annotationId:span.annotationId}:{})},
-    rows,openQuestions:model.openQuestions,discarded,
+    rows,openQuestions:model.openQuestions,discarded,skippedSources:[],
     warnings:[
       "The claim paraphrase and relationships are AI suggestions, not validated conclusions.",
       ...(originKind==="attributed_or_question"?
