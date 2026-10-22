@@ -135,7 +135,7 @@ function PdfPage({
     const page=pdfPage,viewport=displayViewport,canvas=canvasRef.current,textLayer=textRef.current;
     let stopped=false;
     let renderTask:PdfRenderTask|null=null;
-    let layer:{cancel():void}|null=null;
+    let layer:{render():Promise<void>;cancel():void}|null=null;
 
     // PDF.js high-contrast rendering can recolor images and vector drawings.
     // Fail closed to the exact source rendering for any visual content.
