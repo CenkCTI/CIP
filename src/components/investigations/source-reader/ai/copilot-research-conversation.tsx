@@ -103,7 +103,7 @@ export function CopilotResearchConversation({projectId,sourceId,assetId,session,
         <span className="text-[10px] text-[var(--muted)]">Unverified external leads</span>
       </div>
       {step==="planning"?<p role="status" className="text-xs text-[var(--muted-strong)]">Preparing suggested searches…</p>:null}
-      {queries.length && (step==="suggestions"||step==="searching") ? <div className="space-y-3"
+      {queries.length>0 && (step==="suggestions"||step==="searching") ? <div className="space-y-3"
         data-testid="copilot-inline-search-suggestions">
         <p className="text-xs text-[var(--muted-strong)]">Suggested search queries. Nothing is searched until you approve.</p>
         {queries.map((query,index)=><label key={index} className="flex items-start gap-2 text-xs">

@@ -26,7 +26,7 @@ export type CopilotResult = {
 export type CopilotTurn = {
   id: number;
   prompt: string;
-  mode: "ask" | "analyse" | "analyst";
+  mode: "ask" | "analyse" | "analyst" | "research";
   context: CopilotContext;
   result: CopilotResult;
 };
@@ -48,7 +48,7 @@ export function CopilotChat({ turns, onNavigate }: {
     {turns.map((turn) => <article key={turn.id} className="space-y-4" data-testid="copilot-turn">
       <div className="ml-auto max-w-[94%] rounded-xl border border-[var(--line)] bg-[var(--surface-raised)] px-4 py-3 sm:max-w-[88%]">
         <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--amber-soft)]">
-          {contextTitle(turn.context)} · {turn.mode === "analyst" ? "Analyst chat" : turn.mode === "analyse" ? "Analyse" : "Ask"}
+          {contextTitle(turn.context)} · {turn.mode === "research" ? "Web research" : turn.mode === "analyst" ? "Analyst chat" : turn.mode === "analyse" ? "Analyse" : "Ask"}
         </p>
         <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-[var(--foreground)]">{turn.prompt}</p>
       </div>
@@ -57,7 +57,7 @@ export function CopilotChat({ turns, onNavigate }: {
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--amber-soft)]">CİTEM · AI</span>
           <span className="text-[10px] text-[var(--muted)]">
-            {turn.mode==="analyst"?"Independent hypotheses · analyst review required":"Source-grounded response"}
+            {turn.mode==="analyst"||turn.mode==="research"?"Independent hypotheses · analyst review required":"Source-grounded response"}
           </span>
         </div>
         {turn.result.summary ?
@@ -120,7 +120,8 @@ export function CopilotChat({ turns, onNavigate }: {
                 : <span className="text-[11px] text-[var(--muted)]">{item.sourceToken} (page unavailable)</span>}
             </li>)}
           </ul>
-        </details> : <p className="text-xs text-[var(--amber-soft)]">No source-matched excerpts were returned; review the answer carefully.</p>}
+        </details> : turn.result.webEvidence?.length ? null
+          : <p className="text-xs text-[var(--amber-soft)]">No source-matched excerpts were returned; review the answer carefully.</p>}
 
         {turn.result.unansweredQuestions.length ? <div className="space-y-1 text-xs text-[var(--muted-strong)]">
           <p className="font-semibold text-[var(--foreground)]">Unanswered questions</p>
