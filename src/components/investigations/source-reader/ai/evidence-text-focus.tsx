@@ -27,7 +27,8 @@ export function EvidenceTextFocus({children,label="Focus excerpt",kind="evidence
       onClick={()=>{
         setActive(true);
         setNonce(v=>v+1);
-        textRef.current?.scrollIntoView?.({behavior:"smooth",block:"center"});
+        const reduced=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+        textRef.current?.scrollIntoView?.({behavior:reduced?"auto":"smooth",block:"center"});
       }}>
       ◎ {label}
     </button>
