@@ -17,7 +17,7 @@ describe("Phase B 069 safe vector schema contract",()=>{
  });
  it("enforces tenant-scoped candidates before top k in SQL",()=>{
    expect(file.indexOf("where e.project_id=p_project_id")).toBeLessThan(
-     file.indexOf("order by e.embedding <=> p_query_embedding"));
+     file.indexOf("order by e.embedding OPERATOR(extensions.<=>) p_query_embedding"));
    expect(file).toContain("limit p_limit");
    expect(file).not.toContain("security definer");
  });

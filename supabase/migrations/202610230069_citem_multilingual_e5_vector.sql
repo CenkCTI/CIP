@@ -67,7 +67,7 @@ begin
  then return; end if;
  return query
  select c.source_id,c.asset_id,c.page_number,c.chunk_number,c.content,
-  (1 - (e.embedding <=> p_query_embedding))::real as score
+  (1 - (e.embedding OPERATOR(extensions.<=>) p_query_embedding))::real as score
  from public.copilot_chunk_embeddings e
  join public.copilot_document_chunks c on c.id=e.chunk_id
   and c.project_id=e.project_id and c.owner_id=e.owner_id
@@ -89,7 +89,7 @@ begin
   and i.index_version='CITEM-PDF-INDEX-A1-20261023'
   and a.state='READY' and a.asset_role='ORIGINAL'
   and a.sha256=e.asset_sha256 and i.asset_sha256=a.sha256
- order by e.embedding <=> p_query_embedding,
+ order by e.embedding OPERATOR(extensions.<=>) p_query_embedding,
    c.source_id,c.asset_id,c.page_number,c.chunk_number
  limit p_limit;
 end $fn$;
