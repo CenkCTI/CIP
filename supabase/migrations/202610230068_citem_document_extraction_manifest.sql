@@ -84,6 +84,8 @@ alter table public.copilot_document_chunks
  add column content_sha256 text
   check(content_sha256 is null or content_sha256 ~ '^[a-f0-9]{64}$'),
  add column search_text text check(search_text is null or char_length(search_text)<=2200),
+ add column search_fts tsvector generated always as
+  (to_tsvector('simple'::regconfig,coalesce(search_text,''))) stored,
  add column extractor_version text,
  add column chunking_version text,
  add column section_type text
@@ -94,6 +96,9 @@ alter table public.copilot_document_chunks
  add constraint copilot_document_chunks_run_fk
   foreign key(project_id,extraction_run_id,owner_id)
   references public.copilot_document_extraction_runs(project_id,id,owner_id);
+
+create index copilot_document_chunks_search_alias
+ on public.copilot_document_chunks using gin(search_fts);
 
 alter table public.copilot_document_extraction_runs enable row level security;
 alter table public.copilot_document_extracted_pages enable row level security;
@@ -262,9 +267,9 @@ begin
  return query
  with scored as (
   select c.source_id,c.asset_id,c.page_number,c.chunk_number,c.content,
-   ts_rank_cd(c.fts,q) as relevance,
+   greatest(ts_rank_cd(c.fts,q),ts_rank_cd(c.search_fts,q)) as relevance,
    row_number() over(partition by c.asset_id
-    order by ts_rank_cd(c.fts,q) desc,c.page_number,c.chunk_number) as by_asset
+    order by greatest(ts_rank_cd(c.fts,q),ts_rank_cd(c.search_fts,q)) desc,c.page_number,c.chunk_number) as by_asset
   from public.copilot_document_chunks c
   join public.copilot_document_indexes i on i.id=c.index_id
   join public.source_assets a on a.id=c.asset_id and a.project_id=c.project_id
@@ -275,7 +280,7 @@ begin
    and i.extraction_run_id=c.extraction_run_id
    and i.extraction_run_id is not null
    and i.asset_sha256=a.sha256 and a.state='READY' and a.asset_role='ORIGINAL'
-   and c.fts @@ q
+   and (c.fts @@ q or c.search_fts @@ q)
  )
  select s.source_id,s.asset_id,s.page_number,s.chunk_number,s.content,
   s.relevance::real as score from scored s where s.by_asset<=4
@@ -400,9 +405,9 @@ begin
  return query
  with scored as (
   select c.source_id,c.asset_id,c.page_number,c.chunk_number,c.content,
-   ts_rank_cd(c.fts,q) as relevance,
+   greatest(ts_rank_cd(c.fts,q),ts_rank_cd(c.search_fts,q)) as relevance,
    row_number() over(partition by c.asset_id
-    order by ts_rank_cd(c.fts,q) desc,c.page_number,c.chunk_number) as by_asset
+    order by greatest(ts_rank_cd(c.fts,q),ts_rank_cd(c.search_fts,q)) desc,c.page_number,c.chunk_number) as by_asset
   from public.copilot_document_chunks c
   join public.copilot_document_indexes i on i.id=c.index_id
   join public.source_assets a on a.id=c.asset_id and a.project_id=c.project_id
@@ -522,9 +527,9 @@ begin
  return query
  with scored as (
   select c.source_id,c.asset_id,c.page_number,c.chunk_number,c.content,
-   ts_rank_cd(c.fts,q) as relevance,
+   greatest(ts_rank_cd(c.fts,q),ts_rank_cd(c.search_fts,q)) as relevance,
    row_number() over(partition by c.asset_id
-    order by ts_rank_cd(c.fts,q) desc,c.page_number,c.chunk_number) as by_asset
+    order by greatest(ts_rank_cd(c.fts,q),ts_rank_cd(c.search_fts,q)) desc,c.page_number,c.chunk_number) as by_asset
   from public.copilot_document_chunks c
   join public.copilot_document_indexes i on i.id=c.index_id
   join public.source_assets a on a.id=c.asset_id and a.project_id=c.project_id
@@ -660,9 +665,9 @@ begin
  return query
  with scored as (
   select c.source_id,c.asset_id,c.page_number,c.chunk_number,c.content,
-   ts_rank_cd(c.fts,q) as relevance,
+   greatest(ts_rank_cd(c.fts,q),ts_rank_cd(c.search_fts,q)) as relevance,
    row_number() over(partition by c.asset_id
-    order by ts_rank_cd(c.fts,q) desc,c.page_number,c.chunk_number) as by_asset
+    order by greatest(ts_rank_cd(c.fts,q),ts_rank_cd(c.search_fts,q)) desc,c.page_number,c.chunk_number) as by_asset
   from public.copilot_document_chunks c
   join public.copilot_document_indexes i on i.id=c.index_id
   join public.source_assets a on a.id=c.asset_id and a.project_id=c.project_id
