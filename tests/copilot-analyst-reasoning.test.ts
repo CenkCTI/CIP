@@ -1,5 +1,6 @@
 import {describe,it,expect} from "vitest";
-import {makeAnalystMessages,verifyAnalystAnswer} from "@/lib/ai/stage3/analyst-reasoning";
+import {makeAnalystMessages,verifyAnalystAnswer,runAnalystReasoning} from "@/lib/ai/stage3/analyst-reasoning";
+import {requiresExactPdfValueAbstention,requestsSourceGroundedAnswer} from "@/lib/ai/stage3/source-integrity";
 import type {Stage3Span} from "@/lib/ai/stage3/provenance";
 import type {ReadWebPage} from "@/lib/ai/research/types";
 
@@ -41,4 +42,68 @@ describe("Analyst mode evidence and hypothesis trust boundaries",()=>{
     expect(messages[1].content).toContain("WEB_DATA_UNTRUSTED");
     expect(messages[1].content).toContain("https://example.com/report");
   });
+});
+
+describe("Fail-closed source integrity for original PDF glyph corruption",()=>{
+  const corrupted:Stage3Span={
+    token:"MEM_001",page:4,kind:"PDF",sourceId:"source-id",assetId:"asset-id",
+    text:"APT28 a exploité CVE-\uE12E0\uE12E3-\uE12E3397 à partir de mars \uE12E0\uE12E\uE12E.",
+  };
+  const blank={question:"",language:"tr" as const,notes:"",history:[],spans:[corrupted],webPages:[]};
+  it("refuses to infer exact dates without any model call",async()=>{
+    let calls=0;
+    const answer=await runAnalystReasoning({...blank,question:"4. sayfada CVE-2023-23397 başlangıç ve bitiş tarihi nedir?"},async()=>{
+      calls++;throw new Error("The unsafe model call must not happen.");
+    });
+    expect(calls).toBe(0);
+    expect(answer.summary).not.toContain("2023");
+    expect(answer.evidence).toHaveLength(0);
+    expect(answer.hypotheses).toHaveLength(0);
+    expect(answer.warnings.some(w=>w.includes("PDF_GLYPH_INTEGRITY_BLOCK"))).toBe(true);
+  });
+  it("does not mistake başlangıçtaki technical chain as an exact date request",()=>{
+    const question="CERT Polska raporundaki saldırı zincirini başlangıçtaki phishing e-postasından "
+      +"zararlı kodun çalıştırılmasına kadar açıkla. WindowsCodecs.dll dosyasının rolü nedir?";
+    expect(requiresExactPdfValueAbstention(question,[corrupted])).toBe(false);
+    expect(requiresExactPdfValueAbstention("CVE-2023-23397 zafiyeti nedir?",[corrupted])).toBe(false);
+  });
+  it("does not block nonnumeric questions or intact-source dates",()=>{
+    expect(requiresExactPdfValueAbstention("3. sayfada amaç nedir?",[corrupted])).toBe(false);
+    expect(requiresExactPdfValueAbstention("Tarihi nedir?",[span])).toBe(false);
+  });
+  it("withholds confident source claims when every purported quote fails",async()=>{
+    const result=await runAnalystReasoning({...blank,question:"Raporda saldırganın amacı nedir? Kaynak alıntısı göster.",spans:[span]},
+      async()=>JSON.stringify({
+        summary:"Confident but unverifiable conclusion",hypotheses:[hypothesis],
+        evidence:[{statement:"not in source",source_token:"DOC_P002_C01",quote:"Fictitious fabricated original source evidence"}],
+        unansweredQuestions:[],warnings:[],
+      }));
+    expect(result.summary).toContain("doğrulanabilen");
+    expect(result.hypotheses).toHaveLength(0);
+    expect(result.warnings.some(w=>w.includes("NO_VERIFIED_SOURCE_QUOTE"))).toBe(true);
+  });
+  it("provides authoritative page number metadata to the model instead of inferring PDF footers",()=>{
+    const messages=makeAnalystMessages({...blank,question:"PDF'nin 4. sayfası",spans:[corrupted]});
+    expect(messages[1].content).toContain('"page_number":4');
+    expect(messages[0].content).toContain("authoritative page_number");
+  });
+  it("fails closed when a requested PDF has no retrieved source text",async()=>{
+    let calls=0;
+    const result=await runAnalystReasoning({...blank,question:"ANSSI raporunda ne yazıyor?",spans:[]},async()=>{
+      calls++;throw new Error("Should not call model without any PDF excerpts");
+    });
+    expect(calls).toBe(0);
+    expect(result.evidence).toHaveLength(0);
+    expect(result.warnings.some(w=>w.includes("SOURCE_REQUIRED_UNAVAILABLE"))).toBe(true);
+  });
+  it("keeps non-source conceptual questions open to explicitly provisional reasoning",async()=>{
+    expect(requestsSourceGroundedAnswer("Saldırganın amacı nedir?")).toBe(false);
+    expect(requestsSourceGroundedAnswer("ANSSI raporunun 3. sayfasında ne var?")).toBe(true);
+    const result=await runAnalystReasoning({...blank,question:"Saldırganın amacı nedir?",spans:[span]},
+      async()=>JSON.stringify({summary:"Conditional hypothesis, not verified evidence",
+        hypotheses:[hypothesis],evidence:[],unansweredQuestions:[],warnings:[]}));
+    expect(result.summary).toContain("Conditional");
+    expect(result.hypotheses).toHaveLength(1);
+  });
+
 });

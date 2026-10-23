@@ -6,6 +6,7 @@ import {createStage3ReadContext,type Stage3AiReadContext} from "./context";
 import {extractPdfPages} from "./pdf-text";
 import type {Stage3Span} from "./provenance";
 import {splitPagesForIndex,memorySearchQuery} from "./index-chunks";
+import {requestedPdfPages,retrievalProbe,prioritizedEvidenceChunks,rankActivePdfChunks,type IndexedEvidenceChunk} from "./evidence-retrieval";
 
 type Owned=Awaited<ReturnType<typeof requireOwnedProject>>;
 export class InvestigationIndexError extends Error {
@@ -127,15 +128,79 @@ export function eventMemoryHints(events:MemoryEvent[],question:string){
     date:event.created_at,
   }));
 }
-export async function retrieveOwnedEvidence(owned:Owned,question:string,events:MemoryEvent[],limit=12)
-  :Promise<Stage3Span[]>{
-  const expanded=memorySearchQuery(question,events.slice(0,5).map(e=>e.question+" "+e.summary));
-  const {data,error}=await owned.supabase.rpc("copilot_search_document_chunks",{
-    p_project_id:owned.projectId,p_question:expanded,p_limit:Math.min(limit,20),
-  });
-  if(error)throw new InvestigationIndexError("index_database_unavailable");
-  type Chunk={source_id:string;asset_id:string;page_number:number;chunk_number:number;content:string};
-  const rows=(data??[]) as Chunk[];
+export async function retrieveOwnedEvidence(owned:Owned,question:string,events:MemoryEvent[],limit=12,
+  active?:{sourceId:string;assetId:string;ready:boolean;scope?:"active"|"project"}):Promise<Stage3Span[]>{
+  // Current-source retrieval is scoped by original asset, owner and project;
+  // never use unrelated PDFs as evidence for a selected-document question.
+  if(active?.scope!=="project"){
+    if(!active?.ready)return [];
+    const index=await owned.supabase.from("copilot_document_indexes")
+      .select("id,page_count").eq("project_id",owned.projectId)
+      .eq("owner_id",owned.user.id).eq("source_id",active.sourceId)
+      .eq("asset_id",active.assetId).eq("status","READY").maybeSingle();
+    if(index.error)throw new InvestigationIndexError("index_database_unavailable");
+    if(!index.data)return [];
+    const readyPageCount=index.data.page_count;
+    const chunks=await owned.supabase.from("copilot_document_chunks")
+      .select("source_id,asset_id,page_number,chunk_number,content")
+      .eq("project_id",owned.projectId).eq("owner_id",owned.user.id)
+      .eq("source_id",active.sourceId).eq("asset_id",active.assetId)
+      .eq("index_id",index.data.id)
+      .order("page_number").order("chunk_number").limit(120);
+    if(chunks.error)throw new InvestigationIndexError("index_database_unavailable");
+    const candidates=(chunks.data??[]) as IndexedEvidenceChunk[];
+    const requested=requestedPdfPages(question).filter(n=>n<=readyPageCount);
+    const exact=requested.length?
+      candidates.filter(row=>requested.includes(row.page_number)):[];
+    const rest=rankActivePdfChunks(
+      candidates.filter(row=>!requested.includes(row.page_number)),question,limit);
+    return prioritizedEvidenceChunks(exact,[],rest,limit).map((row,i)=>({
+      token:"MEM_"+String(i+1).padStart(3,"0"),text:row.content,
+      page:row.page_number,kind:"PDF" as const,
+      sourceId:row.source_id,assetId:row.asset_id,
+    }));
+  }
+  // Reuse only the analyst's prior questions as referent hints. Unverified AI
+  // summaries have contained wrong dates/actor IDs and must not bias search.
+  const expanded=memorySearchQuery(question,events.slice(0,5).map(e=>e.question));
+  const probe=retrievalProbe(question);
+  const rpcQuestion=async(p_question:string):Promise<IndexedEvidenceChunk[]>=>{
+    const {data,error}=await owned.supabase.rpc("copilot_search_document_chunks",{
+      p_project_id:owned.projectId,p_question,p_limit:Math.min(limit,20),
+    });
+    if(error)throw new InvestigationIndexError("index_database_unavailable");
+    return (data??[]) as IndexedEvidenceChunk[];
+  };
+  const [lexical,translated]=await Promise.all([
+    rpcQuestion(expanded),probe?rpcQuestion(probe):Promise.resolve([] as IndexedEvidenceChunk[]),
+  ]);
+  // An explicit page reference is a navigational constraint. Fetch its exact
+  // owned READY original chunks even if the query's language cannot match FTS.
+  // SHA freshness is established by ensureIndexedOriginalPDF before this call.
+  let exact:IndexedEvidenceChunk[]=[];
+  const requested=active?.ready?requestedPdfPages(question):[];
+  if(active?.ready&&requested.length){
+    const index=await owned.supabase.from("copilot_document_indexes")
+      .select("id,page_count").eq("project_id",owned.projectId)
+      .eq("owner_id",owned.user.id).eq("source_id",active.sourceId)
+      .eq("asset_id",active.assetId).eq("status","READY").maybeSingle();
+    if(index.error)throw new InvestigationIndexError("index_database_unavailable");
+    if(index.data){
+      const readyPageCount=index.data.page_count;
+      const pages=requested.filter(page=>page<=readyPageCount);
+      if(pages.length){
+        const chunks=await owned.supabase.from("copilot_document_chunks")
+          .select("source_id,asset_id,page_number,chunk_number,content")
+          .eq("project_id",owned.projectId).eq("owner_id",owned.user.id)
+          .eq("source_id",active.sourceId).eq("asset_id",active.assetId)
+          .eq("index_id",index.data.id).in("page_number",pages)
+          .order("page_number").order("chunk_number").limit(12);
+        if(chunks.error)throw new InvestigationIndexError("index_database_unavailable");
+        exact=(chunks.data??[]) as IndexedEvidenceChunk[];
+      }
+    }
+  }
+  const rows=prioritizedEvidenceChunks(exact,translated,lexical,limit);
   return rows.map((row,i)=>({
     token:"MEM_"+String(i+1).padStart(3,"0"),text:row.content,
     page:row.page_number,kind:"PDF" as const,sourceId:row.source_id,assetId:row.asset_id,
