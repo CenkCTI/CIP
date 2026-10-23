@@ -111,3 +111,48 @@ Its old READY-derived indexes still contain corrupted glyphs. Do not
 silently replace them using source-model guesses or an SQL bulk update.
 A further review gate must add *extractor-versioned atomic reindexing*
 before this can be accepted as a live repair.
+
+
+## Actual Firefox/Cairo reprinted ANSSI PDF reproduction (2026-10-23)
+
+A user-provided copy of the public ANSSI 23-page APT28 report was
+investigated offline. **Do not commit the uploaded document or transmit it
+to CI.** Local specimen (name intentionally omitted): 943,550 bytes,
+SHA-256 `720fd20512cf88f02492f0c8dcc0f21ead2e48832586105bb95a2c82b1a6bcb0`.
+Metadata: `Creator: Mozilla Firefox 153.0`,
+`Producer: cairo 1.18.4`.
+
+This specimen is NOT byte-equal to either earlier stored source asset
+(934,356 / 934,357 bytes), despite exhibiting the same defect class.
+The independent publicly downloaded ANSSI PDF (2,487,153 bytes,
+SHA-256 `08b62bfd...`) is correctly parsed by both text engines.
+
+On the reprinted specimen:
+- PDF visible page 4 says `CVE-2023-23397`, from `mars 2022`
+  through `juin 2023`. Visual rendering confirms this.
+- Poppler UTF-8 `pdftotext` returns 181 BMP private-use characters
+  on page 4, including altered CVE digits and dates.
+- PyMuPDF returns the same corrupt Unicode mappings.
+- Tesseract French OCR of a 200–240 DPI rasterized page 4 returns the
+  correct CVE and dates, with zero private-use glyphs.
+- Rasterized OCR of pages 15–17 correctly recovers the recommendation
+  prose; side-margin R10–R13 labels were omitted under PSM 3. Since
+  the intact literal labels remain in the PDF source text layer, the
+  OCR arbiter preserves those exact page labels without guessing.
+- `src/lib/ai/stage3/pdf-ocr.ts` now enables opt-in *local*
+  `pdftoppm + tesseract -l fra` recovery from immutable original PDF
+  bytes (strict time and size caps; no cloud OCR, no shell injection,
+  temporary data deleted). Default remains disabled.
+- An independent GitHub test synthesizes a PDF whose visible text is
+  correct but its ToUnicode CMap maps digits into private-use glyphs.
+  Poppler fails intentionally and the actual CITEM `extractPdfPages`
+  OCR fallback must recover CVE/date/identifiers; no user file or font
+  file is checked into the repo.
+
+**Not production-accepted yet.** The Vercel serverless runtime must not
+be assumed to have Tesseract or its French language pack. Optical
+character recognition is potentially imperfect and needs quality
+provenance flags and appropriate quote caution. Stored READY indexes
+are still keyed only by original SHA, not extraction quality/version;
+their old incorrect content is untouched. Versioned atomic reindex and
+a deployment-grade OCR worker/runtime acceptance remain blocking.
