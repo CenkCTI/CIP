@@ -15,7 +15,7 @@ create function storage.foldername(name text) returns text[] language sql immuta
 SQL
 {
  echo "BEGIN;"
- for migration in supabase/migrations/*.sql; do printf "\\i '%s/%s'\n" "$PWD" "$migration"; done
+ for migration in supabase/migrations/*.sql; do [[ "${migration##*/}" == "202610230069_citem_multilingual_e5_vector.sql" ]] && continue; printf "\\i '%s/%s'\n" "$PWD" "$migration"; done
  cat <<'SQL'
 do $$ declare u1 uuid:=gen_random_uuid();u2 uuid:=gen_random_uuid();p1 uuid:=gen_random_uuid();p2 uuid:=gen_random_uuid();r uuid;i1 uuid;i2 uuid;ref uuid;v1 record;v2 record;n integer; begin
  if (select count(*) from pg_class where oid in ('public.report_versions'::regclass,'public.report_references'::regclass,'public.report_version_references'::regclass) and relrowsecurity)<>3 then raise exception 'RLS missing';end if;

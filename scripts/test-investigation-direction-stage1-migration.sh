@@ -42,7 +42,7 @@ SQL
 
 # Validate Stage 1 against the database immediately before migration 053.
 # Downstream Stage 2+ migrations must never be applied before the migration under test.
-find "$ROOT/supabase/migrations" -maxdepth 1 -name '*.sql' | sort | while read -r migration; do
+find "$ROOT/supabase/migrations" -maxdepth 1 -name '*.sql' ! -name '202610230069_citem_multilingual_e5_vector.sql' | sort | while read -r migration; do
   if [[ "$(basename "$migration")" < "202609110053_investigation_direction_stage1.sql" ]]; then
     printf "\\i '%s'\n" "$migration"
   fi

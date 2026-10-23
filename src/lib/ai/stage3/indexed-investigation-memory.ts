@@ -6,9 +6,11 @@ import {createStage3ReadContext,type Stage3AiReadContext} from "./context";
 import {extractPdfPagesDetailed} from "./pdf-text";
 import {buildExtractionManifest,canPublishExtraction,CITEM_INDEX_VERSION} from "./extraction-manifest";
 import {normalizeForSearch} from "./document-quality";
+import {findOwnedSemanticCandidates,fuseScopedSqlCandidates} from "./semantic-retrieval";
+import {planMultilingualLexicalProbes} from "./multilingual-query-plan";
 import type {Stage3Span} from "./provenance";
 import {splitPagesForIndex,memorySearchQuery} from "./index-chunks";
-import {requestedPdfPages,retrievalProbe,prioritizedEvidenceChunks,rankActivePdfChunks,type IndexedEvidenceChunk} from "./evidence-retrieval";
+import {requestedPdfPages,prioritizedEvidenceChunks,rankActivePdfChunks,type IndexedEvidenceChunk} from "./evidence-retrieval";
 
 type Owned=Awaited<ReturnType<typeof requireOwnedProject>>;
 export class InvestigationIndexError extends Error {
@@ -185,16 +187,22 @@ export async function retrieveOwnedEvidence(owned:Owned,question:string,events:M
       candidates.filter(row=>requested.includes(row.page_number)):[];
     const rest=rankActivePdfChunks(
       candidates.filter(row=>!requested.includes(row.page_number)),question,limit);
-    return prioritizedEvidenceChunks(exact,[],rest,limit).map((row,i)=>({
+    const semantic=await findOwnedSemanticCandidates(owned,question,{
+      sourceId:active.sourceId,assetId:active.assetId,
+    });
+    const combined=fuseScopedSqlCandidates(rest,semantic.rows,question,limit);
+    const selected=prioritizedEvidenceChunks(exact,[],combined,limit).map((row,i)=>({
       token:"MEM_"+String(i+1).padStart(3,"0"),text:row.content,
       page:row.page_number,kind:"PDF" as const,
       sourceId:row.source_id,assetId:row.asset_id,
     }));
+    return Object.assign(selected,{retrievalMode:semantic.rows.length?"HYBRID":"LEXICAL_ONLY",
+      semanticWarning:semantic.status==="SEMANTIC_ERROR"?"SEMANTIC_UNAVAILABLE":null});
   }
   // Reuse only the analyst's prior questions as referent hints. Unverified AI
   // summaries have contained wrong dates/actor IDs and must not bias search.
   const expanded=memorySearchQuery(question,events.slice(0,5).map(e=>e.question));
-  const probe=retrievalProbe(question);
+  const probes=planMultilingualLexicalProbes(question);
   const rpcQuestion=async(p_question:string):Promise<IndexedEvidenceChunk[]>=>{
     const {data,error}=await owned.supabase.rpc("copilot_search_document_chunks",{
       p_project_id:owned.projectId,p_question,p_limit:Math.min(limit,20),
@@ -202,9 +210,13 @@ export async function retrieveOwnedEvidence(owned:Owned,question:string,events:M
     if(error)throw new InvestigationIndexError("index_database_unavailable");
     return (data??[]) as IndexedEvidenceChunk[];
   };
-  const [lexical,translated]=await Promise.all([
-    rpcQuestion(expanded),probe?rpcQuestion(probe):Promise.resolve([] as IndexedEvidenceChunk[]),
+  // Each probe is a distinct server-side RLS-filtered lexical RPC. Probes
+  // are search hints only and must never be displayed as original source text.
+  const responses=await Promise.all([
+    rpcQuestion(expanded),...probes.map(term=>rpcQuestion(term)),
   ]);
+  const lexical=responses[0];
+  const translated=responses.slice(1).flat();
   // An explicit page reference is a navigational constraint. Fetch its exact
   // owned READY original chunks even if the query's language cannot match FTS.
   // SHA freshness is established by ensureIndexedOriginalPDF before this call.
@@ -239,11 +251,16 @@ export async function retrieveOwnedEvidence(owned:Owned,question:string,events:M
       }
     }
   }
-  const rows=prioritizedEvidenceChunks(exact,translated,lexical,limit);
-  return rows.map((row,i)=>({
+  const semantic=await findOwnedSemanticCandidates(owned,question);
+  const fused=fuseScopedSqlCandidates([...translated,...lexical],
+    semantic.rows,question,limit);
+  const rows=prioritizedEvidenceChunks(exact,[],fused,limit);
+  const selected=rows.map((row,i)=>({
     token:"MEM_"+String(i+1).padStart(3,"0"),text:row.content,
     page:row.page_number,kind:"PDF" as const,sourceId:row.source_id,assetId:row.asset_id,
   }));
+  return Object.assign(selected,{retrievalMode:semantic.rows.length?"HYBRID":"LEXICAL_ONLY",
+    semanticWarning:semantic.status==="SEMANTIC_ERROR"?"SEMANTIC_UNAVAILABLE":null});
 }
 export type AnalysisEventInput={
   kind:"ANALYSE"|"EXTRACT"|"ASK"|"ASSESSMENT"|"WEB_RESEARCH";

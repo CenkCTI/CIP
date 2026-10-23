@@ -129,10 +129,18 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
         analysis.warnings.push("FALLBACK_CURRENT_PAGE: Only the selected original page/range is available; this is not Entire PDF analysis.");
       if(input.useSource&&input.context.kind==="document"&&!indexedSpans.length)
         analysis.warnings.push("INSUFFICIENT_RETRIEVAL: Entire PDF evidence is unavailable. No page was silently substituted.");
-      if(input.useSource&&indexedSpans.length)
-        analysis.warnings.push(crossSource?
+      const semanticState=(indexedSpans as typeof indexedSpans & {
+        retrievalMode?:"LEXICAL_ONLY"|"HYBRID";semanticWarning?:string|null;
+      });
+      if(semanticState.semanticWarning)
+        analysis.warnings.push("SEMANTIC_UNAVAILABLE: Local semantic service failed; using lexical evidence only.");
+      if(input.useSource&&indexedSpans.length){
+        if(semanticState.retrievalMode==="HYBRID")
+          analysis.warnings.push("HYBRID_RETRIEVAL: Original PDF passages came from a mixture of owner-scoped lexical and semantic ranking; source claims still require verification.");
+        else analysis.warnings.push(crossSource?
           "LEXICAL_ONLY: Indexed passages were found by keyword matching, not multilingual semantic search.":
           "ACTIVE_PDF_ONLY: Only the selected original PDF was used as indexed evidence.");
+      }
       if(corruptPageSpans)
         analysis.warnings.push("PDF_GLYPH_INTEGRITY_WARNING: PDF extraction contains unmapped glyphs. Dates, CVEs and names must be checked against the original rendered page.");
       if(input.webResearch&&!pages.length)
@@ -150,7 +158,8 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
         context:{selected:input.context,indexedCurrent,sourceCount:indexedSpans.length,indexReason}});
     }catch{unifiedSaved=false;}
     return noStore({result,saved:true,unifiedSaved,
-      retrieval:{status:!input.useSource?"DISABLED":indexedSpans.length?"LEXICAL_ONLY":
+      retrieval:{status:!input.useSource?"DISABLED":indexedSpans.length?
+        ((indexedSpans as typeof indexedSpans & {retrievalMode?:string}).retrievalMode??"LEXICAL_ONLY"):
         safePageSpans.length?"FALLBACK_CURRENT_PAGE":"INDEX_UNAVAILABLE",
         indexReason,entireDocumentAvailable:indexedCurrent&&indexedSpans.length>0,
         returnedPassages:indexedSpans.length},

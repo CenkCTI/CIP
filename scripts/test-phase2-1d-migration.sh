@@ -26,7 +26,7 @@ sql_file="$(mktemp)"
 trap 'rm -f "$sql_file"; cleanup' EXIT
 {
   echo "BEGIN;"
-  for migration in supabase/migrations/*.sql; do
+  for migration in supabase/migrations/*.sql; do [[ "${migration##*/}" == "202610230069_citem_multilingual_e5_vector.sql" ]] && continue;
     printf "\\i '%s/%s'\n" "$PWD" "$migration"
   done
   cat <<'SQL'

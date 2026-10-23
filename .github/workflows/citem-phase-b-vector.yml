@@ -1,0 +1,39 @@
+name: CITEM Phase B pgvector and local model smoke
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "supabase/migrations/202610230069_citem_multilingual_e5_vector.sql"
+      - "tests/citem-phase-b-pg16-*.sql"
+      - "services/citem-embedding-worker/**"
+      - ".github/workflows/citem-phase-b-vector.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pgvector:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-test
+          POSTGRES_DB: citem_phase_b
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d citem_phase_b"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Boot disposable schema
+        env:
+          PGPASSWORD: local-test
+        run: |
+          psql -h 127.0.0.1 -U postgres -d citem_phase_b -v ON_ERROR_STOP=1 -f tests/citem-phase-b-pg16-setup.sql
+          psql -h 127.0.0.1 -U postgres -d citem_phase_b -v ON_ERROR_STOP=1 -f supabase/migrations/202610230069_citem_multilingual_e5_vector.sql
+          psql -h 127.0.0.1 -U postgres -d citem_phase_b -v ON_ERROR_STOP=1 -f tests/citem-phase-b-pg16-verify.sql
+      - name: Validate local model worker Python syntax
+        run: python3 -c "import ast,pathlib;ast.parse(pathlib.Path('services/citem-embedding-worker/app.py').read_text())"

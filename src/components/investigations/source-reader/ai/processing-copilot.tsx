@@ -120,6 +120,10 @@ export function ProcessingCopilot({
   const [memoryReady,setMemoryReady]=useState(false);
   const [investigationEvents,setInvestigationEvents]=useState<{id:string;kind:string;summary:string;question:string;created_at:string;source_id:string|null;asset_id:string|null}[]>([]);
   const [indexStatus,setIndexStatus]=useState("");
+  const [localEmbeddingApproved,setLocalEmbeddingApproved]=useState(false);
+  const [semanticIndexing,setSemanticIndexing]=useState(false);
+  const [semanticIndexOffset,setSemanticIndexOffset]=useState(0);
+  const [semanticIndexStatus,setSemanticIndexStatus]=useState("");
   const [notesOpen,setNotesOpen]=useState(false);
   const [responseLanguage, setResponseLanguage] = useState<"auto" | "tr" | "en">("auto");
   const [turns, setTurns] = useState<CopilotTurn[]>([]);
@@ -422,6 +426,39 @@ export function ProcessingCopilot({
       if(inFlight.current===abort){inFlight.current=null;setWorking(false);}
     }
   }
+  async function prepareLocalSemanticIndex(){
+    if(!localEmbeddingApproved||semanticIndexing)return;
+    setSemanticIndexing(true);
+    let cursor=semanticIndexOffset;
+    try{
+      for(let batch=0;batch<16;batch++){
+        const response=await fetch("/api/projects/"+projectId+"/ai/processing/semantic-index",{
+          method:"POST",headers:{"content-type":"application/json"},
+          body:JSON.stringify({
+            sourceId,assetId,approveLocalEmbedding:true,offset:cursor,
+          }),
+        });
+        const body=await response.json() as {
+          status?:string;processed?:number;nextOffset?:number|null;
+          code?:string;error?:string;
+        };
+        if(!response.ok)throw new Error(body.code||body.error||"Semantic index unavailable");
+        if(body.status==="COMPLETE"||body.nextOffset===null){
+          setSemanticIndexOffset(0);
+          setSemanticIndexStatus("Local semantic index complete for this PDF.");
+          return;
+        }
+        if(!Number.isInteger(body.nextOffset)||body.nextOffset!<=cursor)
+          throw new Error("Invalid semantic indexing cursor");
+        cursor=body.nextOffset!;
+        setSemanticIndexOffset(cursor);
+        setSemanticIndexStatus(String(cursor)+" PDF chunks checked for local embeddings…");
+      }
+      setSemanticIndexStatus("Partial semantic index completed; press Continue to index remaining chunks.");
+    }catch(error){
+      setSemanticIndexStatus(error instanceof Error?error.message:"Semantic indexing failed");
+    }finally{setSemanticIndexing(false);}
+  }
   async function backfillPDFs(){
     setIndexStatus("Indexing existing PDF sources…");
     try{
@@ -572,6 +609,20 @@ export function ProcessingCopilot({
               Index existing PDFs (2 at a time)
             </button>
             {indexStatus?<p role="status" className="mt-2 text-[var(--muted-strong)]">{indexStatus}</p>:null}
+            <div className="mt-3 border-t border-[var(--line-neutral)] pt-3">
+              <label className="flex items-start gap-2 text-[11px] text-[var(--muted-strong)]">
+                <input type="checkbox" checked={localEmbeddingApproved}
+                  onChange={event=>setLocalEmbeddingApproved(event.target.checked)}/>
+                I approve local semantic processing for the selected original PDF on the trusted CİTEM worker. No third-party embedding provider is used.
+              </label>
+              <button type="button" disabled={!localEmbeddingApproved||semanticIndexing}
+                onClick={()=>void prepareLocalSemanticIndex()}
+                className="mt-2 rounded-lg border border-[var(--line)] px-3 py-2 text-[var(--amber-soft)] disabled:opacity-50">
+                {semanticIndexing?"Preparing local embeddings…":
+                  semanticIndexOffset>0?"Continue local semantic index":"Prepare local semantic index"}
+              </button>
+              {semanticIndexStatus?<p role="status" className="mt-2 text-[var(--muted-strong)]">{semanticIndexStatus}</p>:null}
+            </div>
           </div>
           <details className="rounded-xl border border-[var(--line-neutral)] p-3">
             <summary className="cursor-pointer text-xs font-semibold text-[var(--foreground)]">
