@@ -1,6 +1,6 @@
 import {describe,it,expect} from "vitest";
 import {makeAnalystMessages,verifyAnalystAnswer,runAnalystReasoning} from "@/lib/ai/stage3/analyst-reasoning";
-import {requiresExactPdfValueAbstention} from "@/lib/ai/stage3/source-integrity";
+import {requiresExactPdfValueAbstention,requestsSourceGroundedAnswer} from "@/lib/ai/stage3/source-integrity";
 import type {Stage3Span} from "@/lib/ai/stage3/provenance";
 import type {ReadWebPage} from "@/lib/ai/research/types";
 
@@ -66,7 +66,7 @@ describe("Fail-closed source integrity for original PDF glyph corruption",()=>{
     expect(requiresExactPdfValueAbstention("Tarihi nedir?",[span])).toBe(false);
   });
   it("withholds confident source claims when every purported quote fails",async()=>{
-    const result=await runAnalystReasoning({...blank,question:"Saldırganın amacı nedir?",spans:[span]},
+    const result=await runAnalystReasoning({...blank,question:"Raporda saldırganın amacı nedir? Kaynak alıntısı göster.",spans:[span]},
       async()=>JSON.stringify({
         summary:"Confident but unverifiable conclusion",hypotheses:[hypothesis],
         evidence:[{statement:"not in source",source_token:"DOC_P002_C01",quote:"Fictitious fabricated original source evidence"}],
@@ -76,4 +76,14 @@ describe("Fail-closed source integrity for original PDF glyph corruption",()=>{
     expect(result.hypotheses).toHaveLength(0);
     expect(result.warnings.some(w=>w.includes("NO_VERIFIED_SOURCE_QUOTE"))).toBe(true);
   });
+  it("keeps non-source conceptual questions open to explicitly provisional reasoning",async()=>{
+    expect(requestsSourceGroundedAnswer("Saldırganın amacı nedir?")).toBe(false);
+    expect(requestsSourceGroundedAnswer("ANSSI raporunun 3. sayfasında ne var?")).toBe(true);
+    const result=await runAnalystReasoning({...blank,question:"Saldırganın amacı nedir?",spans:[span]},
+      async()=>JSON.stringify({summary:"Conditional hypothesis, not verified evidence",
+        hypotheses:[hypothesis],evidence:[],unansweredQuestions:[],warnings:[]}));
+    expect(result.summary).toContain("Conditional");
+    expect(result.hypotheses).toHaveLength(1);
+  });
+
 });

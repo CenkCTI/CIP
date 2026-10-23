@@ -3,7 +3,7 @@ import {AiError,type AiMessage} from "@/lib/ai/client";
 import {extractOneJsonObject} from "@/lib/ai/json";
 import {normalizedQuote,resolveGroundedEvidence,modelFacingSpans,type Stage3Span} from "./provenance";
 import type {ReadWebPage} from "@/lib/ai/research/types";
-import {requiresExactPdfValueAbstention} from "./source-integrity";
+import {requiresExactPdfValueAbstention,requestsSourceGroundedAnswer} from "./source-integrity";
 
 const hypothesisSchema=z.object({
   title:z.string().trim().min(1).max(180),
@@ -133,7 +133,8 @@ export async function runAnalystReasoning(input:{
       const result=verifyAnalystAnswer(parsed,input.spans,input.webPages);
       // A source-backed narrative with no independently matched quotations
       // must not be displayed as a verified source answer.
-      if(input.spans.length>0&&result.evidence.length===0&&result.webEvidence.length===0){
+      if(requestsSourceGroundedAnswer(input.question)&&input.spans.length>0&&
+        result.evidence.length===0&&result.webEvidence.length===0){
         return {...result,summary:input.language==="tr"?
           "Model yanıtına ilişkin orijinal kaynakta doğrulanabilen doğrudan alıntı bulunamadı. Kaynağa dayalı kesin sonuç verilemiyor.":
           "No verbatim source quotation could be verified for the model response. No source-grounded conclusion is available.",
