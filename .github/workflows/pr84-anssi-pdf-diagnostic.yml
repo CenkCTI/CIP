@@ -12,6 +12,7 @@ on:
       - "src/lib/ai/stage3/pdf-text.ts"
       - "src/lib/ai/stage3/document-quality.ts"
       - "tests/citem-pdf-recovery.test.ts"
+      - "tests/citem-anssi-live-recovery.test.ts"
       - "package-lock.json"
   workflow_dispatch:
 
@@ -93,3 +94,8 @@ jobs:
           echo "PDF.js diagnostic exit status: $baseline_status (not a CI pass gate)"
       - name: Page recovery arbiter regression tests
         run: npx vitest run tests/citem-pdf-recovery.test.ts tests/citem-document-quality.test.ts
+      - name: Full extraction path on the official ANSSI PDF (opt-in CI runtime)
+        env:
+          CITEM_ANSSI_PDF_PATH: ${{ env.ANSSI_PDF }}
+          CITEM_PDF_POPPLER_ENABLED: "1"
+        run: npx vitest run tests/citem-anssi-live-recovery.test.ts
