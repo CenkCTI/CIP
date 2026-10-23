@@ -6,6 +6,7 @@ import {createStage3ReadContext,type Stage3AiReadContext} from "./context";
 import {extractPdfPagesDetailed} from "./pdf-text";
 import {buildExtractionManifest,canPublishExtraction,CITEM_INDEX_VERSION} from "./extraction-manifest";
 import {normalizeForSearch} from "./document-quality";
+import {findOwnedSemanticCandidates,fuseScopedSqlCandidates} from "./semantic-retrieval";
 import {planMultilingualLexicalProbes} from "./multilingual-query-plan";
 import type {Stage3Span} from "./provenance";
 import {splitPagesForIndex,memorySearchQuery} from "./index-chunks";
@@ -186,7 +187,11 @@ export async function retrieveOwnedEvidence(owned:Owned,question:string,events:M
       candidates.filter(row=>requested.includes(row.page_number)):[];
     const rest=rankActivePdfChunks(
       candidates.filter(row=>!requested.includes(row.page_number)),question,limit);
-    return prioritizedEvidenceChunks(exact,[],rest,limit).map((row,i)=>({
+    const semantic=await findOwnedSemanticCandidates(owned,question,{
+      sourceId:active.sourceId,assetId:active.assetId,
+    });
+    const combined=fuseScopedSqlCandidates(rest,semantic.rows,question,limit);
+    return prioritizedEvidenceChunks(exact,[],combined,limit).map((row,i)=>({
       token:"MEM_"+String(i+1).padStart(3,"0"),text:row.content,
       page:row.page_number,kind:"PDF" as const,
       sourceId:row.source_id,assetId:row.asset_id,
@@ -244,7 +249,10 @@ export async function retrieveOwnedEvidence(owned:Owned,question:string,events:M
       }
     }
   }
-  const rows=prioritizedEvidenceChunks(exact,translated,lexical,limit);
+  const semantic=await findOwnedSemanticCandidates(owned,question);
+  const fused=fuseScopedSqlCandidates([...translated,...lexical],
+    semantic.rows,question,limit);
+  const rows=prioritizedEvidenceChunks(exact,[],fused,limit);
   return rows.map((row,i)=>({
     token:"MEM_"+String(i+1).padStart(3,"0"),text:row.content,
     page:row.page_number,kind:"PDF" as const,sourceId:row.source_id,assetId:row.asset_id,
