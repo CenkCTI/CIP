@@ -7,7 +7,7 @@ describe("Unified investigation memory RAG",()=>{
     const indexer=readFileSync("src/lib/ai/stage3/indexed-investigation-memory.ts","utf8");
     expect(reader).toContain("storage_path,size_bytes,sha256");
     expect(indexer).toContain('asset.sha256');
-    expect(indexer).toContain('copilot_publish_document_index_v2');
+    expect(indexer).toContain('copilot_publish_document_index_v3');
   });
   it("keeps incomplete indexes out of READY until an atomic token-bound publication",()=>{
     const sql=readFileSync("supabase/migrations/202610230067_copilot_index_atomic_publish.sql","utf8");

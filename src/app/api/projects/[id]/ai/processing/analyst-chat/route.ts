@@ -7,6 +7,7 @@ import {createStage3ReadContext,loadStage3DocumentContext} from "@/lib/ai/stage3
 import {selectMemoryHints,readInvestigationMemory,readProjectMemoryTurns,saveInvestigationTurn,CopilotMemoryError} from "@/lib/ai/stage3/investigation-memory";
 import {runAnalystReasoning} from "@/lib/ai/stage3/analyst-reasoning";
 import {wantsCrossSourceEvidence} from "@/lib/ai/stage3/evidence-retrieval";
+import {hasPrivatePdfTextGlyphs} from "@/lib/ai/stage3/pdf-recovery";
 import {ensureIndexedOriginalPDF,retrieveOwnedEvidence,readProjectMemoryEvents,readProjectAnalystNotes,eventMemoryHints,
   saveInvestigationEvent} from "@/lib/ai/stage3/indexed-investigation-memory";
 import {loadSelectedComparisonPages} from "@/lib/ai/research/comparison-fetch";
@@ -82,7 +83,11 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
       sourceId:input.sourceId,assetId:input.assetId,context:input.context,
       mode:"ask",question:input.question,byokConsent:true,
     })).spans:[];
-    const spans=[...pageSpans,...indexedSpans].slice(0,16);
+    // Unmapped-font glyphs are untrusted and must never be promoted to
+    // source-backed evidence for dates, actor IDs or vulnerabilities.
+    const corruptPageSpans=pageSpans.some(span=>hasPrivatePdfTextGlyphs(span.text));
+    const safePageSpans=pageSpans.filter(span=>!hasPrivatePdfTextGlyphs(span.text));
+    const spans=[...safePageSpans,...indexedSpans].slice(0,16);
     const history=crossSource?selectMemoryHints(projectTurns,input.question):[];
     const eventHistory=crossSource?eventMemoryHints(events,input.question):[];
     // Prior AI summaries are retained in the timeline, but they are not
@@ -120,7 +125,7 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
       if(input.useSource&&!indexedCurrent)
         analysis.warnings.push("INDEX_UNAVAILABLE: Current PDF could not be fully indexed ("+
           (indexReason??"NO_READY_INDEX")+"). Results, if any, may come from other indexed sources.");
-      if(input.useSource&&!indexedSpans.length&&pageSpans.length)
+      if(input.useSource&&!indexedSpans.length&&safePageSpans.length)
         analysis.warnings.push("FALLBACK_CURRENT_PAGE: Only the selected original page/range is available; this is not Entire PDF analysis.");
       if(input.useSource&&input.context.kind==="document"&&!indexedSpans.length)
         analysis.warnings.push("INSUFFICIENT_RETRIEVAL: Entire PDF evidence is unavailable. No page was silently substituted.");
@@ -128,7 +133,7 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
         analysis.warnings.push(crossSource?
           "LEXICAL_ONLY: Indexed passages were found by keyword matching, not multilingual semantic search.":
           "ACTIVE_PDF_ONLY: Only the selected original PDF was used as indexed evidence.");
-      if(spans.some(span=>span.kind==="PDF"&&/[\uE000-\uF8FF\uFFFD]/u.test(span.text)))
+      if(corruptPageSpans)
         analysis.warnings.push("PDF_GLYPH_INTEGRITY_WARNING: PDF extraction contains unmapped glyphs. Dates, CVEs and names must be checked against the original rendered page.");
       if(input.webResearch&&!pages.length)
         analysis.warnings.push("Web research did not provide readable evidence. Analysis is based only on PDF or general model knowledge.");
@@ -146,7 +151,7 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
     }catch{unifiedSaved=false;}
     return noStore({result,saved:true,unifiedSaved,
       retrieval:{status:!input.useSource?"DISABLED":indexedSpans.length?"LEXICAL_ONLY":
-        pageSpans.length?"FALLBACK_CURRENT_PAGE":"INDEX_UNAVAILABLE",
+        safePageSpans.length?"FALLBACK_CURRENT_PAGE":"INDEX_UNAVAILABLE",
         indexReason,entireDocumentAvailable:indexedCurrent&&indexedSpans.length>0,
         returnedPassages:indexedSpans.length},
       notice:unifiedSaved?"Verified source references and provisional analysis are indexed in investigation history.":

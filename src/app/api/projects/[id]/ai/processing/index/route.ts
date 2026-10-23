@@ -3,6 +3,7 @@ import {requireOwnedProject} from "@/lib/projects/ownership";
 import {readJsonLimited,validateOrigin,noStore} from "@/lib/ai/byok/security";
 import {createStage3ReadContext} from "@/lib/ai/stage3/context";
 import {ensureIndexedOriginalPDF,InvestigationIndexError} from "@/lib/ai/stage3/indexed-investigation-memory";
+import {CITEM_INDEX_VERSION} from "@/lib/ai/stage3/extraction-manifest";
 
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
@@ -28,9 +29,10 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
         .ilike("original_filename","%.pdf").order("ready_at",{ascending:false}).limit(30);
       if(error)throw new InvestigationIndexError("index_database_unavailable");
       const {data:existing,error:ixErr}=await owned.supabase.from("copilot_document_indexes")
-        .select("asset_id,status").eq("project_id",owned.projectId).eq("owner_id",owned.user.id);
+        .select("asset_id,status,index_version,quality_status,extraction_run_id").eq("project_id",owned.projectId).eq("owner_id",owned.user.id);
       if(ixErr)throw new InvestigationIndexError("index_database_unavailable");
-      const completed=new Set((existing??[]).filter(v=>v.status==="READY").map(v=>v.asset_id));
+      const completed=new Set((existing??[]).filter(v=>v.status==="READY"&&v.index_version===CITEM_INDEX_VERSION&&
+        v.quality_status==="COMPLETE"&&Boolean(v.extraction_run_id)).map(v=>v.asset_id));
       tasks=(data??[]).filter(v=>!completed.has(v.id)).slice(0,2);
     }else tasks=[{id:input.assetId!,source_id:input.sourceId!}];
     const indexed:{sourceId:string;assetId:string;cached?:boolean;chunks:number;pages?:number;processing?:boolean}[]=[];
