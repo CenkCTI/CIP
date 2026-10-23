@@ -6,6 +6,7 @@ import {stage3RequestSchema} from "@/lib/ai/stage3/schemas";
 import {createStage3ReadContext,loadStage3DocumentContext} from "@/lib/ai/stage3/context";
 import {selectMemoryHints,readInvestigationMemory,readProjectMemoryTurns,saveInvestigationTurn,CopilotMemoryError} from "@/lib/ai/stage3/investigation-memory";
 import {runAnalystReasoning} from "@/lib/ai/stage3/analyst-reasoning";
+import {wantsCrossSourceEvidence} from "@/lib/ai/stage3/evidence-retrieval";
 import {ensureIndexedOriginalPDF,retrieveOwnedEvidence,readProjectMemoryEvents,readProjectAnalystNotes,eventMemoryHints,
   saveInvestigationEvent} from "@/lib/ai/stage3/indexed-investigation-memory";
 import {loadSelectedComparisonPages} from "@/lib/ai/research/comparison-fetch";
@@ -33,6 +34,7 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
     validateOrigin(req);
     const input=inputSchema.parse(await readJsonLimited(req,6000));
     const owned=await requireOwnedProject((await params).id);
+    const crossSource=input.useSource&&wantsCrossSourceEvidence(input.question);
     const credential=await requireResearchByok(owned);
     const reader=createStage3ReadContext(owned);
     // Independently validate the owned source and asset even when PDF context is off.
@@ -64,7 +66,8 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
     let indexedSpans:Awaited<ReturnType<typeof retrieveOwnedEvidence>>=[];
     if(input.useSource){
       try{indexedSpans=await retrieveOwnedEvidence(owned,input.question,events,12,
-        {sourceId:input.sourceId,assetId:input.assetId,ready:indexedCurrent});}
+        {sourceId:input.sourceId,assetId:input.assetId,ready:indexedCurrent,
+          scope:crossSource?"project":"active"});}
       catch{indexedSpans=[];indexReason??="RETRIEVAL_UNAVAILABLE";}
     }
     // The active page is a fallback for newly uploaded or non-indexable PDFs.
@@ -80,8 +83,8 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
       mode:"ask",question:input.question,byokConsent:true,
     })).spans:[];
     const spans=[...pageSpans,...indexedSpans].slice(0,16);
-    const history=selectMemoryHints(projectTurns,input.question);
-    const eventHistory=eventMemoryHints(events,input.question);
+    const history=crossSource?selectMemoryHints(projectTurns,input.question):[];
+    const eventHistory=crossSource?eventMemoryHints(events,input.question):[];
     // Prior AI summaries are retained in the timeline, but they are not
     // trusted evidence or model prompt context for a source-grounded question.
     const promptHistory=input.useSource?history.map(turn=>({
@@ -90,8 +93,9 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
     const promptEventHistory=input.useSource?eventHistory.map(event=>({
       ...event,prior_unverified_analysis:"",
     })):eventHistory;
-    const investigationNotes=[memory.notes,...projectNotes.filter(item=>
-      item.source_id!==input.sourceId).map(item=>"Other source "+item.source_id.slice(0,8)+": "+item.notes)]
+    const investigationNotes=[memory.notes,
+      ...(crossSource?projectNotes.filter(item=>item.source_id!==input.sourceId)
+        .map(item=>"Other source "+item.source_id.slice(0,8)+": "+item.notes):[])]
       .filter(Boolean).join("\n").slice(0,4000);
     const language=input.responseLanguage==="auto"?
       (/[çğıöşü]/i.test(input.question)||/\b(neden|nasıl|amacı|hipotez|analiz)\b/i.test(input.question)?"tr":"en"):
@@ -121,7 +125,9 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
       if(input.useSource&&input.context.kind==="document"&&!indexedSpans.length)
         analysis.warnings.push("INSUFFICIENT_RETRIEVAL: Entire PDF evidence is unavailable. No page was silently substituted.");
       if(input.useSource&&indexedSpans.length)
-        analysis.warnings.push("LEXICAL_ONLY: Indexed passages were found by keyword matching, not multilingual semantic search.");
+        analysis.warnings.push(crossSource?
+          "LEXICAL_ONLY: Indexed passages were found by keyword matching, not multilingual semantic search.":
+          "ACTIVE_PDF_ONLY: Only the selected original PDF was used as indexed evidence.");
       if(spans.some(span=>span.kind==="PDF"&&/[\uE000-\uF8FF\uFFFD]/u.test(span.text)))
         analysis.warnings.push("PDF_GLYPH_INTEGRITY_WARNING: PDF extraction contains unmapped glyphs. Dates, CVEs and names must be checked against the original rendered page.");
       if(input.webResearch&&!pages.length)

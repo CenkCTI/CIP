@@ -2,7 +2,7 @@ import type {Stage3Span} from "./provenance";
 
 /** Exact numeric identifiers in font-private PDF text are not safe to infer. */
 export function isPdfExactValueQuestion(question:string):boolean{
-  return /(?:tarih|başlangıç|bitiş|hangi yıl|ne zaman|yıllar|[Cc][Vv][Ee]-\d{4}|date|start date|end date|when|timeline|\byear\b|hash|fingerprint|sha-?256)/i.test(question);
+  return /(?:tarih|başlangıç(?![\p{L}])|bitiş(?![\p{L}])|hangi yıl|ne zaman|yıllar|hangi\s+CVE|CVE\s+(?:numarası|kodu|kimliği)|date|start date|end date|when|timeline|\byear\b|hash(?:\s+değeri)?|fingerprint|sha-?256)/iu.test(question);
 }
 /** Source-only questions need a literal quotation; free-standing strategy
  * questions can still receive clearly marked conditional hypotheses. */

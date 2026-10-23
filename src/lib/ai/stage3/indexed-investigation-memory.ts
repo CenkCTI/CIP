@@ -6,7 +6,7 @@ import {createStage3ReadContext,type Stage3AiReadContext} from "./context";
 import {extractPdfPages} from "./pdf-text";
 import type {Stage3Span} from "./provenance";
 import {splitPagesForIndex,memorySearchQuery} from "./index-chunks";
-import {requestedPdfPages,retrievalProbe,prioritizedEvidenceChunks,type IndexedEvidenceChunk} from "./evidence-retrieval";
+import {requestedPdfPages,retrievalProbe,prioritizedEvidenceChunks,rankActivePdfChunks,type IndexedEvidenceChunk} from "./evidence-retrieval";
 
 type Owned=Awaited<ReturnType<typeof requireOwnedProject>>;
 export class InvestigationIndexError extends Error {
@@ -129,7 +129,37 @@ export function eventMemoryHints(events:MemoryEvent[],question:string){
   }));
 }
 export async function retrieveOwnedEvidence(owned:Owned,question:string,events:MemoryEvent[],limit=12,
-  active?:{sourceId:string;assetId:string;ready:boolean}):Promise<Stage3Span[]>{
+  active?:{sourceId:string;assetId:string;ready:boolean;scope?:"active"|"project"}):Promise<Stage3Span[]>{
+  // Current-source retrieval is scoped by original asset, owner and project;
+  // never use unrelated PDFs as evidence for a selected-document question.
+  if(active?.scope!=="project"){
+    if(!active?.ready)return [];
+    const index=await owned.supabase.from("copilot_document_indexes")
+      .select("id,page_count").eq("project_id",owned.projectId)
+      .eq("owner_id",owned.user.id).eq("source_id",active.sourceId)
+      .eq("asset_id",active.assetId).eq("status","READY").maybeSingle();
+    if(index.error)throw new InvestigationIndexError("index_database_unavailable");
+    if(!index.data)return [];
+    const readyPageCount=index.data.page_count;
+    const chunks=await owned.supabase.from("copilot_document_chunks")
+      .select("source_id,asset_id,page_number,chunk_number,content")
+      .eq("project_id",owned.projectId).eq("owner_id",owned.user.id)
+      .eq("source_id",active.sourceId).eq("asset_id",active.assetId)
+      .eq("index_id",index.data.id)
+      .order("page_number").order("chunk_number").limit(120);
+    if(chunks.error)throw new InvestigationIndexError("index_database_unavailable");
+    const candidates=(chunks.data??[]) as IndexedEvidenceChunk[];
+    const requested=requestedPdfPages(question).filter(n=>n<=readyPageCount);
+    const exact=requested.length?
+      candidates.filter(row=>requested.includes(row.page_number)):[];
+    const rest=rankActivePdfChunks(
+      candidates.filter(row=>!requested.includes(row.page_number)),question,limit);
+    return prioritizedEvidenceChunks(exact,[],rest,limit).map((row,i)=>({
+      token:"MEM_"+String(i+1).padStart(3,"0"),text:row.content,
+      page:row.page_number,kind:"PDF" as const,
+      sourceId:row.source_id,assetId:row.asset_id,
+    }));
+  }
   // Reuse only the analyst's prior questions as referent hints. Unverified AI
   // summaries have contained wrong dates/actor IDs and must not bias search.
   const expanded=memorySearchQuery(question,events.slice(0,5).map(e=>e.question));

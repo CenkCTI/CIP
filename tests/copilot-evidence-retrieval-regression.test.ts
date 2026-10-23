@@ -1,5 +1,5 @@
 import {describe,it,expect} from "vitest";
-import {explicitPdfPages,requestedPdfPages,retrievalProbe,prioritizedEvidenceChunks,type IndexedEvidenceChunk}
+import {explicitPdfPages,requestedPdfPages,retrievalProbe,prioritizedEvidenceChunks,wantsCrossSourceEvidence,rankActivePdfChunks,type IndexedEvidenceChunk}
   from "@/lib/ai/stage3/evidence-retrieval";
 import {readFileSync} from "node:fs";
 const row=(page_number:number,chunk_number=1):IndexedEvidenceChunk=>({
@@ -40,6 +40,18 @@ describe("PR83 ANSSI page retrieval regressions",()=>{
   it("keeps different source assets distinct even when their page numbers match",()=>{
     const different={...row(3),asset_id:"asset-B"};
     expect(prioritizedEvidenceChunks([row(3)],[different],[row(3)],12)).toHaveLength(2);
+  });
+  it("isolates the selected original by default, cross-source only on explicit request",()=>{
+    expect(wantsCrossSourceEvidence("Yalnızca CERT Polska PDF'sini kullan")).toBe(false);
+    expect(wantsCrossSourceEvidence("CERT Polska raporundaki saldırı zincirini açıkla")).toBe(false);
+    expect(wantsCrossSourceEvidence("Diğer kaynaklarla karşılaştır")).toBe(true);
+  });
+  it("keeps every source page when the whole selected PDF fits the context window",()=>{
+    const all=[row(1,1),row(1,2),row(2,1),row(2,2),row(2,3),row(3),
+      row(4,1),row(4,2),row(4,3),row(5,1),row(5,2)];
+    const ranked=rankActivePdfChunks(all,"CERT Polska raporunun önerileri",12);
+    expect(ranked).toHaveLength(11);
+    expect(ranked.map(r=>r.page_number)).toContain(3);
   });
   it("keeps direct lookups owner/project/index scoped and preserves original text",()=>{
     const indexer=readFileSync("src/lib/ai/stage3/indexed-investigation-memory.ts","utf8");

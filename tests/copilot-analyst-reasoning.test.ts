@@ -61,6 +61,12 @@ describe("Fail-closed source integrity for original PDF glyph corruption",()=>{
     expect(answer.hypotheses).toHaveLength(0);
     expect(answer.warnings.some(w=>w.includes("PDF_GLYPH_INTEGRITY_BLOCK"))).toBe(true);
   });
+  it("does not mistake başlangıçtaki technical chain as an exact date request",()=>{
+    const question="CERT Polska raporundaki saldırı zincirini başlangıçtaki phishing e-postasından "
+      +"zararlı kodun çalıştırılmasına kadar açıkla. WindowsCodecs.dll dosyasının rolü nedir?";
+    expect(requiresExactPdfValueAbstention(question,[corrupted])).toBe(false);
+    expect(requiresExactPdfValueAbstention("CVE-2023-23397 zafiyeti nedir?",[corrupted])).toBe(false);
+  });
   it("does not block nonnumeric questions or intact-source dates",()=>{
     expect(requiresExactPdfValueAbstention("3. sayfada amaç nedir?",[corrupted])).toBe(false);
     expect(requiresExactPdfValueAbstention("Tarihi nedir?",[span])).toBe(false);

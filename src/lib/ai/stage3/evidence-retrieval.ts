@@ -69,3 +69,27 @@ export function prioritizedEvidenceChunks(
   }
   return out;
 }
+
+
+/** Entire PDF points to the active original by default. A question must
+ * explicitly request other documents to enable cross-PDF retrieval. */
+export function wantsCrossSourceEvidence(question:string):boolean{
+ if(/(?:yalnızca|sadece|sırf|just this|only (?:this|the|my)|exclusively)/iu.test(question))return false;
+ return /(?:diğer\s+(?:kaynak|belge|rapor)|başka\s+(?:kaynak|belge|rapor)|tüm\s+(?:kaynak|belge|rapor)|farklı\s+(?:kaynak|belge|rapor)|(?:kaynak|belge|rapor)lar?\s+arası|karşılaştır|kıyasla|projedeki\s+(?:kaynak|belge)|(?:other|across|multiple|all)\s+(?:sources|reports|documents)|compare\s+(?:with|against)|cross.source)/iu.test(question);
+}
+
+/** Return every passage of small originals (not just page one), then rank
+ * larger source sets by conservative, deterministic lexical overlap. */
+export function rankActivePdfChunks(rows:IndexedEvidenceChunk[],question:string,limit:number):IndexedEvidenceChunk[]{
+ const ordered=[...rows].sort((a,b)=>a.page_number-b.page_number||a.chunk_number-b.chunk_number);
+ if(ordered.length<=limit)return ordered;
+ const q=[question,retrievalProbe(question)??""].join(" ").toLocaleLowerCase("tr-TR");
+ const stop=new Set(["hangi","nedir","nasıl","göster","raporunda","raporun","pdf","sayfa",
+  "sayfada","kaynak","orijinal","belirt","açıkla","olarak","için","ile","bir",
+  "ve","what","which","from","show","please","about","report","page"]);
+ const terms=[...new Set((q.match(/[\p{L}\p{N}.-]{3,}/gu)??[]).filter(t=>!stop.has(t)))].slice(0,24);
+ return ordered.map(row=>({row,relevance:terms.reduce((v,t)=>
+    v+(row.content.toLocaleLowerCase("tr-TR").includes(t)?(t.length>=7?2:1):0),0)}))
+  .sort((a,b)=>b.relevance-a.relevance||a.row.page_number-b.row.page_number||
+    a.row.chunk_number-b.row.chunk_number).slice(0,limit).map(x=>x.row);
+}
