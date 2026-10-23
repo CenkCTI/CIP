@@ -1,5 +1,5 @@
 import {describe,it,expect} from "vitest";
-import {hasPrivatePdfTextGlyphs,selectVerifiedPdfPageRecovery} from "@/lib/ai/stage3/pdf-recovery";
+import {hasPrivatePdfTextGlyphs,selectVerifiedPdfPageRecovery,preserveVisibleRecommendationLabels} from "@/lib/ai/stage3/pdf-recovery";
 
 describe("Independent PDF text recovery",()=>{
  it("replaces only the corrupt page with trustworthy same-page alternate text",()=>{
@@ -34,6 +34,15 @@ describe("Independent PDF text recovery",()=>{
    expect(r.pages[0].text).toBe("Exact quotation.");
    expect(r.recovered).toEqual([]);
    expect(r.unresolved).toEqual([4]);
+ });
+ it("preserves only real intact PDF recommendation labels in OCR-supplemented pages",()=>{
+   const original="R10\\nTexte endommagé \\uE12E... R11";
+   const ocr="Recommandation: mettre en œuvre l'authentification multifacteur";
+   const merged=preserveVisibleRecommendationLabels(original,ocr);
+   expect(merged).toContain("R10");
+   expect(merged).toContain("R11");
+   expect(merged).not.toContain("Visible recommendation");
+   expect(preserveVisibleRecommendationLabels("R12", "R12 already recognized")).toBe("R12 already recognized");
  });
  it("detects PUA ranges and replacement characters but not normal digits",()=>{
    expect(hasPrivatePdfTextGlyphs("\uE000")).toBe(true);

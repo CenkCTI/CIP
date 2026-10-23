@@ -5,7 +5,7 @@ export type PdfRecoveredPage=PdfPageText&{extractor:"pdfjs"|"poppler"|"ocr"};
 export function preserveVisibleRecommendationLabels(original:string,ocrText:string):string{
  const ids=[...new Set(original.match(/\bR(?:[1-9]|1[0-9])\b/g)??[])];
  const missing=ids.filter(id=>!new RegExp("\\b"+id+"\\b").test(ocrText));
- return missing.length?"Visible recommendation labels (original PDF): "+missing.join(", ")+"\n"+ocrText:ocrText;
+ return missing.length?missing.join("\n")+"\n"+ocrText:ocrText;
 }
 
 const unsafe=/[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}\uFFFD]/u;
