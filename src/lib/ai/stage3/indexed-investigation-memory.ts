@@ -6,6 +6,7 @@ import {createStage3ReadContext,type Stage3AiReadContext} from "./context";
 import {extractPdfPagesDetailed} from "./pdf-text";
 import {buildExtractionManifest,canPublishExtraction,CITEM_INDEX_VERSION} from "./extraction-manifest";
 import {normalizeForSearch} from "./document-quality";
+import {planMultilingualLexicalProbes} from "./multilingual-query-plan";
 import type {Stage3Span} from "./provenance";
 import {splitPagesForIndex,memorySearchQuery} from "./index-chunks";
 import {requestedPdfPages,retrievalProbe,prioritizedEvidenceChunks,rankActivePdfChunks,type IndexedEvidenceChunk} from "./evidence-retrieval";
@@ -194,7 +195,7 @@ export async function retrieveOwnedEvidence(owned:Owned,question:string,events:M
   // Reuse only the analyst's prior questions as referent hints. Unverified AI
   // summaries have contained wrong dates/actor IDs and must not bias search.
   const expanded=memorySearchQuery(question,events.slice(0,5).map(e=>e.question));
-  const probe=retrievalProbe(question);
+  const probes=planMultilingualLexicalProbes(question);
   const rpcQuestion=async(p_question:string):Promise<IndexedEvidenceChunk[]>=>{
     const {data,error}=await owned.supabase.rpc("copilot_search_document_chunks",{
       p_project_id:owned.projectId,p_question,p_limit:Math.min(limit,20),
@@ -202,9 +203,13 @@ export async function retrieveOwnedEvidence(owned:Owned,question:string,events:M
     if(error)throw new InvestigationIndexError("index_database_unavailable");
     return (data??[]) as IndexedEvidenceChunk[];
   };
-  const [lexical,translated]=await Promise.all([
-    rpcQuestion(expanded),probe?rpcQuestion(probe):Promise.resolve([] as IndexedEvidenceChunk[]),
+  // Each probe is a distinct server-side RLS-filtered lexical RPC. Probes
+  // are search hints only and must never be displayed as original source text.
+  const responses=await Promise.all([
+    rpcQuestion(expanded),...probes.map(term=>rpcQuestion(term)),
   ]);
+  const lexical=responses[0];
+  const translated=responses.slice(1).flat();
   // An explicit page reference is a navigational constraint. Fetch its exact
   // owned READY original chunks even if the query's language cannot match FTS.
   // SHA freshness is established by ensureIndexedOriginalPDF before this call.
