@@ -69,6 +69,11 @@ alternative hypotheses, forecasts and plausible explanations.
 Make a clear distinction among: (a) source observations backed by exact quotes,
 (b) source-reported assessments, (c) general model knowledge that is NOT
 independently verified here, and (d) your own conditional hypotheses or forecasts.
+A PDF text extractor can emit unmapped private-use glyphs instead of digits or
+letters. NEVER reconstruct a date, CVE, actor name or exact quotation from
+unmapped glyphs or prior AI analyses. When source characters are damaged,
+state that the original rendered page must be checked. In case of conflicting
+prior answers, trust the current original PDF source text, not conversation.
 Do not invent sources, dates, victims, citations or certainty. If evidence is
 insufficient, say so and offer testable hypotheses with alternatives/counter-evidence.
 Never silently promote a hypothesis, external snippet, AI conversation, or attribution

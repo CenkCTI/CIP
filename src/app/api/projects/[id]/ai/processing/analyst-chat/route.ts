@@ -63,7 +63,8 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
     }
     let indexedSpans:Awaited<ReturnType<typeof retrieveOwnedEvidence>>=[];
     if(input.useSource){
-      try{indexedSpans=await retrieveOwnedEvidence(owned,input.question,events);}
+      try{indexedSpans=await retrieveOwnedEvidence(owned,input.question,events,12,
+        {sourceId:input.sourceId,assetId:input.assetId,ready:indexedCurrent});}
       catch{indexedSpans=[];indexReason??="RETRIEVAL_UNAVAILABLE";}
     }
     // The active page is a fallback for newly uploaded or non-indexable PDFs.
@@ -113,6 +114,8 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
         analysis.warnings.push("INSUFFICIENT_RETRIEVAL: Entire PDF evidence is unavailable. No page was silently substituted.");
       if(input.useSource&&indexedSpans.length)
         analysis.warnings.push("LEXICAL_ONLY: Indexed passages were found by keyword matching, not multilingual semantic search.");
+      if(spans.some(span=>span.kind==="PDF"&&/[\uE000-\uF8FF\uFFFD]/u.test(span.text)))
+        analysis.warnings.push("PDF_GLYPH_INTEGRITY_WARNING: PDF extraction contains unmapped glyphs. Dates, CVEs and names must be checked against the original rendered page.");
       if(input.webResearch&&!pages.length)
         analysis.warnings.push("Web research did not provide readable evidence. Analysis is based only on PDF or general model knowledge.");
       return analysis;
