@@ -355,8 +355,6 @@ SQL
   -f "$ROOT/supabase/migrations/202610220066_copilot_unified_investigation_rag.sql" >/dev/null
 "${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" \
   -f "$ROOT/supabase/migrations/202610230067_copilot_index_atomic_publish.sql" >/dev/null
-"${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" \
-  -f "$ROOT/supabase/migrations/202610230068_citem_document_extraction_manifest.sql" >/dev/null
 
 "${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" <<'SQL' >/dev/null
 do $acl$
@@ -541,3 +539,10 @@ end $atomic$;
 SQL
 
 echo "Stage 3 processing foundation, Source Claim and Copilot unified memory migration tests passed."
+
+# Forward migration 068 is applied after legacy v2 acceptance, so the
+# previous ready/lexical fixtures remain meaningful for older migration tests.
+"${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" \
+  -f "$ROOT/supabase/migrations/202610230068_citem_document_extraction_manifest.sql" >/dev/null
+
+echo "Phase A migration 068 installed after legacy 067 tests."
