@@ -68,3 +68,18 @@ includes privateUseCount per page. The immutable original PDF is unchanged.
 
 The diagnostic changes here do NOT repair Unicode extraction themselves and
 must not be treated as an end-to-end acceptance pass.
+
+### Independent local Poppler comparison
+
+On a Linux workstation with poppler-utils installed, run:
+
+```bash
+node scripts/citem-anssi-compare-extractors.mjs /path/to/CERTFR-2023-CTI-009.pdf
+```
+
+The check reads the same exact local original and outputs only SHA, Boolean
+gold checks and private-use counts for pages 1/3/4/15/16/17, not raw PDF
+content. A passing result identifies a candidate alternative extraction engine;
+it does NOT authorize silently switching production extraction, trusting
+all untested pages, or changing the original/derived database records.
+Follow with cross-page visual and citation tests before deployment.
