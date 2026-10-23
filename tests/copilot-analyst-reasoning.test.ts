@@ -76,6 +76,20 @@ describe("Fail-closed source integrity for original PDF glyph corruption",()=>{
     expect(result.hypotheses).toHaveLength(0);
     expect(result.warnings.some(w=>w.includes("NO_VERIFIED_SOURCE_QUOTE"))).toBe(true);
   });
+  it("provides authoritative page number metadata to the model instead of inferring PDF footers",()=>{
+    const messages=makeAnalystMessages({...blank,question:"PDF'nin 4. sayfası",spans:[corrupted]});
+    expect(messages[1].content).toContain('"page_number":4');
+    expect(messages[0].content).toContain("authoritative page_number");
+  });
+  it("fails closed when a requested PDF has no retrieved source text",async()=>{
+    let calls=0;
+    const result=await runAnalystReasoning({...blank,question:"ANSSI raporunda ne yazıyor?",spans:[]},async()=>{
+      calls++;throw new Error("Should not call model without any PDF excerpts");
+    });
+    expect(calls).toBe(0);
+    expect(result.evidence).toHaveLength(0);
+    expect(result.warnings.some(w=>w.includes("SOURCE_REQUIRED_UNAVAILABLE"))).toBe(true);
+  });
   it("keeps non-source conceptual questions open to explicitly provisional reasoning",async()=>{
     expect(requestsSourceGroundedAnswer("Saldırganın amacı nedir?")).toBe(false);
     expect(requestsSourceGroundedAnswer("ANSSI raporunun 3. sayfasında ne var?")).toBe(true);
