@@ -47,7 +47,7 @@ export function createStage3ReadContext(ctx: OwnedContext): Stage3AiReadContext 
   }
   return {
     readSource: (id) => one("sources", "id,title,source_type", {id}),
-    readAsset: (sourceId, id) => one("source_assets", "id,source_id,asset_role,state,mime_type,original_filename,storage_path,size_bytes", { id, source_id: sourceId }),
+    readAsset: (sourceId, id) => one("source_assets", "id,source_id,asset_role,state,mime_type,original_filename,storage_path,size_bytes,sha256", { id, source_id: sourceId }),
     readAnnotation: (sourceId, assetId, id) => one("source_annotations", "id,source_id,asset_id,selected_text,page_number,anchor_kind", { id, source_id: sourceId, asset_id: assetId }),
     readExistingIndicators: () => list("indicators", "id,value,type"),
     readExistingMalware: () => list("malware", "id,name,family"),

@@ -276,6 +276,21 @@ function FileSourceForm({
     }
     setProgress(100);
     setStatus(final);
+    // Index the completed original in a separate authenticated request; parsing
+    // issues never invalidate an already successful source upload.
+    if(file.type==="application/pdf"||/\.pdf$/i.test(file.name)){
+      try{
+        setStatus({...final,success:"PDF saved. Building searchable investigation index…"});
+        const response=await fetch("/api/projects/"+projectId+"/ai/processing/index",{
+          method:"POST",headers:{"content-type":"application/json"},
+          body:JSON.stringify({sourceId:prepared.sourceId,assetId:prepared.assetId}),
+        });
+        const payload=await response.json() as {indexed?:{chunks:number}[]};
+        setStatus({...final,success:response.ok&&payload.indexed?.some(item=>item.chunks>0)
+          ?"PDF saved and indexed for investigation memory."
+          :"PDF saved. Text indexing will retry in Analyst Chat or Settings."});
+      }catch{setStatus({...final,success:"PDF saved. Text indexing will retry in Analyst Chat."});}
+    }
     form.reset();
     router.refresh();
   }

@@ -118,6 +118,8 @@ export function ProcessingCopilot({
   const [memoryNotes,setMemoryNotes]=useState("");
   const [memoryStatus,setMemoryStatus]=useState("");
   const [memoryReady,setMemoryReady]=useState(false);
+  const [investigationEvents,setInvestigationEvents]=useState<{id:string;kind:string;summary:string;question:string;created_at:string;source_id:string|null;asset_id:string|null}[]>([]);
+  const [indexStatus,setIndexStatus]=useState("");
   const [notesOpen,setNotesOpen]=useState(false);
   const [responseLanguage, setResponseLanguage] = useState<"auto" | "tr" | "en">("auto");
   const [turns, setTurns] = useState<CopilotTurn[]>([]);
@@ -198,6 +200,22 @@ export function ProcessingCopilot({
     void load();
     return()=>abort.abort();
   },[analystChat,projectId,sourceId,assetId,memoryUrl]);
+
+  useEffect(()=>{
+    if(!analystChat)return;
+    const controller=new AbortController();
+    void (async()=>{
+      try{
+        const response=await fetch("/api/projects/"+projectId+"/ai/processing/timeline",{
+          cache:"no-store",signal:controller.signal,
+        });
+        if(!response.ok)return;
+        const body=await response.json() as {events?:typeof investigationEvents};
+        if(!controller.signal.aborted)setInvestigationEvents(body.events??[]);
+      }catch{/* Timeline is supplemental; old chat must continue to work. */}
+    })();
+    return()=>controller.abort();
+  },[analystChat,projectId,turns.length]);
 
   async function submit(mode:"ask"|"analyse"|"extract",prompt:string,resume=false) {
     if(!canProcess || (mode==="ask" && !prompt.trim())) {
@@ -404,6 +422,19 @@ export function ProcessingCopilot({
       if(inFlight.current===abort){inFlight.current=null;setWorking(false);}
     }
   }
+  async function backfillPDFs(){
+    setIndexStatus("Indexing existing PDF sources…");
+    try{
+      const response=await fetch("/api/projects/"+projectId+"/ai/processing/index",{
+        method:"POST",headers:{"content-type":"application/json"},
+        body:JSON.stringify({backfill:true}),
+      });
+      const body=await response.json() as {indexed?:unknown[];errors?:unknown[];error?:string};
+      if(!response.ok)throw new Error(body.error||"Indexing unavailable");
+      setIndexStatus(String(body.indexed?.length??0)+" PDF(s) checked; "+
+        String(body.errors?.length??0)+" indexing errors. Repeat to index other PDFs.");
+    }catch(err){setIndexStatus(err instanceof Error?err.message:"Indexing failed");}
+  }
   async function saveNotes(){
     setMemoryStatus("");
     try{
@@ -530,6 +561,14 @@ export function ProcessingCopilot({
               <p role="status" className="text-[11px] text-[var(--muted)]">{memoryStatus}</p>
             </div>:null}
           </div>
+          <div className="rounded-xl border border-[var(--line-neutral)] p-3 text-xs">
+            <p className="mb-2 font-semibold">Document memory index</p>
+            <button type="button" onClick={()=>void backfillPDFs()}
+              className="rounded-lg border border-[var(--line)] px-3 py-2 text-[var(--amber-soft)]">
+              Index existing PDFs (2 at a time)
+            </button>
+            {indexStatus?<p role="status" className="mt-2 text-[var(--muted-strong)]">{indexStatus}</p>:null}
+          </div>
           <details className="rounded-xl border border-[var(--line-neutral)] p-3">
             <summary className="cursor-pointer text-xs font-semibold text-[var(--foreground)]">
               NVIDIA BYOK · {connected?"Connected":"Connect to continue"}
@@ -621,7 +660,25 @@ export function ProcessingCopilot({
                 candidate.verifiedSupport[0].quote);
           }}
           onResume={(failed)=>void documentScan.resume(failed)} onCancel={documentScan.cancel}/>:null}
-        {(turns.length>0||researchSessions.length===0)?<CopilotChat turns={turns} onNavigate={onNavigate}/>:null}
+        {(turns.length>0||researchSessions.length===0)?<CopilotChat turns={turns} onNavigate={onNavigate}
+          activeSourceId={sourceId} activeAssetId={assetId}/>:null}
+        {investigationEvents.length ? <details className="mx-5 rounded-xl border border-[var(--line-neutral)] bg-[var(--surface-panel)] p-3"
+          data-testid="copilot-investigation-timeline">
+          <summary className="cursor-pointer text-xs font-semibold text-[var(--amber-soft)]">
+            Investigation memory · {investigationEvents.length} recent analysis events
+          </summary>
+          <div className="mt-3 space-y-2">
+            {investigationEvents.slice(0,12).map(event=><article key={event.id}
+              className="rounded-lg bg-[var(--surface-input)] p-2.5 text-xs">
+              <p className="font-semibold text-[var(--foreground)]">{event.kind} · {new Date(event.created_at).toLocaleDateString()}</p>
+              <p className="mt-1 line-clamp-3 text-[var(--muted-strong)]">{event.summary||event.question}</p>
+              {event.asset_id!==assetId ? <p className="mt-1 text-[var(--muted)]">
+                Other source · {event.source_id?.slice(0,8)}
+              </p>:null}
+              <p className="mt-1 text-[10px] text-[var(--muted)]">Prior AI analysis, not independently verified</p>
+            </article>)}
+          </div>
+        </details>:null}
         {researchSessions.filter(session=>session.sourceId===sourceId&&session.assetId===assetId).map(session=><CopilotResearchConversation
           key={session.id} projectId={projectId} sourceId={sourceId} assetId={assetId}
           session={session} responseLanguage={responseLanguage} useSource={useSource}

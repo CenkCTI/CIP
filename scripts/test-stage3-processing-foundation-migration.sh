@@ -45,7 +45,7 @@ create function storage.filename(name text)returns text language sql immutable a
 $$;
 SQL
 
-find "$ROOT/supabase/migrations" -maxdepth 1 -name '*.sql'   ! -name '202609110053_investigation_direction_stage1.sql'   ! -name '202609230054_investigation_collection_stage2.sql'   ! -name '202609290055_source_reader_pdf_v2.sql'   ! -name '202609290056_source_reader_pdf_v2_hardening.sql'   ! -name '202609300057_timeline_stage3_workflow_v2.sql'   ! -name '202609300058_stage3_processing_foundation.sql'   ! -name '202609300059_stage3_processing_provenance_hardening.sql' ! -name '202610150060_stage3_source_claims.sql' ! -name '202610150061_stage3_source_claim_types.sql' ! -name '202610220064_copilot_investigation_memory.sql' ! -name '202610220065_copilot_memory_acl_hardening.sql'   | sort | while read -r migration; do printf "\\i '%s'\n" "$migration"; done > "$PRE_SQL"
+find "$ROOT/supabase/migrations" -maxdepth 1 -name '*.sql'   ! -name '202609110053_investigation_direction_stage1.sql'   ! -name '202609230054_investigation_collection_stage2.sql'   ! -name '202609290055_source_reader_pdf_v2.sql'   ! -name '202609290056_source_reader_pdf_v2_hardening.sql'   ! -name '202609300057_timeline_stage3_workflow_v2.sql'   ! -name '202609300058_stage3_processing_foundation.sql'   ! -name '202609300059_stage3_processing_provenance_hardening.sql' ! -name '202610150060_stage3_source_claims.sql' ! -name '202610150061_stage3_source_claim_types.sql' ! -name '202610220064_copilot_investigation_memory.sql' ! -name '202610220065_copilot_memory_acl_hardening.sql' ! -name '202610220066_copilot_unified_investigation_rag.sql' ! -name '202610230067_copilot_index_atomic_publish.sql'   | sort | while read -r migration; do printf "\\i '%s'\n" "$migration"; done > "$PRE_SQL"
 
 "${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" -f "$PRE_SQL" >/dev/null
 for migration in   202609110053_investigation_direction_stage1.sql   202609230054_investigation_collection_stage2.sql   202609290055_source_reader_pdf_v2.sql   202609290056_source_reader_pdf_v2_hardening.sql   202609300057_timeline_stage3_workflow_v2.sql   202609300058_stage3_processing_foundation.sql   202609300059_stage3_processing_provenance_hardening.sql   202610150060_stage3_source_claims.sql   202610150061_stage3_source_claim_types.sql
@@ -351,6 +351,10 @@ SQL
   -f "$ROOT/supabase/migrations/202610220064_copilot_investigation_memory.sql" >/dev/null
 "${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" \
   -f "$ROOT/supabase/migrations/202610220065_copilot_memory_acl_hardening.sql" >/dev/null
+"${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" \
+  -f "$ROOT/supabase/migrations/202610220066_copilot_unified_investigation_rag.sql" >/dev/null
+"${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" \
+  -f "$ROOT/supabase/migrations/202610230067_copilot_index_atomic_publish.sql" >/dev/null
 
 "${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" <<'SQL' >/dev/null
 do $acl$
@@ -422,4 +426,116 @@ end $memory$;
 reset role;
 SQL
 
-echo "Stage 3 processing foundation, Source Claim and Copilot memory migration tests passed."
+"${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" <<'SQL' >/dev/null
+do $acl$
+begin
+ if has_table_privilege('anon','public.copilot_document_chunks','SELECT')
+  or has_table_privilege('anon','public.copilot_investigation_events','SELECT')
+  or has_function_privilege('anon','public.copilot_search_document_chunks(uuid,text,integer)','EXECUTE')
+ then raise exception 'Anonymous investigation memory access';end if;
+end $acl$;
+-- Test-only Supabase scaffold: authenticated can resolve auth.uid() (production
+-- Supabase already grants schema USAGE; this fixture must model that contract).
+grant usage on schema auth to authenticated;
+grant select on table public.source_assets to authenticated;
+-- Trusted server workflow writes original-derived material before user read checks.
+insert into public.copilot_document_indexes(id,project_id,source_id,asset_id,owner_id,asset_sha256,status,chunk_count,page_count,indexed_at)
+values('91000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001',
+'30000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001',
+'10000000-0000-4000-8000-000000000001',repeat('a',64),'READY',1,1,now());
+insert into public.copilot_document_chunks(project_id,owner_id,index_id,source_id,asset_id,page_number,chunk_number,content)
+values('20000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001',
+'91000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001',
+'40000000-0000-4000-8000-000000000001',3,1,'ANSSI reports APT28 intrusion and intelligence collection.');
+insert into public.copilot_investigation_events(project_id,owner_id,source_id,asset_id,kind,summary)
+values('20000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001',
+'30000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001',
+'ANALYSE','Provisional source-grounded APT28 assessment.');
+set role authenticated;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
+do $owner$ begin
+ if (select count(*) from public.copilot_search_document_chunks(
+ '20000000-0000-4000-8000-000000000001','APT28 strategic objective',10))<>1
+ then raise exception 'Owner RAG evidence retrieval failed';end if;
+ if (select count(*) from public.copilot_investigation_events)<>1
+ then raise exception 'Owner timeline retrieval failed';end if;
+end $owner$;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000002',false);
+do $foreign$ begin
+ if exists(select 1 from public.copilot_document_indexes) or
+  exists(select 1 from public.copilot_document_chunks) or
+  exists(select 1 from public.copilot_investigation_events)
+ then raise exception 'Cross-owner RAG data exposure';end if;
+ if exists(select 1 from public.copilot_search_document_chunks(
+ '20000000-0000-4000-8000-000000000001','APT28',10))
+ then raise exception 'Cross-owner search leak';end if;
+end $foreign$;
+reset role;
+SQL
+
+
+# Migration 067: exercise transactional publication against the PostgreSQL
+# fixture without uploading any real document or touching production.
+"${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" <<'SQL' >/dev/null
+do $atomic$
+declare
+ claimed record;
+ allowed boolean;
+begin
+ if has_function_privilege('anon',
+   'public.copilot_publish_document_index_v2(uuid,uuid,uuid,uuid,uuid,uuid,text,integer,jsonb)','EXECUTE')
+  or has_function_privilege('authenticated',
+   'public.copilot_publish_document_index_v2(uuid,uuid,uuid,uuid,uuid,uuid,text,integer,jsonb)','EXECUTE')
+ then raise exception 'Untrusted role can publish derived document index';end if;
+ select * into claimed from public.copilot_claim_document_index_v2(
+  '20000000-0000-4000-8000-000000000001',
+  '10000000-0000-4000-8000-000000000001',
+  '30000000-0000-4000-8000-000000000001',
+  '40000000-0000-4000-8000-000000000001',repeat('a',64));
+ if claimed.index_id is null or claimed.claim_token is null then
+  raise exception 'Valid original SHA index claim failed';
+ end if;
+ -- Incomplete page set is rejected and cannot publish READY.
+ select public.copilot_publish_document_index_v2(
+ claimed.index_id,claimed.claim_token,
+ '20000000-0000-4000-8000-000000000001',
+ '10000000-0000-4000-8000-000000000001',
+ '30000000-0000-4000-8000-000000000001',
+ '40000000-0000-4000-8000-000000000001',repeat('a',64),2,
+ '[{"page_number":1,"chunk_number":1,"content":"APT28 espionnage"}]'::jsonb
+ ) into allowed;
+ if allowed then raise exception 'Missing PDF page was published'; end if;
+ if (select status from public.copilot_document_indexes where id=claimed.index_id)<>'PROCESSING'
+ then raise exception 'Index became READY after incomplete publication'; end if;
+ -- An unrelated/stale token cannot publish.
+ select public.copilot_publish_document_index_v2(
+ claimed.index_id,'11111111-1111-4111-8111-111111111111',
+ '20000000-0000-4000-8000-000000000001',
+ '10000000-0000-4000-8000-000000000001',
+ '30000000-0000-4000-8000-000000000001',
+ '40000000-0000-4000-8000-000000000001',repeat('a',64),2,
+ '[{"page_number":1,"chunk_number":1,"content":"APT28 espionnage"},{"page_number":2,"chunk_number":1,"content":"Résumé corroborating details"}]'::jsonb
+ ) into allowed;
+ if allowed then raise exception 'Invalid lease token published index'; end if;
+ -- Exact complete page set and SHA may publish atomically.
+ select public.copilot_publish_document_index_v2(
+ claimed.index_id,claimed.claim_token,
+ '20000000-0000-4000-8000-000000000001',
+ '10000000-0000-4000-8000-000000000001',
+ '30000000-0000-4000-8000-000000000001',
+ '40000000-0000-4000-8000-000000000001',repeat('a',64),2,
+ '[{"page_number":1,"chunk_number":1,"content":"APT28 espionnage"},{"page_number":2,"chunk_number":1,"content":"Résumé corroborating details"}]'::jsonb
+ ) into allowed;
+ if not allowed then raise exception 'Complete atomic index was rejected'; end if;
+ if (select status<>'READY' or page_count<>2 or chunk_count<>2 or claim_token is not null
+     from public.copilot_document_indexes where id=claimed.index_id)
+  or (select count(*) from public.copilot_document_chunks where index_id=claimed.index_id)<>2
+ then raise exception 'READY index had incomplete persisted chunks'; end if;
+ if public.copilot_fail_document_index_v2(claimed.index_id,claimed.claim_token,
+  '20000000-0000-4000-8000-000000000001',
+  '10000000-0000-4000-8000-000000000001')
+ then raise exception 'Completed index could be invalidated by stale lease'; end if;
+end $atomic$;
+SQL
+
+echo "Stage 3 processing foundation, Source Claim and Copilot unified memory migration tests passed."

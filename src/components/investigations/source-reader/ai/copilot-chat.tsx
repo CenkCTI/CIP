@@ -31,9 +31,10 @@ export type CopilotTurn = {
   result: CopilotResult;
 };
 
-export function CopilotChat({ turns, onNavigate }: {
+export function CopilotChat({ turns, onNavigate,activeSourceId,activeAssetId }: {
   turns: CopilotTurn[];
   onNavigate: (page: number, annotationId?: string, quote?: string) => void;
+  activeSourceId?:string;activeAssetId?:string;
 }) {
   if (!turns.length) return <div className="flex h-full min-h-48 flex-col items-center justify-center gap-3 px-8 text-center">
     <span aria-hidden="true" className="grid h-12 w-12 place-items-center rounded-full border border-[var(--line)] bg-[var(--amber-tint)] text-xl text-[var(--amber-soft)]">✦</span>
@@ -110,14 +111,19 @@ export function CopilotChat({ turns, onNavigate }: {
               <blockquote className="break-words border-l-2 border-[var(--amber-dark)] pl-3 text-xs leading-relaxed text-[var(--muted-strong)]">
                 {item.quote}
               </blockquote>
-              {item.page !== null && item.page >= 1
+              {item.page !== null && item.page >= 1 &&
+                 (!activeAssetId || (item.provenance.assetId===activeAssetId &&
+                  (!activeSourceId||item.provenance.sourceId===activeSourceId)))
                 ? <button type="button"
                   className="rounded border border-[var(--line)] px-2.5 py-1 text-[11px] text-[var(--amber-soft)] hover:border-[var(--line-hover)] hover:bg-[var(--amber-tint)]"
                   onClick={() => onNavigate(item.page!, item.provenance.annotationId,item.quote)}
                   aria-label={`Go to PDF page ${item.page}`}>
                   [{item.kind === "ANNOTATION" ? "ANN" : "DOC"} p.{item.page}] ↗
                 </button>
-                : <span className="text-[11px] text-[var(--muted)]">{item.sourceToken} (page unavailable)</span>}
+                : <span className="text-[11px] text-[var(--muted)]">
+                    {item.page===null?"Page unavailable":"Other source"} · {item.provenance.sourceId.slice(0,8)} ·
+                    {item.page!==null?" p."+item.page:""} · {item.sourceToken}
+                  </span>}
             </li>)}
           </ul>
         </details> : turn.result.webEvidence?.length ? null

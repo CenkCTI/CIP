@@ -162,7 +162,8 @@ export function CopilotResearchConversation({projectId,sourceId,assetId,session,
       {error?<p role="alert" className="text-xs text-[var(--danger)]">{error}</p>:null}
       {result?<div data-testid="copilot-inline-research-analysis" className="-mx-4 border-t border-[var(--line-neutral)]">
         <CopilotChat turns={[{id:session.id,mode:"research",prompt:session.question,
-          context:session.context,result} satisfies CopilotTurn]} onNavigate={onNavigate}/>
+          context:session.context,result} satisfies CopilotTurn]} onNavigate={onNavigate}
+          activeSourceId={sourceId} activeAssetId={assetId}/>
       </div>:null}
       <p className="text-[10px] leading-relaxed text-[var(--muted)]">
         Search requests send only approved queries to Brave. PDF and memory are sent to NVIDIA only

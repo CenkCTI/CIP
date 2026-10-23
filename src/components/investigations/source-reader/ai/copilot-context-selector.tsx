@@ -87,7 +87,7 @@ export function CopilotContextSelector({
         <span className="text-[var(--muted)]">Up to 10 pages</span>
       </div> : null}
       {invalidRange ? <p role="alert" className="text-[var(--danger)]">Choose 1–10 consecutive pages.</p> : null}
-      <p className="text-[11px] text-[var(--muted)]">Entire PDF uses every extractable page. Very long or scanned PDFs may require selecting fewer pages; Investigation-wide context is not enabled.</p>
+      <p className="text-[11px] text-[var(--muted)]">Entire PDF analyses read this PDF. Analyst Chat also retrieves relevant, verified passages from indexed sources across this investigation.</p>
     </fieldset> : null}
   </section>;
 }
