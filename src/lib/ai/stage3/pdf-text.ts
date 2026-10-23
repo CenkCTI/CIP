@@ -1,6 +1,7 @@
 import "server-only";
 import {hasPrivatePdfTextGlyphs,selectVerifiedPdfPageRecovery} from "./pdf-recovery";
 import {tryExtractPdfWithPoppler} from "./pdf-poppler";
+import {tryExtractPdfWithOcr} from "./pdf-ocr";
 
 export class Stage3PdfError extends Error {
   constructor(public code: "pdf_invalid" | "pdf_page_out_of_range" | "pdf_text_unavailable" | "pdf_too_large" | "pdf_document_too_large" | "pdf_runtime_unavailable") {
@@ -77,17 +78,29 @@ export async function extractPdfPages(
     } finally {
       await loadingTask.destroy();
     }
-    if(pages.some(p=>hasPrivatePdfTextGlyphs(p.text))){
-      const alternative=await tryExtractPdfWithPoppler(new Uint8Array(bytes),pdf.numPages);
-      if(alternative){
-        const chosen=selectVerifiedPdfPageRecovery(pages,alternative);
-        const result=chosen.pages.map(({page,text})=>({page,text}));
-        if(wholeDocument&&result.reduce((n,p)=>n+p.text.length,0)>maxChars)
-          throw new Stage3PdfError("pdf_document_too_large");
-        return result;
+    // Distinct same-byte engines must not silently replace source text unless
+    // page provenance, Unicode integrity and size sanity are preserved.
+    let recovered=pages;
+    if(recovered.some(p=>hasPrivatePdfTextGlyphs(p.text))){
+      const original=Uint8Array.from(new Uint8Array(bytes));
+      const poppler=await tryExtractPdfWithPoppler(original,pdf.numPages);
+      if(poppler){
+        recovered=selectVerifiedPdfPageRecovery(recovered,poppler,"poppler")
+          .pages.map(({page,text})=>({page,text}));
+      }
+      const unresolved=recovered.filter(p=>hasPrivatePdfTextGlyphs(p.text))
+        .map(p=>p.page);
+      if(unresolved.length){
+        const ocr=await tryExtractPdfWithOcr(original,unresolved,pdf.numPages);
+        if(ocr){
+          recovered=selectVerifiedPdfPageRecovery(recovered,ocr,"ocr")
+            .pages.map(({page,text})=>({page,text}));
+        }
       }
     }
-    return pages;
+    if(wholeDocument&&recovered.reduce((n,p)=>n+p.text.length,0)>maxChars)
+      throw new Stage3PdfError("pdf_document_too_large");
+    return recovered;
   } catch (error) {
     if (error instanceof Stage3PdfError) throw error;
     throw new Stage3PdfError("pdf_invalid");
