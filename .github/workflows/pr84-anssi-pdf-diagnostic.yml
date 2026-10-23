@@ -1,0 +1,95 @@
+name: PR84 ANSSI original PDF dual-extractor diagnostic
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/pr84-anssi-pdf-diagnostic.yml"
+      - "scripts/citem-anssi-compare-extractors.mjs"
+      - "scripts/citem-anssi-pdf-baseline.mjs"
+      - "src/lib/ai/stage3/pdf-recovery.ts"
+      - "src/lib/ai/stage3/pdf-poppler.ts"
+      - "src/lib/ai/stage3/pdf-text.ts"
+      - "src/lib/ai/stage3/document-quality.ts"
+      - "tests/citem-pdf-recovery.test.ts"
+      - "package-lock.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  original-source-diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install JavaScript dependencies
+        run: npm ci
+      - name: Check Poppler availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v pdftotext >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq poppler-utils
+          fi
+          pdftotext -v 2>&1
+      - name: Download original PDF from ANSSI public servers
+        shell: bash
+        run: |
+          set -euo pipefail
+          pdf="$RUNNER_TEMP/CERTFR-2023-CTI-009.pdf"
+          for url in \
+            https://www.cert.ssi.gouv.fr/uploads/CERTFR-2023-CTI-009.pdf \
+            https://cert.cyber.gouv.fr/uploads/CERTFR-2023-CTI-009.pdf
+          do
+            if curl --fail --location --silent --show-error \
+              --retry 2 --connect-timeout 15 --max-time 90 \
+              "$url" --output "$pdf"; then
+              if [ "$(head -c 5 "$pdf")" = "%PDF-" ]; then
+                echo "Downloaded valid PDF header from official ANSSI host."
+                break
+              fi
+            fi
+            rm -f "$pdf"
+          done
+          test -s "$pdf"
+          test "$(head -c 5 "$pdf")" = "%PDF-"
+          echo "ANSSI_PDF=$pdf" >> "$GITHUB_ENV"
+          printf "Source bytes: "
+          wc -c < "$pdf"
+          sha256sum "$pdf" | cut -d" " -f1
+      - name: Poppler golden checks (source-only; no AI or DB)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/citem-anssi-compare-extractors.mjs "$ANSSI_PDF"
+      - name: PDF.js extraction comparison (diagnostic, known glyph failure)
+        shell: bash
+        run: |
+          set -uo pipefail
+          node --experimental-strip-types scripts/citem-anssi-pdf-baseline.mjs \
+            "$ANSSI_PDF" > "$RUNNER_TEMP/pdfjs-baseline.json"
+          baseline_status=$?
+          node -e '
+            const fs=require("node:fs");
+            const b=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+            const keys=["documentPages","coverDate","page3SourceReportedEspionage",
+              "page4Actor","page4Cve","page4CveStart","page4CveEnd",
+              "page15Recommendation10","page15Recommendation11",
+              "page16Recommendation12","page17Recommendation13"];
+            console.log(JSON.stringify({
+              pdfjsPass:b.passed,extractorVersion:b.extractorVersion,
+              pdfSha256:b.pdfSha256,criticalGold:Object.fromEntries(keys.map(k=>[k,b.gold[k]])),
+              corruptedPages:b.pages.filter(p=>p.privateUseCount>0)
+                .map(p=>({page:p.page,privateUseCount:p.privateUseCount}))
+            },null,2));
+          ' "$RUNNER_TEMP/pdfjs-baseline.json"
+          echo "PDF.js diagnostic exit status: $baseline_status (not a CI pass gate)"
+      - name: Page recovery arbiter regression tests
+        run: npx vitest run tests/citem-pdf-recovery.test.ts tests/citem-document-quality.test.ts
