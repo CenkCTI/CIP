@@ -3,25 +3,28 @@ import {createHash} from "node:crypto";
 import type {requireOwnedProject} from "@/lib/projects/ownership";
 import {createAdminClient} from "@/lib/supabase/admin";
 import {createStage3ReadContext,type Stage3AiReadContext} from "./context";
-import {extractPdfPages} from "./pdf-text";
+import {extractPdfPagesDetailed} from "./pdf-text";
+import {buildExtractionManifest,canPublishExtraction,CITEM_INDEX_VERSION} from "./extraction-manifest";
+import {normalizeForSearch} from "./document-quality";
 import type {Stage3Span} from "./provenance";
 import {splitPagesForIndex,memorySearchQuery} from "./index-chunks";
 import {requestedPdfPages,retrievalProbe,prioritizedEvidenceChunks,rankActivePdfChunks,type IndexedEvidenceChunk} from "./evidence-retrieval";
 
 type Owned=Awaited<ReturnType<typeof requireOwnedProject>>;
 export class InvestigationIndexError extends Error {
-  constructor(public code:"invalid_index_source"|"index_metadata_mismatch"|"index_database_unavailable"|"index_failed"){
+  constructor(public code:"invalid_index_source"|"index_metadata_mismatch"|"index_database_unavailable"|"index_failed"|"index_quality_review_required"){
     super(code);
   }
 }
-type IndexedRow={id:string;status:string;asset_sha256:string;chunk_count:number;indexed_at:string|null};
+type IndexedRow={id:string;status:string;asset_sha256:string;chunk_count:number;page_count:number;
+ indexed_at:string|null;index_version:string|null;quality_status:string|null;extraction_run_id:string|null};
 type Asset={state?:unknown;asset_role?:unknown;sha256?:unknown;storage_path?:unknown;
   mime_type?:unknown;original_filename?:unknown;size_bytes?:unknown};
 const isPDF=(a:Asset)=>String(a.mime_type??"").toLowerCase()==="application/pdf"||
   String(a.original_filename??"").toLowerCase().endsWith(".pdf");
 /**
  * A READY index is an atomic, token-owned snapshot of all extracted PDF pages.
- * The v2 RPCs require forward migration 067. No partial chunk set is published.
+ * The v3 RPC requires forward migrations 067+068. No partial evidence is published.
  */
 export async function ensureIndexedOriginalPDF(owned:Owned,sourceId:string,assetId:string,
   reader:Stage3AiReadContext=createStage3ReadContext(owned)){
@@ -34,13 +37,14 @@ export async function ensureIndexedOriginalPDF(owned:Owned,sourceId:string,asset
     throw new InvestigationIndexError("invalid_index_source");
   }
   const existing=await owned.supabase.from("copilot_document_indexes")
-    .select("id,status,asset_sha256,chunk_count,page_count,indexed_at")
+    .select("id,status,asset_sha256,chunk_count,page_count,indexed_at,index_version,quality_status,extraction_run_id")
     .eq("project_id",owned.projectId).eq("owner_id",owned.user.id)
     .eq("source_id",sourceId).eq("asset_id",assetId).maybeSingle();
   if(existing.error)throw new InvestigationIndexError("index_database_unavailable");
-  const cached=existing.data as (IndexedRow&{page_count:number})|null;
+  const cached=existing.data as IndexedRow|null;
   if(cached?.status==="READY"&&cached.asset_sha256===fingerprint&&
-    cached.chunk_count>0&&cached.page_count>0){
+    cached.index_version===CITEM_INDEX_VERSION&&cached.quality_status==="COMPLETE"&&
+    Boolean(cached.extraction_run_id)&&cached.chunk_count>0&&cached.page_count>0){
     // A stale/partially populated READY record must not be trusted as complete.
     const counted=await owned.supabase.from("copilot_document_chunks")
       .select("id",{count:"exact",head:true})
@@ -58,10 +62,22 @@ export async function ensureIndexedOriginalPDF(owned:Owned,sourceId:string,asset
   if(createHash("sha256").update(new Uint8Array(bytes)).digest("hex")!==fingerprint)
     throw new InvestigationIndexError("index_metadata_mismatch");
   // Parse before claiming to avoid holding an index lease while extracting.
-  const pages=await extractPdfPages(bytes,"all",{maxDocumentPages:200,maxDocumentChars:500_000});
-  const chunks=splitPagesForIndex(pages);
-  if(!pages.length||!chunks.length||new Set(chunks.map(c=>c.page_number)).size!==pages.length)
+  const pages=await extractPdfPagesDetailed(bytes,"all",{
+    maxDocumentPages:200,maxDocumentChars:500_000,
+  });
+  const manifest=buildExtractionManifest(pages);
+  if(!canPublishExtraction(manifest))
+    throw new InvestigationIndexError("index_quality_review_required");
+  // Preserve existing deterministic 1800/180 page chunking.
+  const baseChunks=splitPagesForIndex(pages);
+  if(!pages.length||!baseChunks.length||
+    new Set(baseChunks.map(c=>c.page_number)).size!==pages.length)
     throw new InvestigationIndexError("index_failed");
+  const chunks=baseChunks.map(c=>({
+    ...c,content_sha256:createHash("sha256").update(c.content).digest("hex"),
+    search_text:normalizeForSearch(c.content),
+    section_type:manifest.pages[c.page_number-1].section_type,
+  }));
   const writeDb=createAdminClient();
   const claim=await writeDb.rpc("copilot_claim_document_index_v2",{
     p_project_id:owned.projectId,p_owner_id:owned.user.id,
@@ -73,11 +89,18 @@ export async function ensureIndexedOriginalPDF(owned:Owned,sourceId:string,asset
   try{
     // One PostgreSQL transaction checks the SHA, lease, all pages, chunk count
     // and writes the full snapshot before marking it READY.
-    const published=await writeDb.rpc("copilot_publish_document_index_v2",{
+    const published=await writeDb.rpc("copilot_publish_document_index_v3",{
       p_index_id:token.index_id,p_claim_token:token.claim_token,
       p_project_id:owned.projectId,p_owner_id:owned.user.id,
       p_source_id:sourceId,p_asset_id:assetId,p_sha:fingerprint,
-      p_page_count:pages.length,p_chunks:chunks,
+      p_page_count:pages.length,p_chunks:chunks,p_pages:manifest.pages,
+      p_fingerprint:manifest.extraction_fingerprint,
+      p_extractor_version:manifest.extractor_version,
+      p_chunking_version:manifest.chunking_version,
+      p_index_version:manifest.index_version,
+      p_language:manifest.document_language,
+      p_quality_status:manifest.quality_status,
+      p_quality_flags:manifest.quality_flags,
     });
     if(published.error)throw new InvestigationIndexError("index_database_unavailable");
     if(published.data!==true)throw new InvestigationIndexError("index_failed");
@@ -137,7 +160,9 @@ export async function retrieveOwnedEvidence(owned:Owned,question:string,events:M
     const index=await owned.supabase.from("copilot_document_indexes")
       .select("id,page_count").eq("project_id",owned.projectId)
       .eq("owner_id",owned.user.id).eq("source_id",active.sourceId)
-      .eq("asset_id",active.assetId).eq("status","READY").maybeSingle();
+      .eq("asset_id",active.assetId).eq("status","READY")
+      .eq("quality_status","COMPLETE")
+      .eq("index_version",CITEM_INDEX_VERSION).maybeSingle();
     if(index.error)throw new InvestigationIndexError("index_database_unavailable");
     if(!index.data)return [];
     const readyPageCount=index.data.page_count;
@@ -183,7 +208,9 @@ export async function retrieveOwnedEvidence(owned:Owned,question:string,events:M
     const index=await owned.supabase.from("copilot_document_indexes")
       .select("id,page_count").eq("project_id",owned.projectId)
       .eq("owner_id",owned.user.id).eq("source_id",active.sourceId)
-      .eq("asset_id",active.assetId).eq("status","READY").maybeSingle();
+      .eq("asset_id",active.assetId).eq("status","READY")
+      .eq("quality_status","COMPLETE")
+      .eq("index_version",CITEM_INDEX_VERSION).maybeSingle();
     if(index.error)throw new InvestigationIndexError("index_database_unavailable");
     if(index.data){
       const readyPageCount=index.data.page_count;
