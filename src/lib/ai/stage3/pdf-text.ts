@@ -1,4 +1,8 @@
 import "server-only";
+import type {OriginalPage} from "./extraction-manifest";
+import {hasPrivatePdfTextGlyphs,selectVerifiedPdfPageRecovery} from "./pdf-recovery";
+import {tryExtractPdfWithPoppler} from "./pdf-poppler";
+import {tryExtractPdfWithOcr} from "./pdf-ocr";
 
 export class Stage3PdfError extends Error {
   constructor(public code: "pdf_invalid" | "pdf_page_out_of_range" | "pdf_text_unavailable" | "pdf_too_large" | "pdf_document_too_large" | "pdf_runtime_unavailable") {
@@ -13,6 +17,15 @@ export async function extractPdfPages(
   selectedPages: number[] | "all",
   options: { maxDocumentPages?: number; maxDocumentChars?: number } = {},
 ): Promise<{ page: number; text: string }[]> {
+  const extracted=await extractPdfPagesDetailed(bytes,selectedPages,options);
+  return extracted.map(({page,text})=>({page,text}));
+}
+
+export async function extractPdfPagesDetailed(
+  bytes: ArrayBuffer,
+  selectedPages: number[] | "all",
+  options: { maxDocumentPages?: number; maxDocumentChars?: number } = {},
+): Promise<OriginalPage[]> {
   if (bytes.byteLength > MAX_PDF_BYTES) throw new Stage3PdfError("pdf_too_large");
   if (bytes.byteLength < 5 || new TextDecoder().decode(bytes.slice(0, 5)) !== "%PDF-") {
     throw new Stage3PdfError("pdf_invalid");
@@ -31,13 +44,14 @@ export async function extractPdfPages(
   // Avoid relying on the PDF viewer's client-side worker or its signed URL.
   try {
     const loadingTask = getDocument({
-      data: new Uint8Array(bytes),
+      // PDF.js may detach its worker input; preserve the authoritative bytes.
+      data: Uint8Array.from(new Uint8Array(bytes)),
       useSystemFonts: true,
       disableFontFace: true,
       isEvalSupported: false,
     });
     const pdf = await loadingTask.promise;
-    const pages: { page: number; text: string }[] = [];
+    const pages: OriginalPage[] = [];
     const wholeDocument = selectedPages === "all";
     // Never silently sample the first N pages while claiming entire-PDF context.
     // Reject oversized documents before invoking the model.
@@ -66,7 +80,7 @@ export async function extractPdfPages(
           if (wholeDocument && totalTextChars > maxChars) {
             throw new Stage3PdfError("pdf_document_too_large");
           }
-          pages.push({ page: number, text });
+          pages.push({ page: number, text, extractor:"pdfjs" });
         } finally {
           page.cleanup();
         }
@@ -74,7 +88,29 @@ export async function extractPdfPages(
     } finally {
       await loadingTask.destroy();
     }
-    return pages;
+    // Distinct same-byte engines must not silently replace source text unless
+    // page provenance, Unicode integrity and size sanity are preserved.
+    let recovered:OriginalPage[]=pages;
+    if(recovered.some(p=>hasPrivatePdfTextGlyphs(p.text))){
+      const original=Uint8Array.from(new Uint8Array(bytes));
+      const poppler=await tryExtractPdfWithPoppler(original,pdf.numPages);
+      if(poppler){
+        recovered=selectVerifiedPdfPageRecovery(recovered,poppler,"poppler")
+          .pages.map(({page,text,extractor})=>({page,text,extractor}));
+      }
+      const unresolved=recovered.filter(p=>hasPrivatePdfTextGlyphs(p.text))
+        .map(p=>p.page);
+      if(unresolved.length){
+        const ocr=await tryExtractPdfWithOcr(original,unresolved,pdf.numPages);
+        if(ocr){
+          recovered=selectVerifiedPdfPageRecovery(recovered,ocr,"ocr")
+            .pages.map(({page,text,extractor})=>({page,text,extractor}));
+        }
+      }
+    }
+    if(wholeDocument&&recovered.reduce((n,p)=>n+p.text.length,0)>maxChars)
+      throw new Stage3PdfError("pdf_document_too_large");
+    return recovered;
   } catch (error) {
     if (error instanceof Stage3PdfError) throw error;
     throw new Stage3PdfError("pdf_invalid");

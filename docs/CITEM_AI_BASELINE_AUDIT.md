@@ -1,53 +1,87 @@
-# CİTEM AI baseline audit — 2026-10-23
+# CITEM AI Phase A — Verified baseline audit (2026-10-23)
 
-## Verified scope (PR #83 prior to fix)
-- Repository: CenkCTI/CIP, `feat/unified-investigation-memory-rag`.
-- Initial head: `c328e378aef34aa8c7ff3d81047bf36e72f54091`.
-- Base: `ac5bce21a005a4604c6101623571586a9b1ca5d4`. PR was open, Draft, mergeable.
-- GitHub validation check at initial head: success; NODE-6/7 acceptance: skipped; Vercel: success. No real PDF/model acceptance implied.
-- Connected CIP Supabase: Postgres 17.6.1, migration history has 064, 065 and 066; all three Copilot derived-text tables have RLS enabled. Authenticated can SELECT but not modify them; anon has no direct SELECT. There are 0 document index records (read-only count).
-- `pgvector` not installed. Do **not** select an embedding dimension or enable provider billing without provider evaluation and consent.
+## Actual repository state
 
-## Confirmed defects
-1. `context.ts` readAsset projection excluded `sha256`, while the indexer requires it: `invalid_index_source` + hidden fallback.
-2. PostgreSQL `simple` FTS is lexical and does not provide TR/FR semantic similarity. The initial Turkish question had no evidence-based guarantee of retrieving French `espionnage`.
-3. Initial index publication used several independent writes and trusted chunk counts without a committed transaction.
-4. Analyst Chat masked index/retrieval errors and could silently fall back to the selected page.
-5. Quote-substring validation does not establish semantic claim entailment. This is **not** fixed by PR #83.
+- Repository: `CenkCTI/CIP`; approved base: `main`.
+- PR #83 was merged on 2026-10-23: `745e02b6938c73b96f2bc6f777fcdbb6a1f11b8c`.
+- All Phase A edits are on existing **Draft PR #84** (`feat/citem-ai-phase-a-extraction-quality`).
+- PR #83 migrations 066/067 introduced owner-scoped lexical RAG, claim
+  fencing and atomic chunks; Phase A migration **068** is forward-only.
+- The owned original-asset reader includes `sha256`; the SHA is checked
+  against the exact downloaded original before any indexing claim.
+- The new PDF API `extractPdfPagesDetailed` preserves the actual
+  per-page text engine without changing older `extractPdfPages` callers.
 
-## Official gold document (public TLP:CLEAR)
-- Source: https://www.cert.ssi.gouv.fr/cti/CERTFR-2023-CTI-009/
-- PDF: https://www.cert.ssi.gouv.fr/uploads/CERTFR-2023-CTI-009.pdf
-- Verified via official PDF text and page rendering: 23 pages; page 2 Sommaire; page 3 Résumé. `APT28`, `26 octobre 2023`, `CERTFR-2023-CTI-009`, `espionnage` are present.
-- Reported prior `APT28→88` / `26→16 octobre` distortions have **not** been localized to PDF extraction, context packing or model output. Do not autocorrect original text.
+## Source evidence and distinct byte identities
 
-## Reproducible test commands
-```bash
-npm ci
-npx vitest run tests/copilot-unified-investigation-memory.test.ts
-npm run typecheck
-npm run lint
-bash scripts/test-stage3-processing-foundation-migration.sh
-```
-The PostgreSQL test needs its normal PG16+ fixture server/permissions. The 23-page operator-run browser/model test additionally needs an authorized investigation, original PDF upload and an intentionally enabled model provider. No private document is to be sent to an external embedding service automatically.
+1. Official ANSSI `CERTFR-2023-CTI-009` PDF downloaded by CI:
+   2,487,153 bytes; SHA-256
+   `08b62bfd2e5a8b057182768f16ed9436d88bc801cf2c0ed24b0787ce4725efa7`.
+   The original 23-page file passed page-4 CVE/date and page-15–17
+   recommendation checks via Poppler AND PDF.js.
+2. User-provided Firefox/Cairo reprint tested privately:
+   943,550 bytes; SHA-256
+   `720fd20512cf88f02492f0c8dcc0f21ead2e48832586105bb95a2c82b1a6bcb0`.
+   Page-4 rendered visual says `CVE-2023-23397`,
+   `mars 2022` through `juin 2023`; the embedded Unicode map
+   renders altered private-use digits in PDF.js/Poppler/PyMuPDF.
+   French raster OCR recovered those identifiers in that tested page.
+3. Read-only Supabase earlier identified two **different** 934 KB
+   stored assets, hashes beginning `56dd936...` and `cc0a079...`.
+   The indexed 934,357-byte copy had damaged private-use glyphs.
+   The user-uploaded file is NOT byte-identical to these stored assets.
+   No exact stored copy has yet passed the new v3 publication path.
 
-## PR-83-FIX changes and limits
-- Asset SHA projection, explicit source failure warnings and a conservative TR/FR lexical search alias.
-- Forward-only migration 067 provides service-role-only lease-token guarded transactional publication with full page coverage verification. This replaces multi-statement chunk writes.
-- The existing v1 SQL functions/066 history remain intact; deployment must apply 067 **before** relying on the new indexer.
-- The lexical expansion is **not** multilingual semantic search; token/page references remain original.
-- Publication is bounded to 2.4MB serialized JSON and 1500 chunks. Oversized files produce a visible indexing error, not READY.
-- **Unrun gates**: real browser/PDF acceptance, real-model evaluation, PostgreSQL 067 live-schema compatibility, adversarial RLS under authenticated roles, 50–80 gold-question Recall@5, 23-page extraction metrics.
-- Migration 067 is committed to GitHub only, NOT applied to production.
-- Rollback: stop new indexing, use legacy source reader/page context, retain original PDFs, chunks and audit events. Do not drop derived tables without retention approval.
+No original/private PDF or full extracted text is committed to Git,
+uploaded as a CI artifact, or logged.
 
-## Later PR dependencies
-A: separate extracted-original/quality/manifest and page diagnostics (forward-only migration as required).
-B: optional multilingual vector/lexical RRF, model version and explicit consent; `pgvector` is not yet installed.
-C: distinguish quote match from entailment, classify source assertion vs inference, link hypothesis IDs to reviewed evidence.
-D: durable hypothesis version memory, intent routing and approved/SSRF-safe fetched web evidence.
-E: threat model, 50–80 human-reviewed gold questions, PG RLS/adversarial tests, timing/cost and canary rollback.
-All require separate review and none may silently authorize production migrations or external document transfer.
+## Provenance and epistemic boundary
 
-## PostgreSQL lexical control (read-only, 2026-10-23)
-A source-style French sentence containing `APT28` and `espionnage` was queried using PostgreSQL `simple`: `stratejik amaç` = no match, `espionnage` = match, `APT28` = match. This verifies a lexical-language mismatch on a synthetic sentence; it is not an end-to-end PDF retrieval benchmark.
+- Original source: `source_assets` + original Storage object + source SHA.
+- Extraction snapshot: separate, owner/project/source/asset-keyed run and
+  immutable per-page original text + search alias + SHA + engine/version.
+- Metadata extracted from PDF is **unverified**; the migration permits
+  publisher/date/reference/TLP nullable. No LLM guesses, external page
+  comparison or unreviewed TLP adjustment is promoted to truth.
+- `COMPLETE` is a structural extraction-quality state, **not** evidence
+  that every semantic claim is true. Only human-verified source-backed
+  quotes can support a factual assertion.
+- OCR output is provisional and `REVIEW_REQUIRED`. It cannot
+  automatically publish authoritative lexical citations in v3.
+- Old v2 `READY` indexes are not trusted if index_version, exact run
+  identity or extraction quality are absent. They require source-SHA-
+  checked reindexing; do not fabricate a bulk SQL backfill.
+- `simple` FTS remains but receives an additional search-normalized
+  alias index; multilingual embeddings are **Phase B**, not claimed here.
+
+## Repeatability / test status
+
+- `npm test -- tests/citem-extraction-manifest.test.ts tests/citem-phase-a-schema-contract.test.ts`
+- `npm run typecheck`
+- `npm run lint`
+- `npm run build`
+- Independent CI real original ANSSI PDF diagnostic and synthetic
+  private-use glyph OCR integration are in PR #84 workflows.
+- PostgreSQL executable migration + RLS/claim/race acceptance:
+  **NOT RUN** by this audit. Static migration contract tests do not
+  substitute for authenticated PostgreSQL-role tests.
+- Production Vercel PDF/AI/browser interaction, private exact reprinted
+  source reindex and UI navigation: **NOT RUN / NOT ACCEPTED**.
+- No live Supabase migrations, destructive cleanup, paid OCR or merge
+  executed in this scope.
+
+## Mandatory gates before merge
+
+1. Apply 066/067/068 in a disposable PostgreSQL environment; test
+   ordinary authenticated roles, foreign owner, anon, service_role only,
+   live SOURCE SHA drift, rollback, malformed duplicate pages, concurrent
+   claim fences and reindex-from-old version.
+2. Re-evaluate with the *exact* CITEM stored original bytes and original
+   Storage authorization; 23/23 page coverage, quality, actual
+   page-linked quotes, true 2022 date and identifiers.
+3. Verify Vercel runtime does not claim OCR availability. OCR worker
+   deployment is an explicitly **deferred BAYKUSH Node work item**.
+4. Validate UI INDEX_UNAVAILABLE, REVIEW_REQUIRED and
+   FALLBACK_CURRENT_PAGE; no corrupted excerpt may become verified.
+5. Production migration-first rollout and deliberate rollback
+   (newest migrations are forward-only); no merge without approval.

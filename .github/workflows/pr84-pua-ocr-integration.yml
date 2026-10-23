@@ -1,0 +1,51 @@
+name: PR84 synthetic private-use font OCR integration
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/pr84-pua-ocr-integration.yml"
+      - "scripts/citem-create-pua-fixture.py"
+      - "tests/citem-pua-ocr-integration.test.ts"
+      - "src/lib/ai/stage3/pdf-text.ts"
+      - "src/lib/ai/stage3/pdf-recovery.ts"
+      - "src/lib/ai/stage3/pdf-poppler.ts"
+      - "src/lib/ai/stage3/pdf-ocr.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  extract-synthetic-damaged-pdf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: npm ci
+      - name: Install local text and image engines
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq poppler-utils tesseract-ocr tesseract-ocr-fra fonts-dejavu-core
+          python -m pip install --disable-pip-version-check pymupdf reportlab
+      - name: Create synthetic PDF with corrupt ToUnicode and correct visible glyphs
+        run: python scripts/citem-create-pua-fixture.py "$RUNNER_TEMP/isolated-pua-fixture.pdf"
+      - name: Confirm the installed Poppler does not magically decode the broken mapping
+        run: |
+          pdftotext "$RUNNER_TEMP/isolated-pua-fixture.pdf" "$RUNNER_TEMP/poppler.txt"
+          if grep -q 'mars 2022' "$RUNNER_TEMP/poppler.txt"; then
+            echo "The fixture did not exercise the recovery path."
+            exit 1
+          fi
+      - name: Full Stage 3 source extraction with OCR fallback
+        env:
+          CITEM_PDF_POPPLER_ENABLED: "1"
+          CITEM_PDF_OCR_ENABLED: "1"
+        run: CITEM_PUA_PDF_PATH="$RUNNER_TEMP/isolated-pua-fixture.pdf" npx vitest run tests/citem-pua-ocr-integration.test.ts

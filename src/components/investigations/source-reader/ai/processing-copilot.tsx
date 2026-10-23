@@ -429,10 +429,14 @@ export function ProcessingCopilot({
         method:"POST",headers:{"content-type":"application/json"},
         body:JSON.stringify({backfill:true}),
       });
-      const body=await response.json() as {indexed?:unknown[];errors?:unknown[];error?:string};
+      const body=await response.json() as {indexed?:unknown[];errors?:{reason?:string}[];error?:string};
       if(!response.ok)throw new Error(body.error||"Indexing unavailable");
       setIndexStatus(String(body.indexed?.length??0)+" PDF(s) checked; "+
-        String(body.errors?.length??0)+" indexing errors. Repeat to index other PDFs.");
+        String(body.errors?.length??0)+" indexing errors. "+
+        (body.errors?.some(e=>e.reason==="index_quality_review_required")
+          ?"One or more PDFs require extraction review; no unsafe text was published. "
+          :"")+
+        "Repeat to index other PDFs.");
     }catch(err){setIndexStatus(err instanceof Error?err.message:"Indexing failed");}
   }
   async function saveNotes(){

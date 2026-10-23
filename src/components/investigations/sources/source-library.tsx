@@ -285,10 +285,18 @@ function FileSourceForm({
           method:"POST",headers:{"content-type":"application/json"},
           body:JSON.stringify({sourceId:prepared.sourceId,assetId:prepared.assetId}),
         });
-        const payload=await response.json() as {indexed?:{chunks:number}[]};
-        setStatus({...final,success:response.ok&&payload.indexed?.some(item=>item.chunks>0)
+        const payload=await response.json() as {
+          indexed?:{chunks:number}[];errors?:{reason:string}[];
+        };
+        const reason=payload.errors?.[0]?.reason;
+        const message=response.ok&&payload.indexed?.some(item=>item.chunks>0)
           ?"PDF saved and indexed for investigation memory."
-          :"PDF saved. Text indexing will retry in Analyst Chat or Settings."});
+          :reason==="index_quality_review_required"
+            ?"PDF saved. Extraction quality requires analyst review; source text is not trusted for RAG."
+          :reason==="index_database_unavailable"
+            ?"PDF saved. Index schema/runtime unavailable; migration 068 must be verified."
+            :"PDF saved. Index is unavailable; it may be retried from Analyst Chat.";
+        setStatus({...final,success:message});
       }catch{setStatus({...final,success:"PDF saved. Text indexing will retry in Analyst Chat."});}
     }
     form.reset();
