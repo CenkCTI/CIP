@@ -59,7 +59,7 @@ describe("Fail-closed source integrity for original PDF glyph corruption",()=>{
     expect(answer.summary).not.toContain("2023");
     expect(answer.evidence).toHaveLength(0);
     expect(answer.hypotheses).toHaveLength(0);
-    expect(answer.warnings).toContain(expect.stringContaining("PDF_GLYPH_INTEGRITY_BLOCK"));
+    expect(answer.warnings.some(w=>w.includes("PDF_GLYPH_INTEGRITY_BLOCK"))).toBe(true);
   });
   it("does not block nonnumeric questions or intact-source dates",()=>{
     expect(requiresExactPdfValueAbstention("3. sayfada amaç nedir?",[corrupted])).toBe(false);
@@ -74,6 +74,6 @@ describe("Fail-closed source integrity for original PDF glyph corruption",()=>{
       }));
     expect(result.summary).toContain("doğrulanabilen");
     expect(result.hypotheses).toHaveLength(0);
-    expect(result.warnings).toContain(expect.stringContaining("NO_VERIFIED_SOURCE_QUOTE"));
+    expect(result.warnings.some(w=>w.includes("NO_VERIFIED_SOURCE_QUOTE"))).toBe(true);
   });
 });
