@@ -46,8 +46,8 @@ describe("Independent PDF text recovery",()=>{
  });
  it("never loses provenance on unaffected pages when OCR follows Poppler",()=>{
    const source=[
-     {page:4,text:"APT28 CVE-\\uE120-2",extractor:"pdfjs" as const},
-     {page:5,text:"APT28 date \\uE120",extractor:"pdfjs" as const},
+     {page:4,text:"APT28 CVE-\uE120-2",extractor:"pdfjs" as const},
+     {page:5,text:"APT28 date \uE120",extractor:"pdfjs" as const},
    ];
    const poppler=selectVerifiedPdfPageRecovery(source,[
      {page:4,text:"APT28 CVE-2023-23397 checked by Poppler"},
