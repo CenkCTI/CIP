@@ -6,7 +6,7 @@ import {createStage3ReadContext,type Stage3AiReadContext} from "./context";
 import {extractPdfPages} from "./pdf-text";
 import type {Stage3Span} from "./provenance";
 import {splitPagesForIndex,memorySearchQuery} from "./index-chunks";
-import {explicitPdfPages,retrievalProbe,prioritizedEvidenceChunks,type IndexedEvidenceChunk} from "./evidence-retrieval";
+import {requestedPdfPages,retrievalProbe,prioritizedEvidenceChunks,type IndexedEvidenceChunk} from "./evidence-retrieval";
 
 type Owned=Awaited<ReturnType<typeof requireOwnedProject>>;
 export class InvestigationIndexError extends Error {
@@ -130,7 +130,9 @@ export function eventMemoryHints(events:MemoryEvent[],question:string){
 }
 export async function retrieveOwnedEvidence(owned:Owned,question:string,events:MemoryEvent[],limit=12,
   active?:{sourceId:string;assetId:string;ready:boolean}):Promise<Stage3Span[]>{
-  const expanded=memorySearchQuery(question,events.slice(0,5).map(e=>e.question+" "+e.summary));
+  // Reuse only the analyst's prior questions as referent hints. Unverified AI
+  // summaries have contained wrong dates/actor IDs and must not bias search.
+  const expanded=memorySearchQuery(question,events.slice(0,5).map(e=>e.question));
   const probe=retrievalProbe(question);
   const rpcQuestion=async(p_question:string):Promise<IndexedEvidenceChunk[]>=>{
     const {data,error}=await owned.supabase.rpc("copilot_search_document_chunks",{
@@ -146,7 +148,7 @@ export async function retrieveOwnedEvidence(owned:Owned,question:string,events:M
   // owned READY original chunks even if the query's language cannot match FTS.
   // SHA freshness is established by ensureIndexedOriginalPDF before this call.
   let exact:IndexedEvidenceChunk[]=[];
-  const requested=active?.ready?explicitPdfPages(question):[];
+  const requested=active?.ready?requestedPdfPages(question):[];
   if(active?.ready&&requested.length){
     const index=await owned.supabase.from("copilot_document_indexes")
       .select("id,page_count").eq("project_id",owned.projectId)

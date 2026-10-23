@@ -1,5 +1,6 @@
 import {describe,it,expect} from "vitest";
-import {makeAnalystMessages,verifyAnalystAnswer} from "@/lib/ai/stage3/analyst-reasoning";
+import {makeAnalystMessages,verifyAnalystAnswer,runAnalystReasoning} from "@/lib/ai/stage3/analyst-reasoning";
+import {requiresExactPdfValueAbstention} from "@/lib/ai/stage3/source-integrity";
 import type {Stage3Span} from "@/lib/ai/stage3/provenance";
 import type {ReadWebPage} from "@/lib/ai/research/types";
 
@@ -40,5 +41,39 @@ describe("Analyst mode evidence and hypothesis trust boundaries",()=>{
     expect(messages[1].content).toContain("prior_conversation_UNTRUSTED");
     expect(messages[1].content).toContain("WEB_DATA_UNTRUSTED");
     expect(messages[1].content).toContain("https://example.com/report");
+  });
+});
+
+describe("Fail-closed source integrity for original PDF glyph corruption",()=>{
+  const corrupted:Stage3Span={
+    token:"MEM_001",page:4,kind:"PDF",sourceId:"source-id",assetId:"asset-id",
+    text:"APT28 a exploité CVE-\uE12E0\uE12E3-\uE12E3397 à partir de mars \uE12E0\uE12E\uE12E.",
+  };
+  const blank={question:"",language:"tr" as const,notes:"",history:[],spans:[corrupted],webPages:[]};
+  it("refuses to infer exact dates without any model call",async()=>{
+    let calls=0;
+    const answer=await runAnalystReasoning({...blank,question:"4. sayfada CVE-2023-23397 başlangıç ve bitiş tarihi nedir?"},async()=>{
+      calls++;throw new Error("The unsafe model call must not happen.");
+    });
+    expect(calls).toBe(0);
+    expect(answer.summary).not.toContain("2023");
+    expect(answer.evidence).toHaveLength(0);
+    expect(answer.hypotheses).toHaveLength(0);
+    expect(answer.warnings).toContain(expect.stringContaining("PDF_GLYPH_INTEGRITY_BLOCK"));
+  });
+  it("does not block nonnumeric questions or intact-source dates",()=>{
+    expect(requiresExactPdfValueAbstention("3. sayfada amaç nedir?",[corrupted])).toBe(false);
+    expect(requiresExactPdfValueAbstention("Tarihi nedir?",[span])).toBe(false);
+  });
+  it("withholds confident source claims when every purported quote fails",async()=>{
+    const result=await runAnalystReasoning({...blank,question:"Saldırganın amacı nedir?",spans:[span]},
+      async()=>JSON.stringify({
+        summary:"Confident but unverifiable conclusion",hypotheses:[hypothesis],
+        evidence:[{statement:"not in source",source_token:"DOC_P002_C01",quote:"Fictitious fabricated original source evidence"}],
+        unansweredQuestions:[],warnings:[],
+      }));
+    expect(result.summary).toContain("doğrulanabilen");
+    expect(result.hypotheses).toHaveLength(0);
+    expect(result.warnings).toContain(expect.stringContaining("NO_VERIFIED_SOURCE_QUOTE"));
   });
 });

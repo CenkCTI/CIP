@@ -1,5 +1,5 @@
 import {describe,it,expect} from "vitest";
-import {explicitPdfPages,retrievalProbe,prioritizedEvidenceChunks,type IndexedEvidenceChunk}
+import {explicitPdfPages,requestedPdfPages,retrievalProbe,prioritizedEvidenceChunks,type IndexedEvidenceChunk}
   from "@/lib/ai/stage3/evidence-retrieval";
 import {readFileSync} from "node:fs";
 const row=(page_number:number,chunk_number=1):IndexedEvidenceChunk=>({
@@ -13,6 +13,11 @@ describe("PR83 ANSSI page retrieval regressions",()=>{
     expect(explicitPdfPages("What does page 3 say?")).toEqual([3]);
     expect(explicitPdfPages("23 sayfalık raporun amacını açıkla")).toEqual([]);
     expect(explicitPdfPages("CVE-2023-23397 ve Mart 2022")).toEqual([]);
+  });
+  it("reads the next two pages of a section starting at a named PDF page",()=>{
+    expect(requestedPdfPages("Raporun 15. sayfadan başlayan güvenlik önerilerini listele")).toEqual([15,16,17]);
+    expect(requestedPdfPages("3. sayfadaki hedefleri göster")).toEqual([3]);
+    expect(requestedPdfPages("198. sayfadan başlayan bölümü açıkla")).toEqual([198,199,200]);
   });
   it("issues French probes independently of alphabetically truncated Turkish words",()=>{
     expect(retrievalProbe("APT28 operasyonlarının stratejik amacı nedir?"))
@@ -43,7 +48,7 @@ describe("PR83 ANSSI page retrieval regressions",()=>{
     expect(indexer).toContain('.eq("project_id",owned.projectId)');
     expect(indexer).toContain('.eq("owner_id",owned.user.id)');
     expect(indexer).toContain('.eq("index_id",index.data.id)');
-    expect(indexer).toContain("explicitPdfPages(question)");
+    expect(indexer).toContain("requestedPdfPages(question)");
     expect(route).toContain("PDF_GLYPH_INTEGRITY_WARNING");
     expect(analyst).toContain("NEVER reconstruct a date");
   });

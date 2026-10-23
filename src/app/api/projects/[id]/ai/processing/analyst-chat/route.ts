@@ -82,13 +82,21 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
     const spans=[...pageSpans,...indexedSpans].slice(0,16);
     const history=selectMemoryHints(projectTurns,input.question);
     const eventHistory=eventMemoryHints(events,input.question);
+    // Prior AI summaries are retained in the timeline, but they are not
+    // trusted evidence or model prompt context for a source-grounded question.
+    const promptHistory=input.useSource?history.map(turn=>({
+      ...turn,previous_ai_response:"",
+    })):history;
+    const promptEventHistory=input.useSource?eventHistory.map(event=>({
+      ...event,prior_unverified_analysis:"",
+    })):eventHistory;
     const investigationNotes=[memory.notes,...projectNotes.filter(item=>
       item.source_id!==input.sourceId).map(item=>"Other source "+item.source_id.slice(0,8)+": "+item.notes)]
       .filter(Boolean).join("\n").slice(0,4000);
     const language=input.responseLanguage==="auto"?
       (/[çğıöşü]/i.test(input.question)||/\b(neden|nasıl|amacı|hipotez|analiz)\b/i.test(input.question)?"tr":"en"):
       input.responseLanguage;
-    const reservedChars=JSON.stringify({question:input.question,spans,history,eventHistory,notes:investigationNotes}).length+
+    const reservedChars=JSON.stringify({question:input.question,spans,history:promptHistory,eventHistory:promptEventHistory,notes:investigationNotes}).length+
       (input.webResearch?8000:0);
     const result=await withResearchQuota(owned,reservedChars,async()=>{
       let pages:Awaited<ReturnType<typeof loadSelectedComparisonPages>>["pages"]=[];
@@ -102,7 +110,7 @@ export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
           researchWarning="Some selected web pages were unreadable; they were not treated as evidence.";
       }
       const analysis=await runAnalystReasoning({
-        question:input.question,language,notes:investigationNotes,history,eventHistory,spans,webPages:pages,
+        question:input.question,language,notes:investigationNotes,history:promptHistory,eventHistory:promptEventHistory,spans,webPages:pages,
       },messages=>byokChat("nvidia_nim",credential.model,credential.apiKey,messages,"generation"));
       if(researchWarning)analysis.warnings.push(researchWarning);
       if(input.useSource&&!indexedCurrent)

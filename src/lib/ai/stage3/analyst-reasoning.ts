@@ -3,6 +3,7 @@ import {AiError,type AiMessage} from "@/lib/ai/client";
 import {extractOneJsonObject} from "@/lib/ai/json";
 import {normalizedQuote,resolveGroundedEvidence,modelFacingSpans,type Stage3Span} from "./provenance";
 import type {ReadWebPage} from "@/lib/ai/research/types";
+import {requiresExactPdfValueAbstention} from "./source-integrity";
 
 const hypothesisSchema=z.object({
   title:z.string().trim().min(1).max(180),
@@ -111,12 +112,36 @@ export async function runAnalystReasoning(input:{
   spans:Stage3Span[];webPages:ReadWebPage[];
   eventHistory?:{type:string;question:string;prior_unverified_analysis:string;date:string}[];
 },chat:(messages:AiMessage[])=>Promise<string>):Promise<AnalystResponse>{
+  if(requiresExactPdfValueAbstention(input.question,input.spans)){
+    const tr=input.language==="tr";
+    return {
+      summary:tr?
+        "PDF metnindeki eşlenmemiş özel karakterler nedeniyle bu kaynaktan kesin tarih, CVE veya sayısal tanımlayıcı doğrulanamıyor. Orijinal PDF sayfası görsel olarak kontrol edilmeli.":
+        "The PDF contains unmapped font glyphs. Exact dates or identifiers cannot be verified from this text. Review the original rendered page.",
+      hypotheses:[],evidence:[],webEvidence:[],discarded:0,
+      unansweredQuestions:[tr?
+        "Orijinal PDF sayfasındaki ifade nedir?":
+        "What does the original rendered PDF page actually say?"],
+      warnings:["PDF_GLYPH_INTEGRITY_BLOCK: No exact date or identifier can be inferred from unmapped original PDF glyphs."],
+    };
+  }
   const messages=makeAnalystMessages(input);
   for(let attempt=0;attempt<2;attempt++){
     const raw=await chat(messages);
     try{
       const parsed=answerSchema.parse(extractOneJsonObject(raw));
-      return verifyAnalystAnswer(parsed,input.spans,input.webPages);
+      const result=verifyAnalystAnswer(parsed,input.spans,input.webPages);
+      // A source-backed narrative with no independently matched quotations
+      // must not be displayed as a verified source answer.
+      if(input.spans.length>0&&result.evidence.length===0&&result.webEvidence.length===0){
+        return {...result,summary:input.language==="tr"?
+          "Model yanıtına ilişkin orijinal kaynakta doğrulanabilen doğrudan alıntı bulunamadı. Kaynağa dayalı kesin sonuç verilemiyor.":
+          "No verbatim source quotation could be verified for the model response. No source-grounded conclusion is available.",
+          hypotheses:[],warnings:[...result.warnings,
+            "NO_VERIFIED_SOURCE_QUOTE: Model narrative withheld; original-source quotation required."],
+        };
+      }
+      return result;
     }catch{
       if(attempt===1)throw new AiError("malformed_output");
       messages.push({role:"user",content:"Your response was not valid compact JSON. Retry once with exactly summary, hypotheses, evidence, unansweredQuestions and warnings. Only copy quotes from provided source tokens. Do not add fields."});

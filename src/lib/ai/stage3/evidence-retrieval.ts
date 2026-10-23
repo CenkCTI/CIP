@@ -20,6 +20,15 @@ export function explicitPdfPages(question:string):number[]{
   return found;
 }
 
+/** A bounded 3-page continuation for a section that explicitly starts on page N. */
+export function requestedPdfPages(question:string):number[]{
+  const pages=explicitPdfPages(question);
+  const isSectionStart=/\b\d{1,3}\s*\.?\s*sayfadan\s+başlayan\b/iu.test(question);
+  if(!isSectionStart||pages.length!==1)return pages;
+  const start=pages[0];
+  return [start,start+1,start+2].filter(n=>n<=200);
+}
+
 /**
  * Search-only multilingual lexical probes, deliberately separate from the full
  * question. The deployed search RPC alphabetically truncates to 16 terms;
