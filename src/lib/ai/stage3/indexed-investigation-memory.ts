@@ -158,13 +158,19 @@ export async function retrieveOwnedEvidence(owned:Owned,question:string,events:M
   if(active?.scope!=="project"){
     if(!active?.ready)return [];
     const index=await owned.supabase.from("copilot_document_indexes")
-      .select("id,page_count").eq("project_id",owned.projectId)
+      .select("id,page_count,asset_sha256,extraction_run_id").eq("project_id",owned.projectId)
       .eq("owner_id",owned.user.id).eq("source_id",active.sourceId)
       .eq("asset_id",active.assetId).eq("status","READY")
       .eq("quality_status","COMPLETE")
       .eq("index_version",CITEM_INDEX_VERSION).maybeSingle();
     if(index.error)throw new InvestigationIndexError("index_database_unavailable");
     if(!index.data)return [];
+    const live=await owned.supabase.from("source_assets")
+      .select("sha256,state,asset_role").eq("project_id",owned.projectId)
+      .eq("source_id",active.sourceId).eq("id",active.assetId).maybeSingle();
+    if(live.error)throw new InvestigationIndexError("index_database_unavailable");
+    if(!live.data||live.data.sha256!==index.data.asset_sha256||
+      live.data.state!=="READY"||live.data.asset_role!=="ORIGINAL")return [];
     const readyPageCount=index.data.page_count;
     const chunks=await owned.supabase.from("copilot_document_chunks")
       .select("source_id,asset_id,page_number,chunk_number,content")
@@ -206,13 +212,19 @@ export async function retrieveOwnedEvidence(owned:Owned,question:string,events:M
   const requested=active?.ready?requestedPdfPages(question):[];
   if(active?.ready&&requested.length){
     const index=await owned.supabase.from("copilot_document_indexes")
-      .select("id,page_count").eq("project_id",owned.projectId)
+      .select("id,page_count,asset_sha256,extraction_run_id").eq("project_id",owned.projectId)
       .eq("owner_id",owned.user.id).eq("source_id",active.sourceId)
       .eq("asset_id",active.assetId).eq("status","READY")
       .eq("quality_status","COMPLETE")
       .eq("index_version",CITEM_INDEX_VERSION).maybeSingle();
     if(index.error)throw new InvestigationIndexError("index_database_unavailable");
     if(index.data){
+      const live=await owned.supabase.from("source_assets")
+        .select("sha256,state,asset_role").eq("project_id",owned.projectId)
+        .eq("source_id",active.sourceId).eq("id",active.assetId).maybeSingle();
+      if(live.error)throw new InvestigationIndexError("index_database_unavailable");
+      if(!live.data||live.data.sha256!==index.data.asset_sha256||
+        live.data.state!=="READY"||live.data.asset_role!=="ORIGINAL")return [];
       const readyPageCount=index.data.page_count;
       const pages=requested.filter(page=>page<=readyPageCount);
       if(pages.length){
