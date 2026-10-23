@@ -28,6 +28,13 @@ describe("Phase A immutable page extraction manifest",()=>{
   expect(()=>buildExtractionManifest([pages[0],{...pages[1],page:3}])).toThrow();
   expect(()=>buildExtractionManifest([{page:1,text:"",extractor:"pdfjs"}])).toThrow();
  });
+ it("does not force a French, English or Turkish document language guess",()=>{
+  const m=buildExtractionManifest([{page:1,
+    text:"ve bir olarak siber guvenlik tehdit rapor saldiri inceleme ".repeat(4),
+    extractor:"pdfjs"}]);
+  expect(m.document_language).toBe("tr");
+  expect(m.language_method).toBe("heuristic_unverified");
+ });
  it("rejects original PDF pages with private-use Unicode even when page count matches",()=>{
   const m=buildExtractionManifest([{page:1,text:"APT28 mars \uE132\uE130\uE132\uE132 ".repeat(5),
    extractor:"pdfjs"}]);

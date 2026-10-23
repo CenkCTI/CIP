@@ -10,7 +10,7 @@ export type PageQuality={
 export type DocumentQuality={
   pageCount:number;pagesWithText:number;pagesWithoutText:number;
   totalExtractedChars:number;extractionFingerprint:string;
-  languageHint:"fr"|"en"|"unknown";languageMethod:"heuristic_unverified";
+  languageHint:"fr"|"en"|"tr"|"mixed"|"unknown";languageMethod:"heuristic_unverified";
   pageDiagnostics:PageQuality[];flags:QualityFlag[];
 };
 
@@ -72,7 +72,13 @@ export function assessDocumentTextQuality(pages:{page:number;text:string}[]):Doc
   const sample=sampleParts.join(" ").toLocaleLowerCase("en");
   const fr=(sample.match(/\b(?:les|des|dans|pour|contre|depuis|ainsi|leurs|plusieurs|attaques)\b/g)??[]).length;
   const en=(sample.match(/\b(?:the|and|from|against|their|with|these|reports|security)\b/g)??[]).length;
-  const languageHint=fr>=8&&fr>en*2?"fr":en>=8&&en>fr*2?"en":"unknown";
+  const tr=(sample.match(/\b(?:ve|bir|ile|olan|olarak|siber|guvenlik|tehdit|rapor|saldiri|inceleme)\b/g)??[]).length;
+  const leaders=[["fr",fr],["en",en],["tr",tr]] as const;
+  const strong=leaders.filter(([,n])=>n>=8);
+  const languageHint=strong.length>1?"mixed" as const:
+    fr>=8&&fr>Math.max(en,tr)*2?"fr" as const:
+    en>=8&&en>Math.max(fr,tr)*2?"en" as const:
+    tr>=8&&tr>Math.max(fr,en)*2?"tr" as const:"unknown" as const;
   return {pageCount:pages.length,pagesWithText,pagesWithoutText:pages.length-pagesWithText,
     totalExtractedChars,extractionFingerprint:hash.digest("hex"),
     languageHint,languageMethod:"heuristic_unverified",pageDiagnostics:diagnostics,

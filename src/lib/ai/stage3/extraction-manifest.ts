@@ -25,7 +25,7 @@ export type ExtractionPageSnapshot={
 };
 export type ExtractionManifest={
   extractor_version:string;index_version:string;chunking_version:string;
-  extraction_fingerprint:string;document_language:"fr"|"en"|"unknown";
+  extraction_fingerprint:string;document_language:"fr"|"en"|"tr"|"mixed"|"unknown";
   language_method:"heuristic_unverified";
   quality_status:"COMPLETE"|"REVIEW_REQUIRED";
   quality_flags:QualityFlag[];

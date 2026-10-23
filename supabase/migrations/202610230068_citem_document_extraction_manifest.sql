@@ -18,7 +18,7 @@ create table public.copilot_document_extraction_runs (
  index_version text not null check(char_length(index_version) between 1 and 120),
  extraction_fingerprint text not null check(extraction_fingerprint ~ '^[a-f0-9]{64}$'),
  document_language text not null default 'unknown'
-   check(document_language in ('fr','en','unknown')),
+   check(document_language in ('fr','en','tr','mixed','unknown')),
  language_method text not null default 'heuristic_unverified'
    check(language_method in ('heuristic_unverified','analyst_approved')),
  document_title text,report_reference text,publication_date date,publisher text,
@@ -92,7 +92,7 @@ alter table public.copilot_document_chunks
   check(section_type is null or section_type in
    ('COVER','TABLE_OF_CONTENTS','BIBLIOGRAPHY','BODY')),
  add column document_language text
-  check(document_language is null or document_language in ('fr','en','unknown')),
+  check(document_language is null or document_language in ('fr','en','tr','mixed','unknown')),
  add constraint copilot_document_chunks_run_fk
   foreign key(project_id,extraction_run_id,owner_id)
   references public.copilot_document_extraction_runs(project_id,id,owner_id);
@@ -139,7 +139,7 @@ begin
    or p_fingerprint !~ '^[a-f0-9]{64}$'
    or p_extractor_version is null or char_length(p_extractor_version)>120
    or p_chunking_version is null or char_length(p_chunking_version)>120
-   or p_language not in ('fr','en','unknown')
+   or p_language not in ('fr','en','tr','mixed','unknown')
    or p_pages is null or jsonb_typeof(p_pages)<>'array'
    or octet_length(p_pages::text)>5500000
    or p_page_count not between 1 and 200
