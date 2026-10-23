@@ -154,7 +154,8 @@ export async function retrieveOwnedEvidence(owned:Owned,question:string,events:M
       .eq("asset_id",active.assetId).eq("status","READY").maybeSingle();
     if(index.error)throw new InvestigationIndexError("index_database_unavailable");
     if(index.data){
-      const pages=requested.filter(page=>page<=index.data.page_count);
+      const readyPageCount=index.data.page_count;
+      const pages=requested.filter(page=>page<=readyPageCount);
       if(pages.length){
         const chunks=await owned.supabase.from("copilot_document_chunks")
           .select("source_id,asset_id,page_number,chunk_number,content")
