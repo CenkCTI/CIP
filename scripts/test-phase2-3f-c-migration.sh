@@ -42,7 +42,7 @@ SQL
 
 # This harness validates the database immediately before and at migration 048.
 # Downstream migrations must never be applied before 048 merely because newer files were added later.
-find "$ROOT/supabase/migrations" -maxdepth 1 -name '*.sql' | sort | while read -r migration; do
+find "$ROOT/supabase/migrations" -maxdepth 1 -name '*.sql' ! -name '202610230069_citem_multilingual_e5_vector.sql' | sort | while read -r migration; do
   if [[ "$(basename "$migration")" < "202608110048_phase2_3f_c_source_semantics.sql" ]]; then
     printf "\\i '%s'\n" "$migration"
   fi

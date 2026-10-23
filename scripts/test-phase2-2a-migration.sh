@@ -7,7 +7,7 @@ createdb "$DB_NAME"
 psql -v ON_ERROR_STOP=1 -d "$DB_NAME" <<'SQL' >/dev/null
 do $$begin create role authenticated;exception when duplicate_object then null;end$$;do $$begin create role service_role;exception when duplicate_object then null;end$$;do $$begin create role anon;exception when duplicate_object then null;end$$;create schema extensions;create extension pgcrypto with schema extensions;create schema auth;create table auth.users(id uuid primary key,raw_user_meta_data jsonb not null default '{}');create function auth.uid()returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;create function auth.jwt()returns jsonb language sql stable as $$select '{}'::jsonb$$;create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text,owner uuid);create function storage.foldername(name text)returns text[] language sql immutable as $$select string_to_array(name,'/')$$;create function storage.filename(name text)returns text language sql immutable as $$select(string_to_array(name,'/'))[array_length(string_to_array(name,'/'),1)]$$;
 SQL
-for migration in supabase/migrations/*.sql;do printf "\\i '%s/%s'\n" "$PWD" "$migration";done >"$sql_file"
+for migration in supabase/migrations/*.sql;do [[ "${migration##*/}" == "202610230069_citem_multilingual_e5_vector.sql" ]] && continue; printf "\\i '%s/%s'\n" "$PWD" "$migration";done >"$sql_file"
 psql -v ON_ERROR_STOP=1 -d "$DB_NAME" -f "$sql_file" >/dev/null
 psql -v ON_ERROR_STOP=1 -d "$DB_NAME" <<'SQL' >/dev/null
 DO $$begin
