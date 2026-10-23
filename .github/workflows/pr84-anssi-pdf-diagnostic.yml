@@ -96,6 +96,5 @@ jobs:
         run: npx vitest run tests/citem-pdf-recovery.test.ts tests/citem-document-quality.test.ts
       - name: Full extraction path on the official ANSSI PDF (opt-in CI runtime)
         env:
-          CITEM_ANSSI_PDF_PATH: ${{ env.ANSSI_PDF }}
           CITEM_PDF_POPPLER_ENABLED: "1"
-        run: npx vitest run tests/citem-anssi-live-recovery.test.ts
+        run: CITEM_ANSSI_PDF_PATH="$ANSSI_PDF" npx vitest run tests/citem-anssi-live-recovery.test.ts
