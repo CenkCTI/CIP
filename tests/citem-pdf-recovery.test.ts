@@ -44,6 +44,19 @@ describe("Independent PDF text recovery",()=>{
    expect(merged).not.toContain("Visible recommendation");
    expect(preserveVisibleRecommendationLabels("R12", "R12 already recognized")).toBe("R12 already recognized");
  });
+ it("never loses provenance on unaffected pages when OCR follows Poppler",()=>{
+   const source=[
+     {page:4,text:"APT28 CVE-\\uE120-2",extractor:"pdfjs" as const},
+     {page:5,text:"APT28 date \\uE120",extractor:"pdfjs" as const},
+   ];
+   const poppler=selectVerifiedPdfPageRecovery(source,[
+     {page:4,text:"APT28 CVE-2023-23397 checked by Poppler"},
+   ],"poppler");
+   const ocr=selectVerifiedPdfPageRecovery(poppler.pages,[
+     {page:5,text:"APT28 date 2022 recovered in a rendered page"},
+   ],"ocr");
+   expect(ocr.pages.map(p=>p.extractor)).toEqual(["poppler","ocr"]);
+ });
  it("detects PUA ranges and replacement characters but not normal digits",()=>{
    expect(hasPrivatePdfTextGlyphs("\uE000")).toBe(true);
    expect(hasPrivatePdfTextGlyphs("\u{F0000}")).toBe(true);

@@ -10,14 +10,14 @@ export function preserveVisibleRecommendationLabels(original:string,ocrText:stri
 
 const unsafe=/[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}\uFFFD]/u;
 export function hasPrivatePdfTextGlyphs(text:string):boolean{return unsafe.test(text);}
-export function selectVerifiedPdfPageRecovery(primary:PdfPageText[],alternative:PdfPageText[],engine:"poppler"|"ocr"="poppler"):{
+export function selectVerifiedPdfPageRecovery(primary:(PdfPageText|PdfRecoveredPage)[],alternative:PdfPageText[],engine:"poppler"|"ocr"="poppler"):{
  pages:PdfRecoveredPage[];recovered:number[];unresolved:number[];
 }{
  const secondary=new Map(alternative.map(p=>[p.page,p.text]));
  const validPageMap=secondary.size===alternative.length;
  const recovered:number[]=[],unresolved:number[]=[];
  const pages=primary.map(p=>{
-  if(!hasPrivatePdfTextGlyphs(p.text))return {...p,extractor:"pdfjs" as const};
+  if(!hasPrivatePdfTextGlyphs(p.text))return {...p,extractor:("extractor" in p?p.extractor:"pdfjs") as PdfRecoveredPage["extractor"]};
   const rawCandidate=secondary.get(p.page);
   const candidate=rawCandidate===undefined?undefined:(engine==="ocr"?preserveVisibleRecommendationLabels(p.text,rawCandidate):rawCandidate);
   if(validPageMap&&typeof candidate==="string"&&candidate.trim().length>0&&
@@ -28,7 +28,7 @@ export function selectVerifiedPdfPageRecovery(primary:PdfPageText[],alternative:
     return {page:p.page,text:candidate,extractor:engine};
   }
   unresolved.push(p.page);
-  return {...p,extractor:"pdfjs" as const};
+  return {...p,extractor:("extractor" in p?p.extractor:"pdfjs") as PdfRecoveredPage["extractor"]};
  });
  return {pages,recovered,unresolved};
 }
