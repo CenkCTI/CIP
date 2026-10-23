@@ -191,11 +191,13 @@ export async function retrieveOwnedEvidence(owned:Owned,question:string,events:M
       sourceId:active.sourceId,assetId:active.assetId,
     });
     const combined=fuseScopedSqlCandidates(rest,semantic.rows,question,limit);
-    return prioritizedEvidenceChunks(exact,[],combined,limit).map((row,i)=>({
+    const selected=prioritizedEvidenceChunks(exact,[],combined,limit).map((row,i)=>({
       token:"MEM_"+String(i+1).padStart(3,"0"),text:row.content,
       page:row.page_number,kind:"PDF" as const,
       sourceId:row.source_id,assetId:row.asset_id,
     }));
+    return Object.assign(selected,{retrievalMode:semantic.rows.length?"HYBRID":"LEXICAL_ONLY",
+      semanticWarning:semantic.status==="SEMANTIC_ERROR"?"SEMANTIC_UNAVAILABLE":null});
   }
   // Reuse only the analyst's prior questions as referent hints. Unverified AI
   // summaries have contained wrong dates/actor IDs and must not bias search.
@@ -253,10 +255,12 @@ export async function retrieveOwnedEvidence(owned:Owned,question:string,events:M
   const fused=fuseScopedSqlCandidates([...translated,...lexical],
     semantic.rows,question,limit);
   const rows=prioritizedEvidenceChunks(exact,[],fused,limit);
-  return rows.map((row,i)=>({
+  const selected=rows.map((row,i)=>({
     token:"MEM_"+String(i+1).padStart(3,"0"),text:row.content,
     page:row.page_number,kind:"PDF" as const,sourceId:row.source_id,assetId:row.asset_id,
   }));
+  return Object.assign(selected,{retrievalMode:semantic.rows.length?"HYBRID":"LEXICAL_ONLY",
+    semanticWarning:semantic.status==="SEMANTIC_ERROR"?"SEMANTIC_UNAVAILABLE":null});
 }
 export type AnalysisEventInput={
   kind:"ANALYSE"|"EXTRACT"|"ASK"|"ASSESSMENT"|"WEB_RESEARCH";
