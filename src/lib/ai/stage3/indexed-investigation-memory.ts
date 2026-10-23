@@ -9,7 +9,7 @@ import {normalizeForSearch} from "./document-quality";
 import {planMultilingualLexicalProbes} from "./multilingual-query-plan";
 import type {Stage3Span} from "./provenance";
 import {splitPagesForIndex,memorySearchQuery} from "./index-chunks";
-import {requestedPdfPages,retrievalProbe,prioritizedEvidenceChunks,rankActivePdfChunks,type IndexedEvidenceChunk} from "./evidence-retrieval";
+import {requestedPdfPages,prioritizedEvidenceChunks,rankActivePdfChunks,type IndexedEvidenceChunk} from "./evidence-retrieval";
 
 type Owned=Awaited<ReturnType<typeof requireOwnedProject>>;
 export class InvestigationIndexError extends Error {
