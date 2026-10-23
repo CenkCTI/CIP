@@ -133,6 +133,7 @@ declare
  v_inserted integer;
  v_expected integer;
  v_chunks_updated integer;
+ v_computed_fingerprint text;
 begin
  if p_quality_status<>'COMPLETE' or p_quality_flags<>'[]'::jsonb
    or p_index_version<>'CITEM-PDF-INDEX-A1-20261023'
@@ -162,6 +163,15 @@ begin
  if (select count(distinct x.page_number) from
    jsonb_to_recordset(p_pages) as x(page_number integer))<>p_page_count
  then return false; end if;
+ -- Recompute the page-order fingerprint from the exact extracted original
+ -- bytes, including the page number and NUL separators used by Node.js.
+ select encode(sha256(string_agg(
+  convert_to(x.page_number::text,'UTF8') || '\x00'::bytea ||
+  convert_to(x.original_text,'UTF8') || '\x00'::bytea,
+  ''::bytea order by x.page_number)), 'hex')
+ into v_computed_fingerprint
+ from jsonb_to_recordset(p_pages) as x(page_number integer,original_text text);
+ if v_computed_fingerprint is distinct from p_fingerprint then return false; end if;
  if p_chunks is null or jsonb_typeof(p_chunks)<>'array'
    or octet_length(p_chunks::text)>2400000 then return false; end if;
  v_expected:=jsonb_array_length(p_chunks);
