@@ -13,7 +13,7 @@ export type FusedCandidate={
   row:RankedCandidate;score:number;lexicalRank:number|null;
   semanticRank:number|null;exactIdentifierMatch:boolean;
 };
-export type FusionStatus="HYBRID"|"LEXICAL_ONLY"|"INSUFFICIENT_RETRIEVAL";
+export type FusionStatus="HYBRID"|"SEMANTIC_ONLY"|"LEXICAL_ONLY"|"INSUFFICIENT_RETRIEVAL";
 export type FusionResult={status:FusionStatus;items:FusedCandidate[];
   lexicalCandidates:number;semanticCandidates:number};
 
@@ -59,7 +59,7 @@ export function fuseEvidenceRanks(args:{
    seen.add(identity);
    const old=found.get(identity);
    const literal=ids.length>0&&ids.some(id=>row.content.toUpperCase().includes(id));
-   const foundItem=old??{row,score:0,lexicalRank:null,semanticRank:null,
+   const foundItem:FusedCandidate=old??{row,score:0,lexicalRank:null,semanticRank:null,
      exactIdentifierMatch:literal};
    foundItem.score+=1/(k+i+1);
    if(kind==="lexical")foundItem.lexicalRank=i+1;
@@ -90,7 +90,7 @@ export function fuseEvidenceRanks(args:{
  }
  return {
   status:!selected.length?"INSUFFICIENT_RETRIEVAL":
-    semantic.length?"HYBRID":"LEXICAL_ONLY",
+    semantic.length&&lexical.length?"HYBRID":semantic.length?"SEMANTIC_ONLY":"LEXICAL_ONLY",
   items:selected,lexicalCandidates:lexical.length,semanticCandidates:semantic.length,
  };
 }
