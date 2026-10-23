@@ -545,4 +545,6 @@ echo "Stage 3 processing foundation, Source Claim and Copilot unified memory mig
 "${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" \
   -f "$ROOT/supabase/migrations/202610230068_citem_document_extraction_manifest.sql" >/dev/null
 
-echo "Phase A migration 068 installed after legacy 067 tests."
+"${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" \
+ -f "$ROOT/tests/citem-phase-a-postgres-acceptance.sql" >/dev/null
+echo "Phase A migration 068 owner/atomic/PostgreSQL acceptance passed."
