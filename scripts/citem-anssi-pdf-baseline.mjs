@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Operator-run PDF.js acceptance; NO network access and NO document excerpts in logs.
 // node --experimental-strip-types scripts/citem-anssi-pdf-baseline.mjs /path/to/CERTFR-2023-CTI-009.pdf
-import {readFile,readFileSync} from "node:fs";
+import {readFileSync} from "node:fs";
+import {readFile} from "node:fs/promises";
 import {createHash} from "node:crypto";
 import {getDocument} from "pdfjs-dist/legacy/build/pdf.mjs";
 import {splitPagesForIndex,memorySearchQuery} from "../src/lib/ai/stage3/index-chunks.ts";
