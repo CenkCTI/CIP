@@ -83,3 +83,31 @@ content. A passing result identifies a candidate alternative extraction engine;
 it does NOT authorize silently switching production extraction, trusting
 all untested pages, or changing the original/derived database records.
 Follow with cross-page visual and citation tests before deployment.
+
+## Phase A2: optional local independent PDF text recovery
+
+PR #84 now contains \`pdf-recovery.ts\` and \`pdf-poppler.ts\`.
+\`extractPdfPages\` keeps the authoritative PDF bytes intact while PDF.js
+parses a copy. If PDF.js yields Unicode private-use or replacement glyphs,
+the server can optionally run locally installed \`pdftotext\` against the
+*same immutable source PDF*. Enable this only in a controlled server runtime:
+
+\`\`\`bash
+sudo apt install poppler-utils
+CITEM_PDF_POPPLER_ENABLED=1 npm run dev
+\`\`\`
+
+No shell is invoked: the executable and argv are fixed, timeout/buffer are
+bounded, and temporary files are removed. No PDF or text is sent over the
+network to another provider. The page-level recovery arbiter replaces
+only damaged pages if alternate text is nonempty, no longer corrupted, has
+matching page provenance, and passes size sanity checks. If no valid
+alternate exists, the original, visibly flagged extraction is retained.
+
+**Not an unconditional production fix.** Vercel may not provide the Poppler
+binary. This step requires a runtime where \`pdftotext\` is installed.
+The official ANSSI source has not yet been tested through this exact path.
+Its old READY-derived indexes still contain corrupted glyphs. Do not
+silently replace them using source-model guesses or an SQL bulk update.
+A further review gate must add *extractor-versioned atomic reindexing*
+before this can be accepted as a live repair.
