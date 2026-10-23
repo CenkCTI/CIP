@@ -7,7 +7,7 @@ export function isPdfExactValueQuestion(question:string):boolean{
 /** Source-only questions need a literal quotation; free-standing strategy
  * questions can still receive clearly marked conditional hypotheses. */
 export function requestsSourceGroundedAnswer(question:string):boolean{
-  return /(?:pdf|rapor|kaynak|alıntı|sayfa|belge|orijinal|report|document|original|citation|cite|quote|\\bpage\\b)/i.test(question);
+  return /(?:pdf|rapor|kaynak|alıntı|sayfa|belge|orijinal|report|document|original|citation|cite|quote|\bpage\b)/i.test(question);
 }
 export function hasUnmappedPdfGlyphs(spans:Stage3Span[]):boolean{
   return spans.some(span=>span.kind==="PDF"&&/[\uE000-\uF8FF\uFFFD]/u.test(span.text));
