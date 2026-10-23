@@ -43,6 +43,16 @@ const gold={
  page3Resume:/\bresume\b/.test(normalized(3)),
  page3SourceReportedEspionage:normalized(3).includes("espionnage"),
  page3OriginalQuote:normalized(3).includes(normalizeForSearch("utilisées à des fins d’espionnage").toLowerCase()),
+ page4Actor:normalized(4).includes("apt28"),
+ page4Cve:normalized(4).includes("cve-2023-23397"),
+ page4CveStart:normalized(4).includes("mars 2022"),
+ page4CveEnd:normalized(4).includes("juin 2023"),
+ page15Recommendation10:/\bR10\b/.test(byPage(15)),
+ page15Recommendation11:/\bR11\b/.test(byPage(15)),
+ page16Recommendation12:/\bR12\b/.test(byPage(16)),
+ page17Recommendation13:/\bR13\b/.test(byPage(17)),
+ criticalPagesFreeOfPrivateUse:[3,4,15,16,17].every(n=>
+  (quality.pageDiagnostics[n-1]?.privateUseCount??1)===0),
  completeText:quality.pagesWithoutText===0&&quality.pageCount===23,
  chunksPresent:chunks.length>0,
 };
@@ -52,13 +62,16 @@ const report={
  pdfSha256:sha,extractor:"pdfjs-dist/legacy/build/pdf.mjs",
  extractorVersion:packageInfo.version,declaredPageCount,
  extractionFingerprint:quality.extractionFingerprint,extractedChars:quality.totalExtractedChars,
- pages:quality.pageDiagnostics.map(({page,charCount,sectionType,flags})=>({page,charCount,sectionType,flags})),
+ pages:quality.pageDiagnostics.map(({page,charCount,privateUseCount,sectionType,flags})=>({page,charCount,privateUseCount,sectionType,flags})),
  indexedChunkCount:chunks.length,chunkPages:[...new Set(chunks.map(c=>c.page_number))],
  scope:"FULL_DOCUMENT_LOCAL_EXTRACTION_ONLY",
  queryDiagnostics:{questionLanguage:"tr",lookupLanguage:"fr",hasSearchOnlyAlias:trQuery.includes("espionnage"),
   anchorPage:3,quoteCheck:gold.page3OriginalQuote,dbRetrieval:"NOT_RUN",modelEvaluation:"NOT_RUN"},
  gold,
  passed:Object.values(gold).every(Boolean),warnings:quality.flags,
+ remediation:quality.flags.includes("PRIVATE_USE_GLYPHS")?
+  "UNTRUSTED_GLYPHS: inspect ToUnicode/font encoding; cross-check independent local extractor or local OCR against rendered PDF; never guess digits.":
+  null,
 };
 console.log(JSON.stringify(report,null,2));
 if(!report.passed)process.exitCode=1;

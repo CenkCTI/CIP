@@ -38,3 +38,33 @@ analysis. CI can validate pure quality helpers, not the real 23-page fixture.
 - PostgreSQL and browser acceptance with real ANSSI PDF and negative RLS tests.
 - No READY without complete validated evidence; existing PR #83 migration 067
   provides atomic page/chunk publication, but not this planned manifest.
+
+## Blocking ANSSI glyph-integrity finding (2026-10-23)
+
+CITEM indexed the official ANSSI report as 23 pages / 46 chunks, but the
+PDF.js extraction yielded Unicode private-use glyphs in the font text.
+Page 4 visually says **mars 2022**, yet its stored text replaces digits
+with private glyphs. This allowed the AI to answer **mars 2023**.
+Page-completeness and SHA-256 validation cannot catch this semantic defect.
+
+This baseline now flags PRIVATE_USE_GLYPHS and refuses to pass its ANSSI
+golden checks unless page 4 actor/CVE/start/end date and page 15-17 R10-R13
+recommendation identifiers appear verbatim without guessing. JSON report
+includes privateUseCount per page. The immutable original PDF is unchanged.
+
+### Remediation (requires separate implementation and live PDF verification)
+
+1. Inspect the affected PDF font's encoding and /ToUnicode CMap.
+2. Compare PDF.js with a second local engine such as Poppler pdftotext.
+   Where needed, test local OCR against the rendered original page.
+3. Record recovered Unicode text in a separately attributable extraction
+   snapshot with source/engine/version and page provenance. Never replace
+   private characters by a guessed global substitution map.
+4. Require exact checks on 3/4/15/16/17 plus verified dates/identifiers,
+   and independently inspect quotes. Only then wire the reliable extraction
+   into the server and atomically rebuild the derived index from the
+   same original document SHA. Do not modify original Storage PDF files.
+5. Re-run the real-model and browser retrieval tests before merge.
+
+The diagnostic changes here do NOT repair Unicode extraction themselves and
+must not be treated as an end-to-end acceptance pass.

@@ -1,5 +1,5 @@
 import {describe,it,expect} from "vitest";
-import {assessDocumentTextQuality,classifyPdfSection,normalizeForSearch} from "@/lib/ai/stage3/document-quality";
+import {assessDocumentTextQuality,classifyPdfSection,normalizeForSearch,countPrivateUseGlyphs} from "@/lib/ai/stage3/document-quality";
 describe("PDF page quality and search-only normalization",()=>{
  it("keeps original French quotes immutable while generating diacritic aliases",()=>{
    const original="L'œuvre était liée aux données\ncontrôlées";
@@ -28,5 +28,24 @@ describe("PDF page quality and search-only normalization",()=>{
  it("does not treat language heuristics as authoritative metadata",()=>{
    const q=assessDocumentTextQuality([{page:1,text:"the and the and the security reports from the source with these reports"}]);
    expect(q.languageMethod).toBe("heuristic_unverified");
+ });
+});
+
+describe("ANSSI font-private glyph extraction safety",()=>{
+ it("flags corrupt year glyphs even with complete page coverage",()=>{
+  const pages=Array.from({length:23},(_,i)=>({page:i+1,text:"Valid PDF page text ".repeat(8)}));
+  pages[3].text="APT28 CVE-2023-23397 à partir de mars \uE12E0\uE12E\uE12E et jusqu'en juin 2023";
+  const result=assessDocumentTextQuality(pages);
+  expect(result.pageCount).toBe(23);
+  expect(result.pagesWithoutText).toBe(0);
+  expect(result.flags).toContain("PRIVATE_USE_GLYPHS");
+  expect(result.pageDiagnostics[3].privateUseCount).toBe(3);
+  expect(normalizeForSearch(pages[3].text)).not.toContain("mars 2022");
+ });
+ it("accepts intact French dates and distinguishes private-use planes",()=>{
+  const good="APT28 CVE-2023-23397 à partir de mars 2022 et jusqu'en juin 2023";
+  expect(countPrivateUseGlyphs(good)).toBe(0);
+  expect(assessDocumentTextQuality([{page:1,text:good}]).flags).not.toContain("PRIVATE_USE_GLYPHS");
+  expect(countPrivateUseGlyphs("X\u{F0000}Y\u{100000}")).toBe(2);
  });
 });

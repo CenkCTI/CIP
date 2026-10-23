@@ -2,9 +2,9 @@ import {createHash} from "node:crypto";
 
 export type SectionType="COVER"|"TABLE_OF_CONTENTS"|"BIBLIOGRAPHY"|"BODY";
 export type QualityFlag="NO_TEXT"|"LOW_TEXT_COVERAGE"|"REPLACEMENT_GLYPHS"|
-  "CONTROL_CHARACTERS"|"PAGE_SEQUENCE_INVALID";
+  "CONTROL_CHARACTERS"|"PAGE_SEQUENCE_INVALID"|"PRIVATE_USE_GLYPHS";
 export type PageQuality={
-  page:number;charCount:number;replacementCount:number;controlCount:number;
+  page:number;charCount:number;replacementCount:number;controlCount:number;privateUseCount:number;
   sectionType:SectionType;flags:QualityFlag[];
 };
 export type DocumentQuality={
@@ -14,6 +14,10 @@ export type DocumentQuality={
   pageDiagnostics:PageQuality[];flags:QualityFlag[];
 };
 
+/** Report private-use glyphs without inventing a font-to-Unicode map. */
+export function countPrivateUseGlyphs(originalText:string):number{
+ return (originalText.match(/[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/gu)??[]).length;
+}
 export function normalizeForSearch(originalText:string):string{
   // Search alias only; originalText and quoted French passages stay unmodified.
   return originalText.normalize("NFKC")
@@ -48,6 +52,7 @@ export function assessDocumentTextQuality(pages:{page:number;text:string}[]):Doc
     totalExtractedChars+=original.length;
     const replacementCount=(original.match(/\uFFFD/g)??[]).length;
     const controlCount=(original.match(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g)??[]).length;
+    const privateUseCount=countPrivateUseGlyphs(original);
     const pageFlags:QualityFlag[]=[];
     if(!original.trim())pageFlags.push("NO_TEXT");
     else{
@@ -57,9 +62,10 @@ export function assessDocumentTextQuality(pages:{page:number;text:string}[]):Doc
         pageFlags.push("REPLACEMENT_GLYPHS");
       if(controlCount/Math.max(original.length,1)>0.003)
         pageFlags.push("CONTROL_CHARACTERS");
+      if(privateUseCount>0)pageFlags.push("PRIVATE_USE_GLYPHS");
     }
     pageFlags.forEach(flag=>flags.add(flag));
-    diagnostics.push({page:p.page,charCount:original.length,replacementCount,controlCount,
+    diagnostics.push({page:p.page,charCount:original.length,replacementCount,controlCount,privateUseCount,
       sectionType:classifyPdfSection(original,p.page),flags:pageFlags});
     if(sampleParts.join(" ").length<12000)sampleParts.push(original.slice(0,1200));
   }
