@@ -339,7 +339,7 @@ create unique index fusion_attach_unique_note on public.fusion_attachment_links(
 -- Invoker validation means the underlying target table RLS remains effective.
 create function public.fusion_validate_country_link()
 returns trigger language plpgsql security invoker set search_path = '' as $$
-declare target_table text;
+declare target_table text; target_exists boolean;
 begin
  if not public.project_is_owned(new.project_id) or new.created_by is distinct from auth.uid() then
   raise exception 'not authorized' using errcode='42501';
@@ -374,8 +374,8 @@ begin
   raise exception 'invalid target type' using errcode='23514';
  end if;
  execute format('select exists(select 1 from public.%I where project_id=$1 and id=$2)',target_table)
- into strict found using new.project_id,new.target_id;
- if not found then raise exception 'target not found in investigation' using errcode='23503'; end if;
+ into target_exists using new.project_id,new.target_id;
+ if not target_exists then raise exception 'target not found in investigation' using errcode='23503'; end if;
  return new;
 end $$;
 revoke all on function public.fusion_validate_country_link() from public,anon,authenticated;

@@ -33,6 +33,16 @@ import {
 } from "@/lib/graph/types";
 
 const colors: Record<GraphEntityType, string> = {
+  COUNTRY: "#857349",
+  SOURCE: "#557c88",
+  SOURCE_ASSET: "#63777f",
+  SOURCE_NOTE: "#7c8c76",
+  ANNOTATION: "#a98f5f",
+  SOURCE_CLAIM: "#ae776b",
+  ATTRIBUTION_CLAIM: "#a87585",
+  RESEARCH_NOTE: "#7f9777",
+  TIMELINE_EVENT: "#7a95b5",
+  COUNTRY_NOTE: "#8e865b",
   ACTOR: "#b9776e",
   CAMPAIGN: "#c9963e",
   INDICATOR: "#6f9b79",
@@ -45,6 +55,16 @@ const colors: Record<GraphEntityType, string> = {
 };
 
 const typeLabels: Record<GraphEntityType, string> = {
+  COUNTRY: "Country",
+  SOURCE: "Source",
+  SOURCE_ASSET: "Source Asset",
+  SOURCE_NOTE: "Source Note",
+  ANNOTATION: "Annotation",
+  SOURCE_CLAIM: "Source Claim",
+  ATTRIBUTION_CLAIM: "Attribution Claim",
+  RESEARCH_NOTE: "Research Note",
+  TIMELINE_EVENT: "Timeline Event",
+  COUNTRY_NOTE: "Country Note",
   ACTOR: "Actor",
   CAMPAIGN: "Campaign",
   INDICATOR: "Indicator",
@@ -57,6 +77,16 @@ const typeLabels: Record<GraphEntityType, string> = {
 };
 
 const typeCodes: Record<GraphEntityType, string> = {
+  COUNTRY: "CNTRY",
+  SOURCE: "SRC",
+  SOURCE_ASSET: "ASSET",
+  SOURCE_NOTE: "SNOTE",
+  ANNOTATION: "ANNO",
+  SOURCE_CLAIM: "CLAIM",
+  ATTRIBUTION_CLAIM: "ATTR",
+  RESEARCH_NOTE: "NOTE",
+  TIMELINE_EVENT: "TIME",
+  COUNTRY_NOTE: "CNOTE",
   ACTOR: "ACTR",
   CAMPAIGN: "CMPN",
   INDICATOR: "IOC",

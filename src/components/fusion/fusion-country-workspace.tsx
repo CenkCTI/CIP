@@ -26,7 +26,7 @@ export function FusionCountryWorkspace({projectId,code,notes,links,attachments,r
  const evidenceById=Object.fromEntries(evidenceOptions.map(e=>[e.id,e]));
  const recordByKey=Object.fromEntries(recordOptions.map(x=>[x.record_type+":"+x.record_id,x]));
  const chosen=selectedTarget&&recordByKey[selectedTarget.type+":"+selectedTarget.id];
- const h=(formName:string)=><><input type="hidden" name="projectId" value={projectId}/>
+ const h=()=><><input type="hidden" name="projectId" value={projectId}/>
   <input type="hidden" name="country" value={code}/></>;
  return <section className="space-y-4">
   <header><p className="citem-label">Investigation / Fusion</p><h1 className="mt-1 text-2xl font-semibold text-stone-100">Country Notes & Attachments</h1>
@@ -52,7 +52,7 @@ export function FusionCountryWorkspace({projectId,code,notes,links,attachments,r
      <h3 className="text-base font-semibold text-stone-100">Country notes <span className="text-xs font-normal text-stone-500">({notes.length} displayed)</span></h3>
      <p className="mt-1 text-xs text-stone-500">These notes are authored by an analyst, not directly verified source statements.</p>
      <form action={createCountryNote} className="mt-3 space-y-2">
-       {h("note")}<label className="block text-xs text-stone-400">Title<input name="title" required maxLength={180} className="mt-1 w-full rounded border border-stone-700 bg-[#101417] p-2 text-stone-100"/></label>
+       {h()}<label className="block text-xs text-stone-400">Title<input name="title" required maxLength={180} className="mt-1 w-full rounded border border-stone-700 bg-[#101417] p-2 text-stone-100"/></label>
        <label className="block text-xs text-stone-400">Notes<textarea name="body" maxLength={50000} rows={4} className="mt-1 w-full rounded border border-stone-700 bg-[#101417] p-2 text-stone-100"/></label>
        <button className="citem-button" type="submit">Add country note</button>
      </form>
@@ -60,12 +60,12 @@ export function FusionCountryWorkspace({projectId,code,notes,links,attachments,r
       <summary className="cursor-pointer text-sm font-medium text-stone-200">{n.title}
        <span className="ml-2 text-xs font-normal text-stone-500">{new Date(n.updated_at).toLocaleDateString()}</span></summary>
       <form action={updateCountryNote} className="mt-3 space-y-2">
-       {h("update")}<input type="hidden" name="noteId" value={n.id}/>
+       {h()}<input type="hidden" name="noteId" value={n.id}/>
        <input name="title" required maxLength={180} defaultValue={n.title} className="w-full rounded border border-stone-700 bg-[#101417] p-2 text-sm text-stone-100"/>
        <textarea name="body" rows={5} maxLength={50000} defaultValue={n.body} className="w-full rounded border border-stone-700 bg-[#101417] p-2 text-sm text-stone-100"/>
        <button type="submit" className="citem-button-ghost">Save changes</button>
       </form>
-      <form action={deleteCountryNote} className="mt-2">{h("delete")}<input type="hidden" name="noteId" value={n.id}/>
+      <form action={deleteCountryNote} className="mt-2">{h()}<input type="hidden" name="noteId" value={n.id}/>
        <ConfirmSubmit message="Delete this country note? Linked files remain in Evidence storage."/>
       </form>
      </details>)}
@@ -75,18 +75,14 @@ export function FusionCountryWorkspace({projectId,code,notes,links,attachments,r
      <h3 className="text-base font-semibold text-stone-100">Linked investigation records <span className="text-xs font-normal text-stone-500">({recordCount})</span></h3>
      <p className="mt-1 text-xs text-stone-500">Relationships express the reason for country relevance. They are not automatically inferred.</p>
      <div className="mt-3 space-y-3">
-      <form action={linkCountryRecord} className="space-y-2">{h("link")}
+      <form action={linkCountryRecord} className="space-y-2">{h()}
        {selectedTarget?<><input type="hidden" name="targetType" value={selectedTarget.type}/><input type="hidden" name="targetId" value={selectedTarget.id}/>
         <p className="rounded bg-black/20 p-2 text-xs text-amber-200">Selected {selectedTarget.type}: {chosen?.title??selectedTarget.id}</p>
         </>:<>
         <label className="block text-xs text-stone-400">Existing record
-         <select name="targetId" required className="mt-1 w-full rounded border border-stone-700 bg-[#101417] p-2 text-stone-200"
-          defaultValue={recordOptions[0]?.record_id??""}>
-          {recordOptions.map(r=><option key={r.record_type+r.record_id} value={r.record_id}>{r.record_type} · {r.title.slice(0,70)}</option>)}
-         </select></label>
-        <label className="block text-xs text-stone-400">Record type
-         <select name="targetType" className="mt-1 w-full rounded border border-stone-700 bg-[#101417] p-2 text-stone-200" defaultValue={recordOptions[0]?.record_type??"SOURCE"}>
-           {Array.from(new Set(recordOptions.map(r=>r.record_type))).map(r=><option key={r}>{r}</option>)}
+         <select name="recordKey" required className="mt-1 w-full rounded border border-stone-700 bg-[#101417] p-2 text-stone-200"
+          defaultValue={recordOptions[0]?`${recordOptions[0].record_type}:${recordOptions[0].record_id}`:""}>
+          {recordOptions.map(r=><option key={r.record_type+r.record_id} value={`${r.record_type}:${r.record_id}`}>{r.record_type} · {r.title.slice(0,70)}</option>)}
          </select></label>
        </>}
        <label className="block text-xs text-stone-400">Relationship meaning
@@ -99,7 +95,7 @@ export function FusionCountryWorkspace({projectId,code,notes,links,attachments,r
         {links.map(l=><div key={l.id} className="rounded bg-black/20 p-3 text-xs">
          <div className="text-stone-200">{l.target_type} · {recordByKey[l.target_type+":"+l.target_id]?.title||l.target_id}</div>
          <p className="mt-1 text-amber-300">{pretty(l.relation_type)}</p>{l.rationale&&<p className="mt-1 text-stone-400">{l.rationale}</p>}
-         <form action={unlinkCountryRecord} className="mt-2">{h("unlink")}<input type="hidden" name="linkId" value={l.id}/>
+         <form action={unlinkCountryRecord} className="mt-2">{h()}<input type="hidden" name="linkId" value={l.id}/>
           <ConfirmSubmit label="Remove relationship" message="Remove this country association? The original record will not be deleted."/></form>
         </div>)}
         {links.length===0&&<p className="text-xs text-stone-500">No explicit country relationships yet.</p>}
@@ -111,7 +107,7 @@ export function FusionCountryWorkspace({projectId,code,notes,links,attachments,r
      <h3 className="text-base font-semibold text-stone-100">Files and images <span className="text-xs font-normal text-stone-500">({attachmentCount})</span></h3>
      <p className="mt-1 text-xs text-stone-500">Link private Evidence objects already belonging to this investigation. Removing a link never deletes the original file.</p>
      <form action={attachExistingEvidence} className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-      {h("attach")}
+      {h()}
       <label className="text-xs text-stone-400">Existing evidence file
        <select name="evidenceId" required className="mt-1 w-full rounded border border-stone-700 bg-[#101417] p-2 text-stone-200">
         {evidenceOptions.map(e=><option key={e.id} value={e.id}>{e.original_file_name||e.title}</option>)}
@@ -130,7 +126,7 @@ export function FusionCountryWorkspace({projectId,code,notes,links,attachments,r
        <p className="mt-1 text-xs text-stone-500">{a.country_note_id?"Attached to country note":"Attached to country"} · {evidenceById[a.evidence_id]?.type||"Evidence"}</p>
        {a.description&&<p className="mt-2 text-xs text-stone-400">{a.description}</p>}
        <div className="mt-2"><EvidenceDownload projectId={projectId} id={a.evidence_id}/></div>
-       <form action={detachExistingEvidence} className="mt-2">{h("detach")}<input type="hidden" name="attachmentLinkId" value={a.id}/>
+       <form action={detachExistingEvidence} className="mt-2">{h()}<input type="hidden" name="attachmentLinkId" value={a.id}/>
         <ConfirmSubmit label="Detach" message="Detach this file from the country? The original Evidence file is preserved."/></form>
       </div>)}
      </div>

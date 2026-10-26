@@ -72,6 +72,16 @@ export async function deleteCountryNote(form:FormData){
  refresh(ctx.projectId);
 }
 export async function linkCountryRecord(form:FormData){
+ const recordKey=text(form,"recordKey");
+ if(recordKey) {
+  const sep=recordKey.indexOf(":");
+  if(sep<1) throw Error("Invalid record selection");
+  const repaired=new FormData();
+  for(const [key,value] of form.entries()) if(key!=="recordKey") repaired.append(key,value);
+  repaired.set("targetType",recordKey.slice(0,sep));
+  repaired.set("targetId",recordKey.slice(sep+1));
+  form=repaired;
+ }
  const ctx=await context(form);
  const iso2=countryCodeSchema.parse(text(form,"country"));
  const targetType=z.enum(Object.keys(targetTables) as [keyof typeof targetTables,...(keyof typeof targetTables)[]])
