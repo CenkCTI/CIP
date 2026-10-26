@@ -13,6 +13,7 @@ import {
 } from "@/app/projects/[id]/source-collection-actions";
 import { createClient } from "@/lib/supabase/browser";
 import { sourceTypes } from "@/lib/sources/schema";
+import { setSourceReviewStatus } from "@/app/projects/[id]/fusion/actions";
 
 type Row = Record<string, unknown>;
 const s = (value: unknown) => String(value ?? "");
@@ -504,6 +505,21 @@ export function SourceLibrary({
                     </span>
                   </>
                 ) : null}
+              </div>
+              <div className="space-y-2">
+                <form action={setSourceReviewStatus} className="flex flex-col gap-1 text-xs text-stone-400">
+                  <input type="hidden" name="projectId" value={projectId}/>
+                  <input type="hidden" name="sourceId" value={id}/>
+                  <label htmlFor={`source-review-${id}`} className="sr-only">Manual review state</label>
+                  <select id={`source-review-${id}`} name="reviewStatus" defaultValue={s(source.review_status)||"NOT_REVIEWED"}
+                    className="rounded border border-stone-700 bg-[#101417] px-2 py-1 text-stone-200">
+                    <option value="NOT_REVIEWED">Not reviewed</option>
+                    <option value="IN_PROGRESS">In progress</option>
+                    <option value="NEEDS_REVIEW">Needs review</option>
+                    <option value="REVIEWED">Reviewed</option>
+                  </select>
+                  <button className="text-left text-amber-300 underline" type="submit">Save review</button>
+                </form>
               </div>
               <Link className="citem-button-ghost text-center" href={`/projects/${projectId}/sources/${id}`}>
                 Aç

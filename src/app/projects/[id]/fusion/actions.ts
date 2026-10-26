@@ -141,3 +141,17 @@ export async function detachExistingEvidence(form:FormData){
  if(error||!data) throw Error("Could not remove evidence association");
  refresh(ctx.projectId);
 }
+
+export async function setSourceReviewStatus(form:FormData){
+ const ctx=await context(form);
+ const sourceId=z.string().uuid().parse(text(form,"sourceId"));
+ const reviewStatus=z.enum(["NOT_REVIEWED","IN_PROGRESS","REVIEWED","NEEDS_REVIEW"]).parse(text(form,"reviewStatus"));
+ const {data,error}=await ctx.supabase.from("sources").update({
+  review_status:reviewStatus,
+  reviewed_at:reviewStatus==="REVIEWED"?new Date().toISOString():null,
+  reviewed_by:reviewStatus==="REVIEWED"?ctx.user.id:null
+ }).eq("project_id",ctx.projectId).eq("id",sourceId).select("id").single();
+ if(error||!data)throw Error("Unable to update source review status");
+ revalidatePath(`/projects/${ctx.projectId}/sources`);
+ refresh(ctx.projectId);
+}
