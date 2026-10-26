@@ -116,29 +116,26 @@ export default async function FusionPage({params,searchParams}:{
  const item=(name:string,key:string)=><Link key={key} href={`/projects/${id}/fusion?view=${key}`}
   aria-current={view===key?"page":undefined}
   className={`rounded px-3 py-2 text-sm ${view===key?"bg-[#b9822f]/20 text-amber-300":"text-stone-400 hover:bg-stone-800 hover:text-stone-100"}`}>{name}</Link>;
- let content:React.ReactNode;
+ type ViewData =
+  | {kind:"inventory"; data:Awaited<ReturnType<typeof loadFusionInventory>>; filters:ReturnType<typeof parseInventoryFilters>}
+  | {kind:"graph"}
+  | {kind:"map"; selected:string; counts:Awaited<ReturnType<typeof countryCounts>>}
+  | {kind:"countries"; code:string; data:Awaited<ReturnType<typeof countryData>>}
+  | {kind:"error"};
+ let viewData:ViewData={kind:"error"};
  try{
-  if(view==="graph")content=<section><header className="mb-4"><p className="citem-label">Investigation / Fusion</p>
-   <h1 className="mt-1 text-2xl font-semibold text-stone-100">Relationship Graph</h1>
-   <p className="mt-1 text-xs text-stone-500">Existing CİTEM graph service; source-derived and manual edges remain distinct.</p></header>
-   <KnowledgeGraph projectId={id}/></section>;
-  else if(view==="map"){
-   const selected=await selectedCountry(ctx,sp);
-   content=<FusionWorldMap projectId={id} selectedCountry={selected} counts={await countryCounts(ctx)}/>;
+  if(view==="graph"){
+   viewData={kind:"graph"};
+  }else if(view==="map"){
+   viewData={kind:"map",selected:await selectedCountry(ctx,sp),counts:await countryCounts(ctx)};
   }else if(view==="countries"){
-   const selected=await selectedCountry(ctx,sp);
-   const data=await countryData(ctx,selected,sp);
-   content=<FusionCountryWorkspace projectId={id} code={selected} {...data}/>;
+   const code=await selectedCountry(ctx,sp);
+   viewData={kind:"countries",code,data:await countryData(ctx,code,sp)};
   }else{
    const filters=parseInventoryFilters(sp);
-   const data=await loadFusionInventory(id,filters);
-   content=<FusionInventory projectId={id} filters={filters} {...data}/>;
+   viewData={kind:"inventory",filters,data:await loadFusionInventory(id,filters)};
   }
- }catch{
-  content=<div role="alert" className="rounded border border-red-800/60 bg-[#14191d] p-5 text-sm text-red-300">
-   Fusion Workspace could not load. Check that migrations 069–072 have been applied and the investigation data are accessible.
-  </div>;
- }
+ }catch{viewData={kind:"error"};}
  return <main className="mx-auto max-w-[1600px] space-y-4 px-2 pb-8">
    <div className="flex flex-wrap items-center justify-between gap-2">
     <Link href={`/projects/${id}`} className="text-xs text-stone-500 hover:text-amber-300">← {project.data.name}</Link>
@@ -150,6 +147,16 @@ export default async function FusionPage({params,searchParams}:{
     {item("World Map","map")}
     {item("Country Notes & Attachments","countries")}
    </nav>
-   {content}
+   {viewData.kind==="error"&&<div role="alert" className="rounded border border-red-800/60 bg-[#14191d] p-5 text-sm text-red-300">
+    Fusion Workspace could not load. Check that migrations 069–074 have been applied and the investigation data are accessible.
+   </div>}
+   {viewData.kind==="inventory"&&<FusionInventory projectId={id} filters={viewData.filters} {...viewData.data}/>}
+   {viewData.kind==="graph"&&<section>
+     <header className="mb-4"><p className="citem-label">Investigation / Fusion</p>
+      <h1 className="mt-1 text-2xl font-semibold text-stone-100">Relationship Graph</h1>
+      <p className="mt-1 text-xs text-stone-500">Existing CİTEM graph service; source-derived and manual edges remain distinct.</p>
+     </header><KnowledgeGraph projectId={id}/></section>}
+   {viewData.kind==="map"&&<FusionWorldMap projectId={id} selectedCountry={viewData.selected} counts={viewData.counts}/>}
+   {viewData.kind==="countries"&&<FusionCountryWorkspace projectId={id} code={viewData.code} {...viewData.data}/>}
   </main>;
 }
