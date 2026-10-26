@@ -25,6 +25,8 @@ do $$ begin create role service_role bypassrls; exception when duplicate_object 
 create schema extensions;
 create extension if not exists pgcrypto with schema extensions;
 create schema auth;
+-- Supabase grants authenticated schema usage for auth.uid(); mirror that in the isolated fixture.
+grant usage on schema auth to authenticated;
 create table auth.users (id uuid primary key, raw_user_meta_data jsonb not null default '{}');
 create function auth.uid() returns uuid language sql stable
   as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
