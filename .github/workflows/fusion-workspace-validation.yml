@@ -1,0 +1,33 @@
+name: Fusion Workspace validation
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/lib/fusion/**"
+      - "src/components/fusion/**"
+      - "src/lib/graph/**"
+      - "src/components/graph/**"
+      - "src/app/projects/**"
+      - "src/components/investigations/**"
+      - "supabase/migrations/2026102600*.sql"
+      - "tests/fusion-*.test.*"
+      - ".github/workflows/fusion-workspace-validation.yml"
+  push:
+    branches: [feat/citem-investigation-fusion-workspace]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
