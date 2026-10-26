@@ -7,7 +7,6 @@ alter type public.graph_entity_type add value if not exists 'ANNOTATION';
 alter type public.graph_entity_type add value if not exists 'SOURCE_CLAIM';
 alter type public.graph_entity_type add value if not exists 'ATTRIBUTION_CLAIM';
 alter type public.graph_entity_type add value if not exists 'RESEARCH_NOTE';
-alter type public.graph_entity_type add value if not exists 'TIMELINE_EVENT';
 alter type public.graph_entity_type add value if not exists 'COUNTRY_NOTE';
 create or replace function public.graph_entity_exists(p_project_id uuid,p_type public.graph_entity_type,p_id uuid)
 returns boolean language plpgsql stable security definer set search_path = '' as $$
@@ -30,7 +29,6 @@ begin
    when 'SOURCE_CLAIM' then return exists(select 1 from public.source_claims where project_id=p_project_id and id=p_id);
    when 'ATTRIBUTION_CLAIM' then return exists(select 1 from public.source_attribution_claims where project_id=p_project_id and id=p_id);
    when 'RESEARCH_NOTE' then return exists(select 1 from public.research_notes where project_id=p_project_id and id=p_id);
-   when 'TIMELINE_EVENT' then return exists(select 1 from public.timeline_events where project_id=p_project_id and id=p_id);
    when 'COUNTRY_NOTE' then return exists(select 1 from public.investigation_country_notes where project_id=p_project_id and id=p_id);
    else return false;
   end case;
@@ -53,7 +51,5 @@ create trigger fusion_graph_cleanup_source_attribution_claims before delete on p
 create trigger fusion_graph_positions_source_attribution_claims before delete on public.source_attribution_claims for each row execute function public.cleanup_graph_node_positions('ATTRIBUTION_CLAIM');
 create trigger fusion_graph_cleanup_research_notes before delete on public.research_notes for each row execute function public.cleanup_entity_relationships('RESEARCH_NOTE');
 create trigger fusion_graph_positions_research_notes before delete on public.research_notes for each row execute function public.cleanup_graph_node_positions('RESEARCH_NOTE');
-create trigger fusion_graph_cleanup_timeline_events before delete on public.timeline_events for each row execute function public.cleanup_entity_relationships('TIMELINE_EVENT');
-create trigger fusion_graph_positions_timeline_events before delete on public.timeline_events for each row execute function public.cleanup_graph_node_positions('TIMELINE_EVENT');
 create trigger fusion_graph_cleanup_investigation_country_notes before delete on public.investigation_country_notes for each row execute function public.cleanup_entity_relationships('COUNTRY_NOTE');
 create trigger fusion_graph_positions_investigation_country_notes before delete on public.investigation_country_notes for each row execute function public.cleanup_graph_node_positions('COUNTRY_NOTE');

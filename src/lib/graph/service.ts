@@ -13,7 +13,7 @@ import {
 
 type Row = Record<string, unknown>;
 const NODE_LIMIT = 500;
-const graphEntityTypesForCountry=new Set<GraphEntityType>(["SOURCE","SOURCE_ASSET","SOURCE_NOTE","ANNOTATION","SOURCE_CLAIM","ATTRIBUTION_CLAIM","RESEARCH_NOTE","TIMELINE_EVENT","COUNTRY_NOTE","ACTOR","CAMPAIGN","INDICATOR","MALWARE","CVE","MITRE","EVIDENCE"]);
+const graphEntityTypesForCountry=new Set<GraphEntityType>(["SOURCE","SOURCE_ASSET","SOURCE_NOTE","ANNOTATION","SOURCE_CLAIM","ATTRIBUTION_CLAIM","RESEARCH_NOTE","COUNTRY_NOTE","ACTOR","CAMPAIGN","INDICATOR","MALWARE","CVE","MITRE","EVIDENCE"]);
 const EDGE_LIMIT = 1500;
 const s = (v: unknown) => String(v ?? "");
 const count = (v: unknown) => (Array.isArray(v) ? v.length : 0);
@@ -42,7 +42,6 @@ const defs: {
   { type:"SOURCE_CLAIM", table:"source_claims", select:"id,claim_summary,claim_kind,updated_at", order:"updated_at", title:(r)=>s(r.claim_summary).slice(0,110), sub:(r)=>s(r.claim_kind), url:(p,id)=>`/projects/${p}/source-claims/${id}`, meta:["claim_kind","updated_at"] },
   { type:"ATTRIBUTION_CLAIM", table:"source_attribution_claims", select:"id,claim_summary,claimed_actor_text,updated_at", order:"updated_at", title:(r)=>s(r.claim_summary).slice(0,110), sub:(r)=>s(r.claimed_actor_text), url:(p)=>`/projects/${p}/source-claims`, meta:["claimed_actor_text","updated_at"] },
   { type:"RESEARCH_NOTE", table:"research_notes", select:"id,title,updated_at", order:"title", title:(r)=>s(r.title), sub:()=>undefined, url:(p,id)=>`/projects/${p}/notes?note=${id}`, meta:["updated_at"] },
-  { type:"TIMELINE_EVENT", table:"timeline_events", select:"id,event_name,event_date,updated_at", order:"event_date", title:(r)=>s(r.event_name), sub:(r)=>s(r.event_date), url:(p,id)=>`/projects/${p}/timeline/${id}`, meta:["event_date"] },
   { type:"COUNTRY_NOTE", table:"investigation_country_notes", select:"id,title,updated_at,investigation_country_id", order:"title", title:(r)=>s(r.title), sub:()=> "Analyst country note", url:(p)=>`/projects/${p}/fusion?view=countries`, meta:["investigation_country_id","updated_at"] },
 
   {

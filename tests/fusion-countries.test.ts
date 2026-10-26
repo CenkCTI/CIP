@@ -25,7 +25,7 @@ describe("Fusion world countries and graph contract",()=>{
   for(const legacy of ["ACTOR","CAMPAIGN","INDICATOR","MALWARE","CVE","MITRE","EVIDENCE","REPORT","INFRASTRUCTURE_CLUSTER"]){
     expect(graphEntityTypes).toContain(legacy);
   }
-  for(const fresh of ["COUNTRY","SOURCE","SOURCE_ASSET","SOURCE_NOTE","ANNOTATION","SOURCE_CLAIM","ATTRIBUTION_CLAIM","RESEARCH_NOTE","TIMELINE_EVENT","COUNTRY_NOTE"]){
+  for(const fresh of ["COUNTRY","SOURCE","SOURCE_ASSET","SOURCE_NOTE","ANNOTATION","SOURCE_CLAIM","ATTRIBUTION_CLAIM","RESEARCH_NOTE","COUNTRY_NOTE"]){
     expect(graphEntityTypes).toContain(fresh);
     expect(entityTableMap[fresh as keyof typeof entityTableMap]).toBeTruthy();
     expect(graphPrefix[fresh as keyof typeof graphPrefix]).toBeTruthy();
