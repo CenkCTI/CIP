@@ -20,7 +20,7 @@ const targetTables={
 } as const;
 async function context(form:FormData){
  const projectId=projectIdSchema.parse(text(form,"projectId"));
- return {projectId,...await requireOwnedProject(projectId)};
+ return requireOwnedProject(projectId);
 }
 async function ensureCountry(ctx:Awaited<ReturnType<typeof context>>, iso2:string){
  countryCodeSchema.parse(iso2);
