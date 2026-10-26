@@ -31,3 +31,21 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+  postgres-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL 16
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSLo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo $VERSION_CODENAME)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-16 postgresql-client-16
+          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
+          sudo pg_ctlcluster 16 main start || true
+          sudo -u postgres createuser --superuser runner
+      - name: Isolated full migrations and project-RLS acceptance
+        run: bash scripts/test-fusion-workspace-migrations.sh
