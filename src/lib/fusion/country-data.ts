@@ -33,9 +33,10 @@ export async function loadCountryPopup(projectId:string,params:URLSearchParams) 
  if(sourcesResult?.error)throw new Error("Source association count failed");
  const sourceCount=sourcesResult?.count??0;
  let notes:{id:string;title:string;body:string;created_at:string;updated_at:string;created_by:string}[]=[];
- let links:{id:string;target_type:string;target_id:string;relation_type:string;rationale:string|null;created_at:string;title:string;summary:string;source_ids:string[];gap_ids:string[];requirement_ids:string[]}[]=[];
+ let links:{id:string;target_type:string;target_id:string;relation_type:string;rationale:string|null;created_at:string;title:string;summary:string;source_ids:string[];gap_ids:string[];requirement_ids:string[];metadata:Record<string,unknown>;record_created_at:string}[]=[];
  let attachments:{id:string;evidence_id:string;country_note_id:string|null;description:string|null}[]=[];
  let notesTotal=0,linksTotal=0,filesTotal=0;
+ let typeCounts:{target_type:string;total:number}[]=[];let overviewRecords:typeof links=[];
  let details:Record<string,FusionInventoryItem>={};
  let evidence:{id:string;title:string;type:string;original_file_name:string|null;file_size:number|null}[]=[];
  if(countryId){
@@ -43,19 +44,25 @@ export async function loadCountryPopup(projectId:string,params:URLSearchParams) 
   // security_invoker view joins the canonical record; title filters and pagination
   // operate across the whole country dataset, not a preloaded 100/500-record sample.
   let l=supabase.from("fusion_country_link_items")
-    .select("id,target_type,target_id,relation_type,rationale,created_at,title,summary,source_ids,gap_ids,requirement_ids",{count:"exact"})
+    .select("id,target_type,target_id,relation_type,rationale,created_at,title,summary,source_ids,gap_ids,requirement_ids,metadata,record_created_at",{count:"exact"})
     .eq("project_id",projectId).eq("country_iso2",code);
   if(types.includes(kind as CountryType))l=l.eq("target_type",kind);
   if(relationTypes.includes(relation as typeof relationTypes[number]))l=l.eq("relation_type",relation);
   if(term)l=l.ilike("title",`%${term}%`);
-  const [lr,nr]=await Promise.all([
+  const [lr,nr,countsByType,preview]=await Promise.all([
     l.order(sort==="title"?"title":"created_at",{ascending:sort==="title"}).order("id",{ascending:true})
      .range((linkPage-1)*limit,linkPage*limit-1),
     supabase.from("investigation_country_notes").select("id,title,body,created_at,updated_at,created_by",{count:"exact"})
       .eq("project_id",projectId).eq("investigation_country_id",countryId)
-      .order("updated_at",{ascending:false}).range((notePage-1)*limit,notePage*limit-1)
+      .order("updated_at",{ascending:false}).range((notePage-1)*limit,notePage*limit-1),
+    supabase.from("fusion_country_link_type_counts").select("target_type,total").eq("project_id",projectId).eq("country_iso2",code),
+    supabase.from("fusion_country_link_items")
+      .select("id,target_type,target_id,relation_type,rationale,created_at,title,summary,source_ids,gap_ids,requirement_ids,metadata,record_created_at")
+      .eq("project_id",projectId).eq("country_iso2",code).order("created_at",{ascending:false}).limit(6)
   ]);
   links=need(lr,"Country associations failed")??[];linksTotal=lr.count??0;
+  typeCounts=need(countsByType,"Country relation totals failed")??[];
+  overviewRecords=need(preview,"Country preview failed")??[];
   notes=need(nr,"Country notes failed")??[];notesTotal=nr.count??0;
   const recordIds=[...new Set(links.map(l=>l.target_id))];
   if(recordIds.length){
@@ -96,7 +103,7 @@ export async function loadCountryPopup(projectId:string,params:URLSearchParams) 
   if(response.error)throw new Error("Cyber Activity query failed");
   return {key:g.key,total:response.count??0,items:response.data??[]};
  }));
- return {country:code,counts,sourceCount,cyber,links,linksTotal,notes,notesTotal,attachments,filesTotal,
+ return {country:code,counts,sourceCount,cyber,typeCounts,overviewRecords,links,linksTotal,notes,notesTotal,attachments,filesTotal,
   details,evidence,brief:br?.data??null,
   pages:{links:linkPage,notes:notePage,files:filePage},limit};
 }

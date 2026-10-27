@@ -48,7 +48,7 @@ export function CountryIntelligencePopup({projectId,code,onClose,onCountry,prese
  const [tab,setTab]=useState<Tab>("overview"),[dirty,setDirty]=useState(false),[maximized,setMaximized]=useState(false);
  const [linksPage,setLinksPage]=useState(1),[notesPage,setNotesPage]=useState(1),[filesPage,setFilesPage]=useState(1);
  const [query,setQuery]=useState(""),[filterType,setFilterType]=useState(""),[relation,setRelation]=useState("");
- const [sort,setSort]=useState("date"),[editingLink,setEditingLink]=useState<string|null>(null),[showLink,setShowLink]=useState(false);
+ const [sort,setSort]=useState("date"),[editingLink,setEditingLink]=useState<string|null>(null),[showLink,setShowLink]=useState(Boolean(preset));
  const [lookup,setLookup]=useState<{record_type:string;record_id:string;title:string}[]>([]);
  const [lookupCount,setLookupCount]=useState(0),[lookupPage,setLookupPage]=useState(1),[lookupQ,setLookupQ]=useState(""),[lookupType,setLookupType]=useState("SOURCE");
  const [chosen,setChosen]=useState(""),[linkRelation,setLinkRelation]=useState("GENERAL_RELEVANCE"),[rationale,setRationale]=useState("");
@@ -112,9 +112,17 @@ export function CountryIntelligencePopup({projectId,code,onClose,onCountry,prese
   e.preventDefault();const [type,id]=(chosen|| (preset?`${preset.type}:${preset.id}`:"")).split(":");
   if(!supported.includes(type)||!id){setError("Select an Investigation record");return;}
   const f=formBase();f.set("targetType",type);f.set("targetId",id);f.set("relationType",linkRelation);f.set("rationale",rationale);
-  await mutate(linkCountryRecord,f);setShowLink(false);setChosen("");setRationale("");
+  await mutate(linkCountryRecord,f);setShowLink(false);setChosen("");setRationale("");setDirty(false);
  };
  const records=data?.links??[];
+ const relationshipGroups:[string,string[]][]=[
+  ["Sources & Annotations",["SOURCE","SOURCE_ASSET","SOURCE_NOTE","ANNOTATION"]],
+  ["Source Claims",["SOURCE_CLAIM","ATTRIBUTION_CLAIM"]],
+  ["Threat Actors & Campaigns",["ACTOR","CAMPAIGN"]],
+  ["Technical Entities",["INDICATOR","MALWARE","CVE","MITRE"]],
+  ["Timeline Events",["TIMELINE_EVENT"]],
+  ["Notes & Evidence",["RESEARCH_NOTE","EVIDENCE","COUNTRY_NOTE"]]
+ ];
  const recordDetail=(type:string,id:string)=>data?.details[`${type}:${id}`];
  const itemUrl=(type:string,id:string)=>{
    const item=recordDetail(type,id);
@@ -130,7 +138,7 @@ export function CountryIntelligencePopup({projectId,code,onClose,onCountry,prese
      <p className="line-clamp-2 text-xs text-stone-400">{rec?.summary||l.summary||"No additional description"}</p></div>
     <span className="text-xs text-stone-500">{l.relation_type.replaceAll("_"," ")}</span></div>
    {l.rationale&&<p className="mt-2 break-words text-xs text-stone-400">{l.rationale}</p>}
-   {rec&&rec.source_ids.length>0&&<p className="mt-1 text-xs text-stone-500">{rec.source_ids.length} source association(s) · reported material is not verified attribution</p>}
+   {rec&&rec.source_ids.length>0&&<p className="mt-1 text-xs text-stone-500">{rec?.source_ids?.length??l.source_ids?.length??0} source association(s) · reported material is not verified attribution</p>}
    <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
     <Link className="text-amber-300 underline" href={itemUrl(l.target_type,l.target_id)}>Open record</Link>
     <Link className="text-amber-300 underline" href={`/projects/${projectId}/fusion?view=inventory&country=${code}&type=${l.target_type}`}>Inventory</Link>
@@ -141,7 +149,7 @@ export function CountryIntelligencePopup({projectId,code,onClose,onCountry,prese
      const f=formBase();f.set("linkId",l.id);await mutate(unlinkCountryRecord,f);
     }}>Unlink</button></div>
    {editingLink===l.id&&<form className="mt-3 space-y-2 border-t border-stone-800 pt-3" onSubmit={async e=>{
-    e.preventDefault();const f=formBase();f.set("linkId",l.id);const fields=new FormData(e.currentTarget);f.set("relationType",String(fields.get("relationType")));f.set("rationale",String(fields.get("rationale")??""));await mutate(editCountryRelationship,f);setEditingLink(null);
+    e.preventDefault();const f=formBase();f.set("linkId",l.id);const fields=new FormData(e.currentTarget);f.set("relationType",String(fields.get("relationType")));f.set("rationale",String(fields.get("rationale")??""));await mutate(editCountryRelationship,f);setEditingLink(null);setDirty(false);
    }}>
     <label className="block text-xs">Relationship<select name="relationType" className={field} defaultValue={l.relation_type}>{relationTypes.map(r=><option key={r} value={r}>{r.replaceAll("_"," ")}</option>)}</select></label>
     <label className="block text-xs">Rationale<textarea name="rationale" maxLength={4000} defaultValue={l.rationale??""} onChange={()=>setDirty(true)} className={field}/></label>
@@ -157,10 +165,13 @@ export function CountryIntelligencePopup({projectId,code,onClose,onCountry,prese
     <p className="text-xs uppercase text-amber-300">{l.target_type.replaceAll("_"," ")} · {l.relation_type.replaceAll("_"," ")}</p>
     <p className="mt-1 break-words font-medium text-stone-200">{l.title}</p>
     <p className="mt-1 line-clamp-2 break-words text-xs text-stone-400">{l.summary}</p>
+    {l.target_type==="TIMELINE_EVENT"&&typeof (l.metadata as Record<string,unknown>)?.eventDate==="string"&&
+      <p className="mt-1 text-xs text-stone-400">Event date: {String((l.metadata as Record<string,unknown>).eventDate)}</p>}
     {l.rationale&&<p className="mt-2 break-words text-xs text-stone-400">Analyst rationale: {l.rationale}</p>}
     <p className="mt-1 text-xs text-stone-500">{l.source_ids.length} source association(s), not verified attribution</p>
     <div className="mt-2 flex flex-wrap gap-4 text-xs">
       <Link className="text-amber-300 underline" href={itemUrl(l.target_type,l.target_id)}>Open source record</Link>
+      {l.source_ids[0]&&<Link className="text-amber-300 underline" href={`/projects/${projectId}/sources/${l.source_ids[0]}`}>Original source</Link>}
       <Link className="text-amber-300 underline" href={`/projects/${projectId}/fusion?view=inventory&country=${code}&type=${l.target_type}`}>Inventory</Link>
       <button className="text-amber-300 underline" onClick={()=>{setFilterType(l.target_type);setLinksPage(1);setTab("records");}}>Manage relations</button>
     </div>
@@ -197,13 +208,13 @@ export function CountryIntelligencePopup({projectId,code,onClose,onCountry,prese
        ].map(([label,value])=><div key={label} className="rounded border border-stone-800 bg-[#14191d] p-3">
         <p className="text-xs text-stone-400">{label}</p><p className="mt-1 text-xl text-amber-200">{value}</p></div>)}</div>
        <CountryBrief key={code} projectId={projectId} code={code} data={data} mutate={mutate} dirty={setDirty}/>
-       {records.some(r=>r.gap_ids?.length||r.requirement_ids?.length)&&<section className="rounded border border-stone-800 bg-[#14191d] p-3 text-xs text-stone-400">
+       {data.overviewRecords.some(r=>r.gap_ids?.length||r.requirement_ids?.length)&&<section className="rounded border border-stone-800 bg-[#14191d] p-3 text-xs text-stone-400">
         <h3 className="mb-2 font-medium text-[#e8e1d6]">Information Gaps & Collection Requirements</h3>
-        {records.flatMap(r=>r.gap_ids??[]).length} gap association(s) and {records.flatMap(r=>r.requirement_ids??[]).length} requirement association(s) among the displayed linked records. Associations do not prove collection requirements have been satisfied.
+        {data.overviewRecords.flatMap(r=>r.gap_ids??[]).length} gap association(s) and {data.overviewRecords.flatMap(r=>r.requirement_ids??[]).length} requirement association(s) among the displayed linked records. Associations do not prove collection requirements have been satisfied.
         <Link className="ml-2 text-amber-300 underline" href={`/projects/${projectId}/fusion?view=inventory&country=${code}`}>Review in Inventory</Link>
        </section>}
        <section className="space-y-2"><h3 className="text-sm font-semibold text-[#e8e1d6]">Recently linked material</h3>
-        {records.length?records.slice(0,5).map(card):<p className="text-sm text-stone-500">No records linked to this country. Link a record to begin.</p>}
+        {data.overviewRecords.length?data.overviewRecords.map(card):<p className="text-sm text-stone-500">No records linked to this country. Link a record to begin.</p>}
         <button className={btn} onClick={()=>setTab("records")}>Manage linked records</button>
        </section>
        <p className="text-xs text-stone-500">Geographic links are analyst annotations. They do not independently establish targeting, origin or attribution.</p>
@@ -230,7 +241,14 @@ export function CountryIntelligencePopup({projectId,code,onClose,onCountry,prese
         <select aria-label="Filter relationship" className={field} value={relation} onChange={e=>{setRelation(e.target.value);setLinksPage(1);}}><option value="">All relationships</option>{relationTypes.map(t=><option key={t}>{t}</option>)}</select>
        </div>
        <div className="flex items-center gap-2 text-xs text-stone-500">Sort<select className="rounded bg-[#181e22] p-1 text-stone-200" value={sort} onChange={e=>setSort(e.target.value)}><option value="date">Date</option><option value="title">Type / title</option></select></div>
-       {records.length?records.map(card):<p className="text-sm text-stone-500">No country relationships match this filter.</p>}
+       {records.length?relationshipGroups.map(([name,kinds])=>{
+        const section=records.filter(l=>kinds.includes(l.target_type));
+        const total=data.typeCounts.filter(t=>kinds.includes(t.target_type)).reduce((sum,t)=>sum+t.total,0);
+        return section.length?<details open key={name} className="rounded border border-stone-800 bg-[#14191d] p-3">
+         <summary className="cursor-pointer text-sm font-medium text-[#e8e1d6]">{name} · {total} total associations</summary>
+         <div className="mt-3 space-y-2">{section.map(card)}</div>
+        </details>:null;
+       }):<p className="text-sm text-stone-500">No country relationships match this filter.</p>}
        <Pager page={linksPage} total={data.linksTotal} limit={data.limit} onChange={setLinksPage}/>
       </section>}
      {!loading&&data&&tab==="notes"&&<CountryNotesFiles key={code} projectId={projectId} code={code} data={data} mutate={mutate} dirty={setDirty}

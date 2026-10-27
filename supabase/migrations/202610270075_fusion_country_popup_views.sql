@@ -4,13 +4,13 @@ create view public.fusion_country_link_items with (security_invoker=true) as
 select l.project_id, c.country_iso2, l.id, l.target_type, l.target_id,
        l.relation_type, l.rationale, l.created_at, l.updated_at,
        b.title, b.summary, b.origin_kind, b.source_ids, b.annotation_ids,
-       b.gap_ids, b.requirement_ids, b.record_created_at
+       b.gap_ids, b.requirement_ids, b.metadata, b.record_created_at
 from public.investigation_country_links l
 join public.investigation_countries c on c.project_id=l.project_id
  and c.id=l.investigation_country_id
 join lateral (
  select i.title, i.summary, i.origin_kind, i.source_ids, i.annotation_ids,
-        i.gap_ids, i.requirement_ids, i.created_at as record_created_at
+        i.gap_ids, i.requirement_ids, i.metadata, i.created_at as record_created_at
  from public.fusion_inventory_items i
  where i.project_id=l.project_id and i.record_id=l.target_id
    and i.record_type=l.target_type
@@ -39,3 +39,12 @@ create index if not exists investigation_country_links_search_idx
  on public.investigation_country_links(project_id,investigation_country_id,target_type,relation_type,created_at desc);
 create index if not exists investigation_country_notes_country_title_idx
  on public.investigation_country_notes(project_id,investigation_country_id,title);
+
+-- Exact per-record-type totals for collapsible country relation groups.
+create view public.fusion_country_link_type_counts with (security_invoker=true) as
+select project_id,country_iso2,target_type,count(*)::integer as total
+from public.fusion_country_link_items
+group by project_id,country_iso2,target_type;
+grant select on public.fusion_country_link_type_counts to authenticated;
+comment on view public.fusion_country_link_type_counts is
+ 'Owner-RLS-respecting country relation type totals, never threat or incident scores.';
