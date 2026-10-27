@@ -85,7 +85,7 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
   const dx=e.clientX-start.x,dy=e.clientY-start.y;
   if(!start.dragged&&Math.hypot(dx,dy)>6){
    start.dragged=true;suppressClick.current=true;
-   if(!e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.setPointerCapture(e.pointerId);
+   if(e.currentTarget.setPointerCapture && !e.currentTarget.hasPointerCapture?.(e.pointerId))e.currentTarget.setPointerCapture(e.pointerId);
   }
   if(!start.dragged)return;
   const bounds=e.currentTarget.getBoundingClientRect();
@@ -100,7 +100,7 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
   const dragged=gesture.current?.dragged??false;
   suppressClick.current=dragged;
   gesture.current=null;
-  if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
+  if(e.currentTarget.hasPointerCapture?.(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
  };
  return <section className="fusion-map-workspace" aria-label="Fusion World Map">
   <header className="flex flex-wrap items-end justify-between gap-3 px-4 pb-3 pt-3 sm:px-6">
@@ -122,7 +122,7 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
     className="absolute inset-0 h-full w-full touch-none select-none cursor-grab active:cursor-grabbing"
     role="img" aria-label="Interactive map of the world with selectable country boundaries and labels"
     onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
-    onPointerCancel={e=>{gesture.current=null;if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}>
+    onPointerCancel={e=>{gesture.current=null;if(e.currentTarget.hasPointerCapture?.(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}>
     <defs>
      <linearGradient id="fusion-map-land" x1="0" x2="0.95" y1="0" y2="1">
       <stop offset="0" stopColor="#3e535a"/><stop offset="1" stopColor="#293b43"/>
