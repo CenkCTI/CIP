@@ -1439,17 +1439,17 @@ html[data-citem-sidebar="collapsed"] .citem-sidebar {
 }
 .fusion-map-workspace {
   width: 100%;
-  background: linear-gradient(180deg, #0b1215, #0b0f12);
+  background: linear-gradient(180deg, #111416, #0b0e11);
 }
 .citem-worldmap-stage {
   height: min(78dvh, 920px);
   min-height: 520px;
   background:
-    radial-gradient(ellipse at 52% 51%, rgba(36, 67, 70, .38), transparent 74%),
-    radial-gradient(ellipse at 82% 25%, rgba(177, 125, 44, .05), transparent 56%),
-    repeating-linear-gradient(0deg, transparent 0, transparent 39px, rgba(70, 124, 121, .045) 40px),
-    repeating-linear-gradient(90deg, transparent 0, transparent 39px, rgba(70, 124, 121, .045) 40px),
-    #081216;
+    radial-gradient(ellipse at 52% 51%, rgba(74, 67, 54, .3), transparent 74%),
+    radial-gradient(ellipse at 82% 25%, rgba(185, 130, 47, .07), transparent 56%),
+    repeating-linear-gradient(0deg, transparent 0, transparent 39px, rgba(181, 145, 83, .035) 40px),
+    repeating-linear-gradient(90deg, transparent 0, transparent 39px, rgba(181, 145, 83, .035) 40px),
+    #0b0e11;
 }
 .citem-worldmap-stage::after {
   content: "";
@@ -1458,8 +1458,8 @@ html[data-citem-sidebar="collapsed"] .citem-sidebar {
   z-index: 1;
   pointer-events: none;
   background:
-    linear-gradient(180deg, rgba(8, 18, 22, .25), transparent 12%, transparent 84%, rgba(8, 18, 22, .32)),
-    repeating-linear-gradient(180deg, rgba(162, 211, 200, .018) 0px, rgba(162, 211, 200, .018) 1px, transparent 1px, transparent 5px);
+    linear-gradient(180deg, rgba(11, 14, 17, .23), transparent 12%, transparent 84%, rgba(11, 14, 17, .34)),
+    repeating-linear-gradient(180deg, rgba(199, 167, 113, .013) 0px, rgba(199, 167, 113, .013) 1px, transparent 1px, transparent 5px);
 }
 .citem-worldmap-hud-corner {
   position: absolute;
@@ -1476,24 +1476,24 @@ html[data-citem-sidebar="collapsed"] .citem-sidebar {
 .fusion-map-control {
   min-width: 37px;
   height: 36px;
-  border: 1px solid rgba(114, 164, 155, .4);
+  border: 1px solid rgba(185, 148, 92, .32);
   border-radius: 3px;
-  background: rgba(7, 20, 24, .88);
-  color: #d5dcd8;
+  background: rgba(17, 20, 22, .91);
+  color: #e0d7c8;
   font-size: .9rem;
   backdrop-filter: blur(10px);
 }
 .fusion-map-control:hover,.fusion-map-control:focus-visible {
   border-color: #d4a958;
-  background: rgba(122, 90, 43, .26);
+  background: rgba(140, 99, 42, .22);
   color: #f5d49b;
 }
 .fusion-map-search {
-  border: 1px solid rgba(91, 134, 127, .45);
+  border: 1px solid rgba(170, 134, 77, .4);
   border-radius: 4px;
   padding: 12px;
-  background: rgba(7, 20, 24, .88);
-  box-shadow: 0 12px 38px rgba(0,0,0,.3), inset 0 1px rgba(175,207,196,.05);
+  background: rgba(17, 20, 22, .91);
+  box-shadow: 0 12px 38px rgba(0,0,0,.3), inset 0 1px rgba(213,174,102,.045);
   backdrop-filter: blur(14px);
 }
 .fusion-map-country {
@@ -1502,15 +1502,27 @@ html[data-citem-sidebar="collapsed"] .citem-sidebar {
   outline: none;
 }
 .fusion-map-country:hover,.fusion-map-country:focus-visible {
-  stroke: #e8bb73;
-  filter: drop-shadow(0 0 3px rgba(226,183,102,.8));
+  stroke: #e7bd76;
+  filter: drop-shadow(0 0 3px rgba(217,166,74,.65));
 }
 .fusion-map-country.is-selected {
-  filter: drop-shadow(0 0 4px rgba(226,183,102,.46));
+  filter: drop-shadow(0 0 4px rgba(217,166,74,.42));
 }
 .fusion-map-labels {
   user-select: none;
-  text-shadow: 0 1px 2px #061014;
+  text-shadow: 0 1px 2px #0d0f11;
+}
+/* The map's country typography follows CİTEM's warm, technical display system.
+   Use installed DIN-like faces when available and Inter/system sans otherwise;
+   no third-party font download or application-wide font override. */
+.fusion-map-country-name {
+  font-family: Bahnschrift, "DIN Alternate", "Arial Narrow", Inter, ui-sans-serif, system-ui, sans-serif;
+  font-weight: 650;
+  font-stretch: condensed;
+  text-transform: uppercase;
+  font-kerning: normal;
+  text-rendering: geometricPrecision;
+  pointer-events: none;
 }
 @media(max-width:640px){
   .citem-worldmap-stage {height: min(75dvh, 760px);min-height: 410px;}

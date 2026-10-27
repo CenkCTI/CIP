@@ -106,10 +106,10 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
   <header className="flex flex-wrap items-end justify-between gap-3 px-4 pb-3 pt-3 sm:px-6">
    <div>
     <p className="citem-label">FUSION / GEOSPATIAL WORKSPACE</p>
-    <h1 className="mt-1 text-2xl font-semibold tracking-tight text-[#e8e1d6]">World Map <span className="ml-2 align-middle font-mono text-[10px] font-normal tracking-[.18em] text-[#91b4b2]">GLOBAL VIEW</span></h1>
+    <h1 className="mt-1 text-2xl font-semibold tracking-tight text-[#e8e1d6]">World Map <span className="ml-2 align-middle font-mono text-[10px] font-normal tracking-[.18em] text-[#c9963e]">GLOBAL VIEW</span></h1>
     <p className="mt-1 text-xs text-stone-500">Select a country to open its Intelligence Brief · Analyst-linked records only</p>
    </div>
-   <span className="font-mono text-[10px] tracking-[.2em] text-[#81918f]">COUNTRY INTELLIGENCE / 249 ISO ENTRIES</span>
+   <span className="font-mono text-[10px] tracking-[.2em] text-[#958978]">COUNTRY INTELLIGENCE / 249 ISO ENTRIES</span>
   </header>
   <div className="citem-worldmap-stage relative isolate w-full overflow-hidden"
     aria-label="Interactive worldwide country intelligence map">
@@ -125,17 +125,17 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
     onPointerCancel={e=>{gesture.current=null;if(e.currentTarget.hasPointerCapture?.(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}>
     <defs>
      <linearGradient id="fusion-map-land" x1="0" x2="0.95" y1="0" y2="1">
-      <stop offset="0" stopColor="#3e535a"/><stop offset="1" stopColor="#293b43"/>
+      <stop offset="0" stopColor="#404044"/><stop offset="1" stopColor="#282a2c"/>
      </linearGradient>
      <linearGradient id="fusion-map-linked" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stopColor="#59736b"/><stop offset="1" stopColor="#344d4b"/>
+      <stop offset="0" stopColor="#66563e"/><stop offset="1" stopColor="#483d2f"/>
      </linearGradient>
      <linearGradient id="fusion-map-selected" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stopColor="#e2b766"/><stop offset="1" stopColor="#a47030"/>
+      <stop offset="0" stopColor="#d7a84d"/><stop offset="1" stopColor="#90602a"/>
      </linearGradient>
     </defs>
     <rect x="0" y="0" width={W} height={H} fill="transparent"/>
-    <g aria-hidden="true" pointerEvents="none" stroke="#5c9694" strokeOpacity=".13" strokeWidth={.55/zoom}>
+    <g aria-hidden="true" pointerEvents="none" stroke="#b58c4c" strokeOpacity=".13" strokeWidth={.55/zoom}>
      {Array.from({length:11},(_,i)=><line key={`lon-${i}`} x1={i*W/10} y1="0" x2={i*W/10} y2={H}/>)}
      {Array.from({length:7},(_,i)=><line key={`lat-${i}`} x1="0" y1={i*H/6} x2={W} y2={i*H/6}/>)}
     </g>
@@ -148,7 +148,7 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
       return <path key={f.id} d={f.path}
         className={`fusion-map-country ${chosen?"is-selected":linked?"has-intelligence":""}`}
         fill={chosen?"url(#fusion-map-selected)":linked?"url(#fusion-map-linked)":"url(#fusion-map-land)"}
-        stroke={chosen?"#f5c878":linked?"#638f88":"#111c21"}
+        stroke={chosen?"#e8bf77":linked?"#8c714b":"#151719"}
         strokeWidth={(chosen?1.4:0.78)/zoom}
         role={code?"button":undefined} tabIndex={code?0:undefined}
         aria-label={code?`${f.properties.name}: ${count} linked materials`:f.properties.name}
@@ -163,13 +163,13 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
     <g aria-hidden="true" pointerEvents="none" className="fusion-map-labels">
      {displayedLabels.map(label=><text key={label.code}
        x={label.x} y={label.y} textAnchor="middle" dominantBaseline="middle"
-       fontSize={(label.area>1000?11.5:9)/zoom} letterSpacing={.45/zoom}
-       stroke="#0b151a" strokeWidth={2.8/zoom} paintOrder="stroke"
-       fill={popupCountry===label.code?"#ffe5a8":linkedCodes.has(label.code)?"#e4d6ad":"#bdcbcf"}
-       className="font-mono font-medium">{label.label}</text>)}
+       fontSize={(label.area>1000?11.3:9.4)/zoom} letterSpacing={.75/zoom}
+       stroke="#111314" strokeWidth={3/zoom} paintOrder="stroke"
+       fill={popupCountry===label.code?"#ffe2a3":linkedCodes.has(label.code)?"#ebd3a6":"#bdb6aa"}
+       className="fusion-map-country-name">{label.label}</text>)}
     </g>
    </svg>
-   <div className="pointer-events-none absolute left-5 top-5 z-10 hidden font-mono text-[10px] tracking-[.15em] text-[#7da6a4] sm:block" aria-hidden="true">
+   <div className="pointer-events-none absolute left-5 top-5 z-10 hidden font-mono text-[10px] tracking-[.15em] text-[#bda579] sm:block" aria-hidden="true">
     <span className="block opacity-70">BAYKUSH / CİTEM</span>
     <span className="block opacity-50">GEOINT · WORLD PROJECTION</span>
    </div>
@@ -179,28 +179,28 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
     <button type="button" onClick={()=>{setZoom(1);setCenter([W/2,H/2]);}} className="fusion-map-control px-3">Reset</button>
    </div>
    <aside className="fusion-map-search absolute right-3 top-3 z-10 w-[min(320px,calc(100%-1.5rem))] sm:right-5 sm:top-5" aria-label="Country quick search">
-    <label className="block text-[10px] font-semibold uppercase tracking-[.17em] text-[#aabfbd]">Find country / territory
-     <input aria-label="Find a country or territory" className="mt-2 w-full rounded border border-[#416261]/65 bg-[#0b171b]/90 px-3 py-2 text-sm text-stone-100 outline-none placeholder:text-stone-600 focus:border-amber-400"
+    <label className="block text-[10px] font-semibold uppercase tracking-[.17em] text-[#cabda8]">Find country / territory
+     <input aria-label="Find a country or territory" className="mt-2 w-full rounded border border-[#716046]/65 bg-[#101315]/90 px-3 py-2 text-sm text-stone-100 outline-none placeholder:text-stone-600 focus:border-amber-400"
       value={query} onChange={e=>setQuery(e.target.value)} placeholder="Poland, Türkiye, JP..." maxLength={100}/>
     </label>
-    <label className="mt-2 flex items-center gap-2 text-[11px] text-[#acb9b9]">
+    <label className="mt-2 flex items-center gap-2 text-[11px] text-[#bcb0a0]">
      <input type="checkbox" checked={showLinked} onChange={e=>setShowLinked(e.target.checked)} className="accent-[#b9822f]"/>
      With linked material only
     </label>
-    {query.trim()!==""&&<div className="mt-2 max-h-56 overflow-y-auto border-t border-[#456967]/35 pt-1" aria-label="Country search results">
+    {query.trim()!==""&&<div className="mt-2 max-h-56 overflow-y-auto border-t border-[#806343]/35 pt-1" aria-label="Country search results">
       {matches.map(c=><button type="button" key={c.iso2} onClick={()=>{go(c.iso2);setQuery("");}}
-       className="flex w-full justify-between gap-3 px-2 py-1.5 text-left text-xs text-[#d3dcda] hover:bg-[#36504c]/40 focus-visible:bg-[#36504c]/40">
+       className="flex w-full justify-between gap-3 px-2 py-1.5 text-left text-xs text-[#e2d9c8] hover:bg-[#76562e]/25 focus-visible:bg-[#76562e]/25">
        <span>{c.name}</span><span className="font-mono text-amber-300">{c.iso2}</span>
       </button>)}
       {matches.length===0&&<p className="p-2 text-xs text-stone-400">No matching countries.</p>}
     </div>}
    </aside>
-   <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-10 flex flex-wrap items-center justify-between gap-2 border-t border-[#43645f]/30 bg-[#0a1418]/85 px-4 py-2.5 font-mono text-[10px] tracking-wide text-[#b2c4c0] backdrop-blur-sm sm:px-6">
+   <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-10 flex flex-wrap items-center justify-between gap-2 border-t border-[#907049]/30 bg-[#111416]/85 px-4 py-2.5 font-mono text-[10px] tracking-wide text-[#c9bba6] backdrop-blur-sm sm:px-6">
     <span>{hover||selected?.name||"SELECT TERRITORY TO OPEN INTELLIGENCE"} <span className="text-amber-300">· {Math.round(zoom*100)}%</span></span>
-    <span className="flex flex-wrap gap-3"><span><i className="mr-1 inline-block h-2 w-2 bg-[#445860]"/>UNLINKED</span>
-     <span><i className="mr-1 inline-block h-2 w-2 bg-[#607e70]"/>LINKED</span>
+    <span className="flex flex-wrap gap-3"><span><i className="mr-1 inline-block h-2 w-2 bg-[#3b3d40]"/>UNLINKED</span>
+     <span><i className="mr-1 inline-block h-2 w-2 bg-[#796448]"/>LINKED</span>
      <span><i className="mr-1 inline-block h-2 w-2 bg-[#d4a958]"/>SELECTED</span>
-     <span className="hidden text-[#80a8a2] sm:inline">ACTIVE COUNTRIES {totalLinked}</span></span>
+     <span className="hidden text-[#bda276] sm:inline">ACTIVE COUNTRIES {totalLinked}</span></span>
    </div>
   </div>
   <p className="px-4 py-2 text-[11px] text-stone-500 sm:px-6">

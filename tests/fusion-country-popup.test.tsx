@@ -125,7 +125,9 @@ describe("Country Intelligence Popup map integration",()=>{
  it("renders readable names on the map while preserving polygon accessibility",()=>{
   stubFetch();
   render(<FusionWorldMap projectId="test" selectedCountry="" counts={{}}/>);
-  expect(screen.getByText("United States")).toBeInTheDocument();
+  const label=screen.getByText("United States");
+  expect(label).toBeInTheDocument();
+  expect(label).toHaveClass("fusion-map-country-name");
   expect(screen.getByRole("button",{name:/United States of America: 0 linked materials/})).toBeInTheDocument();
  });
 
