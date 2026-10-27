@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { Stage3Candidate } from "@/lib/ai/stage3/candidates";
 import { useRouter } from "next/navigation";
 
@@ -462,6 +462,33 @@ export function AnnotationProcessingActions({
     return kinds[candidate.kind];
   };
   const [open, setOpen] = useState(Boolean(aiCandidate));
+  const processingDialogRef=useRef<HTMLElement>(null);
+  const processingCloseRef=useRef<HTMLButtonElement>(null);
+  useEffect(()=>{
+    if(!open)return;
+    const returnFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;
+    processingCloseRef.current?.focus();
+    const key=(event:KeyboardEvent)=>{
+      if(event.key==="Escape"){
+        event.preventDefault();
+        setOpen(false);
+        return;
+      }
+      if(event.key!=="Tab"||!processingDialogRef.current)return;
+      const focusable=Array.from(processingDialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]'
+      )).filter(el=>el.getClientRects().length>0);
+      if(!focusable.length)return;
+      if(event.shiftKey&&document.activeElement===focusable[0]){
+        event.preventDefault();focusable[focusable.length-1].focus();
+      }else if(!event.shiftKey&&document.activeElement===focusable[focusable.length-1]){
+        event.preventDefault();focusable[0].focus();
+      }
+    };
+    document.addEventListener("keydown",key);
+    return ()=>{document.removeEventListener("keydown",key);returnFocus?.focus();};
+  },[open]);
+
   const [destination, setDestination] = useState<SourceReaderDestination>(()=>destinationForSuggestion(aiCandidate));
   const [selectedTarget, setSelectedTarget] = useState("");
   const [origin, setOrigin] = useState<MappingOrigin>(aiCandidate ? "AI_SUGGESTED" : "SOURCE_EXPLICIT");
@@ -771,6 +798,7 @@ export function AnnotationProcessingActions({
           <section
             className="flex max-h-[calc(100dvh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-amber-900/40 bg-[#0f1417] shadow-2xl"
             role="dialog"
+            ref={processingDialogRef}
             aria-modal="true"
             aria-label="Process source annotation"
           >
@@ -789,6 +817,7 @@ export function AnnotationProcessingActions({
               <button
                 className="citem-button-ghost min-h-0 px-3 py-1.5"
                 type="button"
+                ref={processingCloseRef}
                 onClick={() => setOpen(false)}
               >
                 Close
