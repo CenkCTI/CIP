@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useCallback,useEffect,useRef,useState } from "react";
 import countries from "@/lib/fusion/countries.json";
-import { inventoryDetailUrl,type FusionInventoryItem } from "@/lib/fusion/types";
+import { inventoryDetailUrl } from "@/lib/fusion/types";
 import type { loadCountryPopup } from "@/lib/fusion/country-data";
 import { CountryNotesFiles,CountryBrief } from "./fusion-country-workspace";
 import {linkCountryRecord,unlinkCountryRecord,editCountryRelationship} from "@/app/projects/[id]/fusion/actions";
@@ -24,9 +24,9 @@ const capitals:Record<string,string>={PL:"Warsaw",TR:"Ankara",UA:"Kyiv",DE:"Berl
 const field="w-full rounded border border-stone-700 bg-[#101417] px-2.5 py-2 text-sm text-[#e8e1d6]";
 const btn="rounded border border-stone-600 px-3 py-1.5 text-sm text-amber-200 hover:border-[#b9822f] hover:bg-[#b9822f]/10 disabled:opacity-40";
 function Clock({code}:{code:string}){
- const [now,setNow]=useState<Date|null>(null),[zone,setZone]=useState("");
+ const [now,setNow]=useState(()=>new Date()),[zone,setZone]=useState(()=>zones[code]?.[0]??"");
  const opts=zones[code]??[];
- useEffect(()=>{setZone(opts[0]??"");setNow(new Date());const id=window.setInterval(()=>setNow(new Date()),1000);return ()=>clearInterval(id);},[code]);
+ useEffect(()=>{const id=window.setInterval(()=>setNow(new Date()),1000);return ()=>clearInterval(id);},[]);
  if(!zone||!now)return <span className="text-xs text-stone-500">Local time unavailable · No verified zone mapping</span>;
  let time="Unavailable";try{time=new Intl.DateTimeFormat("en-GB",{timeZone:zone,hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}).format(now);}catch{}
  return <div className="flex flex-wrap items-center gap-2 text-xs text-stone-300">
@@ -67,7 +67,7 @@ export function CountryIntelligencePopup({projectId,code,onClose,onCountry,prese
   setData(j as Data);
  },[popupUrl]);
  useEffect(()=>{
-  let cancelled=false;setLoading(true);setError("");setData(null);
+  let cancelled=false;
   const run=async()=>{try{const r=await fetch(popupUrl(),{cache:"no-store"});const j=await r.json();if(!r.ok)throw Error(j.error||"Country request failed");if(!cancelled)setData(j);}catch(e){if(!cancelled)setError(e instanceof Error?e.message:"Country request failed");}finally{if(!cancelled)setLoading(false);}};
   void run();return ()=>{cancelled=true;};
  },[popupUrl]);
@@ -93,7 +93,7 @@ export function CountryIntelligencePopup({projectId,code,onClose,onCountry,prese
   return ()=>{document.removeEventListener("keydown",key);document.body.style.overflow=previousOverflow;previous.current?.focus();};
  // onClose identity is managed by the map; selected country changes retain modal shell.
  },[onClose,dirty]);
- useEffect(()=>{setTab("overview");setDirty(false);setLinksPage(1);setNotesPage(1);setFilesPage(1);setEditingLink(null);setShowLink(Boolean(preset));},[code,preset?.type,preset?.id]);
+
  const close=()=>{if(dirty&&!window.confirm("Discard unsaved changes?"))return;onClose();};
  const switchCountry=(next:string)=>{if(dirty&&!window.confirm("Discard unsaved changes?"))return;onCountry(next);};
  const apiLookup=async(nextPage=1)=>{
