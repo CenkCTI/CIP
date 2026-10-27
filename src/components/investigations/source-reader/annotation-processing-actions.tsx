@@ -447,6 +447,7 @@ export function AnnotationProcessingActions({
   options: ProcessingOptions;
   compact?: boolean;
   aiCandidate?: Stage3Candidate | null;
+  onChanged?: () => void;
 }) {
   const router = useRouter();
   const refresh = () => { router.refresh(); onChanged?.(); };
