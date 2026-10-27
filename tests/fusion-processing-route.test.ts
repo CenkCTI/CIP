@@ -18,8 +18,13 @@ function database(item:Record<string,unknown>){
    const q={
     select:(_cols:string)=>q,
     eq:(key:string,val:unknown)=>{filters.push([key,val]);return q;},
-    limit:(_size:number)=>Promise.resolve({data:[],error:null}),
-    maybeSingle:async()=>({data:table==="fusion_inventory_items"?item:table==="sources"?{id:source}:null,error:null})
+    in:(key:string,values:unknown[])=>{filters.push([key,values]);return q;},
+    order:(_col:string,_args?:unknown)=>q,
+    limit:(_size:number)=>Promise.resolve({data:table==="sources"?
+      (Array.isArray(item.source_ids)&&item.source_ids.length?
+       (item.source_ids as string[]).map(id=>({id,title:"Source "+id.slice(0,8)})):[]):
+      [],error:null}),
+    maybeSingle:async()=>({data:table==="fusion_inventory_items"?item:null,error:null})
    };
    return q;
   }
@@ -38,7 +43,19 @@ describe("Fusion Processing Source resolution",()=>{
   expect((await response.json()).supported).toBe(true);
   expect(loadFusionSourceReader).toHaveBeenCalledWith(project,source,record);
   expect(calls[0].filters).toEqual(expect.arrayContaining([["project_id",project],["record_type","ANNOTATION"],["record_id",record]]));
-  expect(calls[1].filters).toEqual(expect.arrayContaining([["project_id",project],["id",source]]));
+  expect(calls[1].filters).toEqual(expect.arrayContaining([["project_id",project],["id",[source]]]));
+ });
+ it("requires the analyst to choose when more than one owned Source is related",async()=>{
+  const second="44444444-4444-4444-8444-444444444444";
+  const {db}=database({record_type:"ANNOTATION",record_id:record,source_ids:[source,second],assigned_source_ids:[]});
+  requireOwnedProject.mockResolvedValue({supabase:db});
+  const {GET}=await import("@/app/api/projects/[id]/fusion/processing/route");
+  const ambiguous=await GET(new NextRequest(path+"?type=ANNOTATION&record="+record),{params:Promise.resolve({id:project})});
+  expect(ambiguous.status).toBe(200);
+  expect(await ambiguous.json()).toMatchObject({supported:false,choices:[{id:source},{id:second}]});
+  const unauthorized=await GET(new NextRequest(path+"?type=ANNOTATION&record="+record+"&source=55555555-5555-4555-8555-555555555555"),{params:Promise.resolve({id:project})});
+  expect(unauthorized.status).toBe(403);
+  expect(loadFusionSourceReader).not.toHaveBeenCalled();
  });
  it("rejects missing authorization before checking any Source",async()=>{
   requireOwnedProject.mockRejectedValue(new Error("Access denied"));
