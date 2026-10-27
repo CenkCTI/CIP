@@ -1,4 +1,5 @@
 import {render,screen,waitFor} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import {afterEach,beforeEach,describe,expect,it,vi} from "vitest";
 import {FusionInventoryProcessing} from "@/components/fusion/fusion-inventory-processing";
 import type {FusionInventoryItem} from "@/lib/fusion/types";
@@ -47,6 +48,24 @@ describe("Fusion Inventory Stage 3 reuses original processing reader",()=>{
   render(<FusionInventoryProcessing projectId={item.project_id} item={{...item,record_type:"EVIDENCE"}} onChanged={changed}/>);
   expect(await screen.findByText("No Source linked to this Inventory record.")).toBeInTheDocument();
   expect(screen.queryByRole("region",{name:"Embedded Source Reader"})).not.toBeInTheDocument();
+ });
+ it("requires an explicit Source choice before opening a multi-source Inventory record",async()=>{
+  const chosen="44444444-4444-4444-8444-444444444444";
+  const fetcher=vi.fn(async (url:string)=>new Response(JSON.stringify(
+    new URL(url,"http://localhost").searchParams.get("source")===chosen?
+      {supported:true,reader:{source:{title:"Selected Source",id:chosen}}}:
+      {supported:false,reason:"Several Sources are associated with this record.",choices:[
+        {id:item.record_id,title:"First Source"},{id:chosen,title:"Second Source"}
+      ]}
+   ),{status:200,headers:{"content-type":"application/json"}}));
+  vi.stubGlobal("fetch",fetcher);
+  const user=userEvent.setup();
+  render(<FusionInventoryProcessing projectId={item.project_id} item={item} onChanged={changed}/>);
+  const selection=await screen.findByRole("combobox",{name:"Source for processing"});
+  expect(screen.queryByRole("region",{name:"Embedded Source Reader"})).not.toBeInTheDocument();
+  await user.selectOptions(selection,chosen);
+  expect(await screen.findByText("Selected Source")).toBeInTheDocument();
+  expect(fetcher.mock.calls.some(([url])=>new URL(url,"http://localhost").searchParams.get("source")===chosen)).toBe(true);
  });
  it("does not claim success or render a processor on an authorization failure",async()=>{
   vi.stubGlobal("fetch",vi.fn(async()=>new Response(JSON.stringify({
