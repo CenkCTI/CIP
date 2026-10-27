@@ -340,15 +340,16 @@ export async function finalizeEvidenceUpload(
     await supabase.storage.from("evidence").remove([p.data.storage_path]);
     return { error: "Invalid evidence path." };
   }
-  const { data, error } = await supabase
+  const evidenceId = crypto.randomUUID();
+  const { error } = await supabase
     .from("evidence")
-    .insert({ ...p.data, project_id: pid, collected_by: user.id }).select("id").single();
+    .insert({ id: evidenceId, ...p.data, project_id: pid, collected_by: user.id });
   if (error) {
     await supabase.storage.from("evidence").remove([p.data.storage_path]);
     return { error: evidencePersistenceError(error) };
   }
   revalidatePath(`/projects/${pid}`);
-  return { success: "Evidence saved.", evidenceId: data?.id };
+  return { success: "Evidence saved.", evidenceId };
 }
 export async function updateEvidence(
   projectId: string,
