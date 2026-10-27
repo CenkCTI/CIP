@@ -60,20 +60,21 @@ export async function GET(req:NextRequest,{params}:{params:Promise<{id:string}>}
    ...(entries.filter(a=>a.assignment_kind===kind).map(a=>a.assigned_id)),
    ...(kind==="SOURCE"?item.source_ids:kind==="GAP"?item.gap_ids:item.requirement_ids)
   ])];
-  const [sources,gaps,requirements]=await Promise.all([
+  const [sources,gaps,requirements,sourceReview]=await Promise.all([
    idsByKind("SOURCE").length?supabase.from("sources").select("id,title").eq("project_id",projectId)
     .in("id",idsByKind("SOURCE")):Promise.resolve({data:[],error:null}),
    idsByKind("GAP").length?supabase.from("investigation_information_gaps").select("id,description").eq("project_id",projectId)
     .in("id",idsByKind("GAP")):Promise.resolve({data:[],error:null}),
    idsByKind("REQUIREMENT").length?supabase.from("collection_requirements").select("id,requirement").eq("project_id",projectId)
-    .in("id",idsByKind("REQUIREMENT")):Promise.resolve({data:[],error:null})
+    .in("id",idsByKind("REQUIREMENT")):Promise.resolve({data:[],error:null}),
+   recordType==="SOURCE"?supabase.from("sources").select("review_status").eq("project_id",projectId).eq("id",recordId).single():Promise.resolve({data:null,error:null})
   ]);
-  if(sources.error||gaps.error||requirements.error)throw Error("Unable to resolve assignment names");
+  if(sources.error||gaps.error||requirements.error||sourceReview.error)throw Error("Unable to resolve assignment names");
   const labels:Record<string,string>={};
   for(const row of sources.data??[])labels[row.id]=row.title;
   for(const row of gaps.data??[])labels[row.id]=row.description;
   for(const row of requirements.data??[])labels[row.id]=row.requirement;
-  return NextResponse.json({item,manual:entries,
+  return NextResponse.json({item,reviewStatus:sourceReview.data?.review_status??null,manual:entries,
    countries:linkRows.map(l=>({
     id:l.id,country_iso2:countryIndex[l.investigation_country_id]??null,
     relation_type:l.relation_type,rationale:l.rationale

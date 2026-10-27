@@ -1,21 +1,19 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
+import { FusionInventoryPopup } from "./fusion-inventory-popup";
 import type { FusionInventoryFilters,FusionInventoryItem,FusionGroupKind } from "@/lib/fusion/types";
-import { groupInventory, inventoryDetailUrl } from "@/lib/fusion/types";
+import { groupInventory } from "@/lib/fusion/types";
 import countries from "@/lib/fusion/countries.json";
 
 type Labels={source:Record<string,string>;gap:Record<string,string>;requirement:Record<string,string>;country:Record<string,string>};
 const TYPES=["SOURCE","SOURCE_ASSET","SOURCE_NOTE","ANNOTATION","SOURCE_CLAIM","ATTRIBUTION_CLAIM",
  "INDICATOR","CVE","MITRE","MALWARE","ACTOR","CAMPAIGN","TIMELINE_EVENT","RESEARCH_NOTE",
  "EVIDENCE","COUNTRY_NOTE","INFORMATION_GAP","COLLECTION_REQUIREMENT"];
-const LINK_TYPES=["SOURCE","SOURCE_ASSET","SOURCE_NOTE","ANNOTATION","SOURCE_CLAIM","ATTRIBUTION_CLAIM",
- "INDICATOR","CVE","MITRE","MALWARE","ACTOR","CAMPAIGN","TIMELINE_EVENT","RESEARCH_NOTE","EVIDENCE","COUNTRY_NOTE"];
 const GROUPS:[FusionGroupKind,string][]=[
  ["source","By source"],["all","All records"],["gap","Information gap"],["requirement","Collection requirement"],
  ["type","Record type"],["country","Country"]
 ];
-function short(value:string,max=52){return value.length>max?value.slice(0,max-1)+"…":value;}
 const Badge=({children}:{children:React.ReactNode})=><span className="rounded border border-stone-700/70 bg-[#181e22] px-2 py-0.5 text-[11px] text-stone-300">{children}</span>;
 const fmt=(x:string)=>{const d=new Date(x);return Number.isNaN(d.getTime())?"—":d.toLocaleDateString();};
 export function FusionInventory({projectId,items,count,labels,filters}:{
@@ -99,38 +97,6 @@ export function FusionInventory({projectId,items,count,labels,filters}:{
    <div className="flex gap-2">{filters.page>1&&<Link className="citem-button-ghost" href={pageUrl(filters.page-1)}>Previous</Link>}
     {filters.page<totalPages&&<Link className="citem-button-ghost" href={pageUrl(filters.page+1)}>Next</Link>}</div>
   </div>
-  {selected&&<div className="fixed inset-0 z-50 flex justify-end bg-black/60" role="presentation" onMouseDown={e=>{if(e.currentTarget===e.target)setSelected(null);}}>
-    <aside role="dialog" aria-modal="true" aria-label="Evidence detail" className="flex h-full w-full max-w-xl flex-col border-l border-stone-700 bg-[#111518] shadow-xl">
-     <div className="flex justify-between gap-3 border-b border-stone-800 p-4"><div>
-      <p className="citem-label">Evidence detail · {selected.record_type}</p>
-      <h3 className="mt-2 break-words text-lg font-semibold text-stone-100">{selected.title}</h3>
-      </div><button type="button" aria-label="Close evidence detail" className="self-start rounded px-3 py-1 text-stone-300 hover:bg-stone-800" onClick={()=>setSelected(null)}>✕</button></div>
-     <div className="flex-1 space-y-5 overflow-y-auto p-4 text-sm">
-      <div><p className="citem-label">Record origin</p><p className="mt-1 text-stone-200">{selected.origin_kind.replaceAll("_"," ")}</p>
-       <p className="mt-1 text-xs text-stone-500">Updated {fmt(selected.updated_at)}</p></div>
-      {selected.processing_state&&<div><p className="citem-label">Processing state</p><p>{selected.processing_state}</p></div>}
-      <div><p className="citem-label">Source content / description</p><p className="mt-1 whitespace-pre-wrap break-words text-stone-300">{selected.preview_text||selected.summary||"No verified text excerpt available."}</p></div>
-      <div><p className="citem-label">Source provenance ({selected.source_ids.length})</p>
-        {selected.source_ids.length===0?<p className="mt-1 text-stone-500">No source association recorded</p>:
-          selected.source_ids.map(id=><Link key={id} className="mt-2 block text-amber-300 underline" href={`/projects/${projectId}/sources/${id}`}>{labels.source[id]||id}</Link>)}
-        {selected.annotation_ids.length>0&&<div className="mt-2"><p className="citem-label">Original annotations</p>
-         {selected.annotation_ids.map(a=><Link key={a} className="mt-1 block text-xs text-amber-300" href={`/projects/${projectId}/sources/${selected.source_ids[0]}?annotation=${a}`}>Open highlighted passage · {short(a,12)}</Link>)}</div>}
-      </div>
-      <div><p className="citem-label">Investigation context</p><div className="mt-2 space-y-2">
-       <div><span className="text-stone-500">Information gaps: </span>{selected.gap_ids.length?selected.gap_ids.map(id=>labels.gap[id]||id).join(" · "):"Unlinked"}</div>
-       <div><span className="text-stone-500">Collection requirements: </span>{selected.requirement_ids.length?selected.requirement_ids.map(id=>labels.requirement[id]||id).join(" · "):"Unlinked"}</div>
-       <div><span className="text-stone-500">Countries: </span>{selected.country_codes.length?selected.country_codes.map(code=>labels.country[code]||code).join(", "):"Unlinked"}</div>
-       </div></div>
-      {selected.record_type==="SOURCE_CLAIM"&&Array.isArray(selected.metadata.stances)&&<div><p className="citem-label">Source assertions (not corroboration scores)</p>
-       <ul className="mt-2 space-y-1 text-xs text-stone-300">{(selected.metadata.stances as {stance:string;annotationId:string}[]).map((s,i)=>
-        <li key={i}><Badge>{s.stance}</Badge> · Passage {short(s.annotationId,14)}</li>)}</ul></div>}
-      <div><p className="citem-label">Record metadata</p><pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all rounded bg-black/20 p-3 text-xs text-stone-400">{JSON.stringify(selected.metadata,null,2)}</pre></div>
-     </div>
-     <div className="flex flex-wrap gap-2 border-t border-stone-800 p-4">
-      <Link className="citem-button" href={inventoryDetailUrl(projectId,selected)}>Open original record</Link>
-      {LINK_TYPES.includes(selected.record_type)&&<Link className="citem-button-ghost" href={`/projects/${projectId}/fusion?view=countries&linkType=${selected.record_type}&linkId=${selected.record_id}`}>Link to country</Link>}
-      <Link className="citem-button-ghost" href={`/projects/${projectId}/fusion?view=graph`}>Open graph</Link>
-     </div>
-    </aside></div>}
+  {selected&&<FusionInventoryPopup key={selected.record_type+selected.record_id} projectId={projectId} item={selected} close={()=>setSelected(null)}/>}
  </div>;
 }

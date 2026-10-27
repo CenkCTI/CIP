@@ -17,6 +17,9 @@ export type FusionInventoryItem = {
   gap_ids: string[];
   requirement_ids: string[];
   country_codes: string[];
+  assigned_source_ids: string[];
+  assigned_gap_ids: string[];
+  assigned_requirement_ids: string[];
 };
 export type FusionGroupKind = "source" | "all" | "gap" | "requirement" | "type" | "country";
 export const fusionGroupKinds: FusionGroupKind[] = ["source","all","gap","requirement","type","country"];
@@ -68,9 +71,10 @@ export function groupInventory(items:FusionInventoryItem[],kind:FusionGroupKind,
     groups.set(key,group);
   }
   for(const item of items) {
-    const ids=kind==="source"?item.source_ids:
-      kind==="gap"?item.gap_ids:
-      kind==="requirement"?item.requirement_ids:
+    const combined=(canonical:string[],manual:string[]|undefined)=>[...new Set([...canonical,...(manual??[])])];
+    const ids=kind==="source"?combined(item.source_ids,item.assigned_source_ids):
+      kind==="gap"?combined(item.gap_ids,item.assigned_gap_ids):
+      kind==="requirement"?combined(item.requirement_ids,item.assigned_requirement_ids):
       kind==="country"?item.country_codes:[item.record_type];
     if(!ids?.length){add("unlinked","Independent / Unlinked",item);continue;}
     for(const id of ids) {

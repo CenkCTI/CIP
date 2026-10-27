@@ -24,14 +24,14 @@ export function parseInventoryFilters(raw:Record<string,string|string[]|undefine
 export async function loadFusionInventory(projectId:string, filters:FusionInventoryFilters) {
  const {supabase}=await requireOwnedProject(projectId);
  let query=supabase.from("fusion_inventory_items").select(
-  "project_id,record_type,record_id,title,summary,preview_text,created_at,updated_at,origin_kind,source_id,source_annotation_id,processing_state,metadata,annotation_ids,source_ids,gap_ids,requirement_ids,country_codes",
+  "project_id,record_type,record_id,title,summary,preview_text,created_at,updated_at,origin_kind,source_id,source_annotation_id,processing_state,metadata,annotation_ids,source_ids,gap_ids,requirement_ids,country_codes,assigned_source_ids,assigned_gap_ids,assigned_requirement_ids",
   {count:"exact"}
  ).eq("project_id",projectId);
  if(filters.q) query=query.or(`title.ilike.%${filters.q}%,summary.ilike.%${filters.q}%,preview_text.ilike.%${filters.q}%`);
  if(filters.type) query=query.eq("record_type",filters.type);
- if(filters.source) query=query.contains("source_ids",[filters.source]);
- if(filters.gap) query=query.contains("gap_ids",[filters.gap]);
- if(filters.requirement) query=query.contains("requirement_ids",[filters.requirement]);
+ if(filters.source) query=query.or(`source_ids.cs.{${filters.source}},assigned_source_ids.cs.{${filters.source}}`);
+ if(filters.gap) query=query.or(`gap_ids.cs.{${filters.gap}},assigned_gap_ids.cs.{${filters.gap}}`);
+ if(filters.requirement) query=query.or(`requirement_ids.cs.{${filters.requirement}},assigned_requirement_ids.cs.{${filters.requirement}}`);
  if(filters.country) query=query.contains("country_codes",[filters.country]);
  if(filters.state) query=query.eq("processing_state",filters.state);
  query=query.order(filters.sort,{ascending:filters.sort==="title"}).order("record_type",{ascending:true}).order("record_id",{ascending:true})
@@ -39,9 +39,9 @@ export async function loadFusionInventory(projectId:string, filters:FusionInvent
  const result=await query;
  if(result.error) throw new Error("Unable to load Fusion inventory. Check migration 070.");
  const items=(result.data??[]) as unknown as FusionInventoryItem[];
- const sourceIds=[...new Set(items.flatMap(i=>i.source_ids))];
- const gapIds=[...new Set(items.flatMap(i=>i.gap_ids))];
- const reqIds=[...new Set(items.flatMap(i=>i.requirement_ids))];
+ const sourceIds=[...new Set(items.flatMap(i=>[...i.source_ids,...i.assigned_source_ids]))];
+ const gapIds=[...new Set(items.flatMap(i=>[...i.gap_ids,...i.assigned_gap_ids]))];
+ const reqIds=[...new Set(items.flatMap(i=>[...i.requirement_ids,...i.assigned_requirement_ids]))];
  const [sources,gaps,requirements]=await Promise.all([
   sourceIds.length?supabase.from("sources").select("id,title").eq("project_id",projectId).in("id",sourceIds):Promise.resolve({data:[],error:null}),
   gapIds.length?supabase.from("investigation_information_gaps").select("id,description").eq("project_id",projectId).in("id",gapIds):Promise.resolve({data:[],error:null}),
