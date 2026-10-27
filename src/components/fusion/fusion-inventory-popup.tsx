@@ -98,7 +98,7 @@ function AssignmentEditor({projectId,payload,kind,save,busy}:{
  </section>;
 }
 function CountryEditor({projectId,payload,save,busy}:{
- projectId:string;payload:Payload;save:(action:(f:FormData)=>Promise<void>,data:FormData)=>Promise<void>;busy:boolean
+ projectId:string;payload:Payload;save:(action:(f:FormData)=>Promise<void>,data:FormData)=>Promise<boolean>;busy:boolean
 }){
  const {item}=payload;
  const [code,setCode]=useState(""),[type,setType]=useState("GENERAL_RELEVANCE"),[rationale,setRationale]=useState("");
