@@ -12,7 +12,7 @@ import {
 type AssignmentKind="SOURCE"|"GAP"|"REQUIREMENT";
 type Manual={id:string;assignment_kind:AssignmentKind;assigned_id:string;rationale:string|null;created_at:string;updated_at:string};
 type CountryLink={id:string;country_iso2:string;relation_type:string;rationale:string|null};
-type Payload={item:FusionInventoryItem;manual:Manual[];countries:CountryLink[];labels:Record<string,string>};
+type Payload={item:FusionInventoryItem;manual:Manual[];countries:CountryLink[];labels:Record<string,string>;reviewStatus:string|null};
 type Candidate={id:string;label:string};
 const choices=["GENERAL_RELEVANCE","REPORTED_TARGET","REPORTED_LOCATION","REPORTED_ORIGIN",
  "REPORTED_VICTIM_LOCATION","REPORTED_OPERATIONAL_AREA","MENTIONED_IN_SOURCE","OTHER"];
@@ -29,7 +29,7 @@ function makeForm(projectId:string,item:FusionInventoryItem){
  return form;
 }
 function AssignmentEditor({projectId,payload,kind,save,busy}:{
- projectId:string;payload:Payload;kind:AssignmentKind;save:(action:(f:FormData)=>Promise<void>,data:FormData)=>Promise<void>;busy:boolean
+ projectId:string;payload:Payload;kind:AssignmentKind;save:(action:(f:FormData)=>Promise<void>,data:FormData)=>Promise<boolean>;busy:boolean
 }){
  const item=payload.item;
  const [query,setQuery]=useState(""),[result,setResult]=useState<Candidate[]>([]);
@@ -80,7 +80,7 @@ function AssignmentEditor({projectId,payload,kind,save,busy}:{
   <form onSubmit={async e=>{
    e.preventDefault();if(!choice)return;
    const f=makeForm(projectId,item);f.set("kind",kind);f.set("assignedId",choice);f.set("rationale",rationale);
-   await save(addFusionInventoryAssignment,f);setChoice("");setRationale("");
+   if(await save(addFusionInventoryAssignment,f)){setChoice("");setRationale("");}
   }} className="space-y-2 border-t border-stone-800 pt-3">
    <label className="text-xs text-stone-400">Find an Investigation {label.toLowerCase()} record
     <div className="mt-1 flex gap-2"><input className={input} maxLength={100} placeholder="Search by title" value={query} onChange={e=>setQuery(e.target.value)}/>
@@ -119,7 +119,7 @@ function CountryEditor({projectId,payload,save,busy}:{
     e.preventDefault();const fields=new FormData(e.currentTarget);
     const f=makeForm(projectId,item);f.set("linkId",link.id);f.set("country",link.country_iso2);
     f.set("relationType",String(fields.get("relationType")));f.set("rationale",String(fields.get("rationale")??""));
-    await save(editCountryRelationship,f);setEditing(null);
+    if(await save(editCountryRelationship,f))setEditing(null);
    }}>
     <select className={input} name="relationType" defaultValue={link.relation_type}>{choices.map(x=><option value={x} key={x}>{x.replaceAll("_"," ")}</option>)}</select>
     <textarea className={input} name="rationale" maxLength={4000} rows={2} defaultValue={link.rationale??""}/>
@@ -130,7 +130,7 @@ function CountryEditor({projectId,payload,save,busy}:{
   {countryCapable.has(item.record_type)&&<form className="space-y-2 border-t border-stone-800 pt-3" onSubmit={async e=>{
    e.preventDefault();if(!code)return;
    const f=makeForm(projectId,item);f.set("country",code);f.set("relationType",type);f.set("rationale",rationale);
-   await save(linkCountryRecord,f);setCode("");setRationale("");
+   if(await save(linkCountryRecord,f)){setCode("");setRationale("");}
   }}>
    <label className="block text-xs text-stone-400">Country
     <select className={input} value={code} onChange={e=>setCode(e.target.value)}>
@@ -156,7 +156,7 @@ export function FusionInventoryPopup({projectId,item,close}:{
   const res=await fetch(`/api/projects/${projectId}/fusion/inventory?${q}`,{cache:"no-store"});
   const data=await res.json();
   if(!res.ok)throw Error(data.error??"Unable to load record");
-  setPayload(data);return data as Payload;
+  setPayload(data);setReview(String(data.reviewStatus??""));return data as Payload;
  },[item.record_type,item.record_id,projectId]);
  useEffect(()=>{
   let active=true;const run=async()=>{
@@ -164,7 +164,7 @@ export function FusionInventoryPopup({projectId,item,close}:{
     const q=new URLSearchParams({type:item.record_type,record:item.record_id});
     const res=await fetch(`/api/projects/${projectId}/fusion/inventory?${q}`,{cache:"no-store"});
     const data=await res.json();if(!res.ok)throw Error(data.error??"Unable to load record");
-    if(active){setPayload(data);setReview(String(data.item.metadata?.reviewStatus??""));}
+    if(active){setPayload(data);setReview(String(data.reviewStatus??""));}
    }catch(e){if(active)setError(e instanceof Error?e.message:"Unable to load record");}
    finally{if(active)setLoading(false);}
   };void run();return ()=>{active=false;};
@@ -188,8 +188,8 @@ export function FusionInventoryPopup({projectId,item,close}:{
  },[close,busy]);
  const save=async(fn:(f:FormData)=>Promise<void>,data:FormData)=>{
   setBusy(true);setError("");
-  try{await fn(data);await load();router.refresh();}
-  catch(e){setError(e instanceof Error?e.message:"Assignment failed");throw e;}
+  try{await fn(data);await load();router.refresh();return true;}
+  catch(e){setError(e instanceof Error?e.message:"Assignment failed");return false;}
   finally{setBusy(false);}
  };
  const selected=payload?.item??item;
