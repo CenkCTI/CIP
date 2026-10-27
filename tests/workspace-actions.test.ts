@@ -262,23 +262,23 @@ describe("workspace server workflow security", () => {
   it("valid PNG evidence creation with optional fields blank does not send empty strings to UUID columns", async () => {
     const { inserts } = makeSupabase();
     const { finalizeEvidenceUpload } = await import("@/app/actions");
-    await expect(
-      finalizeEvidenceUpload(PROJECT_ID, {
-        ...finalInput,
-        type: "SCREENSHOT",
-        source_url: "",
-        original_file_name: "proof.png",
-        mime_type: "image/png",
-        storage_path: `${USER_ID}/${PROJECT_ID}/new.png`,
-      }),
-    ).resolves.toEqual({ success: "Evidence saved." });
+    const outcome = await finalizeEvidenceUpload(PROJECT_ID, {
+      ...finalInput,
+      type: "SCREENSHOT",
+      source_url: "",
+      original_file_name: "proof.png",
+      mime_type: "image/png",
+      storage_path: `${USER_ID}/${PROJECT_ID}/new.png`,
+    });
+    expect(outcome.success).toBe("Evidence saved.");
+    expect(outcome.evidenceId).toMatch(/^[0-9a-f-]{36}$/i);
     expect(inserts).toHaveLength(1);
+    expect(inserts[0].id).toBe(outcome.evidenceId);
     expect(inserts[0]).toMatchObject({
       project_id: PROJECT_ID,
       collected_by: USER_ID,
       source_url: null,
     });
-    expect(inserts[0]).not.toHaveProperty("id");
     expect(JSON.stringify(inserts[0])).not.toContain('""');
   });
 
