@@ -106,3 +106,15 @@ Evidence Inventory rows open a centered, responsive record dialog instead of a r
 **Verification:** `tests/fusion-inventory.test.ts` covers original/manual group separation; `tests/fusion-inventory-popup.test.tsx` exercises popup editing without navigation; `tests/fusion-postgres-acceptance.sql` probes manual-assignment cross-user/cross-investigation denial, persisted rationales, and invoker Inventory semantics. Existing CI runs the full migration chain including 076 on an isolated database.
 
 **Deployment boundary:** Migration **076 is branch-only and is NOT applied to the connected CIP Supabase database**. Existing 069–075 remain deployed, but the Inventory edit feature depends on 076 and cannot be considered live until migration 076 is reviewed and applied in the intended nonproduction or approved database. Real signed-in browser testing remains a release gate. No production deploy, main merge, or Copilot reactivation is authorized.
+
+## V3.1 — Embedded Source Highlighting / Process-Extract in Evidence Inventory
+
+The Inventory record popup includes **Highlight · Process / Extract** alongside Assignments and Evidence / Provenance. It uses the original SourceReaderWorkspace, PdfSourceViewer, and AnnotationProcessingActions (the Stage 3 destination menu), rather than inventing a second processing engine. The existing server actions create real source annotations and linked Timeline Events, Source Claims, Indicators, Malware, CVE, ATT&CK, Campaign, Actor, and Attribution Claim outputs.
+
+The new owner-checked GET endpoint /api/projects/[id]/fusion/processing resolves a canonical Source from the selected owned inventory record, or an existing Source evidence_id for an Evidence item. It checks ownership at both the inventory and source levels, loads the existing Stage 2/3 Source Reader data and signed private Source asset URL, and never accepts an arbitrary sourceId directly from the browser. Without a usable Source, the UI explains the blocker instead of creating synthetic annotations. Analyst-assigned Source links provide a processing context, but remain separate from verified canonical evidence provenance.
+
+When embedded, the Source Reader hides its navigation back to Sources and the AI Copilot activation. The nested Stage 3 dialog is layered above the Fusion popup, and the outer focus/Escape handler yields to it. Successful processing actions refresh the selected source context and Inventory without navigating away.
+
+Implementation: src/lib/fusion/source-reader-data.ts, src/app/api/projects/[id]/fusion/processing/route.ts, src/components/fusion/fusion-inventory-processing.tsx, reused Source Reader and Processing components. Test: tests/fusion-inventory-processing.test.tsx plus existing Source Reader and Fusion regressions.
+
+**Remaining acceptance:** run a signed-in browser test of PDF text highlights, region annotations, Process/Extract, mark processed, Timeline/IOC creation, source-claim linking and provenance/audit readback. No production deployment, main merge or AI Copilot reactivation has been authorized.
