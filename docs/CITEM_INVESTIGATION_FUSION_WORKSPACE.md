@@ -4,7 +4,7 @@
 
 Fusion is an analyst-controlled workspace within one existing Investigation (`projects.id`). It consolidates source-material navigation, a unified canonical inventory, existing graph relationships, manually associated countries, country notes, and linked private Evidence files. It does **not** autonomously perform analysis, attribution, scoring, geopolitical inference, source corroboration, or LLM processing.
 
-The four UI views are `/projects/[id]/fusion?view=inventory|graph|map|countries`, reachable from existing Investigation navigation. The original Source Reader, Source Claims, Notes, Evidence, graph storage, and their authorizations remain authoritative.
+The three main views are `/projects/[id]/fusion?view=inventory|graph|map`. Legacy `view=countries` links redirect to the World Map and open the country popup. The original Source Reader, Source Claims, Notes, Evidence, graph storage, and their authorizations remain authoritative.
 
 ## Architecture and canonical material
 
@@ -52,24 +52,42 @@ Apply in order **after** existing migrations up to 068:
 5. `202610260073_fusion_activity_audit.sql` — minimal audit trail.
 6. `202610260074_source_manual_review_status.sql` — manual source status independent of annotations.
 
-These migrations have been written for review **but have not been applied to any live database**. Run them on an isolated PostgreSQL/Supabase instance with the full existing migration history before production deployment. Review RLS grants, security-definer trigger behavior, the geographic reference data, and source/workspace regressions before merge. No new environment variable or additional Storage bucket is required. The suspended AI Copilot navigation is hidden by default and can be explicitly opted in using `NEXT_PUBLIC_CITEM_STAGE3_COPILOT_ENABLED=true`; existing Copilot backend is untouched.
+Migrations 069–074 were previously applied to the connected CIP Supabase database (migration names differ due to a pre-existing unrelated migration with suffix 069). **New migration 075 is on this feature branch only and has not been applied to any live Supabase project.** Run them on an isolated PostgreSQL/Supabase instance with the full existing migration history before production deployment. Review RLS grants, security-definer trigger behavior, the geographic reference data, and source/workspace regressions before merge. No new environment variable or additional Storage bucket is required. The suspended AI Copilot navigation is hidden by default and can be explicitly opted in using `NEXT_PUBLIC_CITEM_STAGE3_COPILOT_ENABLED=true`; existing Copilot backend is untouched.
 
 ## Validation matrix
 
 - Unit: canonical uniqueness, multi-source group membership, unlinked records, deep link, country ISO dataset integrity.
-- Database integration (pending): migrate on isolated Supabase, invoker-view select, cross-user/cross-investigation denial, invalid typed targets, composite FK enforcement, source review status transitions, deterministic pagination, cascade cleanup, and mutation audit.
+- Database integration: GitHub Actions PostgreSQL 16 full-chain tests through 075, owner/cross-investigation denial, attachment integrity and invoker views. The CI logs are the evidence for current pass/fail state.
 - Browser/manual (pending): source annotation navigation, graph CRUD/layout persistence, keyboard map selection/pan, 249-country search, notes CRUD, reusing Evidence private upload/download, country detaching without deletion.
 - Commands to execute on a suitable checkout: `npm ci`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, `npm run test:e2e` (requires live test auth/config).
 
 ### Known limitations and deployment blockers
 
-* In this branch's authoring environment, the full repository/npm dependencies and an isolated Supabase test database were unavailable; **CI, database migration validation, and end-to-end validation must be completed**. A PR is a review artifact, not a production-ready release.
+* GitHub CI provides npm lint/typecheck/tests/build and isolated PostgreSQL acceptance. Authenticated browser end-to-end acceptance remains required; a PR is not a production-ready release.
 * Inventory groups only the 50 records on the active page; to examine another page, use server-side pagination. Source/gap/requirement filtering is by UUID rather than a label picker.
-* Country workspace limits initial note/association/attachment listings to 100 rows and record/evidence pickers to 100 recently updated results; use Inventory to locate the record and its "Link to country" deep-link (if exposed). Pagination/load-more for very large country workspaces remains a follow-up.
-* New file uploads use the existing Evidence library, then require a separate country-link action; no fake automatic association.
+* Popup fetches 20 notes, links and attachments per page. Link Existing Evidence and Link Record search use server-side filtered pagination.
+* Popup Upload & Attach to Country uses the existing signed private Evidence Storage pipeline and an existing canonical Evidence record ID. If the follow-on attachment fails, the UI explicitly reports the retained Evidence record for manual recovery.
 * Map coverage depends on 110m geometry, which is too coarse for some islands/territories and not suitable for legal border judgments.
 * No AI automation, global geopolitical scoring, or automatic source reliability estimates are added.
 
 ## Acceptance requirement
 
 Do not call Fusion production-ready until lint, typecheck, tests, isolated migration validation, owner-RLS tests, and end-to-end acceptance are confirmed. The feature branch must not be merged or deployed solely because the UI renders.
+
+## V2 — World Map / Country Intelligence Popup (PR #86 refactor)
+
+**Three primary views**: Inventory, Relationship Graph, World Map. Country Notes & Attachments is no longer a primary tab. Its behavior is consolidated into a large, responsive, centered dialog with four tabs (Overview, Linked Records, Notes & Files, Cyber Activity), launched by selecting a country polygon or by searching all 249 ISO country/territory records.
+
+**Navigation**: `view=map&country=PL` opens the popup. Legacy `view=countries&country=PL` and `countryId` links resolve to the World Map. Opening a country adds a browser-history entry; switching or closing updates the current entry. Popstate restores the popup country. Map zoom/pan and search filters are local state preserved while the dialog opens or closes.
+
+**Data architecture**: `GET /api/projects/[id]/fusion/country` always checks `requireOwnedProject`. It fetches only the selected country and includes canonical source provenance. On-demand `mode=lookup` paginates candidate records for secure linking. `GET /api/projects/[id]/fusion/evidence` lists only owned Investigation Evidence for manual association. No collectors, news or AI are introduced.
+
+**New additive migration 075**: `fusion_country_link_items`, `fusion_country_attachment_items`, and `fusion_country_link_type_counts` are `security_invoker=true` read views over the existing country links and canonical Inventory/Evidence. They enable full-dataset title search with server-side 20-row pagination, accurate type-group counts, and note-level attachment visibility independently of the note page. There is no new duplicate country table. The existing graph and manual edges remain authoritative.
+
+**Operations**: The dialog reuses original country note CRUD, association insert/delete and private Evidence download/upload; adds typed relationship/rationale editing, analyst-authored Country Brief using a note titled `Country Brief`, notes metadata and explicit Cyber Activity lists. Brief is not an AI conclusion. Source upload finalization now returns the inserted Evidence ID so a successful private upload can be attached immediately; attachment failures are surfaced without deleting the canonical Evidence file. Save operations reload only the selected country's data.
+
+**Time zones**: The header uses the browser's current clock and `Intl.DateTimeFormat` with explicitly curated IANA time zones and daylight-saving transitions. Several major multi-zone countries include a zone selector. This is an incomplete curated mapping, **not** a verified exhaustive capital/time-zone database; unlisted countries show unavailable instead of invented metadata.
+
+**Known V2 limitations**: The V2 popup requires migration 075 in the target environment before country data routes can succeed; its unmerged version has *not* been deployed to production. The curated capital and time-zone mapping covers a subset of ISO catalog entries. The map's Natural Earth 110m polygons do not cover every territory. The country search is keyed to canonical titles, not arbitrary full-text body matches. Country Brief is represented by a reserved note title rather than a new brief field; concurrent brief creation needs product acceptance testing. Graph displays only entity kinds already supported in the canonical Graph (Timeline remains outside graph node types). Cyber Activity lists explicit associations with at most eight previews per section and links back to the canonical records; no sectors or geopolitical predictions are inferred. Real authenticated browser/storage acceptance is still a release gate.
+
+**CI and acceptance**: Verify the exact PR HEAD and individual GitHub Actions logs. Full PostgreSQL chain plus RLS and cross-investigation tests are available in `scripts/test-fusion-workspace-migrations.sh`, while UI interaction tests are in `tests/fusion-country-popup.test.tsx`. Neither an unrun browser scenario nor a skipped gate is considered passed. No merge or production deployment is authorized by this document.
