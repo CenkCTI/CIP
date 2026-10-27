@@ -273,8 +273,8 @@ describe("workspace server workflow security", () => {
     expect(outcome.success).toBe("Evidence saved.");
     expect(outcome.evidenceId).toMatch(/^[0-9a-f-]{36}$/i);
     expect(inserts).toHaveLength(1);
-    expect(inserts[0].id).toBe(outcome.evidenceId);
     expect(inserts[0]).toMatchObject({
+      id: outcome.evidenceId,
       project_id: PROJECT_ID,
       collected_by: USER_ID,
       source_url: null,
