@@ -126,8 +126,8 @@ export function CountryIntelligencePopup({projectId,code,onClose,onCountry,prese
   return <article key={l.id} className="rounded border border-stone-800 bg-[#14191d] px-3 py-3 text-sm">
    <div className="flex flex-wrap items-center justify-between gap-2">
     <div className="min-w-0"><p className="text-[11px] uppercase tracking-wide text-amber-300">{l.target_type.replaceAll("_"," ")}</p>
-     <h4 className="break-words font-medium text-[#e8e1d6]">{rec?.title||l.target_id}</h4>
-     <p className="line-clamp-2 text-xs text-stone-400">{rec?.summary||"No additional description"}</p></div>
+     <h4 className="break-words font-medium text-[#e8e1d6]">{rec?.title||l.title||l.target_id}</h4>
+     <p className="line-clamp-2 text-xs text-stone-400">{rec?.summary||l.summary||"No additional description"}</p></div>
     <span className="text-xs text-stone-500">{l.relation_type.replaceAll("_"," ")}</span></div>
    {l.rationale&&<p className="mt-2 break-words text-xs text-stone-400">{l.rationale}</p>}
    {rec&&rec.source_ids.length>0&&<p className="mt-1 text-xs text-stone-500">{rec.source_ids.length} source association(s) · reported material is not verified attribution</p>}
@@ -149,9 +149,22 @@ export function CountryIntelligencePopup({projectId,code,onClose,onCountry,prese
    </form>}
   </article>;
  };
- const cybergroups:[string,string[]][]=[
-  ["Reported Incidents",["TIMELINE_EVENT"]],["Reported Threat Actors",["ACTOR","ATTRIBUTION_CLAIM"]],
-  ["Campaigns",["CAMPAIGN"]],["Techniques & Vulnerabilities",["MITRE","CVE","INDICATOR","MALWARE"]]];
+ const cyberGroups:[string,string][]=[
+   ["Reported Incidents","incidents"],["Reported Threat Actors","actors"],["Campaigns","campaigns"],
+   ["Techniques & Vulnerabilities","technical"]
+ ];
+ const cyberCard=(l:Data["cyber"][number]["items"][number])=><article key={l.id} className="rounded border border-stone-800 p-3 text-sm">
+    <p className="text-xs uppercase text-amber-300">{l.target_type.replaceAll("_"," ")} · {l.relation_type.replaceAll("_"," ")}</p>
+    <p className="mt-1 break-words font-medium text-stone-200">{l.title}</p>
+    <p className="mt-1 line-clamp-2 break-words text-xs text-stone-400">{l.summary}</p>
+    {l.rationale&&<p className="mt-2 break-words text-xs text-stone-400">Analyst rationale: {l.rationale}</p>}
+    <p className="mt-1 text-xs text-stone-500">{l.source_ids.length} source association(s), not verified attribution</p>
+    <div className="mt-2 flex flex-wrap gap-4 text-xs">
+      <Link className="text-amber-300 underline" href={itemUrl(l.target_type,l.target_id)}>Open source record</Link>
+      <Link className="text-amber-300 underline" href={`/projects/${projectId}/fusion?view=inventory&country=${code}&type=${l.target_type}`}>Inventory</Link>
+      <button className="text-amber-300 underline" onClick={()=>{setFilterType(l.target_type);setLinksPage(1);setTab("records");}}>Manage relations</button>
+    </div>
+   </article>;
  return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-0 sm:p-4" onMouseDown={e=>{if(e.target===e.currentTarget)close();}}>
    <div role="dialog" aria-modal="true" aria-labelledby="country-popup-heading" ref={modal}
     className={`flex w-full flex-col overflow-hidden border border-stone-700 bg-[#0b0e11] shadow-2xl sm:rounded-lg ${maximized?"h-screen max-w-none sm:h-[96vh]":"h-screen max-w-[1120px] sm:h-[88vh]"}`}>
@@ -184,6 +197,11 @@ export function CountryIntelligencePopup({projectId,code,onClose,onCountry,prese
        ].map(([label,value])=><div key={label} className="rounded border border-stone-800 bg-[#14191d] p-3">
         <p className="text-xs text-stone-400">{label}</p><p className="mt-1 text-xl text-amber-200">{value}</p></div>)}</div>
        <CountryBrief key={code} projectId={projectId} code={code} data={data} mutate={mutate} dirty={setDirty}/>
+       {records.some(r=>r.gap_ids?.length||r.requirement_ids?.length)&&<section className="rounded border border-stone-800 bg-[#14191d] p-3 text-xs text-stone-400">
+        <h3 className="mb-2 font-medium text-[#e8e1d6]">Information Gaps & Collection Requirements</h3>
+        {records.flatMap(r=>r.gap_ids??[]).length} gap association(s) and {records.flatMap(r=>r.requirement_ids??[]).length} requirement association(s) among the displayed linked records. Associations do not prove collection requirements have been satisfied.
+        <Link className="ml-2 text-amber-300 underline" href={`/projects/${projectId}/fusion?view=inventory&country=${code}`}>Review in Inventory</Link>
+       </section>}
        <section className="space-y-2"><h3 className="text-sm font-semibold text-[#e8e1d6]">Recently linked material</h3>
         {records.length?records.slice(0,5).map(card):<p className="text-sm text-stone-500">No records linked to this country. Link a record to begin.</p>}
         <button className={btn} onClick={()=>setTab("records")}>Manage linked records</button>
@@ -219,12 +237,14 @@ export function CountryIntelligencePopup({projectId,code,onClose,onCountry,prese
        page={notesPage} onPage={setNotesPage} filesPage={filesPage} onFilesPage={setFilesPage}/>}
      {!loading&&data&&tab==="cyber"&&<section className="space-y-5">
        <p className="text-sm text-stone-400">Only explicitly country-linked Investigation records are shown. No country risk scoring or automatic attribution.</p>
-       {cybergroups.map(([title,kinds])=><div key={title} className="space-y-2 rounded border border-stone-800 bg-[#14191d] p-3">
-        <h3 className="font-medium text-[#e8e1d6]">{title}</h3>
-        {records.filter(l=>kinds.includes(l.target_type)).length?
-         records.filter(l=>kinds.includes(l.target_type)).map(card):
-         <p className="text-xs text-stone-500">No explicitly linked {title.toLowerCase()} on this page.</p>}
-       </div>)}
+       {cyberGroups.map(([title,key])=>{
+        const group=data.cyber.find(g=>g.key===key);
+        return <div key={key} className="space-y-2 rounded border border-stone-800 bg-[#14191d] p-3">
+         <h3 className="font-medium text-[#e8e1d6]">{title} <span className="text-xs text-stone-500">({group?.total??0} explicit associations)</span></h3>
+         {group?.items.length?group.items.map(cyberCard):<p className="text-xs text-stone-500">No explicitly linked records for this section.</p>}
+         {(group?.total??0)>8&&<button className="text-xs text-amber-300 underline" onClick={()=>{setTab("records");setQuery("");setFilterType("");setLinksPage(1);}}>Browse all linked records</button>}
+        </div>;
+       })}
        <section className="rounded border border-stone-800 p-3"><h3 className="text-sm font-medium text-[#e8e1d6]">Targeted sectors</h3><p className="text-xs text-stone-500">No verified structured sector association is available for this country.</p></section>
        <button className={btn} onClick={()=>{setTab("records");setShowLink(true);}}>Link Cyber Activity Record</button>
       </section>}

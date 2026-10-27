@@ -33,7 +33,7 @@ export async function loadCountryPopup(projectId:string,params:URLSearchParams) 
  if(sourcesResult?.error)throw new Error("Source association count failed");
  const sourceCount=sourcesResult?.count??0;
  let notes:{id:string;title:string;body:string;created_at:string;updated_at:string;created_by:string}[]=[];
- let links:{id:string;target_type:string;target_id:string;relation_type:string;rationale:string|null;created_at:string}[]=[];
+ let links:{id:string;target_type:string;target_id:string;relation_type:string;rationale:string|null;created_at:string;title:string;summary:string;source_ids:string[];gap_ids:string[];requirement_ids:string[]}[]=[];
  let attachments:{id:string;evidence_id:string;country_note_id:string|null;description:string|null}[]=[];
  let notesTotal=0,linksTotal=0,filesTotal=0;
  let details:Record<string,FusionInventoryItem>={};
