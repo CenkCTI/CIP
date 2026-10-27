@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import {beforeEach,afterEach,describe,expect,it,vi} from "vitest";
 import {FusionWorldMap} from "@/components/fusion/fusion-world-map";
 
-const refresh=vi.fn(),createCountryNote=vi.fn(async(_form:FormData)=>{}),updateCountryNote=vi.fn(async()=>{});
+const refresh=vi.fn(),createCountryNote=vi.fn(async(_form:FormData)=>{}),updateCountryNote=vi.fn(async(_form:FormData)=>{});
 vi.mock("next/navigation",()=>({useRouter:()=>({refresh}),usePathname:()=>"/projects/test/fusion"}));
 vi.mock("@/app/projects/[id]/fusion/actions",()=>({
  createCountryNote:(form:FormData)=>createCountryNote(form),

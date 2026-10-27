@@ -97,7 +97,7 @@ export async function loadCountryPopup(projectId:string,params:URLSearchParams) 
  ];
  const cyber=await Promise.all(groups.map(async g=>{
   const response=await supabase.from("fusion_country_link_items")
-   .select("id,target_type,target_id,relation_type,rationale,created_at,title,summary,source_ids,gap_ids,requirement_ids",{count:"exact"})
+   .select("id,target_type,target_id,relation_type,rationale,created_at,title,summary,source_ids,gap_ids,requirement_ids,metadata",{count:"exact"})
    .eq("project_id",projectId).eq("country_iso2",code)
    .in("target_type",g.kinds).order("created_at",{ascending:false}).range(0,7);
   if(response.error)throw new Error("Cyber Activity query failed");
