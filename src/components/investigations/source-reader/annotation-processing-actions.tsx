@@ -120,7 +120,6 @@ function CreateFields({
   annotation: Row;
   candidate?: { observedValue: string; canonicalValue: string; type: string } | null;
   aiCandidate?: Stage3Candidate | null;
-  onChanged?: () => void;
 }) {
   const excerpt = text(annotation.selected_text) || text(annotation.comment);
   const cve = excerpt.match(/CVE-\d{4}-\d{4,}/i)?.[0]?.toUpperCase() ?? "";
@@ -862,6 +861,7 @@ export function AnnotationProcessingActions({
                       annotation={annotation}
                       events={events}
                       links={timelineLinks}
+                      onChanged={onChanged}
                       aiCandidate={aiCandidate?.kind === "TIMELINE" ? aiCandidate : null}
                     />
                   </div>
@@ -872,6 +872,7 @@ export function AnnotationProcessingActions({
                     annotation={annotation}
                     claims={options.source_claim}
                     assertions={sourceClaimAssertions}
+                    onChanged={onChanged}
                     aiCandidate={aiCandidate?.kind === "SOURCE_CLAIM" ? aiCandidate : null}
                     key={aiCandidate?.candidateId ?? "manual-claim"}
                   />
