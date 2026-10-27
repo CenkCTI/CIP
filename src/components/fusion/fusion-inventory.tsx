@@ -16,8 +16,8 @@ const GROUPS:[FusionGroupKind,string][]=[
 ];
 const Badge=({children}:{children:React.ReactNode})=><span className="rounded border border-stone-700/70 bg-[#181e22] px-2 py-0.5 text-[11px] text-stone-300">{children}</span>;
 const fmt=(x:string)=>{const d=new Date(x);return Number.isNaN(d.getTime())?"—":d.toLocaleDateString();};
-export function FusionInventory({projectId,items,count,labels,filters}:{
- projectId:string;items:FusionInventoryItem[];count:number;labels:Labels;filters:FusionInventoryFilters
+export function FusionInventory({projectId,items,count,labels,filters,assignmentReady=true}:{
+ projectId:string;items:FusionInventoryItem[];count:number;labels:Labels;filters:FusionInventoryFilters;assignmentReady?:boolean
 }){
  const [selected,setSelected]=useState<FusionInventoryItem|null>(null);
  const groups=groupInventory(items,filters.group,labels);
@@ -36,6 +36,7 @@ export function FusionInventory({projectId,items,count,labels,filters}:{
     <p className="mt-1 text-xs text-stone-500">Canonical investigation records · Source reporting is not an analyst assessment</p></div>
    <div className="text-right text-xs text-stone-400"><strong className="text-lg text-amber-300">{count.toLocaleString()}</strong><span className="block">unique matching records</span></div>
   </header>
+  {!assignmentReady&&<p role="status" className="rounded border border-amber-900 bg-[#2b2119] p-3 text-sm text-amber-200">Existing Inventory remains readable. Inline assignments require Supabase migration 076 before editing.</p>}
   <form className="rounded border border-stone-800 bg-[#111518] p-3" action={`/projects/${projectId}/fusion`} method="get">
     <input type="hidden" name="view" value="inventory"/>
     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -97,6 +98,6 @@ export function FusionInventory({projectId,items,count,labels,filters}:{
    <div className="flex gap-2">{filters.page>1&&<Link className="citem-button-ghost" href={pageUrl(filters.page-1)}>Previous</Link>}
     {filters.page<totalPages&&<Link className="citem-button-ghost" href={pageUrl(filters.page+1)}>Next</Link>}</div>
   </div>
-  {selected&&<FusionInventoryPopup key={selected.record_type+selected.record_id} projectId={projectId} item={selected} close={()=>setSelected(null)}/>}
+  {selected&&<FusionInventoryPopup key={selected.record_type+selected.record_id} projectId={projectId} item={selected} assignmentReady={assignmentReady} close={()=>setSelected(null)}/>}
  </div>;
 }

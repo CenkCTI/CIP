@@ -143,11 +143,11 @@ function CountryEditor({projectId,payload,save,busy}:{
   </form>}
  </section>;
 }
-export function FusionInventoryPopup({projectId,item,close}:{
- projectId:string;item:FusionInventoryItem;close:()=>void
+export function FusionInventoryPopup({projectId,item,close,assignmentReady=true}:{
+ projectId:string;item:FusionInventoryItem;close:()=>void;assignmentReady?:boolean
 }){
  const router=useRouter();
- const [payload,setPayload]=useState<Payload|null>(null),[loading,setLoading]=useState(true);
+ const [payload,setPayload]=useState<Payload|null>(null),[loading,setLoading]=useState(assignmentReady);
  const [error,setError]=useState(""),[busy,setBusy]=useState(false),[tab,setTab]=useState<"assign"|"evidence">("assign");
  const [review,setReview]=useState("");
  const dialog=useRef<HTMLDivElement>(null),returnFocus=useRef<HTMLElement|null>(null),closeButton=useRef<HTMLButtonElement>(null);
@@ -159,6 +159,7 @@ export function FusionInventoryPopup({projectId,item,close}:{
   setPayload(data);setReview(String(data.reviewStatus??""));return data as Payload;
  },[item.record_type,item.record_id,projectId]);
  useEffect(()=>{
+  if(!assignmentReady)return;
   let active=true;const run=async()=>{
    try{
     const q=new URLSearchParams({type:item.record_type,record:item.record_id});
@@ -168,7 +169,7 @@ export function FusionInventoryPopup({projectId,item,close}:{
    }catch(e){if(active)setError(e instanceof Error?e.message:"Unable to load record");}
    finally{if(active)setLoading(false);}
   };void run();return ()=>{active=false;};
- },[projectId,item.record_type,item.record_id]);
+ },[projectId,item.record_type,item.record_id,assignmentReady]);
  useEffect(()=>{
   returnFocus.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
   closeButton.current?.focus();
@@ -210,6 +211,7 @@ export function FusionInventoryPopup({projectId,item,close}:{
    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
     {error&&<div role="alert" className="mb-4 rounded border border-red-900 bg-red-950/30 p-3 text-sm text-red-200">{error}
      <button className="ml-3 underline" type="button" onClick={()=>{setError("");void load().catch(e=>setError(String(e)));}}>Retry</button></div>}
+    {!assignmentReady&&<p role="alert" className="rounded border border-amber-900 p-4 text-sm text-amber-200">Read-only mode: migration 076 has not been applied to the connected Supabase database. Install it before using manual assignments.</p>}
     {loading&&<p role="status" className="text-sm text-stone-400">Loading Investigation record and assignments…</p>}
     {!loading&&payload&&tab==="assign"&&<div className="grid gap-4 lg:grid-cols-2">
      <AssignmentEditor key={`${item.record_type}:${item.record_id}:SOURCE`} projectId={projectId} payload={payload} kind="SOURCE" save={save} busy={busy}/>
