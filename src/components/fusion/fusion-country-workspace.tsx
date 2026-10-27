@@ -93,7 +93,7 @@ export function CountryNotesFiles({projectId,code,data,mutate,dirty,page,onPage,
     </article>;
    })}
    {data.attachments.length===0&&<p className="text-sm text-stone-500">No attached files on this page.</p>}
-   <div className="flex justify-between text-xs text-stone-400"><button disabled={filePage<=1} onClick={()=>onFilesPage(Math.max(1,filesPage-1))}>Previous files</button><span>File page {data.pages.files}</span><button disabled={data.pages.files*data.limit>=data.filesTotal} onClick={()=>onFilesPage(filesPage+1)}>Next files</button></div>
+   <div className="flex justify-between text-xs text-stone-400"><button disabled={filesPage<=1} onClick={()=>onFilesPage(Math.max(1,filesPage-1))}>Previous files</button><span>File page {data.pages.files}</span><button disabled={data.pages.files*data.limit>=data.filesTotal} onClick={()=>onFilesPage(filesPage+1)}>Next files</button></div>
   </section>
  </div>;
 }
