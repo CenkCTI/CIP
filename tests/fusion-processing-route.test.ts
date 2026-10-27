@@ -47,13 +47,13 @@ describe("Fusion Processing Source resolution",()=>{
  });
  it("requires the analyst to choose when more than one owned Source is related",async()=>{
   const second="44444444-4444-4444-8444-444444444444";
-  const {db}=database({record_type:"ANNOTATION",record_id:record,source_ids:[source,second],assigned_source_ids:[]});
+  const {db}=database({record_type:"EVIDENCE",record_id:record,source_ids:[source,second],assigned_source_ids:[]});
   requireOwnedProject.mockResolvedValue({supabase:db});
   const {GET}=await import("@/app/api/projects/[id]/fusion/processing/route");
-  const ambiguous=await GET(new NextRequest(path+"?type=ANNOTATION&record="+record),{params:Promise.resolve({id:project})});
+  const ambiguous=await GET(new NextRequest(path+"?type=EVIDENCE&record="+record),{params:Promise.resolve({id:project})});
   expect(ambiguous.status).toBe(200);
   expect(await ambiguous.json()).toMatchObject({supported:false,choices:[{id:source},{id:second}]});
-  const unauthorized=await GET(new NextRequest(path+"?type=ANNOTATION&record="+record+"&source=55555555-5555-4555-8555-555555555555"),{params:Promise.resolve({id:project})});
+  const unauthorized=await GET(new NextRequest(path+"?type=EVIDENCE&record="+record+"&source=55555555-5555-4555-8555-555555555555"),{params:Promise.resolve({id:project})});
   expect(unauthorized.status).toBe(403);
   expect(loadFusionSourceReader).not.toHaveBeenCalled();
  });
