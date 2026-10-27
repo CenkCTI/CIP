@@ -99,6 +99,11 @@ export function CountryIntelligencePopup({projectId,code,onClose,onCountry,prese
   return ()=>document.removeEventListener("keydown",key);
  },[onClose,dirty]);
 
+ const switchTab=(next:Tab):boolean=>{
+  if(next===tab)return true;
+  if(dirty&&!window.confirm("Discard unsaved changes?"))return false;
+  setDirty(false);setTab(next);return true;
+ };
  const close=()=>{if(dirty&&!window.confirm("Discard unsaved changes?"))return;onClose();};
  const switchCountry=(next:string)=>{if(dirty&&!window.confirm("Discard unsaved changes?"))return;onCountry(next);};
  const apiLookup=async(nextPage=1)=>{
@@ -173,7 +178,7 @@ export function CountryIntelligencePopup({projectId,code,onClose,onCountry,prese
       <Link className="text-amber-300 underline" href={itemUrl(l.target_type,l.target_id)}>Open source record</Link>
       {l.source_ids[0]&&<Link className="text-amber-300 underline" href={`/projects/${projectId}/sources/${l.source_ids[0]}`}>Original source</Link>}
       <Link className="text-amber-300 underline" href={`/projects/${projectId}/fusion?view=inventory&country=${code}&type=${l.target_type}`}>Inventory</Link>
-      <button className="text-amber-300 underline" onClick={()=>{setFilterType(l.target_type);setLinksPage(1);setTab("records");}}>Manage relations</button>
+      <button className="text-amber-300 underline" onClick={()=>{if(!switchTab("records"))return;setFilterType(l.target_type);setLinksPage(1);}}>Manage relations</button>
     </div>
    </article>;
  return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-0 sm:p-4" onMouseDown={e=>{if(e.target===e.currentTarget)close();}}>
@@ -195,7 +200,7 @@ export function CountryIntelligencePopup({projectId,code,onClose,onCountry,prese
     </header>
     <nav aria-label="Country intelligence sections" className="flex shrink-0 flex-wrap gap-1 border-b border-stone-800 bg-[#14191d] p-2">
      {([["overview","Overview"],["records","Linked Records"],["notes","Notes & Files"],["cyber","Cyber Activity"]] as [Tab,string][]).map(([key,label])=>
-      <button key={key} role="tab" aria-selected={tab===key} className={`rounded px-3 py-2 text-sm ${tab===key?"bg-[#b9822f]/20 text-amber-200":"text-stone-400 hover:bg-stone-800"}`} onClick={()=>setTab(key)}>{label}</button>)}
+      <button key={key} role="tab" aria-selected={tab===key} className={`rounded px-3 py-2 text-sm ${tab===key?"bg-[#b9822f]/20 text-amber-200":"text-stone-400 hover:bg-stone-800"}`} onClick={()=>switchTab(key)}>{label}</button>)}
     </nav>
     <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 sm:px-6">
      {error&&<div role="alert" className="mb-3 rounded border border-red-800 bg-[#241c1d] p-3 text-sm text-red-300">{error}
@@ -215,7 +220,7 @@ export function CountryIntelligencePopup({projectId,code,onClose,onCountry,prese
        </section>}
        <section className="space-y-2"><h3 className="text-sm font-semibold text-[#e8e1d6]">Recently linked material</h3>
         {data.overviewRecords.length?data.overviewRecords.map(card):<p className="text-sm text-stone-500">No records linked to this country. Link a record to begin.</p>}
-        <button className={btn} onClick={()=>setTab("records")}>Manage linked records</button>
+        <button className={btn} onClick={()=>switchTab("records")}>Manage linked records</button>
        </section>
        <p className="text-xs text-stone-500">Geographic links are analyst annotations. They do not independently establish targeting, origin or attribution.</p>
      </div>}
@@ -260,11 +265,11 @@ export function CountryIntelligencePopup({projectId,code,onClose,onCountry,prese
         return <div key={key} className="space-y-2 rounded border border-stone-800 bg-[#14191d] p-3">
          <h3 className="font-medium text-[#e8e1d6]">{title} <span className="text-xs text-stone-500">({group?.total??0} explicit associations)</span></h3>
          {group?.items.length?group.items.map(cyberCard):<p className="text-xs text-stone-500">No explicitly linked records for this section.</p>}
-         {(group?.total??0)>8&&<button className="text-xs text-amber-300 underline" onClick={()=>{setTab("records");setQuery("");setFilterType("");setLinksPage(1);}}>Browse all linked records</button>}
+         {(group?.total??0)>8&&<button className="text-xs text-amber-300 underline" onClick={()=>{if(!switchTab("records"))return;setQuery("");setFilterType("");setLinksPage(1);}}>Browse all linked records</button>}
         </div>;
        })}
        <section className="rounded border border-stone-800 p-3"><h3 className="text-sm font-medium text-[#e8e1d6]">Targeted sectors</h3><p className="text-xs text-stone-500">No verified structured sector association is available for this country.</p></section>
-       <button className={btn} onClick={()=>{setTab("records");setShowLink(true);}}>Link Cyber Activity Record</button>
+       <button className={btn} onClick={()=>{if(!switchTab("records"))return;setShowLink(true);}}>Link Cyber Activity Record</button>
       </section>}
      </div>
     <footer className="flex shrink-0 flex-wrap justify-between gap-2 border-t border-stone-800 bg-[#14191d] px-4 py-3 text-xs">

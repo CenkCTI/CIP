@@ -83,4 +83,20 @@ describe("Country Intelligence Popup map integration",()=>{
   expect(createCountryNote).toHaveBeenCalledTimes(1);
   expect(screen.getByRole("dialog")).toBeInTheDocument();
  });
+ it("does not discard unsaved analyst brief when moving to another tab without confirmation",async()=>{
+  stubFetch();const user=userEvent.setup();
+  const confirm=vi.fn(()=>false);vi.stubGlobal("confirm",confirm);
+  render(<FusionWorldMap projectId="test" selectedCountry="PL" counts={{}}/>);
+  const dialog=await screen.findByRole("dialog");
+  await user.click(within(dialog).getByRole("button",{name:"Edit brief"}));
+  await user.type(within(dialog).getByLabelText("Country brief"),"Unpublished investigation note");
+  await user.click(within(dialog).getByRole("tab",{name:"Linked Records"}));
+  expect(confirm).toHaveBeenCalled();
+  expect(within(dialog).getByLabelText("Country brief")).toHaveValue("Unpublished investigation note");
+  expect(within(dialog).getByRole("tab",{name:"Overview"})).toHaveAttribute("aria-selected","true");
+  confirm.mockReturnValue(true);
+  await user.click(within(dialog).getByRole("tab",{name:"Linked Records"}));
+  expect(within(dialog).getByRole("tab",{name:"Linked Records"})).toHaveAttribute("aria-selected","true");
+ });
+
 });
