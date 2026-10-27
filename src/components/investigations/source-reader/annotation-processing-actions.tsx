@@ -120,6 +120,7 @@ function CreateFields({
   annotation: Row;
   candidate?: { observedValue: string; canonicalValue: string; type: string } | null;
   aiCandidate?: Stage3Candidate | null;
+  onChanged?: () => void;
 }) {
   const excerpt = text(annotation.selected_text) || text(annotation.comment);
   const cve = excerpt.match(/CVE-\d{4}-\d{4,}/i)?.[0]?.toUpperCase() ?? "";
@@ -434,6 +435,7 @@ export function AnnotationProcessingActions({
   options,
   compact = false,
   aiCandidate,
+  onChanged,
 }: {
   projectId: string;
   sourceId: string;
@@ -447,6 +449,7 @@ export function AnnotationProcessingActions({
   aiCandidate?: Stage3Candidate | null;
 }) {
   const router = useRouter();
+  const refresh = () => { router.refresh(); onChanged?.(); };
   const state = (text(annotation.processing_state) ||
     "UNPROCESSED") as AnnotationProcessingState;
   const destinationForSuggestion = (candidate:Stage3Candidate | null | undefined):SourceReaderDestination => {
@@ -502,7 +505,7 @@ export function AnnotationProcessingActions({
       if (result.success) {
         setIgnoreOpen(false);
         setIgnoreReason("");
-        router.refresh();
+        refresh();
       }
     });
   }
@@ -520,7 +523,7 @@ export function AnnotationProcessingActions({
         formData,
       );
       setMessage(result);
-      if (result.success) router.refresh();
+      if (result.success) refresh();
     });
   }
 
@@ -544,7 +547,7 @@ export function AnnotationProcessingActions({
       setMessage(result);
       if (result.success) {
         setSelectedTarget("");
-        router.refresh();
+        refresh();
       }
     });
   }
@@ -670,7 +673,7 @@ export function AnnotationProcessingActions({
                       text(output.id),
                     );
                     setMessage(result);
-                    if (result.success) router.refresh();
+                    if (result.success) refresh();
                   })
                 }
               >
@@ -759,7 +762,7 @@ export function AnnotationProcessingActions({
 
       {open ? (
         <div
-          className="fixed inset-0 z-[100] grid place-items-center bg-black/75 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[150] grid place-items-center bg-black/75 p-4 backdrop-blur-sm"
           role="presentation"
           onMouseDown={(event) => {
             if (event.currentTarget === event.target) setOpen(false);
@@ -944,7 +947,7 @@ export function AnnotationProcessingActions({
                                   })),
                                 );
                                 setMessage(result);
-                                if (result.success) router.refresh();
+                                if (result.success) refresh();
                               })
                             }
                           >

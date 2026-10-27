@@ -508,6 +508,8 @@ export function SourceReaderWorkspace({
   sourceClaimAssertions,
   processingOptions,
   initialFocusedAnnotationId,
+  embedded = false,
+  onChanged,
 }: {
   projectId: string;
   source: Row;
@@ -536,8 +538,11 @@ export function SourceReaderWorkspace({
     source_claim: Row[];
   };
   initialFocusedAnnotationId?: string | null;
+  embedded?: boolean;
+  onChanged?: () => void;
 }) {
   const router = useRouter();
+  const refresh = () => { router.refresh(); onChanged?.(); };
   const isPdf =
     s(asset?.mime_type).toLowerCase() === "application/pdf" ||
     s(asset?.original_filename).toLowerCase().endsWith(".pdf");
@@ -708,7 +713,7 @@ export function SourceReaderWorkspace({
       setMessage(result);
       if (result.success) {
         setEditingAnnotationId(null);
-        router.refresh();
+        refresh();
       }
     });
   }
@@ -732,18 +737,18 @@ export function SourceReaderWorkspace({
         setDraftRect(null);
         setComment("");
         setMode(null);
-        router.refresh();
+        refresh();
       }
     });
   }
 
   return (
-    <section className="mx-auto max-w-[1600px] space-y-4">
+    <section className={embedded ? "w-full min-w-0 space-y-4" : "mx-auto max-w-[1600px] space-y-4"}>
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <Link className="text-sm text-amber-300" href={`/projects/${projectId}/sources`}>
+          {!embedded && <Link className="text-sm text-amber-300" href={`/projects/${projectId}/sources`}>
             ← Kaynaklar
-          </Link>
+          </Link>}
           <p className="citem-label mt-3">Kaynak Okuyucu</p>
           <h1 className="mt-1 text-2xl font-semibold text-stone-100">{s(source.title)}</h1>
           <p className="mt-1 text-sm text-stone-500">
@@ -760,7 +765,7 @@ export function SourceReaderWorkspace({
               Kaynak URL'si
             </a>
           ) : null}
-          {isPdf && asset && signedUrl ? (
+          {!embedded && isPdf && asset && signedUrl ? (
             <button type="button" className="citem-button" aria-label="Open AI Processing Copilot"
               onClick={() => setCopilotOpen(true)}>◈ AI Copilot</button>
           ) : null}
@@ -1166,6 +1171,7 @@ export function SourceReaderWorkspace({
                           options={processingOptions}
                           aiCandidate={aiReview?.annotationId === id ? aiReview.candidate : null}
                           compact={!expanded}
+                          onChanged={onChanged}
                         />
                       ) : null}
                       <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-stone-800/70 pt-2">
@@ -1214,7 +1220,7 @@ export function SourceReaderWorkspace({
                               setMessage(result);
                               if (result.success) {
                                 if (editingAnnotationId === id) setEditingAnnotationId(null);
-                                router.refresh();
+                                refresh();
                               }
                             })
                           }
@@ -1234,7 +1240,7 @@ export function SourceReaderWorkspace({
           </div>
         </aside>
       </div>
-      {copilotOpen && isPdf && asset && signedUrl ? (
+      {!embedded && copilotOpen && isPdf && asset && signedUrl ? (
         <ProcessingCopilot
           key={`${s(source.id)}:${s(asset.id)}`}
           projectId={projectId}
