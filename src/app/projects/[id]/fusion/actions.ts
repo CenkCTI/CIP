@@ -182,3 +182,57 @@ export async function setSourceReviewStatus(form:FormData){
  revalidatePath(`/projects/${ctx.projectId}/sources`);
  refresh(ctx.projectId);
 }
+
+/** Manual categorization never updates source-derived provenance, assertions, or canonical content. */
+const inventoryAssignmentKinds=["SOURCE","GAP","REQUIREMENT"] as const;
+const inventoryRecordTables={
+ ...targetTables,
+ INFORMATION_GAP:"investigation_information_gaps",
+ COLLECTION_REQUIREMENT:"collection_requirements"
+} as const;
+async function inventoryAssignmentInput(form:FormData){
+ const ctx=await context(form);
+ const recordType=z.enum(Object.keys(inventoryRecordTables) as
+  [keyof typeof inventoryRecordTables,...(keyof typeof inventoryRecordTables)[]]).parse(text(form,"recordType"));
+ const recordId=z.string().uuid().parse(text(form,"recordId"));
+ const check=await ctx.supabase.from(inventoryRecordTables[recordType]).select("id")
+  .eq("project_id",ctx.projectId).eq("id",recordId).maybeSingle();
+ if(check.error||!check.data)throw Error("Record not found within this Investigation");
+ return {ctx,recordType,recordId};
+}
+export async function addFusionInventoryAssignment(form:FormData){
+ const {ctx,recordType,recordId}=await inventoryAssignmentInput(form);
+ const kind=z.enum(inventoryAssignmentKinds).parse(text(form,"kind"));
+ const assignedId=z.string().uuid().parse(text(form,"assignedId"));
+ const rationale=z.string().max(4000).parse(text(form,"rationale"));
+ const assignedTable=kind==="SOURCE"?"sources":kind==="GAP"?"investigation_information_gaps":"collection_requirements";
+ const checked=await ctx.supabase.from(assignedTable).select("id").eq("project_id",ctx.projectId).eq("id",assignedId).maybeSingle();
+ if(checked.error||!checked.data)throw Error("Assignment target is outside this Investigation");
+ if(kind==="SOURCE"&&recordType==="SOURCE"&&recordId===assignedId)throw Error("Source cannot be assigned to itself");
+ const result=await ctx.supabase.from("fusion_record_assignments").insert({
+  project_id:ctx.projectId,record_type:recordType,record_id:recordId,
+  assignment_kind:kind,assigned_id:assignedId,rationale:rationale||null,created_by:ctx.user.id
+ });
+ if(result.error)throw Error(result.error.code==="23505"?"Already assigned":"Unable to save manual assignment");
+ refresh(ctx.projectId);
+}
+export async function updateFusionInventoryAssignment(form:FormData){
+ const {ctx,recordType,recordId}=await inventoryAssignmentInput(form);
+ const id=z.string().uuid().parse(text(form,"assignmentId"));
+ const rationale=z.string().max(4000).parse(text(form,"rationale"));
+ const result=await ctx.supabase.from("fusion_record_assignments")
+  .update({rationale:rationale||null})
+  .eq("project_id",ctx.projectId).eq("record_type",recordType).eq("record_id",recordId)
+  .eq("id",id).select("id").single();
+ if(result.error||!result.data)throw Error("Unable to update manual assignment");
+ refresh(ctx.projectId);
+}
+export async function removeFusionInventoryAssignment(form:FormData){
+ const {ctx,recordType,recordId}=await inventoryAssignmentInput(form);
+ const id=z.string().uuid().parse(text(form,"assignmentId"));
+ const result=await ctx.supabase.from("fusion_record_assignments")
+  .delete().eq("project_id",ctx.projectId).eq("record_type",recordType).eq("record_id",recordId)
+  .eq("id",id).select("id").single();
+ if(result.error||!result.data)throw Error("Unable to remove assignment");
+ refresh(ctx.projectId);
+}
