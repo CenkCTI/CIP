@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useCallback,useEffect,useRef,useState } from "react";
 import { useRouter } from "next/navigation";
 import countries from "@/lib/fusion/countries.json";
+import {FusionInventoryProcessing} from "./fusion-inventory-processing";
 import { inventoryDetailUrl,type FusionInventoryItem } from "@/lib/fusion/types";
 import {
  addFusionInventoryAssignment,updateFusionInventoryAssignment,removeFusionInventoryAssignment,
@@ -148,7 +149,7 @@ export function FusionInventoryPopup({projectId,item,close,assignmentReady=true}
 }){
  const router=useRouter();
  const [payload,setPayload]=useState<Payload|null>(null),[loading,setLoading]=useState(assignmentReady);
- const [error,setError]=useState(""),[busy,setBusy]=useState(false),[tab,setTab]=useState<"assign"|"evidence">("assign");
+ const [error,setError]=useState(""),[busy,setBusy]=useState(false),[tab,setTab]=useState<"assign"|"processing"|"evidence">("assign");
  const [review,setReview]=useState("");
  const dialog=useRef<HTMLDivElement>(null),returnFocus=useRef<HTMLElement|null>(null),closeButton=useRef<HTMLButtonElement>(null);
  const load=useCallback(async()=>{
@@ -178,6 +179,7 @@ export function FusionInventoryPopup({projectId,item,close,assignmentReady=true}
  },[]);
  useEffect(()=>{
   const listener=(e:KeyboardEvent)=>{
+   if(e.target instanceof Element && e.target.closest('[aria-label="Process source annotation"]'))return;
    if(e.key==="Escape"){e.preventDefault();if(!busy)close();}
    if(e.key!=="Tab"||!dialog.current)return;
    const elements=[...dialog.current.querySelectorAll<HTMLElement>('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled])')].filter(el=>el.getClientRects().length>0);
@@ -197,7 +199,7 @@ export function FusionInventoryPopup({projectId,item,close,assignmentReady=true}
  return <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/75 p-0 sm:p-4"
    onMouseDown={e=>{if(e.currentTarget===e.target&&!busy)close();}}>
   <div role="dialog" aria-modal="true" aria-labelledby="inventory-popup-heading" ref={dialog}
-   className="flex h-screen w-full max-w-[1150px] flex-col overflow-hidden border border-stone-700 bg-[#0b0e11] shadow-2xl sm:h-[90vh] sm:rounded-lg">
+   className="flex h-screen w-full max-w-[1500px] flex-col overflow-hidden border border-stone-700 bg-[#0b0e11] shadow-2xl sm:h-[90vh] sm:rounded-lg">
    <header className="flex shrink-0 items-start justify-between gap-4 border-b border-stone-800 bg-[#181e22] p-4 sm:px-6">
     <div className="min-w-0"><p className="citem-label">Fusion / Evidence Inventory · {selected.record_type.replaceAll("_"," ")}</p>
      <h2 id="inventory-popup-heading" className="mt-1 break-words text-xl font-semibold text-[#e8e1d6]">{selected.title}</h2>
@@ -206,6 +208,7 @@ export function FusionInventoryPopup({projectId,item,close,assignmentReady=true}
    </header>
    <nav className="flex shrink-0 gap-1 border-b border-stone-800 p-2" aria-label="Inventory popup sections">
     <button className={tab==="assign"?"rounded bg-amber-800/20 p-2 text-amber-300":"rounded p-2 text-stone-400"} onClick={()=>setTab("assign")}>Assignments</button>
+    <button className={tab==="processing"?"rounded bg-amber-800/20 p-2 text-amber-300":"rounded p-2 text-stone-400"} onClick={()=>setTab("processing")}>Highlight · Process / Extract</button>
     <button className={tab==="evidence"?"rounded bg-amber-800/20 p-2 text-amber-300":"rounded p-2 text-stone-400"} onClick={()=>setTab("evidence")}>Evidence & provenance</button>
    </nav>
    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
@@ -227,6 +230,10 @@ export function FusionInventoryPopup({projectId,item,close,assignmentReady=true}
       </select><button className={button} disabled={busy}>Save review state</button>
      </form>}
     </div>}
+    {tab==="processing"&&<FusionInventoryProcessing
+      key={item.record_type+":"+item.record_id}
+      projectId={projectId} item={selected}
+      onChanged={()=>{void load().catch(e=>setError(String(e)));router.refresh();}}/>}
     {!loading&&payload&&tab==="evidence"&&<section className="space-y-4 text-sm">
      <div className="rounded border border-stone-800 bg-[#14191d] p-4"><h3 className="mb-2 font-semibold text-[#e8e1d6]">Original content · read-only</h3>
       <p className="whitespace-pre-wrap break-words text-stone-300">{selected.preview_text||selected.summary||"No excerpt saved"}</p></div>
