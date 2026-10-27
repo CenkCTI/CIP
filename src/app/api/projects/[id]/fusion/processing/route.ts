@@ -16,20 +16,38 @@ export async function GET(request:NextRequest,{params}:{params:Promise<{id:strin
    .eq("project_id",id).eq("record_type",kind).eq("record_id",recordId).maybeSingle();
   if(r.error||!r.data)return NextResponse.json({error:"Inventory record not found"},{status:404});
   const item=r.data;
-  let candidate=kind==="SOURCE"?recordId:(item.source_id??item.source_ids?.[0]??item.assigned_source_ids?.[0]??null);
-  // Evidence linked from collection may be backed by an already existing source.
-  if(!candidate&&kind==="EVIDENCE"){
-   const matched=await supabase.from("sources").select("id").eq("project_id",id).eq("evidence_id",recordId).limit(2);
-   if(matched.error)throw Error("Source lookup failed");
-   candidate=matched.data?.[0]?.id??null;
+
+  const links=[...new Set([
+    ...(kind==="SOURCE"?[recordId]:[]),
+    ...(item.source_id?[item.source_id]:[]),
+    ...(item.source_ids??[]),
+    ...(item.assigned_source_ids??[])
+  ])];
+  // Resolve only existing, owner-scoped Sources. Multiple links require explicit analyst selection.
+  const associated=links.length?
+    await supabase.from("sources").select("id,title").eq("project_id",id).in("id",links).order("title",{ascending:true}).limit(1000):
+    kind==="EVIDENCE"?
+      await supabase.from("sources").select("id,title").eq("project_id",id).eq("evidence_id",recordId)
+        .order("title",{ascending:true}).limit(1000):
+      {data:[],error:null};
+  if(associated.error)throw Error("Source lookup failed");
+  const candidates=associated.data??[];
+  if(!candidates.length){
+   return NextResponse.json({supported:false,reason:"No Source linked to this Inventory record. Stage 3 extraction requires a real Source annotation. Associate an existing Source in Assignments or register a Source through collection first."},{headers:{"Cache-Control":"private, no-store"}});
   }
-  if(!candidate){
-   return NextResponse.json({supported:false,reason:"No Source linked to this Inventory record. Stage 3 extraction requires a real Source annotation; first associate an existing Source in Assignments, or create a Source in the collection workflow."},{headers:{"Cache-Control":"private, no-store"}});
+  const requestedSource=request.nextUrl.searchParams.get("source");
+  if(requestedSource && !uuid.safeParse(requestedSource).success){
+   return NextResponse.json({error:"Invalid Source selection"},{status:400});
   }
-  const checked=await supabase.from("sources").select("id").eq("project_id",id).eq("id",candidate).maybeSingle();
-  if(checked.error||!checked.data){
-   return NextResponse.json({supported:false,reason:"The linked Source no longer exists in this Investigation."},{headers:{"Cache-Control":"private, no-store"}});
+  if(requestedSource&&!candidates.some(row=>row.id===requestedSource)){
+   return NextResponse.json({error:"Selected Source does not belong to this record"},{status:403});
   }
+  if(candidates.length>1&&!requestedSource){
+   return NextResponse.json({supported:false,reason:"Several Sources are associated with this Inventory record. Choose the Source you want to annotate and process.",choices:candidates},{
+     headers:{"Cache-Control":"private, no-store"}
+   });
+  }
+  const candidate=requestedSource??candidates[0].id;
   const sourceReader=await loadFusionSourceReader(id,candidate,
     kind==="ANNOTATION"?recordId:item.source_annotation_id??null);
   return NextResponse.json({supported:true,reader:sourceReader},{
