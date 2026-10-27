@@ -17,8 +17,12 @@ export async function GET(request:NextRequest,{params}:{params:Promise<{id:strin
   if(r.error||!r.data)return NextResponse.json({error:"Inventory record not found"},{status:404});
   const item=r.data;
 
-  const links=[...new Set([
-    ...(kind==="SOURCE"?[recordId]:[]),
+  // Source and Source Annotation identities are immutable provenance, not analyst choices.
+  // Never process a particular Annotation against a different manually linked Source.
+  const pinnedSource=kind==="SOURCE"?recordId:
+    ["ANNOTATION","SOURCE_ASSET","SOURCE_NOTE"].includes(kind)?
+      (item.source_id??item.source_ids?.[0]??null):null;
+  const links=pinnedSource?[pinnedSource]:[...new Set([
     ...(item.source_id?[item.source_id]:[]),
     ...(item.source_ids??[]),
     ...(item.assigned_source_ids??[])
