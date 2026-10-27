@@ -256,7 +256,7 @@ export function CountryIntelligencePopup({projectId,code,onClose,onCountry,prese
        }):<p className="text-sm text-stone-500">No country relationships match this filter.</p>}
        <Pager page={linksPage} total={data.linksTotal} limit={data.limit} onChange={setLinksPage}/>
       </section>}
-     {!loading&&data&&tab==="notes"&&<CountryNotesFiles key={code} projectId={projectId} code={code} data={data} mutate={mutate} dirty={setDirty}
+     {!loading&&data&&tab==="notes"&&<CountryNotesFiles key={code} projectId={projectId} code={code} data={data} mutate={mutate} dirty={setDirty} isDirty={dirty}
        page={notesPage} onPage={setNotesPage} filesPage={filesPage} onFilesPage={setFilesPage}/>}
      {!loading&&data&&tab==="cyber"&&<section className="space-y-5">
        <p className="text-sm text-stone-400">Only explicitly country-linked Investigation records are shown. No country risk scoring or automatic attribution.</p>

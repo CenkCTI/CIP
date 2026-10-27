@@ -99,4 +99,17 @@ describe("Country Intelligence Popup map integration",()=>{
   expect(within(dialog).getByRole("tab",{name:"Linked Records"})).toHaveAttribute("aria-selected","true");
  });
 
+ it("guards against discarding a newly typed country note when collapsing its editor",async()=>{
+  stubFetch();const user=userEvent.setup();
+  const confirm=vi.fn(()=>false);vi.stubGlobal("confirm",confirm);
+  render(<FusionWorldMap projectId="test" selectedCountry="PL" counts={{}}/>);
+  const dialog=await screen.findByRole("dialog");
+  await user.click(within(dialog).getByRole("tab",{name:"Notes & Files"}));
+  await user.click(within(dialog).getByRole("button",{name:"+ New note"}));
+  await user.type(within(dialog).getByLabelText("Note title"),"Unsaved research");
+  await user.click(within(dialog).getByRole("button",{name:"+ New note"}));
+  expect(confirm).toHaveBeenCalledOnce();
+  expect(within(dialog).getByLabelText("Note title")).toHaveValue("Unsaved research");
+ });
+
 });

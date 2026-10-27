@@ -28,13 +28,22 @@ export function CountryBrief({projectId,code,data,mutate,dirty}:{
   {brief&&<p className="mt-2 text-xs text-stone-500">Author {brief.created_by.slice(0,8)} · Updated {new Date(brief.updated_at).toLocaleString()} · Analyst-authored, not independently verified</p>}
  </section>;
 }
-export function CountryNotesFiles({projectId,code,data,mutate,dirty,page,onPage,filesPage,onFilesPage}:{
- projectId:string;code:string;data:CountryPopupData;mutate:CountryAction;dirty:(v:boolean)=>void;page:number;onPage:(n:number)=>void;filesPage:number;onFilesPage:(n:number)=>void
+export function CountryNotesFiles({projectId,code,data,mutate,dirty,isDirty,page,onPage,filesPage,onFilesPage}:{
+ projectId:string;code:string;data:CountryPopupData;mutate:CountryAction;dirty:(v:boolean)=>void;isDirty:boolean;page:number;onPage:(n:number)=>void;filesPage:number;onFilesPage:(n:number)=>void
 }){
  const [editing,setEditing]=useState<string|null>(null);
  const [showNew,setShowNew]=useState(false);
  const [attaching,setAttaching]=useState(false);
  const notes=data.notes.filter(n=>n.id!==data.brief?.id);
+ const mayDiscard=()=>!isDirty||window.confirm("Discard unsaved changes?");
+ const toggleNew=()=>{
+  if(!mayDiscard())return;
+  setShowNew(!showNew);setEditing(null);dirty(false);
+ };
+ const toggleEditor=(id:string)=>{
+  if(!mayDiscard())return;
+  setEditing(editing===id?null:id);setShowNew(false);dirty(false);
+ };
  const run=async (fn:(f:FormData)=>Promise<void>,form:FormData)=>{
   await mutate(fn,form);setEditing(null);setShowNew(false);dirty(false);
  };
@@ -42,7 +51,7 @@ export function CountryNotesFiles({projectId,code,data,mutate,dirty,page,onPage,
  return <div className="grid min-w-0 gap-5 lg:grid-cols-2">
   <section className="min-w-0 space-y-3">
    <div className="flex items-center justify-between gap-2"><div><h3 className="font-semibold text-[#e8e1d6]">Country Notes</h3><p className="text-xs text-stone-500">{data.notesTotal} saved notes</p></div>
-    <button className={button} onClick={()=>setShowNew(!showNew)}>+ New note</button></div>
+    <button className={button} onClick={toggleNew}>+ New note</button></div>
    {showNew&&<form className="space-y-2 rounded border border-stone-700 bg-[#14191d] p-3" onSubmit={async e=>{
     e.preventDefault();const f=base(projectId,code);const t=e.currentTarget;f.set("title",(t.elements.namedItem("title") as HTMLInputElement).value);f.set("body",(t.elements.namedItem("body") as HTMLTextAreaElement).value);await run(createCountryNote,f);
    }}><input name="title" aria-label="Note title" placeholder="Note title" required maxLength={180} className={field} onChange={()=>dirty(true)}/>
@@ -52,7 +61,7 @@ export function CountryNotesFiles({projectId,code,data,mutate,dirty,page,onPage,
    {notes.map(n=><article key={n.id} className="rounded border border-stone-800 bg-[#14191d] p-3">
     <div className="flex justify-between gap-2"><div className="min-w-0"><h4 className="break-words text-sm text-stone-200">{n.title}</h4>
      <p className="text-xs text-stone-500">Created {new Date(n.created_at).toLocaleDateString()} · Updated {new Date(n.updated_at).toLocaleDateString()} · Author {n.created_by.slice(0,8)}</p></div>
-     <button className="text-xs text-amber-300" onClick={()=>{setEditing(editing===n.id?null:n.id);dirty(false);}}>Edit</button></div>
+     <button className="text-xs text-amber-300" onClick={()=>toggleEditor(n.id)}>Edit</button></div>
     {editing===n.id?<form key={n.id} className="mt-3 space-y-2" onSubmit={async e=>{e.preventDefault();const f=base(projectId,code);f.set("noteId",n.id);f.set("title",(e.currentTarget.elements.namedItem("title") as HTMLInputElement).value);f.set("body",(e.currentTarget.elements.namedItem("body") as HTMLTextAreaElement).value);await run(updateCountryNote,f);}}>
      <input className={field} name="title" maxLength={180} required defaultValue={n.title} onChange={()=>dirty(true)}/>
      <textarea className={field} name="body" rows={5} maxLength={50000} defaultValue={n.body} onChange={()=>dirty(true)}/>
