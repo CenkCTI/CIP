@@ -128,7 +128,22 @@ describe("Country Intelligence Popup map integration",()=>{
   const label=screen.getByText("United States");
   expect(label).toBeInTheDocument();
   expect(label).toHaveClass("fusion-map-country-name");
+  expect(within(screen.getByRole("img",{name:"Interactive map of the world with selectable country boundaries and labels"}))
+    .getByRole("button",{name:/Poland: 0 linked materials/})).toHaveAttribute("stroke","#737d80");
   expect(screen.getByRole("button",{name:/United States of America: 0 linked materials/})).toBeInTheDocument();
+ });
+
+ it("keeps country borders distinct for unlinked, linked and selected countries",async()=>{
+  stubFetch();const user=userEvent.setup();
+  render(<FusionWorldMap projectId="test" selectedCountry="" counts={{PL:{links:1,notes:0,attachments:0}}}/>);
+  const map=screen.getByRole("img",{name:"Interactive map of the world with selectable country boundaries and labels"});
+  const poland=within(map).getByRole("button",{name:/Poland: 1 linked materials/});
+  const germany=within(map).getByRole("button",{name:/Germany: 0 linked materials/});
+  expect(germany).toHaveAttribute("stroke","#737d80");
+  expect(poland).toHaveAttribute("stroke","#969d8e");
+  await user.click(poland);
+  expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  expect(poland).toHaveAttribute("stroke","#d4a958");
  });
 
 });

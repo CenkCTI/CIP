@@ -77,7 +77,7 @@ export function visibleMapLabels(labels:MapLabel[],zoom:number,center:[number,nu
   .sort((a,b)=>(linked.has(b.code)?1:0)-(linked.has(a.code)?1:0)||b.area-a.area);
  const placed:MapLabel[]=[];
  for(const label of candidates){
-  const effectiveWidth=(label.label.length*6.5+9)/zoom;
+  const effectiveWidth=(label.label.length*6.35+10)/zoom;
   const radius=Math.max(effectiveWidth/2,cellWidth);
   const bounds={left:label.x-radius,right:label.x+radius,top:label.y-cellHeight/2,bottom:label.y+cellHeight/2};
   if(taken.some(b=>!(bounds.right<b.left||bounds.left>b.right||bounds.bottom<b.top||bounds.top>b.bottom)))continue;

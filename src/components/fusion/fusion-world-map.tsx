@@ -125,17 +125,17 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
     onPointerCancel={e=>{gesture.current=null;if(e.currentTarget.hasPointerCapture?.(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}>
     <defs>
      <linearGradient id="fusion-map-land" x1="0" x2="0.95" y1="0" y2="1">
-      <stop offset="0" stopColor="#404044"/><stop offset="1" stopColor="#282a2c"/>
+      <stop offset="0" stopColor="#363c3e"/><stop offset="1" stopColor="#292e31"/>
      </linearGradient>
      <linearGradient id="fusion-map-linked" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stopColor="#66563e"/><stop offset="1" stopColor="#483d2f"/>
+      <stop offset="0" stopColor="#4e554b"/><stop offset="1" stopColor="#3b433d"/>
      </linearGradient>
      <linearGradient id="fusion-map-selected" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stopColor="#d7a84d"/><stop offset="1" stopColor="#90602a"/>
+      <stop offset="0" stopColor="#c18a39"/><stop offset="1" stopColor="#86602d"/>
      </linearGradient>
     </defs>
     <rect x="0" y="0" width={W} height={H} fill="transparent"/>
-    <g aria-hidden="true" pointerEvents="none" stroke="#b58c4c" strokeOpacity=".13" strokeWidth={.55/zoom}>
+    <g aria-hidden="true" pointerEvents="none" stroke="#93918a" strokeOpacity=".115" strokeWidth={.5/zoom}>
      {Array.from({length:11},(_,i)=><line key={`lon-${i}`} x1={i*W/10} y1="0" x2={i*W/10} y2={H}/>)}
      {Array.from({length:7},(_,i)=><line key={`lat-${i}`} x1="0" y1={i*H/6} x2={W} y2={i*H/6}/>)}
     </g>
@@ -148,8 +148,8 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
       return <path key={f.id} d={f.path}
         className={`fusion-map-country ${chosen?"is-selected":linked?"has-intelligence":""}`}
         fill={chosen?"url(#fusion-map-selected)":linked?"url(#fusion-map-linked)":"url(#fusion-map-land)"}
-        stroke={chosen?"#e8bf77":linked?"#8c714b":"#151719"}
-        strokeWidth={(chosen?1.4:0.78)/zoom}
+        stroke={chosen?"#d4a958":linked?"#969d8e":"#737d80"}
+        strokeWidth={(chosen?1.65:linked?1.08:1.03)/zoom}
         role={code?"button":undefined} tabIndex={code?0:undefined}
         aria-label={code?`${f.properties.name}: ${count} linked materials`:f.properties.name}
         onMouseEnter={()=>setHover(f.properties.name)} onMouseLeave={()=>setHover("")}
@@ -163,13 +163,13 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
     <g aria-hidden="true" pointerEvents="none" className="fusion-map-labels">
      {displayedLabels.map(label=><text key={label.code}
        x={label.x} y={label.y} textAnchor="middle" dominantBaseline="middle"
-       fontSize={(label.area>1000?11.3:9.4)/zoom} letterSpacing={.75/zoom}
-       stroke="#111314" strokeWidth={3/zoom} paintOrder="stroke"
-       fill={popupCountry===label.code?"#ffe2a3":linkedCodes.has(label.code)?"#ebd3a6":"#bdb6aa"}
+       fontSize={(label.area>1000?11:9.2)/zoom} letterSpacing={.55/zoom}
+       stroke="#171b1d" strokeWidth={2.4/zoom} paintOrder="stroke"
+       fill={popupCountry===label.code?"#f2d79c":linkedCodes.has(label.code)?"#e0dccd":"#c6ccc9"}
        className="fusion-map-country-name">{label.label}</text>)}
     </g>
    </svg>
-   <div className="pointer-events-none absolute left-5 top-5 z-10 hidden font-mono text-[10px] tracking-[.15em] text-[#bda579] sm:block" aria-hidden="true">
+   <div className="pointer-events-none absolute left-5 top-5 z-10 hidden font-mono text-[10px] tracking-[.15em] text-[#a9a399] sm:block" aria-hidden="true">
     <span className="block opacity-70">BAYKUSH / CİTEM</span>
     <span className="block opacity-50">GEOINT · WORLD PROJECTION</span>
    </div>
@@ -195,11 +195,11 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
       {matches.length===0&&<p className="p-2 text-xs text-stone-400">No matching countries.</p>}
     </div>}
    </aside>
-   <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-10 flex flex-wrap items-center justify-between gap-2 border-t border-[#907049]/30 bg-[#111416]/85 px-4 py-2.5 font-mono text-[10px] tracking-wide text-[#c9bba6] backdrop-blur-sm sm:px-6">
+   <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-10 flex flex-wrap items-center justify-between gap-2 border-t border-[#8a8171]/30 bg-[#111416]/85 px-4 py-2.5 font-mono text-[10px] tracking-wide text-[#c9bba6] backdrop-blur-sm sm:px-6">
     <span>{hover||selected?.name||"SELECT TERRITORY TO OPEN INTELLIGENCE"} <span className="text-amber-300">· {Math.round(zoom*100)}%</span></span>
-    <span className="flex flex-wrap gap-3"><span><i className="mr-1 inline-block h-2 w-2 bg-[#3b3d40]"/>UNLINKED</span>
-     <span><i className="mr-1 inline-block h-2 w-2 bg-[#796448]"/>LINKED</span>
-     <span><i className="mr-1 inline-block h-2 w-2 bg-[#d4a958]"/>SELECTED</span>
+    <span className="flex flex-wrap gap-3"><span><i className="mr-1 inline-block h-2 w-2 bg-[#363c3e]"/>UNLINKED</span>
+     <span><i className="mr-1 inline-block h-2 w-2 bg-[#4e554b]"/>LINKED</span>
+     <span><i className="mr-1 inline-block h-2 w-2 bg-[#b9822f]"/>SELECTED</span>
      <span className="hidden text-[#bda276] sm:inline">ACTIVE COUNTRIES {totalLinked}</span></span>
    </div>
   </div>

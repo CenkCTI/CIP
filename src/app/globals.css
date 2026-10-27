@@ -1439,16 +1439,16 @@ html[data-citem-sidebar="collapsed"] .citem-sidebar {
 }
 .fusion-map-workspace {
   width: 100%;
-  background: linear-gradient(180deg, #111416, #0b0e11);
+  background: linear-gradient(180deg, #111518, #0b0e11);
 }
 .citem-worldmap-stage {
   height: min(78dvh, 920px);
   min-height: 520px;
   background:
-    radial-gradient(ellipse at 52% 51%, rgba(74, 67, 54, .3), transparent 74%),
-    radial-gradient(ellipse at 82% 25%, rgba(185, 130, 47, .07), transparent 56%),
-    repeating-linear-gradient(0deg, transparent 0, transparent 39px, rgba(181, 145, 83, .035) 40px),
-    repeating-linear-gradient(90deg, transparent 0, transparent 39px, rgba(181, 145, 83, .035) 40px),
+    radial-gradient(ellipse at 52% 51%, rgba(45, 52, 55, .24), transparent 75%),
+    radial-gradient(ellipse at 82% 25%, rgba(185, 130, 47, .027), transparent 56%),
+    repeating-linear-gradient(0deg, transparent 0, transparent 39px, rgba(140, 148, 145, .026) 40px),
+    repeating-linear-gradient(90deg, transparent 0, transparent 39px, rgba(140, 148, 145, .026) 40px),
     #0b0e11;
 }
 .citem-worldmap-stage::after {
@@ -1459,7 +1459,7 @@ html[data-citem-sidebar="collapsed"] .citem-sidebar {
   pointer-events: none;
   background:
     linear-gradient(180deg, rgba(11, 14, 17, .23), transparent 12%, transparent 84%, rgba(11, 14, 17, .34)),
-    repeating-linear-gradient(180deg, rgba(199, 167, 113, .013) 0px, rgba(199, 167, 113, .013) 1px, transparent 1px, transparent 5px);
+    repeating-linear-gradient(180deg, rgba(170, 178, 174, .009) 0px, rgba(170, 178, 174, .009) 1px, transparent 1px, transparent 5px);
 }
 .citem-worldmap-hud-corner {
   position: absolute;
@@ -1467,7 +1467,7 @@ html[data-citem-sidebar="collapsed"] .citem-sidebar {
   width: 18px;
   height: 18px;
   pointer-events: none;
-  border-color: rgba(192, 151, 74, .62);
+  border-color: rgba(185, 130, 47, .48);
 }
 .citem-worldmap-hud-corner--tl { top: 12px; left: 12px; border-top: 1px solid; border-left: 1px solid; }
 .citem-worldmap-hud-corner--tr { top: 12px; right: 12px; border-top: 1px solid; border-right: 1px solid; }
@@ -1476,7 +1476,7 @@ html[data-citem-sidebar="collapsed"] .citem-sidebar {
 .fusion-map-control {
   min-width: 37px;
   height: 36px;
-  border: 1px solid rgba(185, 148, 92, .32);
+  border: 1px solid rgba(170, 135, 75, .3);
   border-radius: 3px;
   background: rgba(17, 20, 22, .91);
   color: #e0d7c8;
@@ -1489,7 +1489,7 @@ html[data-citem-sidebar="collapsed"] .citem-sidebar {
   color: #f5d49b;
 }
 .fusion-map-search {
-  border: 1px solid rgba(170, 134, 77, .4);
+  border: 1px solid rgba(170, 135, 75, .28);
   border-radius: 4px;
   padding: 12px;
   background: rgba(17, 20, 22, .91);
@@ -1502,26 +1502,28 @@ html[data-citem-sidebar="collapsed"] .citem-sidebar {
   outline: none;
 }
 .fusion-map-country:hover,.fusion-map-country:focus-visible {
-  stroke: #e7bd76;
-  filter: drop-shadow(0 0 3px rgba(217,166,74,.65));
+  stroke: #d4a958;
+  filter: drop-shadow(0 0 2px rgba(185,130,47,.35));
 }
 .fusion-map-country.is-selected {
-  filter: drop-shadow(0 0 4px rgba(217,166,74,.42));
+  filter: drop-shadow(0 0 3px rgba(185,130,47,.23));
 }
 .fusion-map-labels {
   user-select: none;
-  text-shadow: 0 1px 2px #0d0f11;
+  text-shadow: none;
 }
-/* The map's country typography follows CİTEM's warm, technical display system.
-   Use installed DIN-like faces when available and Inter/system sans otherwise;
-   no third-party font download or application-wide font override. */
+/* Operational cartography: compact, authoritative lettering rather than
+   neon/retro terminal type. Platform fonts keep the map dependency-free. */
 .fusion-map-country-name {
-  font-family: Bahnschrift, "DIN Alternate", "Arial Narrow", Inter, ui-sans-serif, system-ui, sans-serif;
-  font-weight: 650;
+  font-family: "Bahnschrift SemiCondensed", "Arial Narrow", "Liberation Sans Narrow",
+    "DejaVu Sans Condensed", "Roboto Condensed", Arial, sans-serif;
+  font-size-adjust: from-font;
+  font-weight: 600;
   font-stretch: condensed;
+  font-style: normal;
+  letter-spacing: .025em;
   text-transform: uppercase;
-  font-kerning: normal;
-  text-rendering: geometricPrecision;
+  text-rendering: optimizeLegibility;
   pointer-events: none;
 }
 @media(max-width:640px){
