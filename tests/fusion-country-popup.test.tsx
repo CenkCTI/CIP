@@ -112,4 +112,21 @@ describe("Country Intelligence Popup map integration",()=>{
   expect(within(dialog).getByLabelText("Note title")).toHaveValue("Unsaved research");
  });
 
+ it("opens Country Intelligence Brief by clicking a country polygon directly, without search",async()=>{
+  stubFetch();const user=userEvent.setup();
+  render(<FusionWorldMap projectId="test" selectedCountry="" counts={{}}/>);
+  const map=screen.getByRole("img",{name:"Interactive map of the world with selectable country boundaries and labels"});
+  const polygon=within(map).getByRole("button",{name:/Poland: 0 linked materials/});
+  await user.click(polygon);
+  const dialog=await screen.findByRole("dialog");
+  expect(within(dialog).getByText(/Poland · PL \/ POL/)).toBeInTheDocument();
+  expect(window.location.search).toContain("country=PL");
+ });
+ it("renders readable names on the map while preserving polygon accessibility",()=>{
+  stubFetch();
+  render(<FusionWorldMap projectId="test" selectedCountry="" counts={{}}/>);
+  expect(screen.getByText("United States")).toBeInTheDocument();
+  expect(screen.getByRole("button",{name:/United States of America: 0 linked materials/})).toBeInTheDocument();
+ });
+
 });
