@@ -45,7 +45,12 @@ export function inventoryDetailUrl(projectId:string, item:FusionInventoryItem):s
     case "MALWARE": return `${root}/malware/${item.record_id}`;
     case "CVE": return `${root}/cves/${item.record_id}`;
     case "MITRE": return `${root}/mitre/${item.record_id}`;
-    case "COUNTRY_NOTE": return `${root}/fusion?view=map`;
+    case "COUNTRY_NOTE": {
+      const id=item.metadata?.countryId;
+      return typeof id==="string" && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(id)
+        ? `${root}/fusion?view=map&countryId=${id}`
+        : `${root}/fusion?view=map`;
+    }
     case "COLLECTION_REQUIREMENT": return `${root}/collection`;
     case "INFORMATION_GAP": return root;
     default: return `${root}/fusion`;

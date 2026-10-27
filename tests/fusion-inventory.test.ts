@@ -16,6 +16,12 @@ describe("Fusion canonical inventory",()=>{
  it("keeps independent records visible",()=>{
   expect(groupInventory([item("2",[])],"source")[0].key).toBe("unlinked");
  });
+ it("preserves canonical Country Note membership in the map popup deep link",()=>{
+  const countryId="20000000-0000-4000-8000-000000000001";
+  const i={...item("note",[]),record_type:"COUNTRY_NOTE",metadata:{countryId}};
+  expect(inventoryDetailUrl("project-1",i)).toBe(
+   `/projects/project-1/fusion?view=map&countryId=${countryId}`);
+ });
  it("uses annotation identity in its reader deep link",()=>{
   const i={...item("a",["s1"]),record_type:"ANNOTATION"};
   expect(inventoryDetailUrl("p",i)).toBe("/projects/p/sources/s1?annotation=a");
