@@ -4,10 +4,6 @@ import {describe,expect,it,vi} from "vitest";
 import {AnnotationProcessingActions} from "@/components/investigations/source-reader/annotation-processing-actions";
 
 vi.mock("next/navigation",()=>({useRouter:()=>({refresh:vi.fn()})}));
-vi.mock("@/app/projects/[id]/source-processing-actions",()=>({
- createAnnotationOutput:vi.fn(),linkAnnotationOutput:vi.fn(),
- processAnnotationIndicatorBatch:vi.fn(),setAnnotationProcessingState:vi.fn(),unlinkAnnotationOutput:vi.fn()
-}));
 vi.mock("@/app/projects/[id]/timeline-actions",()=>({
  createTimelineEventFromAnnotation:vi.fn(),linkAnnotationToTimelineEvent:vi.fn()
 }));
