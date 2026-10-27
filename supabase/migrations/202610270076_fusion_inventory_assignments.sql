@@ -101,6 +101,8 @@ create policy fusion_record_assignments_update on public.fusion_record_assignmen
  with check (public.project_is_owned(project_id) and created_by=auth.uid());
 create policy fusion_record_assignments_delete on public.fusion_record_assignments
  for delete to authenticated using (public.project_is_owned(project_id));
+create trigger fusion_record_assignments_audit after insert or update or delete on public.fusion_record_assignments
+ for each row execute function public.fusion_write_audit();
 comment on table public.fusion_record_assignments is
  'Explicit analyst organizational assignments. Never treated as source-derived corroboration or original provenance.';
 

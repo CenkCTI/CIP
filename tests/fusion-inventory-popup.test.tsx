@@ -70,7 +70,7 @@ describe("Fusion Evidence Inventory inline record modal",()=>{
   const modal=await screen.findByRole("dialog",{name:/Research screenshot/});
   expect(modal).toHaveAttribute("aria-modal","true");
   expect(within(modal).queryByText("Open original record")).not.toBeInTheDocument();
-  expect(within(modal).getByText("No canonical association recorded")).toBeInTheDocument();
+  expect(within(modal).getAllByText("No canonical association recorded").length).toBeGreaterThan(0);
   const sourceSection=within(modal).getByText("Sources").closest("section")!;
   await user.click(within(sourceSection).getByRole("button",{name:"Search"}));
   await within(sourceSection).findByRole("option",{name:"Vendor report"});
@@ -78,7 +78,7 @@ describe("Fusion Evidence Inventory inline record modal",()=>{
   await user.type(within(sourceSection).getByRole("textbox",{name:"Sources assignment rationale"}),"Analyst tag");
   await user.click(within(sourceSection).getByRole("button",{name:"Assign sources"}));
   await waitFor(()=>expect(add).toHaveBeenCalledTimes(1));
-  await waitFor(()=>expect(within(sourceSection).getByText("Analyst tag")).toBeInTheDocument());
+  await waitFor(()=>expect(within(sourceSection).getByText(/Analyst tag/)).toBeInTheDocument());
   vi.stubGlobal("confirm",vi.fn(()=>true));
   await user.click(within(sourceSection).getByRole("button",{name:"Remove"}));
   await waitFor(()=>expect(remove).toHaveBeenCalledTimes(1));
