@@ -16,7 +16,8 @@ const targetTables={
  ANNOTATION:"source_annotations",SOURCE_CLAIM:"source_claims",ATTRIBUTION_CLAIM:"source_attribution_claims",
  ACTOR:"threat_actors",CAMPAIGN:"campaigns",INDICATOR:"indicators",MALWARE:"malware",
  CVE:"cves",MITRE:"mitre_techniques",TIMELINE_EVENT:"timeline_events",
- RESEARCH_NOTE:"research_notes",EVIDENCE:"evidence",COUNTRY_NOTE:"investigation_country_notes"
+ RESEARCH_NOTE:"research_notes",EVIDENCE:"evidence",COUNTRY_NOTE:"investigation_country_notes",
+ INFORMATION_GAP:"investigation_information_gaps",COLLECTION_REQUIREMENT:"collection_requirements"
 } as const;
 async function context(form:FormData){
  const projectId=projectIdSchema.parse(text(form,"projectId"));

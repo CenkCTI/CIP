@@ -159,3 +159,60 @@ cross join lateral (
 
 comment on view public.fusion_inventory_items is 'Canonical provenance (source_ids/gap_ids/requirement_ids) is separate from explicit assigned_*_ids. All under invoker-RLS.';
 grant select on public.fusion_inventory_items to authenticated;
+
+-- Include Direction records in country relationships (existing Country table reused).
+alter table public.investigation_country_links
+ drop constraint investigation_country_links_target_type_check;
+alter table public.investigation_country_links
+ add constraint investigation_country_links_target_type_check check(target_type in (
+  'SOURCE','SOURCE_ASSET','SOURCE_NOTE','ANNOTATION','SOURCE_CLAIM','ATTRIBUTION_CLAIM',
+  'ACTOR','CAMPAIGN','INDICATOR','MALWARE','CVE','MITRE','TIMELINE_EVENT',
+  'RESEARCH_NOTE','EVIDENCE','COUNTRY_NOTE','INFORMATION_GAP','COLLECTION_REQUIREMENT'
+ ));
+create or replace function public.fusion_validate_country_link()
+returns trigger language plpgsql security invoker set search_path = '' as $$
+declare target_table text; target_exists boolean;
+begin
+ if not public.project_is_owned(new.project_id) or new.created_by is distinct from auth.uid() then
+  raise exception 'not authorized' using errcode='42501';
+ end if;
+ if tg_op='UPDATE' and (new.project_id<>old.project_id or new.created_by<>old.created_by) then
+  raise exception 'immutable ownership' using errcode='42501';
+ end if;
+ target_table:=case new.target_type
+  when 'SOURCE' then 'sources'
+  when 'SOURCE_ASSET' then 'source_assets'
+  when 'SOURCE_NOTE' then 'source_notes'
+  when 'ANNOTATION' then 'source_annotations'
+  when 'SOURCE_CLAIM' then 'source_claims'
+  when 'ATTRIBUTION_CLAIM' then 'source_attribution_claims'
+  when 'ACTOR' then 'threat_actors'
+  when 'CAMPAIGN' then 'campaigns'
+  when 'INDICATOR' then 'indicators'
+  when 'MALWARE' then 'malware'
+  when 'CVE' then 'cves'
+  when 'MITRE' then 'mitre_techniques'
+  when 'TIMELINE_EVENT' then 'timeline_events'
+  when 'RESEARCH_NOTE' then 'research_notes'
+  when 'EVIDENCE' then 'evidence'
+  when 'COUNTRY_NOTE' then 'investigation_country_notes'
+  when 'INFORMATION_GAP' then 'investigation_information_gaps'
+  when 'COLLECTION_REQUIREMENT' then 'collection_requirements'
+  else null end;
+ if target_table is null then raise exception 'unsupported target' using errcode='23514'; end if;
+ if not exists(select 1 from public.investigation_countries c
+   where c.id=new.investigation_country_id and c.project_id=new.project_id) then
+  raise exception 'country not in investigation' using errcode='23503';
+ end if;
+ if not (select exists(select 1 from pg_catalog.pg_class where oid=('public.'||target_table)::regclass)) then
+  raise exception 'invalid target type' using errcode='23514';
+ end if;
+ execute format('select exists(select 1 from public.%I where project_id=$1 and id=$2)',target_table)
+ into target_exists using new.project_id,new.target_id;
+ if not target_exists then raise exception 'target not found in investigation' using errcode='23503'; end if;
+ return new;
+end $$;
+create trigger fusion_country_cleanup_gap after delete on public.investigation_information_gaps
+ for each row execute function public.fusion_cleanup_country_links('INFORMATION_GAP');
+create trigger fusion_country_cleanup_requirement after delete on public.collection_requirements
+ for each row execute function public.fusion_cleanup_country_links('COLLECTION_REQUIREMENT');
