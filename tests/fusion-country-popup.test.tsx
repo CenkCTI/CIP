@@ -18,6 +18,10 @@ vi.mock("@/components/workspace-forms",()=>({
 }));
 const result=(country:string,note="")=>({
  country,counts:{links:0,notes:note?1:0,attachments:0},sourceCount:0,links:[],linksTotal:0,
+ typeCounts:[],overviewRecords:[],cyber:[
+  {key:"incidents",total:0,items:[]},{key:"actors",total:0,items:[]},
+  {key:"campaigns",total:0,items:[]},{key:"technical",total:0,items:[]}
+ ],
  notes:note?[{id:"cccccccc-1111-4111-8111-111111111111",title:"Country Brief",body:note,
  created_at:"2026-10-27T00:00:00Z",updated_at:"2026-10-27T00:00:00Z",created_by:"aaaaaaaa-1111-4111-8111-111111111111"}]:[],
  notesTotal:note?1:0,brief:note?{id:"cccccccc-1111-4111-8111-111111111111",title:"Country Brief",body:note,created_by:"aaaaaaaa-1111-4111-8111-111111111111",created_at:"2026-10-27T00:00:00Z",updated_at:"2026-10-27T00:00:00Z"}:null,
@@ -40,7 +44,7 @@ describe("Country Intelligence Popup map integration",()=>{
   const zoom=screen.getByRole("button",{name:"Zoom in"});await user.click(zoom);
   expect(screen.getByText(/130%/)).toBeInTheDocument();
   await user.type(screen.getByLabelText("Find a country or territory"),"Poland");
-  await user.click(screen.getByRole("button",{name:/Poland PL/}));
+  await user.click(within(screen.getByLabelText("Country search results")).getByRole("button",{name:/Poland/}));
   const dialog=await screen.findByRole("dialog");
   expect(within(dialog).getByText(/Poland · PL \/ POL/)).toBeInTheDocument();
   for(const t of ["Overview","Linked Records","Notes & Files","Cyber Activity"]){
