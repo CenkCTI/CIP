@@ -16,7 +16,7 @@ export async function GET(request:NextRequest,{params}:{params:Promise<{id:strin
    .eq("project_id",id).eq("record_type",kind).eq("record_id",recordId).maybeSingle();
   if(r.error||!r.data)return NextResponse.json({error:"Inventory record not found"},{status:404});
   const item=r.data;
-  let candidate=kind==="SOURCE"?recordId:(item.source_ids?.[0]??item.assigned_source_ids?.[0]??null);
+  let candidate=kind==="SOURCE"?recordId:(item.source_id??item.source_ids?.[0]??item.assigned_source_ids?.[0]??null);
   // Evidence linked from collection may be backed by an already existing source.
   if(!candidate&&kind==="EVIDENCE"){
    const matched=await supabase.from("sources").select("id").eq("project_id",id).eq("evidence_id",recordId).limit(2);
