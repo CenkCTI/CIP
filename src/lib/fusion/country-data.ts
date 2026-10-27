@@ -28,6 +28,11 @@ export async function loadCountryPopup(projectId:string,params:URLSearchParams) 
  const countryCounts=need(await supabase.from("fusion_country_counts").select("links,notes,attachments")
    .eq("project_id",projectId).eq("country_iso2",code).maybeSingle(),"Country metrics failed");
  const counts=countryCounts??{links:0,notes:0,attachments:0};
+ const sourcesResult=countryId?await supabase.from("investigation_country_links")
+  .select("id",{count:"exact",head:true}).eq("project_id",projectId)
+  .eq("investigation_country_id",countryId).eq("target_type","SOURCE"):null;
+ if(sourcesResult?.error)throw new Error("Source association count failed");
+ const sourceCount=sourcesResult?.count??0;
  let notes:{id:string;title:string;body:string;created_at:string;updated_at:string;created_by:string}[]=[];
  let links:{id:string;target_type:string;target_id:string;relation_type:string;rationale:string|null;created_at:string}[]=[];
  let attachments:{id:string;evidence_id:string;country_note_id:string|null;description:string|null}[]=[];
@@ -83,7 +88,7 @@ export async function loadCountryPopup(projectId:string,params:URLSearchParams) 
    .select("id,title,body,created_at,updated_at,created_by").eq("project_id",projectId)
    .eq("investigation_country_id",countryId).eq("title","Country Brief").order("created_at").limit(1).maybeSingle():null;
  if(br?.error)throw new Error("Country brief failed");
- return {country:code,counts,links,linksTotal,notes,notesTotal,attachments,filesTotal,
+ return {country:code,counts,sourceCount,links,linksTotal,notes,notesTotal,attachments,filesTotal,
   details,evidence,brief:br?.data??null,
   pages:{links:linkPage,notes:notePage,files:filePage},limit};
 }

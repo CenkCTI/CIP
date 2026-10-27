@@ -79,19 +79,24 @@ export function CountryIntelligencePopup({projectId,code,onClose,onCountry,prese
  useEffect(()=>{
   previous.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
   closeRef.current?.focus();
-  const previousOverflow=document.body.style.overflow;document.body.style.overflow="hidden";
+  const originalOverflow=document.body.style.overflow;
+  document.body.style.overflow="hidden";
+  return ()=>{document.body.style.overflow=originalOverflow;previous.current?.focus();};
+ },[]);
+ useEffect(()=>{
   const key=(e:KeyboardEvent)=>{
-   if(e.key==="Escape"){e.preventDefault();if(!dirty)onClose();else if(window.confirm("Discard unsaved changes?")){setDirty(false);onClose();}}
+   if(e.key==="Escape"){
+    e.preventDefault();
+    if(!dirty||window.confirm("Discard unsaved changes?"))onClose();
+   }
    if(e.key!=="Tab"||!modal.current)return;
    const elements=[...modal.current.querySelectorAll<HTMLElement>('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]')].filter(el=>el.getClientRects().length>0);
    if(!elements.length)return;
-   const first=elements[0],last=elements[elements.length-1];
-   if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}
-   if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}
+   if(e.shiftKey&&document.activeElement===elements[0]){e.preventDefault();elements[elements.length-1].focus();}
+   else if(!e.shiftKey&&document.activeElement===elements[elements.length-1]){e.preventDefault();elements[0].focus();}
   };
   document.addEventListener("keydown",key);
-  return ()=>{document.removeEventListener("keydown",key);document.body.style.overflow=previousOverflow;previous.current?.focus();};
- // onClose identity is managed by the map; selected country changes retain modal shell.
+  return ()=>document.removeEventListener("keydown",key);
  },[onClose,dirty]);
 
  const close=()=>{if(dirty&&!window.confirm("Discard unsaved changes?"))return;onClose();};
@@ -175,7 +180,7 @@ export function CountryIntelligencePopup({projectId,code,onClose,onCountry,prese
      {!loading&&data&&tab==="overview"&&<div className="space-y-5">
        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{[
         ["Linked records",data.counts.links],["Country notes",data.counts.notes],["Attachments",data.counts.attachments],
-        ["Linked sources",data.links.filter(l=>l.target_type==="SOURCE").length]
+        ["Linked sources",data.sourceCount]
        ].map(([label,value])=><div key={label} className="rounded border border-stone-800 bg-[#14191d] p-3">
         <p className="text-xs text-stone-400">{label}</p><p className="mt-1 text-xl text-amber-200">{value}</p></div>)}</div>
        <CountryBrief key={code} projectId={projectId} code={code} data={data} mutate={mutate} dirty={setDirty}/>
