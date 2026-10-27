@@ -1,10 +1,9 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound,redirect } from "next/navigation";
 import { z } from "zod";
 import { KnowledgeGraph } from "@/components/graph/knowledge-graph";
 import { FusionInventory } from "@/components/fusion/fusion-inventory";
 import { FusionWorldMap } from "@/components/fusion/fusion-world-map";
-import { FusionCountryWorkspace } from "@/components/fusion/fusion-country-workspace";
 import { requireOwnedProject } from "@/lib/projects/ownership";
 import { loadFusionInventory,parseInventoryFilters } from "@/lib/fusion/inventory";
 import countries from "@/lib/fusion/countries.json";
@@ -34,75 +33,6 @@ async function selectedCountry(ctx:Context,sp:Search){
  }
  return "";
 }
-async function countryData(ctx:Context,code:string,sp:Search){
- const projectId=ctx.projectId;
- const empty={notes:[],links:[],attachments:[],recordOptions:[],evidenceOptions:[],
-  recordCount:0,attachmentCount:0,selectedTarget:null} as {
-   notes:{id:string;title:string;body:string;created_at:string;updated_at:string}[];
-   links:{id:string;target_type:string;target_id:string;relation_type:string;rationale:string|null}[];
-   attachments:{id:string;evidence_id:string;country_note_id:string|null;description:string|null}[];
-   recordOptions:{record_type:string;record_id:string;title:string}[];
-   evidenceOptions:{id:string;title:string;type:string;original_file_name:string|null;file_size:number|null}[];
-   recordCount:number;attachmentCount:number;selectedTarget:{type:string;id:string}|null;
-  };
- if(!code)return empty;
- const country=await ctx.supabase.from("investigation_countries").select("id")
-  .eq("project_id",projectId).eq("country_iso2",code).maybeSingle();
- if(country.error)throw Error("Unable to read country membership");
- const activeId=country.data?.id??"";
- const safeSearch=first(sp,"recordQ",100).replace(/[(),.*%_\\]/g," ").trim();
- let pickQuery=ctx.supabase.from("fusion_inventory_items").select("record_type,record_id,title")
-  .eq("project_id",projectId).in("record_type",VALID_TYPES).order("updated_at",{ascending:false}).limit(100);
- if(safeSearch)pickQuery=pickQuery.ilike("title",`%${safeSearch}%`);
- const [noteResult,linkResult,picker,evidenceResult]=await Promise.all([
-  activeId?ctx.supabase.from("investigation_country_notes")
-   .select("id,title,body,created_at,updated_at",{count:"exact"}).eq("project_id",projectId)
-   .eq("investigation_country_id",activeId).order("updated_at",{ascending:false}).limit(100):
-   Promise.resolve({data:[],error:null,count:0}),
-  activeId?ctx.supabase.from("investigation_country_links")
-   .select("id,target_type,target_id,relation_type,rationale",{count:"exact"}).eq("project_id",projectId)
-   .eq("investigation_country_id",activeId).order("created_at",{ascending:false}).limit(100):
-   Promise.resolve({data:[],error:null,count:0}),
-  pickQuery,
-  ctx.supabase.from("evidence").select("id,title,type,original_file_name,file_size")
-   .eq("project_id",projectId).order("created_at",{ascending:false}).limit(100),
- ]);
- if(noteResult.error||linkResult.error||picker.error||evidenceResult.error)
-  throw Error("Unable to load country workspace.");
- const notes=(noteResult.data??[]) as typeof empty.notes;
- const links=(linkResult.data??[]) as typeof empty.links;
- const noteIds=notes.map(n=>n.id);
- let attachmentQuery=ctx.supabase.from("fusion_attachment_links")
-  .select("id,evidence_id,country_note_id,description",{count:"exact"}).eq("project_id",projectId)
-  .order("created_at",{ascending:false}).limit(100);
- if(activeId) attachmentQuery=noteIds.length?
-  attachmentQuery.or(`investigation_country_id.eq.${activeId},country_note_id.in.(${noteIds.join(",")})`):
-  attachmentQuery.eq("investigation_country_id",activeId);
- else return {...empty,recordOptions:(picker.data??[]) as typeof empty.recordOptions,evidenceOptions:(evidenceResult.data??[]) as typeof empty.evidenceOptions};
- const attachmentResult=await attachmentQuery;
- if(attachmentResult.error)throw Error("Unable to load country evidence attachments.");
- const attachments=(attachmentResult.data??[]) as typeof empty.attachments;
- const missingEvidence=attachments.map(a=>a.evidence_id).filter(id=>!(evidenceResult.data??[]).some(e=>e.id===id));
- const extraEvidence=missingEvidence.length?await ctx.supabase.from("evidence")
-  .select("id,title,type,original_file_name,file_size").eq("project_id",projectId).in("id",missingEvidence):
-  {data:[],error:null};
- const linkedIDs=links.map(l=>l.target_id);
- const existingOptions=(picker.data??[]) as typeof empty.recordOptions;
- const needs=linkedIDs.filter(id=>!existingOptions.some(o=>o.record_id===id));
- const extraRecords=needs.length?await ctx.supabase.from("fusion_inventory_items")
-  .select("record_type,record_id,title").eq("project_id",projectId).in("record_id",needs):
-  {data:[],error:null};
- const type=first(sp,"linkType",40),id=first(sp,"linkId",40);
- const selectedTarget=VALID_TYPES.includes(type)&&z.string().uuid().safeParse(id).success?{type,id}:null;
- return {
-  notes,links,attachments,recordCount:linkResult.count??links.length,
-  attachmentCount:attachmentResult.count??attachments.length,
-  recordOptions:[...existingOptions,...((extraRecords.data??[]) as typeof empty.recordOptions)],
-  evidenceOptions:[...((evidenceResult.data??[]) as typeof empty.evidenceOptions),
-    ...((extraEvidence.data??[]) as typeof empty.evidenceOptions)],
-  selectedTarget,
- };
-}
 export default async function FusionPage({params,searchParams}:{
  params:Promise<{id:string}>;
  searchParams?:Promise<Search>;
@@ -111,6 +41,13 @@ export default async function FusionPage({params,searchParams}:{
  const sp=(await searchParams)??{};
  const view=["inventory","graph","map","countries"].includes(first(sp,"view",15))?first(sp,"view",15):"inventory";
  const ctx=await requireOwnedProject(id).catch(()=>notFound());
+ if(view==="countries"){
+  const country=await selectedCountry(ctx,sp);
+  const to=new URLSearchParams();
+  for(const [key,value] of Object.entries(sp)) if(key!=="view"&&typeof value==="string")to.set(key,value);
+  to.set("view","map");if(country)to.set("country",country);else {to.delete("country");to.delete("countryId");}
+  redirect(`/projects/${id}/fusion?${to.toString()}`);
+ }
  const project=await ctx.supabase.from("projects").select("name").eq("id",id).single();
  if(project.error||!project.data)notFound();
  const item=(name:string,key:string)=><Link key={key} href={`/projects/${id}/fusion?view=${key}`}
@@ -120,7 +57,6 @@ export default async function FusionPage({params,searchParams}:{
   | {kind:"inventory"; data:Awaited<ReturnType<typeof loadFusionInventory>>; filters:ReturnType<typeof parseInventoryFilters>}
   | {kind:"graph"}
   | {kind:"map"; selected:string; counts:Awaited<ReturnType<typeof countryCounts>>}
-  | {kind:"countries"; code:string; data:Awaited<ReturnType<typeof countryData>>}
   | {kind:"error"};
  let viewData:ViewData={kind:"error"};
  try{
@@ -128,9 +64,6 @@ export default async function FusionPage({params,searchParams}:{
    viewData={kind:"graph"};
   }else if(view==="map"){
    viewData={kind:"map",selected:await selectedCountry(ctx,sp),counts:await countryCounts(ctx)};
-  }else if(view==="countries"){
-   const code=await selectedCountry(ctx,sp);
-   viewData={kind:"countries",code,data:await countryData(ctx,code,sp)};
   }else{
    const filters=parseInventoryFilters(sp);
    viewData={kind:"inventory",filters,data:await loadFusionInventory(id,filters)};
@@ -145,7 +78,6 @@ export default async function FusionPage({params,searchParams}:{
     {item("Evidence Inventory","inventory")}
     {item("Relationship Graph","graph")}
     {item("World Map","map")}
-    {item("Country Notes & Attachments","countries")}
    </nav>
    {viewData.kind==="error"&&<div role="alert" className="rounded border border-red-800/60 bg-[#14191d] p-5 text-sm text-red-300">
     Fusion Workspace could not load. Check that migrations 069–074 have been applied and the investigation data are accessible.
@@ -156,7 +88,8 @@ export default async function FusionPage({params,searchParams}:{
       <h1 className="mt-1 text-2xl font-semibold text-stone-100">Relationship Graph</h1>
       <p className="mt-1 text-xs text-stone-500">Existing CİTEM graph service; source-derived and manual edges remain distinct.</p>
      </header><KnowledgeGraph projectId={id}/></section>}
-   {viewData.kind==="map"&&<FusionWorldMap projectId={id} selectedCountry={viewData.selected} counts={viewData.counts}/>}
-   {viewData.kind==="countries"&&<FusionCountryWorkspace projectId={id} code={viewData.code} {...viewData.data}/>}
+   {viewData.kind==="map"&&<FusionWorldMap projectId={id} selectedCountry={viewData.selected} counts={viewData.counts}
+     preset={VALID_TYPES.includes(first(sp,"linkType",40))&&z.string().uuid().safeParse(first(sp,"linkId",40)).success?
+      {type:first(sp,"linkType",40),id:first(sp,"linkId",40)}:null}/>}
   </main>;
 }

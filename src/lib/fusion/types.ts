@@ -45,7 +45,7 @@ export function inventoryDetailUrl(projectId:string, item:FusionInventoryItem):s
     case "MALWARE": return `${root}/malware/${item.record_id}`;
     case "CVE": return `${root}/cves/${item.record_id}`;
     case "MITRE": return `${root}/mitre/${item.record_id}`;
-    case "COUNTRY_NOTE": return `${root}/fusion?view=countries`;
+    case "COUNTRY_NOTE": return `${root}/fusion?view=map`;
     case "COLLECTION_REQUIREMENT": return `${root}/collection`;
     case "INFORMATION_GAP": return root;
     default: return `${root}/fusion`;

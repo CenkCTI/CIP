@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
-import { useMemo,useRef,useState } from "react";
+import { useCallback,useEffect,useMemo,useRef,useState } from "react";
+import { CountryIntelligencePopup } from "./country-intelligence-popup";
 import { useRouter } from "next/navigation";
 import countries from "@/lib/fusion/countries.json";
 import world from "@/lib/fusion/world-110m.json";
@@ -24,10 +25,29 @@ function geometryPath(g:GeoFeature["geometry"]){
  const polys=(g.type==="Polygon"?[g.coordinates]:g.coordinates) as number[][][][];
  return polys.map(poly=>poly.map(ringPath).join(" ")).join(" ");
 }
-export function FusionWorldMap({projectId,selectedCountry,counts}:{
- projectId:string;selectedCountry:string;counts:Record<string,CountryCount>
+export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
+ projectId:string;selectedCountry:string;counts:Record<string,CountryCount>;preset?:{type:string;id:string}|null
 }){
  const router=useRouter();
+ const [popupCountry,setPopupCountry]=useState(selectedCountry);
+ const initialFocus=useRef<HTMLElement|null>(null);
+ const url=(code:string)=>{const u=new URL(window.location.href);u.searchParams.set("view","map");if(code)u.searchParams.set("country",code);else u.searchParams.delete("country");u.searchParams.delete("countryId");return u.pathname+u.search+u.hash;};
+ const go=useCallback((code:string)=>{
+  initialFocus.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
+  setPopupCountry(code);
+  window.history.pushState(null,"",url(code));
+ },[]);
+ const close=useCallback(()=>{
+  setPopupCountry("");
+  window.history.replaceState(null,"",url(""));
+  window.requestAnimationFrame(()=>initialFocus.current?.focus());
+ },[]);
+ const switchCountry=useCallback((code:string)=>{
+  setPopupCountry(code);window.history.replaceState(null,"",url(code));
+ },[]);
+ useEffect(()=>{const pop=()=>{const q=new URLSearchParams(window.location.search);const code=q.get("country")??"";setPopupCountry(countries.some(c=>c.iso2===code)?code:"");};
+ window.addEventListener("popstate",pop);return ()=>window.removeEventListener("popstate",pop);},[]);
+ useEffect(()=>{const refresh=()=>router.refresh();window.addEventListener("fusion-country-updated",refresh);return ()=>window.removeEventListener("fusion-country-updated",refresh);},[router]);
  const [zoom,setZoom]=useState(1);
  const [center,setCenter]=useState<[number,number]>([W/2,H/2]);
  const [query,setQuery]=useState("");
@@ -35,14 +55,12 @@ export function FusionWorldMap({projectId,selectedCountry,counts}:{
  const [hover,setHover]=useState("");
  const gesture=useRef<{x:number;y:number;cx:number;cy:number;dragged:boolean}|null>(null);
  const shapes=useMemo(()=>(world.features as GeoFeature[]).map(f=>({...f,path:geometryPath(f.geometry)})),[]);
- const known=new Set(shapes.map(f=>f.id));
  const iso3to2=new Map(countries.map(c=>[c.iso3,c.iso2]));
- const selected=countries.find(c=>c.iso2===selectedCountry);
+ const selected=countries.find(c=>c.iso2===popupCountry);
  const matches=countries.filter(c=>
    (!showLinked||((counts[c.iso2]?.links??0)+(counts[c.iso2]?.notes??0)+(counts[c.iso2]?.attachments??0)>0))
    && (c.name.toLocaleLowerCase().includes(query.toLocaleLowerCase())||c.iso2.toLowerCase()===query.toLowerCase()))
    .slice(0,100);
- const go=(code:string)=>router.push(`/projects/${projectId}/fusion?view=map&country=${encodeURIComponent(code)}`);
  const zoomBy=(delta:number)=>setZoom(z=>Math.min(8,Math.max(1,z*delta)));
  return <section className="space-y-4">
   <header><p className="citem-label">Investigation / Fusion</p><h1 className="mt-1 text-2xl font-semibold text-stone-100">World Map</h1>
@@ -73,7 +91,7 @@ export function FusionWorldMap({projectId,selectedCountry,counts}:{
       {shapes.map(f=>{
        const code=iso3to2.get(f.id);
        const total=code?(counts[code]?.links??0)+(counts[code]?.notes??0)+(counts[code]?.attachments??0):0;
-       const chosen=code===selectedCountry;
+       const chosen=code===popupCountry;
        return <path key={f.id} d={f.path} fill={chosen?"#b9822f":total>0?"#5b584f":"#30383c"}
          stroke={chosen?"#d4a958":"#0b0e11"} role={code?"button":undefined}
          tabIndex={code?0:undefined} aria-label={code?`${f.properties.name}: ${total} linked materials`:f.properties.name}
@@ -97,21 +115,15 @@ export function FusionWorldMap({projectId,selectedCountry,counts}:{
      <label className="mt-3 flex gap-2 text-xs text-stone-400"><input type="checkbox" checked={showLinked} onChange={e=>setShowLinked(e.target.checked)}/> With linked material only</label>
      <div className="mt-3 max-h-40 overflow-y-auto rounded border border-stone-800" aria-label="Country search results">
       {matches.map(c=><button key={c.iso2} type="button" onClick={()=>go(c.iso2)}
-       className={`flex w-full justify-between gap-2 border-b border-stone-800 px-2 py-1.5 text-left text-xs hover:bg-stone-800 ${c.iso2===selectedCountry?"text-amber-300":"text-stone-300"}`}>
+       className={`flex w-full justify-between gap-2 border-b border-stone-800 px-2 py-1.5 text-left text-xs hover:bg-stone-800 ${c.iso2===popupCountry?"text-amber-300":"text-stone-300"}`}>
        <span>{c.name}</span><span className="text-stone-500">{c.iso2}</span></button>)}
       {matches.length===0&&<p className="p-3 text-xs text-stone-500">No countries match this search.</p>}
      </div>
-     {selected?<div className="mt-5 space-y-3 border-t border-stone-800 pt-4">
-      <div><p className="citem-label">Selected country</p><h2 className="mt-1 text-xl font-semibold text-stone-100">{selected.name} <span className="text-sm text-stone-500">{selected.iso2} / {selected.iso3}</span></h2>
-       <p className="mt-1 text-xs text-stone-500">{selected.region} · {selected.subregion}</p></div>
-      <p className="text-xs text-stone-400">{known.has(selected.iso3)?"World polygon available":"No polygon in Natural Earth 110m; country remains available here."}</p>
-      <dl className="grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded bg-black/20 p-2"><dt className="text-stone-500">Links</dt><dd className="text-base text-stone-200">{counts[selected.iso2]?.links??0}</dd></div>
-      <div className="rounded bg-black/20 p-2"><dt className="text-stone-500">Notes</dt><dd className="text-base text-stone-200">{counts[selected.iso2]?.notes??0}</dd></div>
-      <div className="rounded bg-black/20 p-2"><dt className="text-stone-500">Files</dt><dd className="text-base text-stone-200">{counts[selected.iso2]?.attachments??0}</dd></div></dl>
-      <Link className="citem-button inline-block" href={`/projects/${projectId}/fusion?view=countries&country=${selected.iso2}`}>Open country workspace</Link>
-      <Link className="block text-xs text-amber-300 underline" href={`/projects/${projectId}/fusion?view=inventory&country=${selected.iso2}`}>View country-linked inventory</Link>
-     </div>:<p className="mt-4 text-xs text-stone-500">Select any of the 249 catalog entries to open its country workspace.</p>}
+     <p className="mt-4 text-xs text-stone-500">{selected?
+       `${selected.name} selected · country workspace is open in the map dialog.`:
+       "Select any country or territory to open the Intelligence popup without losing map zoom or pan."}</p>
     </aside>
   </div>
+ {popupCountry&&<CountryIntelligencePopup key={popupCountry} projectId={projectId} code={popupCountry} onClose={close} onCountry={switchCountry} preset={preset}/>}
  </section>;
 }

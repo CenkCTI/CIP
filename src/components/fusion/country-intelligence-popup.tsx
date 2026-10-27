@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useCallback,useEffect,useRef,useState,useTransition } from "react";
+import { useCallback,useEffect,useRef,useState } from "react";
 import countries from "@/lib/fusion/countries.json";
 import { inventoryDetailUrl,type FusionInventoryItem } from "@/lib/fusion/types";
 import type { loadCountryPopup } from "@/lib/fusion/country-data";
@@ -52,7 +52,7 @@ export function CountryIntelligencePopup({projectId,code,onClose,onCountry,prese
  const [lookup,setLookup]=useState<{record_type:string;record_id:string;title:string}[]>([]);
  const [lookupCount,setLookupCount]=useState(0),[lookupPage,setLookupPage]=useState(1),[lookupQ,setLookupQ]=useState(""),[lookupType,setLookupType]=useState("SOURCE");
  const [chosen,setChosen]=useState(""),[linkRelation,setLinkRelation]=useState("GENERAL_RELEVANCE"),[rationale,setRationale]=useState("");
- const [pending,startTransition]=useTransition();
+
  const modal=useRef<HTMLDivElement>(null), closeRef=useRef<HTMLButtonElement>(null),previous=useRef<HTMLElement|null>(null);
  const country=(countries as Country[]).find(c=>c.iso2===code);
  const popupUrl=useCallback((mode="detail")=>{
@@ -200,7 +200,7 @@ export function CountryIntelligencePopup({projectId,code,onClose,onCountry,prese
         <Pager page={lookupPage} total={lookupCount} limit={20} onChange={n=>void apiLookup(n)}/>
         <label className="block text-xs text-stone-400">Relationship<select value={linkRelation} onChange={e=>setLinkRelation(e.target.value)} className={field}>{relationTypes.map(t=><option key={t} value={t}>{t.replaceAll("_"," ")}</option>)}</select></label>
         <label className="block text-xs text-stone-400">Why is this country relevant?<textarea className={field} maxLength={4000} value={rationale} onChange={e=>{setRationale(e.target.value);setDirty(true);}}/></label>
-        <button className={btn} disabled={pending||(!chosen&&!preset)}>Save relationship</button></form>}
+        <button className={btn} disabled={!chosen&&!preset}>Save relationship</button></form>}
        <div className="grid gap-2 md:grid-cols-4">
         <input className={field+" md:col-span-2"} placeholder="Search linked titles" value={query} onChange={e=>{setQuery(e.target.value);setLinksPage(1);}}/>
         <select aria-label="Filter type" className={field} value={filterType} onChange={e=>{setFilterType(e.target.value);setLinksPage(1);}}><option value="">All types</option>{supported.map(t=><option key={t}>{t}</option>)}</select>

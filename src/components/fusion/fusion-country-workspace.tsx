@@ -28,13 +28,12 @@ export function CountryBrief({projectId,code,data,mutate,dirty}:{
   {brief&&<p className="mt-2 text-xs text-stone-500">Author {brief.created_by.slice(0,8)} · Updated {new Date(brief.updated_at).toLocaleString()} · Analyst-authored, not independently verified</p>}
  </section>;
 }
-export function CountryNotesFiles({projectId,code,data,mutate,dirty,page,onPage}:{
- projectId:string;code:string;data:CountryPopupData;mutate:CountryAction;dirty:(v:boolean)=>void;page:number;onPage:(n:number)=>void
+export function CountryNotesFiles({projectId,code,data,mutate,dirty,page,onPage,filesPage,onFilesPage}:{
+ projectId:string;code:string;data:CountryPopupData;mutate:CountryAction;dirty:(v:boolean)=>void;page:number;onPage:(n:number)=>void;filesPage:number;onFilesPage:(n:number)=>void
 }){
  const [editing,setEditing]=useState<string|null>(null);
  const [showNew,setShowNew]=useState(false);
  const [attaching,setAttaching]=useState(false);
- const [filePage,setFilePage]=useState(1);
  const notes=data.notes.filter(n=>n.id!==data.brief?.id);
  const run=async (fn:(f:FormData)=>Promise<void>,form:FormData)=>{
   await mutate(fn,form);setEditing(null);setShowNew(false);dirty(false);
@@ -94,7 +93,7 @@ export function CountryNotesFiles({projectId,code,data,mutate,dirty,page,onPage}
     </article>;
    })}
    {data.attachments.length===0&&<p className="text-sm text-stone-500">No attached files on this page.</p>}
-   <div className="flex justify-between text-xs text-stone-400"><button disabled={filePage<=1} onClick={()=>{setFilePage(n=>n-1);onPage(page);}}>Previous files</button><span>File page {data.pages.files}</span><button disabled={data.pages.files*data.limit>=data.filesTotal} onClick={()=>{setFilePage(n=>n+1);onPage(page);}}>Next files</button></div>
+   <div className="flex justify-between text-xs text-stone-400"><button disabled={filePage<=1} onClick={()=>onFilesPage(Math.max(1,filesPage-1))}>Previous files</button><span>File page {data.pages.files}</span><button disabled={data.pages.files*data.limit>=data.filesTotal} onClick={()=>onFilesPage(filesPage+1)}>Next files</button></div>
   </section>
  </div>;
 }
