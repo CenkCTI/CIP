@@ -49,7 +49,8 @@ export async function loadFusionInventory(projectId:string, filters:FusionInvent
   result=await makeQuery(false);
  }
  if(result.error)throw Error("Unable to load Fusion Inventory records");
- const items=(result.data??[]).map(row=>({
+ const rows=(result.data??[]) as unknown as Record<string,unknown>[];
+ const items=rows.map(row=>({
    ...row,assigned_source_ids:row.assigned_source_ids??[],
    assigned_gap_ids:row.assigned_gap_ids??[],
    assigned_requirement_ids:row.assigned_requirement_ids??[]
