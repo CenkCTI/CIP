@@ -76,7 +76,7 @@ describe("Country Intelligence Popup map integration",()=>{
   });
   render(<FusionWorldMap projectId="test" selectedCountry="PL" counts={{}}/>);
   const dialog=await screen.findByRole("dialog");
-  await user.click(within(dialog).getByRole("button",{name:"Edit brief"}));
+  await user.click(await within(dialog).findByRole("button",{name:"Edit brief"}));
   await user.type(within(dialog).getByLabelText("Country brief"),"Analyst observation only");
   await user.click(within(dialog).getByRole("button",{name:"Save brief"}));
   await waitFor(()=>expect(within(dialog).getByText("Analyst observation only")).toBeInTheDocument());
@@ -88,7 +88,7 @@ describe("Country Intelligence Popup map integration",()=>{
   const confirm=vi.fn(()=>false);vi.stubGlobal("confirm",confirm);
   render(<FusionWorldMap projectId="test" selectedCountry="PL" counts={{}}/>);
   const dialog=await screen.findByRole("dialog");
-  await user.click(within(dialog).getByRole("button",{name:"Edit brief"}));
+  await user.click(await within(dialog).findByRole("button",{name:"Edit brief"}));
   await user.type(within(dialog).getByLabelText("Country brief"),"Unpublished investigation note");
   await user.click(within(dialog).getByRole("tab",{name:"Linked Records"}));
   expect(confirm).toHaveBeenCalled();
