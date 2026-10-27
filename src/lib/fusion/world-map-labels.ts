@@ -41,6 +41,13 @@ const abbreviations:Record<string,string>={
  "United Kingdom":"United Kingdom","Republic of the Congo":"Congo",
  "Bosnia and Herzegovina":"Bosnia & Herz.","Papua New Guinea":"Papua New Guinea"
 };
+const shortCountryNames:Record<string,string>={
+ US:"United States",RU:"Russia",GB:"United Kingdom",TR:"Türkiye",IR:"Iran",
+ KP:"North Korea",KR:"South Korea",VN:"Vietnam",LA:"Laos",TZ:"Tanzania",
+ BO:"Bolivia",VE:"Venezuela",CD:"DR Congo",CG:"Congo",CZ:"Czechia",
+ MD:"Moldova",SY:"Syria",BN:"Brunei",FM:"Micronesia",PS:"Palestine",
+ MK:"North Macedonia",CI:"Côte d'Ivoire",TL:"Timor-Leste",TW:"Taiwan"
+};
 export function getWorldLabels(features:WorldFeature[],countryNames:Record<string,{code:string;name:string}>):MapLabel[]{
  const result:MapLabel[]=[];
  for(const feature of features){
@@ -53,7 +60,7 @@ export function getWorldLabels(features:WorldFeature[],countryNames:Record<strin
    if(candidate&&(!largest||candidate.area>largest.area))largest=candidate;
   }
   if(!largest||largest.x<0||largest.x>MAP_WIDTH||largest.y<0||largest.y>MAP_HEIGHT)continue;
-  result.push({code:country.code,name:country.name,label:abbreviations[feature.properties.name]??country.name,...largest});
+  result.push({code:country.code,name:country.name,label:shortCountryNames[country.code]??abbreviations[feature.properties.name]??country.name,...largest});
  }
  return result;
 }
