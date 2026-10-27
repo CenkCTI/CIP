@@ -325,7 +325,7 @@ export async function authorizeEvidenceUpload(
 export async function finalizeEvidenceUpload(
   projectId: string,
   input: unknown,
-): Promise<State> {
+): Promise<State & { evidenceId?: string }> {
   const { supabase, user, projectId: pid } = await assertProject(projectId);
   const p = evidenceFinalizeSchema.safeParse(input);
   if (!p.success) {
@@ -340,15 +340,15 @@ export async function finalizeEvidenceUpload(
     await supabase.storage.from("evidence").remove([p.data.storage_path]);
     return { error: "Invalid evidence path." };
   }
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("evidence")
-    .insert({ ...p.data, project_id: pid, collected_by: user.id });
+    .insert({ ...p.data, project_id: pid, collected_by: user.id }).select("id").single();
   if (error) {
     await supabase.storage.from("evidence").remove([p.data.storage_path]);
     return { error: evidencePersistenceError(error) };
   }
   revalidatePath(`/projects/${pid}`);
-  return { success: "Evidence saved." };
+  return { success: "Evidence saved.", evidenceId: data?.id };
 }
 export async function updateEvidence(
   projectId: string,

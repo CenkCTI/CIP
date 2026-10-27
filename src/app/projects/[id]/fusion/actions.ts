@@ -101,6 +101,21 @@ export async function linkCountryRecord(form:FormData){
  if(error) throw Error(error.code==="23505"?"Country association already exists":"Unable to link record to country");
  refresh(ctx.projectId);
 }
+export async function editCountryRelationship(form:FormData){
+ const ctx=await context(form);
+ const id=z.string().uuid().parse(text(form,"linkId"));
+ const relationType=z.enum(relationTypes).parse(text(form,"relationType"));
+ const rationale=z.string().max(4000).parse(text(form,"rationale"));
+ const country=countryCodeSchema.parse(text(form,"country"));
+ const membership=await ctx.supabase.from("investigation_countries").select("id")
+  .eq("project_id",ctx.projectId).eq("country_iso2",country).maybeSingle();
+ if(membership.error||!membership.data)throw Error("Country not in this investigation");
+ const result=await ctx.supabase.from("investigation_country_links")
+   .update({relation_type:relationType,rationale:rationale||null}).eq("project_id",ctx.projectId)
+   .eq("investigation_country_id",membership.data.id).eq("id",id).select("id").single();
+ if(result.error||!result.data)throw Error("Unable to update relationship");
+ refresh(ctx.projectId);
+}
 export async function unlinkCountryRecord(form:FormData){
  const ctx=await context(form);
  const id=z.string().uuid().parse(text(form,"linkId"));
