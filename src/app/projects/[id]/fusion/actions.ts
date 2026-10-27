@@ -53,9 +53,20 @@ export async function createCountryNote(form:FormData){
  if(error) throw Error("Country note could not be saved");
  refresh(ctx.projectId);
 }
+async function assertCountryNote(ctx:Awaited<ReturnType<typeof context>>,form:FormData,noteId:string){
+ const code=countryCodeSchema.parse(text(form,"country"));
+ const country=await ctx.supabase.from("investigation_countries").select("id")
+   .eq("project_id",ctx.projectId).eq("country_iso2",code).maybeSingle();
+ if(country.error||!country.data)throw Error("Country does not belong to this Investigation");
+ const note=await ctx.supabase.from("investigation_country_notes").select("id")
+   .eq("project_id",ctx.projectId).eq("investigation_country_id",country.data.id)
+   .eq("id",noteId).maybeSingle();
+ if(note.error||!note.data)throw Error("Note is not part of the selected country");
+}
 export async function updateCountryNote(form:FormData){
  const ctx=await context(form);
  const noteId=z.string().uuid().parse(text(form,"noteId"));
+ await assertCountryNote(ctx,form,noteId);
  const title=z.string().trim().min(1).max(180).parse(text(form,"title"));
  const body=z.string().max(50000).parse(text(form,"body"));
  const {data,error}=await ctx.supabase.from("investigation_country_notes")
@@ -66,6 +77,7 @@ export async function updateCountryNote(form:FormData){
 export async function deleteCountryNote(form:FormData){
  const ctx=await context(form);
  const noteId=z.string().uuid().parse(text(form,"noteId"));
+ await assertCountryNote(ctx,form,noteId);
  const {data,error}=await ctx.supabase.from("investigation_country_notes")
   .delete().eq("project_id",ctx.projectId).eq("id",noteId).select("id").single();
  if(error||!data) throw Error("Country note deletion failed or access denied");
