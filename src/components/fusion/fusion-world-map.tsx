@@ -173,7 +173,7 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
     <span className="block opacity-70">BAYKUSH / CİTEM</span>
     <span className="block opacity-50">GEOINT · WORLD PROJECTION</span>
    </div>
-   <div className="absolute left-3 top-20 z-10 flex gap-1.5 sm:left-5 sm:top-20">
+   <div className="absolute bottom-16 left-3 z-10 flex gap-1.5 sm:bottom-auto sm:left-5 sm:top-20">
     <button type="button" onClick={()=>zoomBy(1.3)} className="fusion-map-control" aria-label="Zoom in">+</button>
     <button type="button" onClick={()=>zoomBy(1/1.3)} className="fusion-map-control" aria-label="Zoom out">−</button>
     <button type="button" onClick={()=>{setZoom(1);setCenter([W/2,H/2]);}} className="fusion-map-control px-3">Reset</button>

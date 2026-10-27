@@ -69,12 +69,14 @@ export default async function FusionPage({params,searchParams}:{
    viewData={kind:"inventory",filters,data:await loadFusionInventory(id,filters)};
   }
  }catch{viewData={kind:"error"};}
- return <main className="mx-auto max-w-[1600px] space-y-4 px-2 pb-8">
-   <div className="flex flex-wrap items-center justify-between gap-2">
+ return <main className={view==="map"?"fusion-map-bleed space-y-2 pb-2":"mx-auto max-w-[1600px] space-y-4 px-2 pb-8"}>
+   <div className={view==="map"?"flex flex-wrap items-center justify-between gap-2 px-4 pt-3 sm:px-6":"flex flex-wrap items-center justify-between gap-2"}>
     <Link href={`/projects/${id}`} className="text-xs text-stone-500 hover:text-amber-300">← {project.data.name}</Link>
     <p className="text-xs text-stone-600">Fusion Workspace · Analyst-controlled</p>
    </div>
-   <nav aria-label="Fusion Workspace views" className="flex flex-wrap gap-1 rounded border border-stone-800 bg-[#111518] p-1.5">
+   <nav aria-label="Fusion Workspace views" className={view==="map"?
+      "flex flex-wrap gap-1 border-b border-[#48605a]/35 bg-[#0d1417]/65 px-4 py-2 sm:px-6":
+      "flex flex-wrap gap-1 rounded border border-stone-800 bg-[#111518] p-1.5"}>
     {item("Evidence Inventory","inventory")}
     {item("Relationship Graph","graph")}
     {item("World Map","map")}

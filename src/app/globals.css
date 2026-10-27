@@ -1425,3 +1425,98 @@ html[data-citem-sidebar="collapsed"] .citem-sidebar {
   70%{background:rgba(12,51,31,.23)}
   100%{background:transparent}
 }
+
+
+/* Full-bleed Fusion map: occupies the investigation canvas, not a dashboard card. */
+.citem-content:has(> .fusion-map-bleed) {
+  max-width: none;
+  padding: 0;
+  margin: 0;
+}
+.fusion-map-bleed {
+  width: 100%;
+  min-width: 0;
+}
+.fusion-map-workspace {
+  width: 100%;
+  background: linear-gradient(180deg, #0b1215, #0b0f12);
+}
+.citem-worldmap-stage {
+  height: min(78dvh, 920px);
+  min-height: 520px;
+  background:
+    radial-gradient(ellipse at 52% 51%, rgba(36, 67, 70, .38), transparent 74%),
+    radial-gradient(ellipse at 82% 25%, rgba(177, 125, 44, .05), transparent 56%),
+    repeating-linear-gradient(0deg, transparent 0, transparent 39px, rgba(70, 124, 121, .045) 40px),
+    repeating-linear-gradient(90deg, transparent 0, transparent 39px, rgba(70, 124, 121, .045) 40px),
+    #081216;
+}
+.citem-worldmap-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(8, 18, 22, .25), transparent 12%, transparent 84%, rgba(8, 18, 22, .32)),
+    repeating-linear-gradient(180deg, rgba(162, 211, 200, .018) 0px, rgba(162, 211, 200, .018) 1px, transparent 1px, transparent 5px);
+}
+.citem-worldmap-hud-corner {
+  position: absolute;
+  z-index: 2;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+  border-color: rgba(192, 151, 74, .62);
+}
+.citem-worldmap-hud-corner--tl { top: 12px; left: 12px; border-top: 1px solid; border-left: 1px solid; }
+.citem-worldmap-hud-corner--tr { top: 12px; right: 12px; border-top: 1px solid; border-right: 1px solid; }
+.citem-worldmap-hud-corner--bl { bottom: 12px; left: 12px; border-bottom: 1px solid; border-left: 1px solid; }
+.citem-worldmap-hud-corner--br { bottom: 12px; right: 12px; border-bottom: 1px solid; border-right: 1px solid; }
+.fusion-map-control {
+  min-width: 37px;
+  height: 36px;
+  border: 1px solid rgba(114, 164, 155, .4);
+  border-radius: 3px;
+  background: rgba(7, 20, 24, .88);
+  color: #d5dcd8;
+  font-size: .9rem;
+  backdrop-filter: blur(10px);
+}
+.fusion-map-control:hover,.fusion-map-control:focus-visible {
+  border-color: #d4a958;
+  background: rgba(122, 90, 43, .26);
+  color: #f5d49b;
+}
+.fusion-map-search {
+  border: 1px solid rgba(91, 134, 127, .45);
+  border-radius: 4px;
+  padding: 12px;
+  background: rgba(7, 20, 24, .88);
+  box-shadow: 0 12px 38px rgba(0,0,0,.3), inset 0 1px rgba(175,207,196,.05);
+  backdrop-filter: blur(14px);
+}
+.fusion-map-country {
+  cursor: pointer;
+  transition: filter 160ms ease, stroke 160ms ease;
+  outline: none;
+}
+.fusion-map-country:hover,.fusion-map-country:focus-visible {
+  stroke: #e8bb73;
+  filter: drop-shadow(0 0 3px rgba(226,183,102,.8));
+}
+.fusion-map-country.is-selected {
+  filter: drop-shadow(0 0 4px rgba(226,183,102,.46));
+}
+.fusion-map-labels {
+  user-select: none;
+  text-shadow: 0 1px 2px #061014;
+}
+@media(max-width:640px){
+  .citem-worldmap-stage {height: min(75dvh, 760px);min-height: 410px;}
+  .fusion-map-search {padding: 9px;}
+  .citem-worldmap-hud-corner {width: 12px;height: 12px;}
+}
+@media(prefers-reduced-motion:reduce){
+  .fusion-map-country,.fusion-map-control {transition: none;}
+}
