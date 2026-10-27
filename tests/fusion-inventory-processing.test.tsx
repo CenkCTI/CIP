@@ -27,7 +27,7 @@ describe("Fusion Inventory Stage 3 reuses original processing reader",()=>{
  beforeEach(()=>changed.mockClear());
  afterEach(()=>vi.unstubAllGlobals());
  it("opens Source Reader inline and refetches Stage 3 data after a mutation",async()=>{
-  const fetcher=vi.fn(async()=>new Response(JSON.stringify({
+  const fetcher=vi.fn(async (_url:string)=>new Response(JSON.stringify({
    supported:true,reader:{source:{title:"Source PDF",id:item.record_id}}
   }),{status:200,headers:{"Content-Type":"application/json"}}));
   vi.stubGlobal("fetch",fetcher);
