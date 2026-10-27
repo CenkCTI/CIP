@@ -69,6 +69,44 @@ begin
   raise exception 'FAIL cross-investigation attachment accepted';
  exception when foreign_key_violation then null;end;
 end $test$;
+-- Fusion 076 manual assignments: canonical Evidence provenance remains unchanged.
+insert into public.fusion_record_assignments(
+ id,project_id,record_type,record_id,assignment_kind,assigned_id,rationale,created_by)
+values(
+ 'a0000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001',
+ 'EVIDENCE','50000000-0000-4000-8000-000000000001','SOURCE',
+ '40000000-0000-4000-8000-000000000001','Analyst organization only',auth.uid());
+do $manual$
+begin
+ if not exists(select 1 from public.fusion_inventory_items where project_id='20000000-0000-4000-8000-000000000001'
+  and record_type='EVIDENCE' and record_id='50000000-0000-4000-8000-000000000001'
+  and assigned_source_ids @> array['40000000-0000-4000-8000-000000000001']::uuid[]
+  and not source_ids @> array['40000000-0000-4000-8000-000000000001']::uuid[]) then
+   raise exception 'Manual source assignment lost provenance separation';end if;
+ begin
+  insert into public.fusion_record_assignments(project_id,record_type,record_id,assignment_kind,assigned_id,created_by)
+  values('20000000-0000-4000-8000-000000000001','EVIDENCE',
+   '50000000-0000-4000-8000-000000000001','SOURCE',
+   '40000000-0000-4000-8000-000000000003',auth.uid());
+  raise exception 'FAIL accepted same-owner cross-Investigation manual assignment';
+ exception when foreign_key_violation then null;end;
+ begin
+  insert into public.fusion_record_assignments(project_id,record_type,record_id,assignment_kind,assigned_id,created_by)
+  values('20000000-0000-4000-8000-000000000001','EVIDENCE',
+   '50000000-0000-4000-8000-000000000001','SOURCE',
+   '40000000-0000-4000-8000-000000000002',auth.uid());
+  raise exception 'FAIL accepted cross-owner manual assignment';
+ exception when foreign_key_violation then null;end;
+end $manual$;
+update public.fusion_record_assignments set rationale='Reviewed manual label'
+ where id='a0000000-0000-4000-8000-000000000001';
+do $manual$
+begin
+ if not exists(select 1 from public.fusion_record_assignments
+  where id='a0000000-0000-4000-8000-000000000001' and rationale='Reviewed manual label')
+ then raise exception 'Manual assignment update failed';end if;
+end $manual$;
+
 delete from public.fusion_attachment_links where id='90000000-0000-4000-8000-000000000001';
 do $test$
 begin
@@ -86,6 +124,9 @@ begin
   raise exception 'Other user reads country links';end if;
  if exists(select 1 from public.fusion_activity_events where project_id='20000000-0000-4000-8000-000000000001') then
   raise exception 'Other user reads audit';end if;
+ if exists(select 1 from public.fusion_record_assignments
+   where project_id='20000000-0000-4000-8000-000000000001') then
+   raise exception 'Cross-owner manual assignments leaked';end if;
  if exists(select 1 from public.fusion_country_link_items
    where project_id='20000000-0000-4000-8000-000000000001') then
   raise exception 'Other owner reads country relation search view';end if;
