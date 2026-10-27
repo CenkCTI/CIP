@@ -4,14 +4,16 @@ import {SourceReaderWorkspace} from "@/components/investigations/source-reader/s
 import type {loadFusionSourceReader} from "@/lib/fusion/source-reader-data";
 import type {FusionInventoryItem} from "@/lib/fusion/types";
 type Reader=Awaited<ReturnType<typeof loadFusionSourceReader>>;
-type Result={supported:true;reader:Reader}|{supported:false;reason:string};
+type Result={supported:true;reader:Reader}|{supported:false;reason:string;choices?:{id:string;title:string}[]};
 export function FusionInventoryProcessing({projectId,item,onChanged}:{
  projectId:string;item:FusionInventoryItem;onChanged:()=>void
 }){
  const [result,setResult]=useState<Result|null>(null);
  const [loading,setLoading]=useState(true),[error,setError]=useState("");
+ const [sourceChoice,setSourceChoice]=useState("");
  const url="/api/projects/"+projectId+"/fusion/processing?"+
-  new URLSearchParams({type:item.record_type,record:item.record_id}).toString();
+  new URLSearchParams({...{type:item.record_type,record:item.record_id},
+    ...(sourceChoice?{source:sourceChoice}:{})}).toString();
  const load=useCallback(async()=>{
   const response=await fetch(url,{cache:"no-store"});
   const body=await response.json();
@@ -43,7 +45,17 @@ export function FusionInventoryProcessing({projectId,item,onChanged}:{
   {loading&&<p role="status" className="p-4 text-sm text-stone-400">Loading Source Reader and Processing…</p>}
   {error&&<p role="alert" className="rounded border border-red-900 p-4 text-sm text-red-300">{error}
    <button className="ml-3 underline" onClick={()=>{setError("");void load().catch(e=>setError(String(e)));}}>Retry</button></p>}
-  {!loading&&result&&!result.supported&&<p role="status" className="rounded border border-stone-800 p-4 text-sm text-stone-400">{result.reason}</p>}
+  {!loading&&result&&!result.supported&&<div role="status" className="space-y-3 rounded border border-stone-800 p-4 text-sm text-stone-400">
+   <p>{result.reason}</p>
+   {result.choices?.length&&<label className="block text-sm text-amber-200">
+    Source for processing
+    <select className="mt-2 w-full rounded border border-stone-700 bg-[#101417] p-2 text-sm text-stone-200"
+     value={sourceChoice} onChange={e=>{setSourceChoice(e.target.value);setLoading(true);setResult(null);}}>
+     <option value="">Choose the Source to annotate</option>
+     {result.choices.map(x=><option value={x.id} key={x.id}>{x.title}</option>)}
+    </select>
+   </label>}
+  </div>}
   {!loading&&result?.supported&&
    <SourceReaderWorkspace {...result.reader} embedded onChanged={changed}/>}
  </div>;
