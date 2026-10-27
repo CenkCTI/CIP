@@ -22,7 +22,7 @@ export async function loadCountryPopup(projectId:string,params:URLSearchParams) 
  const code=iso.parse(params.get("country")??"");
  if(!countries.some(c=>c.iso2===code))throw new Error("Country not in reference catalog");
  const membership=need(await supabase.from("investigation_countries").select("id").eq("project_id",projectId).eq("country_iso2",code).maybeSingle(),"Country lookup failed");
- const countryId=membership?.id??null;
+ const countryId=(membership as {id:string}|null)?.id??null;
  const linkPage=page(params.get("linksPage")),notePage=page(params.get("notesPage")),filePage=page(params.get("filesPage"));
  const term=safe(params.get("q")),kind=params.get("type")??"",relation=params.get("relation")??"",sort=params.get("sort")==="title"?"title":"created_at";
  const countryCounts=need(await supabase.from("fusion_country_counts").select("links,notes,attachments")
