@@ -35,6 +35,14 @@ begin
   raise exception 'Inventory source duplicate or missing';end if;
  if (select count(*) from public.fusion_inventory_items where project_id='20000000-0000-4000-8000-000000000001' and country_codes @> array['PL']::text[] and record_type='SOURCE')<>1 then
   raise exception 'Country source link not indexed in inventory';end if;
+ if not exists(select 1 from public.fusion_country_link_items
+    where project_id='20000000-0000-4000-8000-000000000001' and country_iso2='PL'
+    and target_type='SOURCE' and title='Owner A report' and relation_type='MENTIONED_IN_SOURCE') then
+  raise exception 'Country canonical record search view failed';end if;
+ if not exists(select 1 from public.fusion_country_attachment_items
+    where project_id='20000000-0000-4000-8000-000000000001' and country_iso2='PL'
+    and evidence_title='Owner A evidence') then
+  raise exception 'Country private attachment view failed';end if;
  if not exists(select 1 from public.fusion_country_counts where country_iso2='PL' and links=1 and notes=1 and attachments=1) then
   raise exception 'Country counts incorrect';end if;
  if not exists(select 1 from public.fusion_activity_events where object_table='investigation_country_links' and action='INSERT') then
@@ -78,6 +86,12 @@ begin
   raise exception 'Other user reads country links';end if;
  if exists(select 1 from public.fusion_activity_events where project_id='20000000-0000-4000-8000-000000000001') then
   raise exception 'Other user reads audit';end if;
+ if exists(select 1 from public.fusion_country_link_items
+   where project_id='20000000-0000-4000-8000-000000000001') then
+  raise exception 'Other owner reads country relation search view';end if;
+ if exists(select 1 from public.fusion_country_attachment_items
+   where project_id='20000000-0000-4000-8000-000000000001') then
+  raise exception 'Other owner reads Evidence attachments';end if;
  if exists(select 1 from public.fusion_inventory_items where project_id='20000000-0000-4000-8000-000000000001') then
   raise exception 'Security invoker inventory leaked another project';end if;
  if exists(select 1 from public.fusion_country_counts where project_id='20000000-0000-4000-8000-000000000001') then
