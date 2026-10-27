@@ -28,8 +28,8 @@ describe("Fusion tactical map country labels",()=>{
    for(let i=0;i<set.length;i++){
     for(let j=i+1;j<set.length;j++){
      const a=set[i],b=set[j];
-     const aWidth=Math.max((a.label.length*5.6+7)/(2*z),13/z);
-     const bWidth=Math.max((b.label.length*5.6+7)/(2*z),13/z);
+     const aWidth=Math.max((a.label.length*7.1+11)/(2*z),13/z);
+     const bWidth=Math.max((b.label.length*7.1+11)/(2*z),13/z);
      const overlapX=Math.abs(a.x-b.x)<aWidth+bWidth;
      const overlapY=Math.abs(a.y-b.y)<11/z;
      expect(overlapX&&overlapY).toBe(false);
