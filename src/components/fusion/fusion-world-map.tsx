@@ -138,6 +138,11 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
     onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
     onPointerCancel={e=>{gesture.current=null;if(e.currentTarget.hasPointerCapture?.(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}>
     <defs>
+     {/* Decorative weathering is map-space, so clouds, terrain and lights zoom and pan together. */}
+     <filter id="fusion-atlas-cloud-noise" x="0" y="0" width="100%" height="100%" colorInterpolationFilters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency=".016 .031" numOctaves="4" seed="17" stitchTiles="stitch"/>
+      <feColorMatrix type="matrix" values=".18 0 0 0 .41  0 .18 0 0 .49  0 0 .18 0 .48  .6 .6 .6 0 -.79"/>
+     </filter>
      <linearGradient id="fusion-map-land" x1="0" x2="0.95" y1="0" y2="1">
       <stop offset="0" stopColor="#344332"/><stop offset="1" stopColor="#233124"/>
      </linearGradient>
@@ -148,13 +153,20 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
       <stop offset="0" stopColor="#c9963e"/><stop offset="1" stopColor="#886326"/>
      </linearGradient>
     </defs>
-    <rect x="0" y="0" width={W} height={H} fill="#081316" pointerEvents="none"/>
-    <g aria-hidden="true" pointerEvents="none" fill="#34443e">
+    <rect x="0" y="0" width={W} height={H} fill="#061315" pointerEvents="none"/>
+    {/* Both NASA equirectangular 2:1 rasters align with the Natural Earth hit-test polygons. */}
+    <g aria-hidden="true" pointerEvents="none" className="fusion-atlas-imagery">
+     <image href="/api/fusion/atlas-terrain" x={0} y={0} width={W} height={H}
+       preserveAspectRatio="none" className="fusion-atlas-terrain"/>
+     <image href="/api/fusion/atlas-texture" x={0} y={0} width={W} height={H}
+       preserveAspectRatio="none" className="fusion-atlas-satellite"/>
+     <rect x={0} y={0} width={W} height={H} fill="#b1bdb3"
+       className="fusion-atlas-clouds" filter="url(#fusion-atlas-cloud-noise)"/>
+    </g>
+    {/* Offline-safe land silhouettes: map still works if an imagery provider is unreachable. */}
+    <g aria-hidden="true" pointerEvents="none" fill="#30413a" className="fusion-atlas-vector-fallback">
       {mapShapes.map(f=><path key={"terrain-"+f.id} d={f.path}/>)}
     </g>
-    <image href="/api/fusion/atlas-texture"
-      x={0} y={0} width={W} height={H} preserveAspectRatio="none"
-      pointerEvents="none" className="fusion-atlas-satellite"/>
     <g aria-hidden="true" pointerEvents="none" stroke="#817961" strokeOpacity=".08" strokeWidth={.35/zoom}>
      {Array.from({length:11},(_,i)=><line key={`lon-${i}`} x1={i*W/10} y1="0" x2={i*W/10} y2={H}/>)}
      {Array.from({length:7},(_,i)=><line key={`lat-${i}`} x1="0" y1={i*H/6} x2={W} y2={i*H/6}/>)}
@@ -166,10 +178,10 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
       const chosen=code===popupCountry;
       const count=code?(counts[code]?.links??0)+(counts[code]?.notes??0)+(counts[code]?.attachments??0):0;
       return <path key={f.id} d={f.path}
-        className={`fusion-map-country ${chosen?"is-selected":linked?"has-intelligence":""}`}
-        fill={chosen?"rgba(167,115,57,.37)":linked?"rgba(104,92,63,.2)":"rgba(24,43,37,.12)"}
-        stroke={chosen?"#d7b37f":linked?"#9c8966":"#9b8669"}
-        strokeWidth={(chosen?1.5:linked?.81:.68)/zoom} strokeOpacity={chosen?1:.63}
+        className={`fusion-map-country fusion-atlas-country ${chosen?"is-selected":linked?"has-intelligence":""}`}
+        fill={chosen?"rgba(188,133,57,.25)":linked?"rgba(186,135,70,.095)":"rgba(19,37,32,.035)"}
+        stroke={chosen?"#e3b96d":linked?"#bd9d68":"#ab8c62"}
+        strokeWidth={(chosen?1.25:linked?.69:.53)/zoom} strokeOpacity={chosen?1:.78}
         role={code?"button":undefined} tabIndex={code?0:undefined}
         aria-label={code?`${f.properties.name}: ${count} linked materials`:f.properties.name}
         onMouseEnter={()=>setHover(f.properties.name)} onMouseLeave={()=>setHover("")}
@@ -191,7 +203,7 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
        fontSize={8.2/zoom} fill="#9baca9" opacity=".63"
        textAnchor="middle" letterSpacing={2/zoom}>{label}</text>)}
     </g>
-    <g aria-hidden="true" pointerEvents="none" className="fusion-map-labels">
+    <g aria-hidden="true" pointerEvents="none" className="fusion-map-labels fusion-atlas-labels">
      {displayedLabels.map(label=><text key={label.code}
        x={label.x} y={label.y} textAnchor="middle" dominantBaseline="middle"
        fontSize={(label.area>1000?9.3:8.4)/zoom} letterSpacing={1.16/zoom}
