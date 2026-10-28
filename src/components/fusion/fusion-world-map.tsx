@@ -25,7 +25,7 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
  const [popupCountry,setPopupCountry]=useState(selectedCountry);
  const previousFocus=useRef<HTMLElement|null>(null);
  const mapStage=useRef<HTMLDivElement|null>(null);
- const [mapWidth,setMapWidth]=useState(960);
+ const [mapDimensions,setMapDimensions]=useState<[number,number]>([960,480]);
  const [zoom,setZoom]=useState(1);
  const [center,setCenter]=useState<[number,number]>([W/2,H/2]);
  const [query,setQuery]=useState("");
@@ -64,7 +64,7 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
  useEffect(()=>{
   if(!mapStage.current||typeof ResizeObserver==="undefined")return;
   const observer=new ResizeObserver(entries=>{
-   if(entries[0])setMapWidth(entries[0].contentRect.width);
+   if(entries[0])setMapDimensions([entries[0].contentRect.width,entries[0].contentRect.height]);
   });
   observer.observe(mapStage.current);
   return ()=>observer.disconnect();
@@ -78,12 +78,27 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
  const displayedLabels=useMemo(()=>visibleMapLabels(mapLabels,zoom,center,linkedCodes),[zoom,center,linkedCodes]);
  const totalLinked=linkedCodes.size;
  const selected=countries.find(c=>c.iso2===popupCountry);
+ const capitalAliases:Record<string,string[]>={
+  PL:["Warsaw","Warszawa"],TR:["Ankara","Istanbul","İstanbul"],
+  US:["Washington","New York","Los Angeles"],GB:["London"],DE:["Berlin"],
+  FR:["Paris"],UA:["Kyiv","Kiev"],RU:["Moscow"],CN:["Beijing","Shanghai"],
+  JP:["Tokyo"],IT:["Rome"],ES:["Madrid"],IN:["New Delhi","Mumbai"],
+  CA:["Ottawa","Toronto"],AU:["Canberra","Sydney"],BR:["Brasilia","Brasília"],
+  AR:["Buenos Aires"],MX:["Mexico City"],EG:["Cairo"],SA:["Riyadh"],
+  IR:["Tehran"],KR:["Seoul"],ZA:["Pretoria","Johannesburg","Cape Town"],
+  NG:["Abuja","Lagos"],DZ:["Algiers"],ID:["Jakarta"],VN:["Hanoi"]
+ };
  const matches=countries.filter(c=>
   (!showLinked||linkedCodes.has(c.iso2))&&
-  (c.name.toLocaleLowerCase().includes(query.toLocaleLowerCase())||c.iso2.toLowerCase()===query.toLowerCase()))
+  (c.name.toLocaleLowerCase().includes(query.toLocaleLowerCase())||
+   c.region?.toLocaleLowerCase().includes(query.toLocaleLowerCase())||
+   c.subregion?.toLocaleLowerCase().includes(query.toLocaleLowerCase())||
+   capitalAliases[c.iso2]?.some(name=>name.toLocaleLowerCase().includes(query.toLocaleLowerCase()))||
+   c.iso2.toLowerCase()===query.toLowerCase()))
   .slice(0,50);
  const zoomBy=(amount:number)=>setZoom(z=>Math.min(8,Math.max(1,z*amount)));
- const approxKm=40075*165/(Math.max(1,mapWidth)*zoom);
+ const pixelsPerUnit=Math.min(Math.max(1,mapDimensions[0])/(W/zoom),Math.max(1,mapDimensions[1])/(H/zoom));
+ const approxKm=40075*165/(W*pixelsPerUnit);
  const onPointerDown=(e:React.PointerEvent<SVGSVGElement>)=>{
   if(e.button!==0)return;
   gesture.current={x:e.clientX,y:e.clientY,cx:center[0],cy:center[1],dragged:false};
