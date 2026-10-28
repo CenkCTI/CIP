@@ -8,10 +8,19 @@ three as static same-origin SVG images, in this order:
 2. `02_gece_sehir_isiklari_RGBA.png` — decorative warm city lights (opacity .95).
 3. `03_atmosfer_bulut_RGBA.png` — decorative atmosphere/clouds (opacity .7).
 
-All three images have the same `x=0`, `y=0`, `width=960`, `height=480` and
-`preserveAspectRatio="xMidYMid meet"`. They move in the **same SVG viewBox** as
-Natural Earth country geometry. There is no independent background crop, CSS
-cover transform, synthetic cloud filter or remote imagery fallback. The former
+All source images use `x=0`, `y=0`, `width=960`, `height=480` and
+`preserveAspectRatio="xMidYMid meet"`. The base image is reused twice: as a
+very dim ocean/atmosphere texture and as land texture **clipped by Natural
+Earth country paths**. The night-light layer shares that same geographic clip;
+clouds remain above. Consequently the visible land silhouette, country
+selection targets, and golden border geometry now derive from the same
+authoritative vector outlines, even though the raster's internal relief is
+artistic. No independent background crop or remote imagery is required.
+
+On desktop the 2:1 SVG is displayed in a 2:1 container at full available width;
+page scrolling replaces the former wide-screen 3:1 stage that letterboxed the
+map with large black side gutters. Preserve undistorted world geometry; don't
+switch to `preserveAspectRatio="none"` or `background-size: cover`. The former
 NASA Blue Marble / Black Marble proxy endpoints were removed.
 
 ## Live interaction and reference-only assets
