@@ -147,4 +147,18 @@ describe("Country Intelligence Popup map integration",()=>{
   expect(poland).toHaveAttribute("stroke","#d7b37f");
  });
 
+ it("renders the strategic atlas controls without leaking analyst requests to imagery providers",()=>{
+  stubFetch();
+  const {container}=render(<FusionWorldMap projectId="test" selectedCountry="" counts={{}}/>);
+  const map=screen.getByRole("img",{name:"Interactive map of the world with selectable country boundaries and labels"});
+  const texture=map.querySelector("image");
+  expect(texture).toHaveAttribute("href","/api/fusion/atlas-texture");
+  expect(screen.getByLabelText("Country quick search")).toBeInTheDocument();
+  expect(screen.getByLabelText("Approximate map scale at the equator")).toBeInTheDocument();
+  expect(screen.getByRole("button",{name:"Zoom in"})).toBeInTheDocument();
+  expect(screen.getByRole("button",{name:"Zoom out"})).toBeInTheDocument();
+  expect(screen.getByRole("button",{name:"Reset map view"})).toBeInTheDocument();
+  expect(container.querySelector(".fusion-atlas-compass")).toBeInTheDocument();
+ });
+
 });
