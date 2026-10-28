@@ -1706,3 +1706,31 @@ html[data-citem-sidebar="collapsed"] .citem-sidebar {
 .fusion-atlas-ocean-labels text {
   fill: #9daaa7;
 }
+
+
+/* World-fit correction: the actual map is a 2:1 equirectangular canvas.
+   Let the page scroll instead of letterboxing the map inside a shallow 3:1
+   screen-height rectangle. Geographic SVG paths remain undistorted. */
+@media (min-width: 641px) {
+ .fusion-atlas-stage {
+  height: auto;
+  aspect-ratio: 2 / 1;
+  min-height: 0;
+  max-height: none;
+ }
+}
+.fusion-atlas-ocean-texture {
+ opacity: .13;
+ filter: brightness(.52) saturate(.4);
+}
+.fusion-atlas-geographic-land {
+ fill-opacity: 1;
+}
+.fusion-atlas-basemap {
+ opacity: .86;
+}
+/* Gold country strokes are drawn from the same geographic polygons that
+   clip the visible land texture, never from the illustrated shorelines. */
+.fusion-atlas-country {
+ fill-opacity: 1;
+}
