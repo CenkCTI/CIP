@@ -1676,3 +1676,72 @@ html[data-citem-sidebar="collapsed"] .citem-sidebar {
 @media(prefers-reduced-motion:reduce){
  .fusion-atlas-country{transition:none}
 }
+
+
+/* CİTEM Cinematic World Atlas — georeferenced, interactive layers.
+   Terrain and 2016 night lights remain under the SVG's real country hit paths.
+   The filters intentionally do not imply real-time observation or threat risk. */
+.fusion-atlas-stage {
+  background: radial-gradient(ellipse at 52% 40%, #132024 0%, #071315 72%, #030b10 100%);
+}
+.fusion-atlas-stage::before {
+  background:
+    radial-gradient(ellipse at 50% 46%, transparent 18%, rgba(2,11,15,.17) 74%, rgba(2,8,12,.47) 100%),
+    linear-gradient(180deg, rgba(1,8,12,.18), transparent 13%, transparent 82%, rgba(2,10,13,.38));
+}
+.fusion-atlas-stage::after {
+  background:
+    repeating-linear-gradient(180deg, rgba(225,219,197,.010) 0, transparent 1px, transparent 4px),
+    repeating-linear-gradient(90deg, rgba(225,219,197,.009) 0, transparent 1px, transparent 5px);
+}
+.fusion-atlas-imagery { isolation: isolate; pointer-events: none; }
+.fusion-atlas-terrain {
+  opacity: .94;
+  filter: brightness(.42) contrast(1.24) saturate(.47) sepia(.20) hue-rotate(-10deg);
+}
+.fusion-atlas-satellite {
+  mix-blend-mode: screen;
+  opacity: .90;
+  filter: brightness(1.35) contrast(1.45) sepia(1) saturate(1.45) hue-rotate(-12deg);
+}
+.fusion-atlas-clouds {
+  opacity: .38;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+.fusion-atlas-vector-fallback {
+  fill-opacity: .09;
+  pointer-events: none;
+}
+.fusion-atlas-country {
+  transition: fill .14s ease, stroke .14s ease, filter .14s ease;
+}
+.fusion-atlas-country:hover, .fusion-atlas-country:focus-visible {
+  fill: rgba(181,131,69,.17);
+  stroke: #e1b16f;
+  stroke-opacity: 1;
+  filter: drop-shadow(0 0 1.3px rgba(218,167,92,.48));
+}
+.fusion-atlas-country.is-selected {
+  fill: rgba(200,143,66,.25);
+  stroke: #f0c388;
+  filter: drop-shadow(0 0 2.5px rgba(220,166,87,.70));
+}
+.fusion-atlas-labels .fusion-map-country-name {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: inherit;
+  font-weight: 400;
+  letter-spacing: .12em;
+  stroke: #081315;
+  stroke-width: 2px;
+  fill: #e4e0d4;
+  text-shadow: 0 1px 3px rgba(0,0,0,.4);
+}
+.fusion-atlas-ocean-labels text {
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  fill: #b4c0bc;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fusion-atlas-country { transition: none; }
+}
