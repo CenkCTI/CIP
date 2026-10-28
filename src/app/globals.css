@@ -1525,7 +1525,6 @@ html[data-citem-sidebar="collapsed"] .citem-sidebar {
   font-family: "CITEM Operational", Arial, sans-serif;
   font-weight: 700;
   font-style: normal;
-  letter-spacing: .085em;
   text-transform: uppercase;
   text-rendering: geometricPrecision;
   pointer-events: none;
@@ -1563,10 +1562,6 @@ html[data-citem-sidebar="collapsed"] .citem-sidebar {
   content:"";position:absolute;inset:0;pointer-events:none;z-index:1;
   background:repeating-linear-gradient(180deg,rgba(240,222,186,.008) 0,rgba(240,222,186,.008) 1px,transparent 2px,transparent 5px);
 }
-.fusion-atlas-satellite {
-  filter:brightness(.50) saturate(.52) sepia(.22) hue-rotate(5deg);
-  opacity:.90;
-}
 .fusion-atlas-country {
   fill-opacity:.86;
   transition:stroke .14s ease,fill .14s ease,filter .14s ease;
@@ -1583,9 +1578,6 @@ html[data-citem-sidebar="collapsed"] .citem-sidebar {
 .fusion-atlas-labels .fusion-map-country-name{
   font-family:Georgia,"Times New Roman",serif;
   font-weight:400;
-  letter-spacing:.12em;
-  fill:#d5d4cb;
-  stroke:#0b1717;
   text-transform:uppercase;
 }
 .fusion-atlas-ocean-labels text{
@@ -1640,8 +1632,8 @@ html[data-citem-sidebar="collapsed"] .citem-sidebar {
 .fusion-atlas-scale-rule:before,.fusion-atlas-scale-rule:after{
   content:"";position:absolute;top:0;bottom:0;border-left:1px solid #c8d0c8;
 }
-.fusion-atlas-scale-rule:before{left:32%}
-.fusion-atlas-scale-rule:after{left:65%}
+.fusion-atlas-scale-rule:before{left:33.333%}
+.fusion-atlas-scale-rule:after{left:66.667%}
 .fusion-atlas-controls{
   position:absolute;right:15px;bottom:15px;z-index:4;
   display:flex;flex-direction:column;gap:6px;
@@ -1678,70 +1670,39 @@ html[data-citem-sidebar="collapsed"] .citem-sidebar {
 }
 
 
-/* CİTEM Cinematic World Atlas — georeferenced, interactive layers.
-   Terrain and 2016 night lights remain under the SVG's real country hit paths.
-   The filters intentionally do not imply real-time observation or threat risk. */
+/* Approved CİTEM Dark Atlas. Raster layers are decorative, in shared map
+   coordinates; SVG polygons, text and React controls remain interactive. */
 .fusion-atlas-stage {
-  background: radial-gradient(ellipse at 52% 40%, #132024 0%, #071315 72%, #030b10 100%);
+  background: #071315;
 }
 .fusion-atlas-stage::before {
-  background:
-    radial-gradient(ellipse at 50% 46%, transparent 18%, rgba(2,11,15,.17) 74%, rgba(2,8,12,.47) 100%),
-    linear-gradient(180deg, rgba(1,8,12,.18), transparent 13%, transparent 82%, rgba(2,10,13,.38));
+  background: radial-gradient(ellipse at 50% 46%, transparent 45%, rgba(2,8,12,.16) 100%);
 }
 .fusion-atlas-stage::after {
-  background:
-    repeating-linear-gradient(180deg, rgba(225,219,197,.010) 0, transparent 1px, transparent 4px),
-    repeating-linear-gradient(90deg, rgba(225,219,197,.009) 0, transparent 1px, transparent 5px);
+  background: repeating-linear-gradient(180deg, rgba(225,219,197,.006) 0, transparent 1px, transparent 4px);
 }
 .fusion-atlas-imagery { isolation: isolate; pointer-events: none; }
-.fusion-atlas-terrain {
-  opacity: .94;
-  filter: brightness(.42) contrast(1.24) saturate(.47) sepia(.20) hue-rotate(-10deg);
-}
-.fusion-atlas-satellite {
-  mix-blend-mode: screen;
-  opacity: .90;
-  filter: brightness(1.35) contrast(1.45) sepia(1) saturate(1.45) hue-rotate(-12deg);
-}
-.fusion-atlas-clouds {
-  opacity: .38;
-  mix-blend-mode: screen;
-  pointer-events: none;
-}
-.fusion-atlas-vector-fallback {
-  fill-opacity: .09;
-  pointer-events: none;
-}
-.fusion-atlas-country {
-  transition: fill .14s ease, stroke .14s ease, filter .14s ease;
-}
+.fusion-atlas-basemap { opacity: 1; }
+.fusion-atlas-city-lights { opacity: .95; }
+.fusion-atlas-clouds { opacity: .7; }
 .fusion-atlas-country:hover, .fusion-atlas-country:focus-visible {
-  fill: rgba(181,131,69,.17);
-  stroke: #e1b16f;
+  fill: rgba(181,131,69,.13);
+  stroke: #d7b37f;
   stroke-opacity: 1;
-  filter: drop-shadow(0 0 1.3px rgba(218,167,92,.48));
+  filter: drop-shadow(0 0 1.3px rgba(218,167,92,.35));
 }
 .fusion-atlas-country.is-selected {
-  fill: rgba(200,143,66,.25);
-  stroke: #f0c388;
-  filter: drop-shadow(0 0 2.5px rgba(220,166,87,.70));
+  fill: rgba(200,143,66,.19);
+  stroke: #d7b37f;
+  filter: drop-shadow(0 0 2px rgba(220,166,87,.45));
 }
 .fusion-atlas-labels .fusion-map-country-name {
   font-family: Georgia, "Times New Roman", serif;
-  font-size: inherit;
   font-weight: 400;
-  letter-spacing: .12em;
-  stroke: #081315;
-  stroke-width: 2px;
-  fill: #e4e0d4;
+  /* Size, tracking and halo come from SVG attributes using the actual screen
+     scale. CSS overrides here would break zoom and the collision measurement. */
   text-shadow: 0 1px 3px rgba(0,0,0,.4);
 }
 .fusion-atlas-ocean-labels text {
-  font-family: Georgia, "Times New Roman", serif;
-  font-style: italic;
-  fill: #b4c0bc;
-}
-@media (prefers-reduced-motion: reduce) {
-  .fusion-atlas-country { transition: none; }
+  fill: #9daaa7;
 }

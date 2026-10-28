@@ -120,32 +120,23 @@ Implementation: src/lib/fusion/source-reader-data.ts, src/app/api/projects/[id]/
 **Remaining acceptance:** run a signed-in browser test of PDF text highlights, region annotations, Process/Extract, mark processed, Timeline/IOC creation, source-claim linking and provenance/audit readback. No production deployment, main merge or AI Copilot reactivation has been authorized.
 
 
-## Cinematic World Atlas visual layer (stacked map-design PR)
+## Dark Atlas visual layer (map-design PR #87)
 
-The map retains the original same-Investigation hit-testing, Natural Earth 1:110m
-country polygons, country search, zoom/pan, labels and Country Intelligence Popup.
+The map now uses the three original approved base/lights/atmosphere PNGs from
+`citem_atlas_diger_katmanlar.zip`, committed under `public/fusion/atlas/`. They are
+static same-origin images in the same 960×480 SVG viewBox as Natural Earth hit
+targets. The former NASA raster layers and their proxy endpoints are removed.
 
-Two **historical static, equirectangular** NASA datasets supply cinematic color:
+Country polygons, keyboard/click selection, collision-managed live SVG labels,
+country/city search, zoom/pan/reset, accessible React HUD and the Investigation-
+scoped Country Intelligence Popup remain functional. Label placement measures
+actual uppercase serif text and accounts for viewport size and zoom. The
+reference-only border, label and HUD PNGs never replace live interaction.
 
-- [NASA Blue Marble — Land, Ocean and Ice](https://eoimages.gsfc.nasa.gov/images/imagerecords/57000/57730/land_ocean_ice_2048.jpg):
-  land/terrain appearance beneath the interaction layer.
-- [NASA Black Marble 2016](https://assets.science.nasa.gov/content/dam/science/esd/eo/images/imagerecords/144000/144898/BlackMarble_2016_01deg.jpg):
-  observed night-light texture composed above terrain. The retired NEO Black
-  Marble URL was replaced with NASA's current Science asset endpoint.
+The basemap is approved illustrative artwork, not geographically exact imagery.
+SVG country boundaries remain authoritative. Decorative city lights and clouds
+are neither observed night radiance nor current weather or cyber activity.
 
-The app fetches both via fixed, bounded, cached same-origin route handlers:
-`/api/fusion/atlas-terrain` and `/api/fusion/atlas-texture`. The browser never
-requests a third-party map service and no analyst/project context is transmitted
-to NASA. A vector land silhouette remains as a fallback if either provider is
-unavailable. Fractal cloud texture and gold boundaries are decorative; they do
-**not** represent current cloud conditions, active incidents or any threat score.
-
-This implementation recreates the reference's **visual language**, rather than
-using a flattened, geographically unregistered concept-art screenshot as a map
-tile. This protects the accuracy of polygon click targets at every zoom level.
-
-Validation: `tests/fusion-cinematic-map.test.ts` checks raster composition,
-the retained interactive country layer, and the fixed NASA proxy sources.
-Live deployment/browser screenshot review and country-popup interaction remain
-separate acceptance gates. This visual-only PR does not apply migrations,
-alter saved evidence, or enable live collection.
+See [layer integration, source hashes and browser acceptance](CITEM_ATLAS_LAYER_IMPORT.md)
+for exact filenames, alignment decisions and signed-in desktop screenshots.
+No production deployment or main merge is part of this change.

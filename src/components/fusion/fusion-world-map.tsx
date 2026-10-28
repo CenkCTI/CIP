@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import countries from "@/lib/fusion/countries.json";
 import world from "@/lib/fusion/world-110m.json";
 import {
- MAP_WIDTH,MAP_HEIGHT,geometryPath,getWorldLabels,visibleMapLabels,
+ MAP_WIDTH,MAP_HEIGHT,MAP_LABEL_FONT,MAP_LABEL_SPACING,clampMapCenter,
+ geometryPath,getWorldLabels,mapLabelFontSize,mapPixelsPerUnit,visibleMapLabels,
  type WorldFeature
 } from "@/lib/fusion/world-map-labels";
 import { CountryIntelligencePopup } from "./country-intelligence-popup";
@@ -26,6 +27,8 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
  const previousFocus=useRef<HTMLElement|null>(null);
  const mapStage=useRef<HTMLDivElement|null>(null);
  const [mapDimensions,setMapDimensions]=useState<[number,number]>([960,480]);
+ const [stageHeight,setStageHeight]=useState<number>();
+ const [labelWidths,setLabelWidths]=useState<Record<string,number>>({});
  const [zoom,setZoom]=useState(1);
  const [center,setCenter]=useState<[number,number]>([W/2,H/2]);
  const [query,setQuery]=useState("");
@@ -63,11 +66,36 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
  },[]);
  useEffect(()=>{
   if(!mapStage.current||typeof ResizeObserver==="undefined")return;
+  const fitViewport=()=>{
+   if(!mapStage.current)return;
+   const top=mapStage.current.getBoundingClientRect().top+window.scrollY;
+   setStageHeight(Math.max(410,window.innerHeight-top-12));
+  };
   const observer=new ResizeObserver(entries=>{
    if(entries[0])setMapDimensions([entries[0].contentRect.width,entries[0].contentRect.height]);
+   fitViewport();
   });
   observer.observe(mapStage.current);
-  return ()=>observer.disconnect();
+  window.addEventListener("resize",fitViewport);
+  return ()=>{observer.disconnect();window.removeEventListener("resize",fitViewport);};
+ },[]);
+ useEffect(()=>{
+  if(typeof CanvasRenderingContext2D==="undefined")return;
+  const context=document.createElement("canvas").getContext("2d");
+  if(!context)return;
+  let cancelled=false;
+  const measure=()=>{
+   if(cancelled)return;
+   setLabelWidths(Object.fromEntries(mapLabels.map(label=>{
+    context.font=`400 ${mapLabelFontSize(label)}px ${MAP_LABEL_FONT}`;
+    const text=label.label.toLocaleUpperCase("en-US");
+    return [label.code,context.measureText(text).width+Math.max(0,text.length-1)*MAP_LABEL_SPACING];
+   })));
+  };
+  // Synchronize with browser font readiness, including later font replacement.
+  void document.fonts.ready.then(measure);
+  document.fonts.addEventListener("loadingdone",measure);
+  return ()=>{cancelled=true;document.fonts.removeEventListener("loadingdone",measure);};
  },[]);
  useEffect(()=>{
   const refresh=()=>router.refresh();
@@ -75,8 +103,9 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
   return ()=>window.removeEventListener("fusion-country-updated",refresh);
  },[router]);
  const linkedCodes=useMemo(()=>new Set(Object.entries(counts).filter(([,c])=>c.links+c.notes+c.attachments>0).map(([code])=>code)),[counts]);
- const displayedLabels=useMemo(()=>visibleMapLabels(mapLabels,zoom,center,linkedCodes),[zoom,center,linkedCodes]);
- const totalLinked=linkedCodes.size;
+ const pixelsPerUnit=mapPixelsPerUnit(mapDimensions,zoom);
+ const displayedLabels=useMemo(()=>visibleMapLabels(mapLabels,zoom,center,linkedCodes,
+  {pixelsPerUnit,widths:labelWidths,selected:popupCountry}),[zoom,center,linkedCodes,pixelsPerUnit,labelWidths,popupCountry]);
  const selected=countries.find(c=>c.iso2===popupCountry);
  const capitalAliases:Record<string,string[]>={
   PL:["Warsaw","Warszawa"],TR:["Ankara","Istanbul","İstanbul"],
@@ -96,9 +125,12 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
    capitalAliases[c.iso2]?.some(name=>name.toLocaleLowerCase().includes(query.toLocaleLowerCase()))||
    c.iso2.toLowerCase()===query.toLowerCase()))
   .slice(0,50);
- const zoomBy=(amount:number)=>setZoom(z=>Math.min(8,Math.max(1,z*amount)));
- const pixelsPerUnit=Math.min(Math.max(1,mapDimensions[0])/(W/zoom),Math.max(1,mapDimensions[1])/(H/zoom));
- const approxKm=40075*165/(W*pixelsPerUnit);
+ const zoomBy=(amount:number)=>{
+  const next=Math.min(8,Math.max(1,zoom*amount));
+  setZoom(next);setCenter(c=>clampMapCenter(c,next));
+ };
+ const scaleWidth=mapDimensions[0]<=640?115:165;
+ const approxKm=40075*scaleWidth/(W*pixelsPerUnit);
  const onPointerDown=(e:React.PointerEvent<SVGSVGElement>)=>{
   if(e.button!==0)return;
   gesture.current={x:e.clientX,y:e.clientY,cx:center[0],cy:center[1],dragged:false};
@@ -116,11 +148,8 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
   if(!start.dragged)return;
   const bounds=e.currentTarget.getBoundingClientRect();
   if(!bounds.width||!bounds.height)return;
-  const scale=W/(bounds.width*zoom);
-  setCenter([
-   Math.max(0,Math.min(W,start.cx-dx*scale)),
-   Math.max(0,Math.min(H,start.cy-dy*H/(bounds.height*zoom)))
-  ]);
+  const scale=mapPixelsPerUnit([bounds.width,bounds.height],zoom);
+  setCenter(clampMapCenter([start.cx-dx/scale,start.cy-dy/scale],zoom));
  };
  const onPointerUp=(e:React.PointerEvent<SVGSVGElement>)=>{
   const dragged=gesture.current?.dragged??false;
@@ -129,7 +158,7 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
   if(e.currentTarget.hasPointerCapture?.(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
  };
  return <section className="fusion-map-workspace" aria-label="Fusion World Map">
-  <div ref={mapStage} className="citem-worldmap-stage fusion-atlas-stage relative isolate w-full overflow-hidden"
+  <div ref={mapStage} style={{height:stageHeight}} className="citem-worldmap-stage fusion-atlas-stage relative isolate w-full overflow-hidden"
     aria-label="Interactive worldwide country intelligence map">
    <svg viewBox={`${center[0]-W/(zoom*2)} ${center[1]-H/(zoom*2)} ${W/zoom} ${H/zoom}`}
     preserveAspectRatio="xMidYMid meet"
@@ -137,37 +166,18 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
     role="img" aria-label="Interactive map of the world with selectable country boundaries and labels"
     onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
     onPointerCancel={e=>{gesture.current=null;if(e.currentTarget.hasPointerCapture?.(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}>
-    <defs>
-     {/* Decorative weathering is map-space, so clouds, terrain and lights zoom and pan together. */}
-     <filter id="fusion-atlas-cloud-noise" x="0" y="0" width="100%" height="100%" colorInterpolationFilters="sRGB">
-      <feTurbulence type="fractalNoise" baseFrequency=".016 .031" numOctaves="4" seed="17" stitchTiles="stitch"/>
-      <feColorMatrix type="matrix" values=".18 0 0 0 .41  0 .18 0 0 .49  0 0 .18 0 .48  .6 .6 .6 0 -.79"/>
-     </filter>
-     <linearGradient id="fusion-map-land" x1="0" x2="0.95" y1="0" y2="1">
-      <stop offset="0" stopColor="#344332"/><stop offset="1" stopColor="#233124"/>
-     </linearGradient>
-     <linearGradient id="fusion-map-linked" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stopColor="#536545"/><stop offset="1" stopColor="#3e5037"/>
-     </linearGradient>
-     <linearGradient id="fusion-map-selected" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stopColor="#c9963e"/><stop offset="1" stopColor="#886326"/>
-     </linearGradient>
-    </defs>
-    <rect x="0" y="0" width={W} height={H} fill="#061315" pointerEvents="none"/>
-    {/* Both NASA equirectangular 2:1 rasters align with the Natural Earth hit-test polygons. */}
+    <rect x="0" y="0" width={W} height={H} fill="#071315" pointerEvents="none"/>
+    {/* All three aligned 1774×887 source canvases share the SVG's 2:1 map space.
+        The illustrated coastline is decorative; Natural Earth remains authoritative. */}
     <g aria-hidden="true" pointerEvents="none" className="fusion-atlas-imagery">
-     <image href="/api/fusion/atlas-terrain" x={0} y={0} width={W} height={H}
-       preserveAspectRatio="none" className="fusion-atlas-terrain"/>
-     <image href="/api/fusion/atlas-texture" x={0} y={0} width={W} height={H}
-       preserveAspectRatio="none" className="fusion-atlas-satellite"/>
-     <rect x={0} y={0} width={W} height={H} fill="#b1bdb3"
-       className="fusion-atlas-clouds" filter="url(#fusion-atlas-cloud-noise)"/>
+     <image href="/fusion/atlas/01_onaylanan_ana_harita.png" x={0} y={0} width={W} height={H}
+       preserveAspectRatio="xMidYMid meet" className="fusion-atlas-basemap"/>
+     <image href="/fusion/atlas/02_gece_sehir_isiklari_RGBA.png" x={0} y={0} width={W} height={H}
+       preserveAspectRatio="xMidYMid meet" className="fusion-atlas-city-lights"/>
+     <image href="/fusion/atlas/03_atmosfer_bulut_RGBA.png" x={0} y={0} width={W} height={H}
+       preserveAspectRatio="xMidYMid meet" className="fusion-atlas-clouds"/>
     </g>
-    {/* Offline-safe land silhouettes: map still works if an imagery provider is unreachable. */}
-    <g aria-hidden="true" pointerEvents="none" fill="#30413a" className="fusion-atlas-vector-fallback">
-      {mapShapes.map(f=><path key={"terrain-"+f.id} d={f.path}/>)}
-    </g>
-    <g aria-hidden="true" pointerEvents="none" stroke="#817961" strokeOpacity=".08" strokeWidth={.35/zoom}>
+    <g aria-hidden="true" pointerEvents="none" stroke="#817961" strokeOpacity=".08" strokeWidth={.35/pixelsPerUnit}>
      {Array.from({length:11},(_,i)=><line key={`lon-${i}`} x1={i*W/10} y1="0" x2={i*W/10} y2={H}/>)}
      {Array.from({length:7},(_,i)=><line key={`lat-${i}`} x1="0" y1={i*H/6} x2={W} y2={i*H/6}/>)}
     </g>
@@ -180,8 +190,8 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
       return <path key={f.id} d={f.path}
         className={`fusion-map-country fusion-atlas-country ${chosen?"is-selected":linked?"has-intelligence":""}`}
         fill={chosen?"rgba(188,133,57,.25)":linked?"rgba(186,135,70,.095)":"rgba(19,37,32,.035)"}
-        stroke={chosen?"#e3b96d":linked?"#bd9d68":"#ab8c62"}
-        strokeWidth={(chosen?1.25:linked?.69:.53)/zoom} strokeOpacity={chosen?1:.78}
+        stroke={chosen?"#d7b37f":linked?"#9c8966":"#9b8669"}
+        strokeWidth={(chosen?1.25:linked?.65:.5)/pixelsPerUnit} strokeOpacity={chosen?1:.55}
         role={code?"button":undefined} tabIndex={code?0:undefined}
         aria-label={code?`${f.properties.name}: ${count} linked materials`:f.properties.name}
         onMouseEnter={()=>setHover(f.properties.name)} onMouseLeave={()=>setHover("")}
@@ -200,14 +210,14 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
        ["I N D I A N",694,306],["O C E A N",694,324],
        ["S O U T H E R N  O C E A N",485,452]
       ].map(([label,x,y],i)=><text key={i} x={Number(x)} y={Number(y)}
-       fontSize={8.2/zoom} fill="#9baca9" opacity=".63"
-       textAnchor="middle" letterSpacing={2/zoom}>{label}</text>)}
+       fontSize={8.2/pixelsPerUnit} fill="#9baca9" opacity=".63"
+       textAnchor="middle" letterSpacing={2/pixelsPerUnit}>{label}</text>)}
     </g>
     <g aria-hidden="true" pointerEvents="none" className="fusion-map-labels fusion-atlas-labels">
      {displayedLabels.map(label=><text key={label.code}
        x={label.x} y={label.y} textAnchor="middle" dominantBaseline="middle"
-       fontSize={(label.area>1000?9.3:8.4)/zoom} letterSpacing={1.16/zoom}
-       stroke="#0c1617" strokeWidth={1.85/zoom} paintOrder="stroke"
+       fontSize={mapLabelFontSize(label)/pixelsPerUnit} letterSpacing={MAP_LABEL_SPACING/pixelsPerUnit}
+       stroke="#0c1617" strokeWidth={2/pixelsPerUnit} paintOrder="stroke"
        fill={popupCountry===label.code?"#f4d8a9":"#d9d6cb"}
        className="fusion-map-country-name">{label.label}</text>)}
     </g>
@@ -242,10 +252,10 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
      </g>
     </svg>
    </div>
-   <div className="fusion-atlas-scale" aria-label="Approximate map scale at the equator">
+   <div className="fusion-atlas-scale" style={{width:scaleWidth}} aria-label="Approximate map scale at the equator">
     <div className="fusion-atlas-scale-text"><span>0</span>
-     <span>{Math.round(approxKm*.2).toLocaleString("en-US")}</span>
-     <span>{Math.round(approxKm*.5).toLocaleString("en-US")}</span>
+     <span>{Math.round(approxKm/3).toLocaleString("en-US")}</span>
+     <span>{Math.round(approxKm*2/3).toLocaleString("en-US")}</span>
      <span>{Math.round(approxKm).toLocaleString("en-US")} km</span></div>
     <div className="fusion-atlas-scale-rule"/>
    </div>
