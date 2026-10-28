@@ -156,10 +156,15 @@ describe("Country Intelligence Popup map integration",()=>{
   expect(imagery).toHaveAttribute("aria-hidden","true");
   const layers=Array.from(map.querySelectorAll("image"));
   expect(layers.map(layer=>layer.getAttribute("href"))).toEqual([
-   "/fusion/atlas/01_onaylanan_ana_harita.png",
+   "/fusion/atlas/01_onaylanan_ana_harita.png", // dim atmospheric source outside mapped land
+   "/fusion/atlas/01_onaylanan_ana_harita.png", // land clipped to real country outlines
    "/fusion/atlas/02_gece_sehir_isiklari_RGBA.png",
    "/fusion/atlas/03_atmosfer_bulut_RGBA.png"
   ]);
+  const geoClip=map.querySelector('clipPath#fusion-atlas-geographic-land');
+  expect(geoClip).not.toBeNull();
+  expect(geoClip?.querySelectorAll("path").length).toBeGreaterThan(150);
+  expect(map.querySelector('g[clip-path="url(#fusion-atlas-geographic-land)"]')).not.toBeNull();
   for(const layer of layers){
    expect(layer).toHaveAttribute("width","960");
    expect(layer).toHaveAttribute("height","480");
