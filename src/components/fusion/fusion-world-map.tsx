@@ -152,7 +152,7 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
     <g aria-hidden="true" pointerEvents="none" fill="#34443e">
       {mapShapes.map(f=><path key={"terrain-"+f.id} d={f.path}/>)}
     </g>
-    <image href="https://neo.sci.gsfc.nasa.gov/archive/blackmarble/2016/global/BlackMarble_2016_01deg.jpg"
+    <image href="/api/fusion/atlas-texture"
       x={0} y={0} width={W} height={H} preserveAspectRatio="none"
       pointerEvents="none" className="fusion-atlas-satellite"/>
     <g aria-hidden="true" pointerEvents="none" stroke="#817961" strokeOpacity=".08" strokeWidth={.35/zoom}>
