@@ -1,8 +1,8 @@
 // Static historical decorative imagery, fetched through the application so a
 // private analyst's IP and investigation context are never sent to NASA.
 const SOURCES=[
- "https://neo.gsfc.nasa.gov/archive/blackmarble/2016/global/BlackMarble_2016_01deg.jpg",
- "https://neo.sci.gsfc.nasa.gov/archive/blackmarble/2016/global/BlackMarble_2016_01deg.jpg"
+ // NASA moved the historical NEO archive; use the verified Science asset.
+ "https://assets.science.nasa.gov/content/dam/science/esd/eo/images/imagerecords/144000/144898/BlackMarble_2016_01deg.jpg"
 ];
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
