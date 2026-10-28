@@ -29,6 +29,7 @@ export function AnnotationTimelineActions({
   events,
   links,
   aiCandidate,
+  onChanged,
 }: {
   projectId: string;
   sourceId: string;
@@ -36,8 +37,10 @@ export function AnnotationTimelineActions({
   events: Row[];
   links: Row[];
   aiCandidate?: Extract<Stage3Candidate,{kind:"TIMELINE"}> | null;
+  onChanged?: () => void;
 }) {
   const router = useRouter();
+  const refresh = () => { router.refresh(); onChanged?.(); };
   const aiDate=aiCandidate?.normalizedDate ?? "";
   const initialPrecision:Precision=/^\d{4}-\d{2}-\d{2}$/.test(aiDate)?"DAY":
     /^\d{4}-\d{2}$/.test(aiDate)?"MONTH":/^\d{4}$/.test(aiDate)?"YEAR":
@@ -102,7 +105,7 @@ export function AnnotationTimelineActions({
               setMessage(result);
               if (result.success) {
                 setMode("idle");
-                router.refresh();
+                refresh();
               }
             });
           }}
@@ -153,7 +156,7 @@ export function AnnotationTimelineActions({
               setMessage(result);
               if (result.success) {
                 setMode("idle");
-                router.refresh();
+                refresh();
               }
             });
           }}

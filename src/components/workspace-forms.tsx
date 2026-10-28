@@ -532,7 +532,7 @@ export function DeleteEvidence({
     </form>
   );
 }
-export function EvidenceUpload({ projectId }: { projectId: string }) {
+export function EvidenceUpload({ projectId, onUploaded }: { projectId: string; onUploaded?: (id: string) => Promise<void> }) {
   const [status, setStatus] = useState<State>({});
   const [progress, setProgress] = useState(0);
   const [pending, setPending] = useState(false);
@@ -623,6 +623,18 @@ export function EvidenceUpload({ projectId }: { projectId: string }) {
     if (final.success) {
       form.reset();
       setEvidenceType("FILE");
+      if (onUploaded) {
+        if (!final.evidenceId) {
+          setStatus({ error: "Evidence saved but its identifier is missing; link it from the Evidence list." });
+        } else {
+          try {
+            await onUploaded(final.evidenceId);
+            setStatus({ success: "Evidence uploaded and attached to the country." });
+          } catch (cause) {
+            setStatus({ error: `Evidence uploaded, but country attachment failed: ${cause instanceof Error?cause.message:"Unknown error"}. The original file is safe in Evidence; link it using Link Existing Evidence.` });
+          }
+        }
+      }
     }
   }
   return (

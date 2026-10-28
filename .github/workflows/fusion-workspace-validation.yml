@@ -1,0 +1,51 @@
+name: Fusion Workspace validation
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/lib/fusion/**"
+      - "src/components/fusion/**"
+      - "src/lib/graph/**"
+      - "src/components/graph/**"
+      - "src/app/projects/**"
+      - "src/components/investigations/**"
+      - "supabase/migrations/2026102600*.sql"
+      - "tests/fusion-*.test.*"
+      - ".github/workflows/fusion-workspace-validation.yml"
+  push:
+    branches: [feat/citem-investigation-fusion-workspace]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  postgres-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL 16
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSLo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo $VERSION_CODENAME)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-16 postgresql-client-16
+          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
+          sudo pg_ctlcluster 16 main start || true
+          sudo -u postgres createuser --superuser runner
+      - name: Isolated full migrations and project-RLS acceptance
+        run: bash scripts/test-fusion-workspace-migrations.sh
