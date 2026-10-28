@@ -24,6 +24,8 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
  const router=useRouter();
  const [popupCountry,setPopupCountry]=useState(selectedCountry);
  const previousFocus=useRef<HTMLElement|null>(null);
+ const mapStage=useRef<HTMLDivElement|null>(null);
+ const [mapWidth,setMapWidth]=useState(960);
  const [zoom,setZoom]=useState(1);
  const [center,setCenter]=useState<[number,number]>([W/2,H/2]);
  const [query,setQuery]=useState("");
@@ -60,6 +62,14 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
   return ()=>window.removeEventListener("popstate",pop);
  },[]);
  useEffect(()=>{
+  if(!mapStage.current||typeof ResizeObserver==="undefined")return;
+  const observer=new ResizeObserver(entries=>{
+   if(entries[0])setMapWidth(entries[0].contentRect.width);
+  });
+  observer.observe(mapStage.current);
+  return ()=>observer.disconnect();
+ },[]);
+ useEffect(()=>{
   const refresh=()=>router.refresh();
   window.addEventListener("fusion-country-updated",refresh);
   return ()=>window.removeEventListener("fusion-country-updated",refresh);
@@ -73,6 +83,7 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
   (c.name.toLocaleLowerCase().includes(query.toLocaleLowerCase())||c.iso2.toLowerCase()===query.toLowerCase()))
   .slice(0,50);
  const zoomBy=(amount:number)=>setZoom(z=>Math.min(8,Math.max(1,z*amount)));
+ const approxKm=40075*165/(Math.max(1,mapWidth)*zoom);
  const onPointerDown=(e:React.PointerEvent<SVGSVGElement>)=>{
   if(e.button!==0)return;
   gesture.current={x:e.clientX,y:e.clientY,cx:center[0],cy:center[1],dragged:false};
@@ -103,7 +114,7 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
   if(e.currentTarget.hasPointerCapture?.(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
  };
  return <section className="fusion-map-workspace" aria-label="Fusion World Map">
-  <div className="citem-worldmap-stage fusion-atlas-stage relative isolate w-full overflow-hidden"
+  <div ref={mapStage} className="citem-worldmap-stage fusion-atlas-stage relative isolate w-full overflow-hidden"
     aria-label="Interactive worldwide country intelligence map">
    <svg viewBox={`${center[0]-W/(zoom*2)} ${center[1]-H/(zoom*2)} ${W/zoom} ${H/zoom}`}
     preserveAspectRatio="xMidYMid meet"
@@ -205,7 +216,10 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
     </svg>
    </div>
    <div className="fusion-atlas-scale" aria-label="Approximate map scale at the equator">
-    <div className="fusion-atlas-scale-text"><span>0</span><span>1,000</span><span>2,500</span><span>5,000 km</span></div>
+    <div className="fusion-atlas-scale-text"><span>0</span>
+     <span>{Math.round(approxKm*.2).toLocaleString("en-US")}</span>
+     <span>{Math.round(approxKm*.5).toLocaleString("en-US")}</span>
+     <span>{Math.round(approxKm).toLocaleString("en-US")} km</span></div>
     <div className="fusion-atlas-scale-rule"/>
    </div>
    <div className="fusion-atlas-controls">
