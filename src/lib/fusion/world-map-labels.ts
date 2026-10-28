@@ -64,6 +64,10 @@ export function getWorldLabels(features:WorldFeature[],countryNames:Record<strin
  }
  return result;
 }
+const referenceFeatured=new Set([
+ "US","CA","MX","BR","AR","RU","CN","IN","AU","ZA","TR","DE","FR","UA","PL",
+ "IT","GB","ES","EG","SA","IR","DZ","LY","SD","NE","JP","ID","NG"
+]);
 export function visibleMapLabels(labels:MapLabel[],zoom:number,center:[number,number],linked:ReadonlySet<string>){
  const width=MAP_WIDTH/zoom,height=MAP_HEIGHT/zoom;
  const left=center[0]-width/2,top=center[1]-height/2;
@@ -73,8 +77,8 @@ export function visibleMapLabels(labels:MapLabel[],zoom:number,center:[number,nu
  const taken:{left:number;right:number;top:number;bottom:number}[]=[];
  const candidates=labels
   .filter(l=>l.x>left&&l.x<left+width&&l.y>top&&l.y<top+height)
-  .filter(l=>zoom>=2.2||l.area>=Math.max(60,190/(zoom*zoom))||linked.has(l.code))
-  .sort((a,b)=>(linked.has(b.code)?1:0)-(linked.has(a.code)?1:0)||b.area-a.area);
+  .filter(l=>zoom>=2.2||referenceFeatured.has(l.code)||l.area>=Math.max(60,190/(zoom*zoom))||linked.has(l.code))
+  .sort((a,b)=>(linked.has(b.code)?1:0)-(linked.has(a.code)?1:0)||(referenceFeatured.has(b.code)?1:0)-(referenceFeatured.has(a.code)?1:0)||b.area-a.area);
  const placed:MapLabel[]=[];
  for(const label of candidates){
   const effectiveWidth=(label.label.length*7.1+11)/zoom;
