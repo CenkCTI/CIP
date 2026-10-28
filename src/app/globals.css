@@ -1538,3 +1538,141 @@ html[data-citem-sidebar="collapsed"] .citem-sidebar {
 @media(prefers-reduced-motion:reduce){
   .fusion-map-country,.fusion-map-control {transition: none;}
 }
+
+
+/* CİTEM Fusion · Dark Strategic Atlas (reference-directed map, scoped). */
+.fusion-atlas {
+  background:#091415;
+  width:100%;
+  min-width:0;
+}
+.fusion-atlas-stage {
+  height:calc(100dvh - 162px);
+  min-height:520px;
+  max-height:1100px;
+  border:1px solid rgba(148,147,125,.14);
+  background:radial-gradient(ellipse at 55% 48%,#132321,#071315 82%);
+  isolation:isolate;
+}
+.fusion-atlas-stage::before {
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:1;
+  background:radial-gradient(ellipse at 51% 48%,transparent 32%,rgba(3,13,15,.23) 91%),
+    linear-gradient(180deg,rgba(2,12,13,.20),transparent 20%,transparent 80%,rgba(2,12,13,.22));
+}
+.fusion-atlas-stage::after {
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:1;
+  background:repeating-linear-gradient(180deg,rgba(240,222,186,.008) 0,rgba(240,222,186,.008) 1px,transparent 2px,transparent 5px);
+}
+.fusion-atlas-satellite {
+  filter:brightness(.50) saturate(.52) sepia(.22) hue-rotate(5deg);
+  opacity:.90;
+}
+.fusion-atlas-country {
+  fill-opacity:.86;
+  transition:stroke .14s ease,fill .14s ease,filter .14s ease;
+}
+.fusion-atlas-country:hover,.fusion-atlas-country:focus-visible {
+  stroke:#e8c388;
+  stroke-opacity:1;
+  filter:drop-shadow(0 0 1.3px #b98b49);
+}
+.fusion-atlas-country.is-selected {
+  stroke:#e0bd82;
+  filter:drop-shadow(0 0 2.4px rgba(221,164,81,.62));
+}
+.fusion-atlas-labels .fusion-map-country-name{
+  font-family:Georgia,"Times New Roman",serif;
+  font-weight:400;
+  letter-spacing:.12em;
+  fill:#d5d4cb;
+  stroke:#0b1717;
+  text-transform:uppercase;
+}
+.fusion-atlas-ocean-labels text{
+  font-family:Georgia,"Times New Roman",serif;
+  font-style:italic;
+}
+.fusion-atlas-search{
+  position:absolute;top:12px;left:13px;z-index:6;
+  width:min(350px,calc(100% - 86px));
+  height:38px;display:flex;gap:9px;align-items:center;
+  padding:0 9px 0 12px;border:1px solid rgba(130,149,140,.26);
+  border-radius:4px;background:rgba(7,17,20,.88);
+  color:#a5b2ae;backdrop-filter:blur(9px);
+  box-shadow:0 5px 20px rgba(0,0,0,.18);
+}
+.fusion-atlas-search-input{
+  min-width:0;flex:1;border:0;outline:0;background:transparent;
+  color:#dadfd6;font-size:12px;font-family:inherit;
+}
+.fusion-atlas-search-input::placeholder{color:#87938e}
+.fusion-atlas-filter-toggle{
+  width:27px;height:27px;display:grid;place-items:center;
+  border-left:1px solid rgba(173,169,140,.13);color:#acb9b0;
+}
+.fusion-atlas-filter-toggle[aria-pressed="true"],.fusion-atlas-filter-toggle:hover{color:#dfb36f}
+.fusion-atlas-results{
+  position:absolute;left:-1px;right:-1px;top:calc(100% + 3px);
+  max-height:260px;overflow:auto;background:rgba(7,18,21,.98);
+  border:1px solid rgba(130,149,140,.33);
+  box-shadow:0 12px 28px rgba(0,0,0,.4);
+}
+.fusion-atlas-search-item{
+  padding:8px 12px;width:100%;display:flex;justify-content:space-between;
+  text-align:left;font-size:12px;color:#d2d8d1;
+}
+.fusion-atlas-search-item span:last-child{font-size:10px;color:#c6a06d}
+.fusion-atlas-search-item:hover,.fusion-atlas-search-item:focus-visible{background:rgba(117,90,52,.19)}
+.fusion-atlas-compass{
+  position:absolute;left:20px;bottom:46px;z-index:3;
+  opacity:.66;pointer-events:none;
+}
+.fusion-atlas-scale {
+  position:absolute;left:20px;bottom:15px;width:165px;z-index:3;
+  color:#c4c8bf;opacity:.75;pointer-events:none;
+}
+.fusion-atlas-scale-text{display:flex;justify-content:space-between;font:9px Georgia,serif;letter-spacing:.03em}
+.fusion-atlas-scale-rule {
+  height:7px;width:100%;margin-top:3px;
+  border-left:1px solid #c8d0c8;border-bottom:1px solid #c8d0c8;
+  border-right:1px solid #c8d0c8;position:relative;
+}
+.fusion-atlas-scale-rule:before,.fusion-atlas-scale-rule:after{
+  content:"";position:absolute;top:0;bottom:0;border-left:1px solid #c8d0c8;
+}
+.fusion-atlas-scale-rule:before{left:32%}
+.fusion-atlas-scale-rule:after{left:65%}
+.fusion-atlas-controls{
+  position:absolute;right:15px;bottom:15px;z-index:4;
+  display:flex;flex-direction:column;gap:6px;
+}
+.fusion-atlas-zoom,.fusion-atlas-recenter{
+  border:1px solid rgba(132,151,141,.42);border-radius:4px;
+  background:rgba(8,18,22,.81);color:#d5d8cb;
+  box-shadow:0 3px 14px rgba(0,0,0,.2);
+}
+.fusion-atlas-zoom{display:flex;flex-direction:column}
+.fusion-atlas-zoom button{
+  width:29px;height:29px;font-size:17px;
+  line-height:1;display:grid;place-items:center;
+}
+.fusion-atlas-zoom button+button{border-top:1px solid rgba(132,151,141,.27)}
+.fusion-atlas-recenter{height:30px;width:30px;display:grid;place-items:center}
+.fusion-atlas-controls button:hover,.fusion-atlas-controls button:focus-visible{
+ color:#e7c490;background:rgba(77,62,42,.56)
+}
+.fusion-atlas-corner-status{
+  position:absolute;right:55px;bottom:15px;z-index:3;
+  font:10px Georgia,serif;color:#b7c2b7;opacity:.7;
+}
+@media(max-width:640px){
+ .fusion-atlas-stage{height:calc(100dvh - 148px);min-height:410px}
+ .fusion-atlas-search{width:min(305px,calc(100% - 60px));top:8px;left:8px;height:36px}
+ .fusion-atlas-compass{left:9px;bottom:45px}
+ .fusion-atlas-scale{left:15px;bottom:15px;width:115px}
+ .fusion-atlas-controls{right:10px;bottom:12px}
+ .fusion-atlas-corner-status{display:none}
+}
+@media(prefers-reduced-motion:reduce){
+ .fusion-atlas-country{transition:none}
+}
