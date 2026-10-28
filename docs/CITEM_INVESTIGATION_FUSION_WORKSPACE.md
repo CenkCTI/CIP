@@ -118,3 +118,25 @@ When embedded, the Source Reader hides its navigation back to Sources and the AI
 Implementation: src/lib/fusion/source-reader-data.ts, src/app/api/projects/[id]/fusion/processing/route.ts, src/components/fusion/fusion-inventory-processing.tsx, reused Source Reader and Processing components. Test: tests/fusion-inventory-processing.test.tsx plus existing Source Reader and Fusion regressions.
 
 **Remaining acceptance:** run a signed-in browser test of PDF text highlights, region annotations, Process/Extract, mark processed, Timeline/IOC creation, source-claim linking and provenance/audit readback. No production deployment, main merge or AI Copilot reactivation has been authorized.
+
+
+## Dark Atlas visual layer (map-design PR #87)
+
+The map now uses the three original approved base/lights/atmosphere PNGs from
+`citem_atlas_diger_katmanlar.zip`, committed under `public/fusion/atlas/`. They are
+static same-origin images in the same 960×480 SVG viewBox as Natural Earth hit
+targets. The former NASA raster layers and their proxy endpoints are removed.
+
+Country polygons, keyboard/click selection, collision-managed live SVG labels,
+country/city search, zoom/pan/reset, accessible React HUD and the Investigation-
+scoped Country Intelligence Popup remain functional. Label placement measures
+actual uppercase serif text and accounts for viewport size and zoom. The
+reference-only border, label and HUD PNGs never replace live interaction.
+
+The basemap is approved illustrative artwork, not geographically exact imagery.
+SVG country boundaries remain authoritative. Decorative city lights and clouds
+are neither observed night radiance nor current weather or cyber activity.
+
+See [layer integration, source hashes and browser acceptance](CITEM_ATLAS_LAYER_IMPORT.md)
+for exact filenames, alignment decisions and signed-in desktop screenshots.
+No production deployment or main merge is part of this change.
