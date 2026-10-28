@@ -27,7 +27,6 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
  const previousFocus=useRef<HTMLElement|null>(null);
  const mapStage=useRef<HTMLDivElement|null>(null);
  const [mapDimensions,setMapDimensions]=useState<[number,number]>([960,480]);
- const [stageHeight,setStageHeight]=useState<number>();
  const [labelWidths,setLabelWidths]=useState<Record<string,number>>({});
  const [zoom,setZoom]=useState(1);
  const [center,setCenter]=useState<[number,number]>([W/2,H/2]);
@@ -66,18 +65,13 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
  },[]);
  useEffect(()=>{
   if(!mapStage.current||typeof ResizeObserver==="undefined")return;
-  const fitViewport=()=>{
-   if(!mapStage.current)return;
-   const top=mapStage.current.getBoundingClientRect().top+window.scrollY;
-   setStageHeight(Math.max(410,window.innerHeight-top-12));
-  };
+  // Keep the 2:1 geographic canvas aspect ratio instead of shrinking the globe
+  // inside an arbitrarily wide, viewport-height box (the black side gutters).
   const observer=new ResizeObserver(entries=>{
    if(entries[0])setMapDimensions([entries[0].contentRect.width,entries[0].contentRect.height]);
-   fitViewport();
   });
   observer.observe(mapStage.current);
-  window.addEventListener("resize",fitViewport);
-  return ()=>{observer.disconnect();window.removeEventListener("resize",fitViewport);};
+  return ()=>observer.disconnect();
  },[]);
  useEffect(()=>{
   if(typeof CanvasRenderingContext2D==="undefined")return;
@@ -158,7 +152,7 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
   if(e.currentTarget.hasPointerCapture?.(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
  };
  return <section className="fusion-map-workspace" aria-label="Fusion World Map">
-  <div ref={mapStage} style={{height:stageHeight}} className="citem-worldmap-stage fusion-atlas-stage relative isolate w-full overflow-hidden"
+  <div ref={mapStage} className="citem-worldmap-stage fusion-atlas-stage relative isolate w-full overflow-hidden"
     aria-label="Interactive worldwide country intelligence map">
    <svg viewBox={`${center[0]-W/(zoom*2)} ${center[1]-H/(zoom*2)} ${W/zoom} ${H/zoom}`}
     preserveAspectRatio="xMidYMid meet"
@@ -166,14 +160,30 @@ export function FusionWorldMap({projectId,selectedCountry,counts,preset}:{
     role="img" aria-label="Interactive map of the world with selectable country boundaries and labels"
     onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
     onPointerCancel={e=>{gesture.current=null;if(e.currentTarget.hasPointerCapture?.(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}>
+    <defs>
+     {/* The approved illustration is NOT a georeferenced map: its coastlines
+         differ from the actual country positions. The polygon clip guarantees
+         that visible land silhouettes and hit areas use identical geometry. */}
+     <clipPath id="fusion-atlas-geographic-land" clipPathUnits="userSpaceOnUse">
+      {mapShapes.map(f=><path key={"land-clip-"+f.id} d={f.path}/>)}
+     </clipPath>
+    </defs>
     <rect x="0" y="0" width={W} height={H} fill="#071315" pointerEvents="none"/>
-    {/* All three aligned 1774×887 source canvases share the SVG's 2:1 map space.
-        The illustrated coastline is decorative; Natural Earth remains authoritative. */}
     <g aria-hidden="true" pointerEvents="none" className="fusion-atlas-imagery">
+     {/* Dim atmospheric illustration outside land, so its inaccurate
+         coastlines cannot be mistaken for the interactive geographic border. */}
      <image href="/fusion/atlas/01_onaylanan_ana_harita.png" x={0} y={0} width={W} height={H}
-       preserveAspectRatio="xMidYMid meet" className="fusion-atlas-basemap"/>
-     <image href="/fusion/atlas/02_gece_sehir_isiklari_RGBA.png" x={0} y={0} width={W} height={H}
-       preserveAspectRatio="xMidYMid meet" className="fusion-atlas-city-lights"/>
+       preserveAspectRatio="xMidYMid meet" className="fusion-atlas-ocean-texture"/>
+     {/* Countries and basemap now share one authoritative coastline. */}
+     <g fill="#283630" className="fusion-atlas-geographic-land">
+      {mapShapes.map(f=><path key={"land-fill-"+f.id} d={f.path}/>)}
+     </g>
+     <g clipPath="url(#fusion-atlas-geographic-land)">
+      <image href="/fusion/atlas/01_onaylanan_ana_harita.png" x={0} y={0} width={W} height={H}
+        preserveAspectRatio="xMidYMid meet" className="fusion-atlas-basemap"/>
+      <image href="/fusion/atlas/02_gece_sehir_isiklari_RGBA.png" x={0} y={0} width={W} height={H}
+        preserveAspectRatio="xMidYMid meet" className="fusion-atlas-city-lights"/>
+     </g>
      <image href="/fusion/atlas/03_atmosfer_bulut_RGBA.png" x={0} y={0} width={W} height={H}
        preserveAspectRatio="xMidYMid meet" className="fusion-atlas-clouds"/>
     </g>
