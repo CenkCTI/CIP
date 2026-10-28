@@ -128,9 +128,9 @@ describe("Country Intelligence Popup map integration",()=>{
   const label=screen.getByText("United States");
   expect(label).toBeInTheDocument();
   expect(label).toHaveClass("fusion-map-country-name");
-  expect(label).toHaveAttribute("fill","#c6d2b9");
+  expect(label).toHaveAttribute("fill","#d9d6cb");
   expect(within(screen.getByRole("img",{name:"Interactive map of the world with selectable country boundaries and labels"}))
-    .getByRole("button",{name:/Poland: 0 linked materials/})).toHaveAttribute("stroke","#74876a");
+    .getByRole("button",{name:/Poland: 0 linked materials/})).toHaveAttribute("stroke","#9b8669");
   expect(screen.getByRole("button",{name:/United States of America: 0 linked materials/})).toBeInTheDocument();
  });
 
@@ -140,11 +140,11 @@ describe("Country Intelligence Popup map integration",()=>{
   const map=screen.getByRole("img",{name:"Interactive map of the world with selectable country boundaries and labels"});
   const poland=within(map).getByRole("button",{name:/Poland: 1 linked materials/});
   const germany=within(map).getByRole("button",{name:/Germany: 0 linked materials/});
-  expect(germany).toHaveAttribute("stroke","#74876a");
-  expect(poland).toHaveAttribute("stroke","#a0af79");
+  expect(germany).toHaveAttribute("stroke","#9b8669");
+  expect(poland).toHaveAttribute("stroke","#9c8966");
   await user.click(poland);
   expect(await screen.findByRole("dialog")).toBeInTheDocument();
-  expect(poland).toHaveAttribute("stroke","#d4a958");
+  expect(poland).toHaveAttribute("stroke","#d7b37f");
  });
 
 });
