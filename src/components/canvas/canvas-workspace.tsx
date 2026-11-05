@@ -28,6 +28,13 @@ function CanvasNoteNode({ id, data, selected }: NodeProps<CanvasNode>) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDraft(data.content);
   }, [data.content]);
+  useEffect(() => {
+    // Commit after a short typing pause even if focus stays in the note.
+    // Blur flushes immediately; undo history groups a typing burst.
+    if (draft === data.content) return;
+    const timer = window.setTimeout(() => data.onCommit(id, draft), 450);
+    return () => window.clearTimeout(timer);
+  }, [draft, data.content, data.onCommit, id]);
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-md border border-amber-900/60 bg-[#1a1b19] shadow-lg"
       style={{ outline: selected ? "1px solid #d4a958" : undefined }}>
