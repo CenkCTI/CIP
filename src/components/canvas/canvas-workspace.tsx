@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   applyNodeChanges, Background, BackgroundVariant, Controls, MiniMap,
   NodeResizer, ReactFlow, ReactFlowProvider, useReactFlow,
@@ -8,6 +8,11 @@ import {
 } from "@xyflow/react";
 import { useAutosave } from "@/components/document-workspace/use-autosave";
 import type { CanvasItem } from "@/lib/canvas/schema";
+import { CanvasEntityNode, type CanvasEntityFlowNode } from "./canvas-entity-node";
+import { CanvasEntityPicker } from "./canvas-entity-picker";
+import {
+  canvasEntityKey, type CanvasEntityRef, type CanvasEntitySummary,
+} from "@/lib/canvas/entity-registry";
 import {
   commitCanvasHistory, createCanvasHistory, redoCanvasHistory,
   undoCanvasHistory, updateCanvasItem,
@@ -19,9 +24,10 @@ type NoteData = {
   onCommit: (id: string, content: string) => void;
   onResize: (id: string, geometry: { x: number; y: number; width: number; height: number }) => void;
 };
-type CanvasNode = Node<NoteData, "canvasNote">;
+type CanvasNoteFlowNode = Node<NoteData, "canvasNote">;
+type CanvasNode = CanvasNoteFlowNode | CanvasEntityFlowNode;
 
-function CanvasNoteNode({ id, data, selected }: NodeProps<CanvasNode>) {
+function CanvasNoteNode({ id, data, selected }: NodeProps<CanvasNoteFlowNode>) {
   const [draft, setDraft] = useState(data.content);
   const lastCommitted = useRef(data.content);
   useEffect(() => {
@@ -65,7 +71,7 @@ function CanvasNoteNode({ id, data, selected }: NodeProps<CanvasNode>) {
   );
 }
 
-const nodeTypes = { canvasNote: CanvasNoteNode };
+const nodeTypes = { canvasNote: CanvasNoteNode, canvasEntity: CanvasEntityNode };
 
 function Editor({
   projectId, canvasId, name, initialItems, initialRevision,
@@ -79,6 +85,68 @@ function Editor({
   const [history, setHistory] = useState(() => createCanvasHistory(initialItems));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [interactionError, setInteractionError] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [entityByKey, setEntityByKey] = useState<Record<string, CanvasEntitySummary>>({});
+  const [missingKeys, setMissingKeys] = useState<string[]>([]);
+  const [loadingKeys, setLoadingKeys] = useState<string[]>([]);
+  const [resolverError, setResolverError] = useState("");
+  const attempted = useRef(new Set<string>());
+  const refs = useMemo<CanvasEntityRef[]>(() => history.present
+    .filter((item) => item.kind === "ENTITY_REF")
+    .map((item) => ({ recordType: item.record_type, recordId: item.record_id })),
+    [history.present],
+  );
+  const refSignature = refs.map(canvasEntityKey).join("|");
+
+  useEffect(() => {
+    const outstanding = refs.filter((ref) =>
+      !attempted.current.has(canvasEntityKey(ref)) && !entityByKey[canvasEntityKey(ref)]);
+    const batch = [...new Map(outstanding.map((ref) => [canvasEntityKey(ref), ref])).values()];
+    if (!batch.length) return;
+    batch.forEach((ref) => attempted.current.add(canvasEntityKey(ref)));
+    const keys = batch.map(canvasEntityKey);
+    const resolve = async () => {
+      setLoadingKeys((current) => [...new Set([...current, ...keys])]);
+      setResolverError("");
+      try {
+        const found: CanvasEntitySummary[] = [];
+        const missing: CanvasEntityRef[] = [];
+        for (let offset = 0; offset < batch.length; offset += 50) {
+          const response = await fetch(`/api/projects/${projectId}/canvases/entities`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            cache: "no-store", body: JSON.stringify({ refs: batch.slice(offset, offset + 50) }),
+          });
+          if (!response.ok) throw new Error("Could not resolve linked Investigation records.");
+          const payload = await response.json() as {
+            items: CanvasEntitySummary[]; missing: CanvasEntityRef[];
+          };
+          found.push(...payload.items);
+          missing.push(...payload.missing);
+        }
+        setEntityByKey((current) => ({
+          ...current, ...Object.fromEntries(found.map((entity) => [canvasEntityKey(entity), entity])),
+        }));
+        const unavailable = new Set(missing.map(canvasEntityKey));
+        setMissingKeys((current) => [
+          ...new Set([...current.filter((key) => !keys.includes(key)), ...unavailable]),
+        ]);
+      } catch (error) {
+        setResolverError(error instanceof Error ? error.message : "Record lookup failed.");
+      } finally {
+        setLoadingKeys((current) => current.filter((key) => !keys.includes(key)));
+      }
+    };
+    void resolve();
+    // The ref signature changes only when references are added/removed, not on text edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refSignature, projectId, entityByKey]);
+
+  const refreshEntities = useCallback(() => {
+    attempted.current.clear();
+    setEntityByKey({});
+    setMissingKeys([]);
+    setResolverError("");
+  }, []);
 
   const commitNote = useCallback((id: string, content: string) => {
     setHistory((current) => commitCanvasHistory(
@@ -91,15 +159,30 @@ function Editor({
     ));
   }, []);
 
-  const makeNodes = useCallback((items: CanvasItem[]): CanvasNode[] => items.map((item) => ({
-    id: item.id, type: "canvasNote",
-    position: { x: item.x, y: item.y },
-    style: { width: item.width, height: item.height },
-    data: { content: item.content, onCommit: commitNote, onResize: commitResize },
-    dragHandle: ".canvas-drag-handle",
-    zIndex: item.z_index,
-    selected: item.id === selectedId,
-  })), [commitNote, commitResize, selectedId]);
+  const makeNodes = useCallback((items: CanvasItem[]): CanvasNode[] => items.map((item): CanvasNode => {
+    const common = {
+      id: item.id, position: { x: item.x, y: item.y },
+      style: { width: item.width, height: item.height },
+      dragHandle: ".canvas-drag-handle", zIndex: item.z_index,
+      selected: item.id === selectedId,
+    };
+    if (item.kind === "ENTITY_REF") {
+      const key = canvasEntityKey({ recordType: item.record_type, recordId: item.record_id });
+      return {
+        ...common, type: "canvasEntity",
+        data: {
+          recordType: item.record_type, recordId: item.record_id,
+          entity: entityByKey[key] ?? null,
+          loading: loadingKeys.includes(key) || (!attempted.current.has(key) && !missingKeys.includes(key)),
+          onResize: commitResize,
+        },
+      };
+    }
+    return {
+      ...common, type: "canvasNote",
+      data: { content: item.content, onCommit: commitNote, onResize: commitResize },
+    };
+  }), [commitNote, commitResize, selectedId, entityByKey, loadingKeys, missingKeys]);
 
   const [nodes, setNodes] = useState<CanvasNode[]>(() => makeNodes(initialItems));
   useEffect(() => {
@@ -153,6 +236,32 @@ function Editor({
     setInteractionError("");
   }, [history.present.length, screenToFlowPosition]);
 
+  const addEntity = useCallback((entity: CanvasEntitySummary) => {
+    if (history.present.length >= 500) {
+      setInteractionError("This Canvas has reached the 500-item limit.");
+      setPickerOpen(false);
+      return;
+    }
+    const bounds = rootRef.current?.getBoundingClientRect();
+    const center = bounds
+      ? screenToFlowPosition({ x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 })
+      : { x: 0, y: 0 };
+    const next: CanvasItem = {
+      id: crypto.randomUUID(), kind: "ENTITY_REF", content: "",
+      record_type: entity.recordType, record_id: entity.recordId,
+      x: Math.round(center.x - 170), y: Math.round(center.y - 110),
+      width: 340, height: 220, z_index: history.present.length,
+    };
+    const key = canvasEntityKey(entity);
+    attempted.current.add(key);
+    setEntityByKey((current) => ({ ...current, [key]: entity }));
+    setMissingKeys((current) => current.filter((item) => item !== key));
+    setHistory((current) => commitCanvasHistory(current, [...current.present, next]));
+    setSelectedId(next.id);
+    setPickerOpen(false);
+    setInteractionError("");
+  }, [history.present.length, screenToFlowPosition]);
+
   const deleteSelected = useCallback(() => {
     if (!selectedId) return;
     setHistory((current) => commitCanvasHistory(current, current.present.filter((item) => item.id !== selectedId)));
@@ -201,11 +310,16 @@ function Editor({
   return <div className="space-y-2">
     <header className="flex flex-wrap items-center justify-between gap-3 rounded border border-stone-800 bg-[#11171a] p-3">
       <div>
-        <p className="citem-label">Analysis Canvas · CANVAS-1</p>
+        <p className="citem-label">Analysis Canvas · CANVAS-2</p>
         <h1 className="text-lg font-semibold text-stone-100">{name}</h1>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" className="citem-button" onClick={addNote}>+ Working note</button>
+        <button type="button" className="citem-button" onClick={() => setPickerOpen(true)}>
+          + Investigation record
+        </button>
+        <button type="button" className="citem-button-ghost"
+          disabled={!refs.length} onClick={refreshEntities}>Refresh linked records</button>
         <button type="button" className="citem-button-ghost" disabled={!history.past.length} onClick={undo} aria-label="Undo">Undo</button>
         <button type="button" className="citem-button-ghost" disabled={!history.future.length} onClick={redo} aria-label="Redo">Redo</button>
         <button type="button" className="citem-button-ghost text-red-300" disabled={!selectedId} onClick={deleteSelected}>Remove</button>
@@ -215,16 +329,16 @@ function Editor({
       </div>
     </header>
     <div role="status" aria-live="polite" className="flex flex-wrap justify-between gap-2 text-xs text-stone-400">
-      <span>{history.present.length} working notes · {statusLabel}</span>
+      <span>{history.present.filter((item) => item.kind === "NOTE").length} working notes · {refs.length} linked records · {statusLabel}</span>
       <span>Canvas layout is independent of the Investigation Knowledge Graph.</span>
     </div>
-    {(interactionError || autosave.error) && <p role="alert" className="rounded border border-red-900/70 px-3 py-2 text-sm text-red-300">
-      {interactionError || autosave.error}
+    {(interactionError || autosave.error || resolverError) && <p role="alert" className="rounded border border-red-900/70 px-3 py-2 text-sm text-red-300">
+      {interactionError || autosave.error || resolverError}
       {autosave.status === "conflict" ? " Do not reload until you have copied your unsaved notes." : ""}
     </p>}
     <div ref={rootRef} className="relative h-[min(72vh,760px)] min-h-[440px] overflow-hidden rounded border border-stone-700 bg-[#0d1215]">
       {history.present.length === 0 ? <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center text-center text-sm text-stone-500">
-        <div><p className="text-lg text-stone-300">Your canvas is empty</p><p className="mt-2">Add a working note to begin. No sample intelligence is created.</p></div>
+        <div><p className="text-lg text-stone-300">Your canvas is empty</p><p className="mt-2">Add a note or link an Investigation record. No sample intelligence is created.</p></div>
       </div> : null}
       <ReactFlow<CanvasNode>
         nodes={nodes} edges={[]} nodeTypes={nodeTypes}
@@ -244,6 +358,7 @@ function Editor({
         <MiniMap pannable zoomable maskColor="rgba(5,9,11,0.65)" />
       </ReactFlow>
     </div>
+    {pickerOpen && <CanvasEntityPicker projectId={projectId} onAdd={addEntity} onClose={() => setPickerOpen(false)} />}
   </div>;
 }
 
