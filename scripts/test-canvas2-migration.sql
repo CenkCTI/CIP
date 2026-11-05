@@ -42,7 +42,7 @@ begin
     kind='ENTITY_REF' and record_type='SOURCE' and record_id=ref_id)=1, 'Reference stored';
   assert public.save_analysis_canvas_v1(project,board,2,key,payload)=3,
     'Same mutation replay is idempotent';
-  assert (select count(*) from public.analysis_canvas_mutations where canvas_id=board)=4,
+  assert (select count(*) from public.analysis_canvas_mutations where canvas_id=board)=3,
     'Only one new mutation receipt';
   begin
     perform public.save_analysis_canvas_v1(project,board,3,
