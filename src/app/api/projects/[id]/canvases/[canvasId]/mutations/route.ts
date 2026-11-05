@@ -45,7 +45,7 @@ export async function POST(
     p_items: parsed.data.items,
   };
   const result = sceneMode
-    ? await ctx.supabase.rpc("save_analysis_canvas_v2", {
+    ? await ctx.supabase.rpc("save_analysis_canvas_v3", {
         ...common, p_edges: canvasSceneSaveSchema.parse(raw).edges,
       })
     : await ctx.supabase.rpc("save_analysis_canvas_v1", common);
