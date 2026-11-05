@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { canvasItemSchema, canvasSaveSchema } from "@/lib/canvas/schema";
+import { canvasItemSchema, canvasSaveSchema, type CanvasItem } from "@/lib/canvas/schema";
 import { canvasEntityTypes } from "@/lib/canvas/entity-registry";
 import { commitCanvasHistory, createCanvasHistory, undoCanvasHistory } from "@/lib/canvas/history";
 
-const entity = {
+const entity: Extract<CanvasItem, { kind: "ENTITY_REF" }> = {
   id: "7b73aa8e-8155-41b7-b4c1-bc88854b1001",
   kind: "ENTITY_REF" as const,
   content: "",
