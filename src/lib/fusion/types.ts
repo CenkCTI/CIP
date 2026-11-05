@@ -28,7 +28,7 @@ export type FusionInventoryFilters = {
   q:string; type:string; source:string; gap:string; requirement:string;
   country:string; state:string; group:FusionGroupKind; page:number; sort:string;
 };
-export function inventoryDetailUrl(projectId:string, item:FusionInventoryItem):string {
+export function inventoryDetailUrl(projectId:string, item:Pick<FusionInventoryItem, "record_type" | "record_id" | "source_ids" | "metadata">):string {
   const root=`/projects/${projectId}`;
   switch(item.record_type) {
     case "SOURCE": return `${root}/sources/${item.record_id}`;
