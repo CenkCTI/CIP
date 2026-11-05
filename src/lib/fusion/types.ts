@@ -39,6 +39,7 @@ export function inventoryDetailUrl(projectId:string, item:Pick<FusionInventoryIt
       return id?`${root}/sources/${id}?annotation=${item.record_id}`:`${root}/sources`;
     }
     case "SOURCE_CLAIM": return `${root}/source-claims/${item.record_id}`;
+    case "ATTRIBUTION_CLAIM": return `${root}/fusion?view=inventory&focusType=ATTRIBUTION_CLAIM&focusId=${item.record_id}`;
     case "RESEARCH_NOTE": return `${root}/notes?note=${item.record_id}`;
     case "EVIDENCE": return `${root}?tab=evidence#evidence-${item.record_id}`;
     case "TIMELINE_EVENT": return `${root}/timeline/${item.record_id}`;
