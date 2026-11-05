@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireOwnedProject } from "@/lib/projects/ownership";
 import {
   canvasEntityFromFusionRow, canvasEntityKey, canvasEntityTypeSchema,
+  type CanvasEntitySummary,
 } from "@/lib/canvas/entity-registry";
 
 export const runtime = "nodejs";
@@ -85,7 +86,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const allowed = new Set(unique.map(canvasEntityKey));
   const found = (data ?? [])
     .map((row) => canvasEntityFromFusionRow(id, row as Record<string, unknown>))
-    .filter((item) => item !== null && allowed.has(canvasEntityKey(item)));
+    .filter((item): item is CanvasEntitySummary =>
+      item !== null && allowed.has(canvasEntityKey(item)));
   const matches = new Set(found.map(canvasEntityKey));
   const missing = unique.filter((item) => !matches.has(canvasEntityKey(item)));
   return NextResponse.json({ items: found, missing }, { headers: NO_STORE });
