@@ -7,6 +7,7 @@ import { FusionWorldMap } from "@/components/fusion/fusion-world-map";
 import { requireOwnedProject } from "@/lib/projects/ownership";
 import { loadFusionInventory,parseInventoryFilters } from "@/lib/fusion/inventory";
 import countries from "@/lib/fusion/countries.json";
+import type { FusionInventoryItem } from "@/lib/fusion/types";
 
 type Search=Record<string,string|string[]|undefined>;
 const first=(q:Search,key:string,max=120)=>typeof q[key]==="string"?q[key].slice(0,max):"";
@@ -54,7 +55,7 @@ export default async function FusionPage({params,searchParams}:{
   aria-current={view===key?"page":undefined}
   className={`rounded px-3 py-2 text-sm ${view===key?"bg-[#b9822f]/20 text-amber-300":"text-stone-400 hover:bg-stone-800 hover:text-stone-100"}`}>{name}</Link>;
  type ViewData =
-  | {kind:"inventory"; data:Awaited<ReturnType<typeof loadFusionInventory>>; filters:ReturnType<typeof parseInventoryFilters>}
+  | {kind:"inventory"; data:Awaited<ReturnType<typeof loadFusionInventory>>; filters:ReturnType<typeof parseInventoryFilters>; focusedItem:FusionInventoryItem|null}
   | {kind:"graph"}
   | {kind:"map"; selected:string; counts:Awaited<ReturnType<typeof countryCounts>>}
   | {kind:"error"};
@@ -66,7 +67,23 @@ export default async function FusionPage({params,searchParams}:{
    viewData={kind:"map",selected:await selectedCountry(ctx,sp),counts:await countryCounts(ctx)};
   }else{
    const filters=parseInventoryFilters(sp);
-   viewData={kind:"inventory",filters,data:await loadFusionInventory(id,filters)};
+   const focusType=first(sp,"focusType",40);
+   const focusId=first(sp,"focusId",40);
+   let focusedItem:FusionInventoryItem|null=null;
+   if(/^[A-Z_]{2,32}$/.test(focusType) && z.string().uuid().safeParse(focusId).success){
+     const focus=await ctx.supabase.from("fusion_inventory_items").select("*")
+       .eq("project_id",id).eq("record_type",focusType).eq("record_id",focusId).maybeSingle();
+     if(focus.error) throw Error("Focused record unavailable");
+     if(focus.data){
+       focusedItem={
+         ...focus.data,
+         assigned_source_ids:focus.data.assigned_source_ids??[],
+         assigned_gap_ids:focus.data.assigned_gap_ids??[],
+         assigned_requirement_ids:focus.data.assigned_requirement_ids??[],
+       } as unknown as FusionInventoryItem;
+     }
+   }
+   viewData={kind:"inventory",filters,data:await loadFusionInventory(id,filters),focusedItem};
   }
  }catch{viewData={kind:"error"};}
  return <main className={view==="map"?"fusion-map-bleed space-y-2 pb-2":"mx-auto max-w-[1600px] space-y-4 px-2 pb-8"}>
@@ -84,7 +101,7 @@ export default async function FusionPage({params,searchParams}:{
    {viewData.kind==="error"&&<div role="alert" className="rounded border border-red-800/60 bg-[#14191d] p-5 text-sm text-red-300">
     Fusion Workspace could not load. Check that migrations 069–074 have been applied and the investigation data are accessible.
    </div>}
-   {viewData.kind==="inventory"&&<FusionInventory projectId={id} filters={viewData.filters} {...viewData.data}/>}
+   {viewData.kind==="inventory"&&<FusionInventory projectId={id} filters={viewData.filters} focusedItem={viewData.focusedItem} {...viewData.data}/>}
    {viewData.kind==="graph"&&<section>
      <header className="mb-4"><p className="citem-label">Investigation / Fusion</p>
       <h1 className="mt-1 text-2xl font-semibold text-stone-100">Relationship Graph</h1>
