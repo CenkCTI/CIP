@@ -517,7 +517,23 @@ function Editor({
         onNodeDragStop={handleDragStop}
         onConnect={onConnect}
         onPaneClick={() => { setSelectedNodeIds(new Set()); setSelectedEdgeIds(new Set()); }}
-        onEdgesChange={() => { /* Deletions only happen through revisioned scene history. */ }}
+        onEdgesChange={(changes) => {
+          // Selection is local UI state; only intentional toolbar operations mutate
+          // the persisted scene. Ignore implicit remove/change events.
+          setSelectedEdgeIds((current) => {
+            const selected = new Set(current);
+            for (const change of changes) {
+              if (change.type !== "select") continue;
+              if (change.selected) selected.add(change.id);
+              else selected.delete(change.id);
+            }
+            return sameSet(current, selected) ? current : selected;
+          });
+        }}
+        onEdgeClick={(_, edge) => {
+          setSelectedEdgeIds(new Set([edge.id]));
+          setSelectedNodeIds(new Set());
+        }}
         nodesConnectable
         deleteKeyCode={null}
         selectionOnDrag panOnDrag={[1, 2]} multiSelectionKeyCode="Shift"
