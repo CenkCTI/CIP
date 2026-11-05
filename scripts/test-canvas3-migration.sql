@@ -65,8 +65,8 @@ begin
   begin
     perform public.save_analysis_canvas_v2(project,board,5,
       'ce1f11c5-ea5d-4d7a-97d4-91cc8c940013',
-      replace(items::text,'09fd43b3-b3b1-47ad-86af-c65cd31b0009',
-        '09fd43b3-b3b1-47ad-86af-c65cd31b0022')::jsonb,edges);
+      replace(items::text,'"group_id": "09fd43b3-b3b1-47ad-86af-c65cd31b0009"',
+        '"group_id": "09fd43b3-b3b1-47ad-86af-c65cd31b0022"')::jsonb,edges);
     raise exception 'MISSING_GROUP_ACCEPTED';
   exception when invalid_parameter_value then null;
   end;
@@ -86,7 +86,7 @@ begin
   exception when invalid_parameter_value then null;
   end;
 
-  assert (select revision from public.analysis_canvases where id=board)=5,
+  assert (select c.revision from public.analysis_canvases c where c.id=board)=5,
     'Rejected mutations must not increase the revision';
   assert (select count(*) from public.analysis_canvas_edges where canvas_id=board)=1,
     'Rejected edits must not delete relationships';
