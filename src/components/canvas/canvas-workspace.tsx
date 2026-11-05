@@ -13,6 +13,8 @@ import {
 import { CanvasEntityNode, type CanvasEntityFlowNode } from "./canvas-entity-node";
 import { CanvasFrameNode, type CanvasFrameFlowNode } from "./canvas-frame-node";
 import { CanvasEntityPicker } from "./canvas-entity-picker";
+import { CanvasAiPanel, type CanvasAssistAction } from "./canvas-ai-panel";
+import type { CanvasAssistResult } from "@/lib/canvas/ai-assist";
 import {
   canvasEntityKey, type CanvasEntityRef, type CanvasEntitySummary,
 } from "@/lib/canvas/entity-registry";
@@ -132,6 +134,7 @@ function Editor({
   const [selectedEdgeIds, setSelectedEdgeIds] = useState<Set<string>>(() => new Set());
   const [interactionError, setInteractionError] = useState("");
   const [pickerMode, setPickerMode] = useState<"ENTITY" | "MEDIA" | null>(null);
+  const [aiOpen, setAiOpen] = useState(false);
   const [entityByKey, setEntityByKey] = useState<Record<string, CanvasEntitySummary>>({});
   const [missingKeys, setMissingKeys] = useState<string[]>([]);
   const [loadingKeys, setLoadingKeys] = useState<string[]>([]);
@@ -408,6 +411,62 @@ function Editor({
     setSelectedEdgeIds((current) => sameSet(current, edgeIds) ? current : edgeIds);
   }, []);
 
+  const selectedAssistIds = history.present.items
+    .filter((item) => selectedNodeIds.has(item.id) &&
+      (item.kind === "NOTE" || item.kind === "ENTITY_REF"))
+    .map((item) => item.id);
+  const prepareAssistRevision = useCallback(async (): Promise<number> => {
+    const persisted = await autosave.flush();
+    if (!persisted) throw new Error("Save the Canvas changes before asking AI.");
+    const response = await fetch(
+      `/api/projects/${projectId}/canvases/${canvasId}`, { cache: "no-store" });
+    if (!response.ok) throw new Error("Cannot verify the latest Canvas revision.");
+    const data = await response.json() as { canvas?: { revision?: number } };
+    const revision = Number(data.canvas?.revision);
+    if (!Number.isSafeInteger(revision) || revision < 0) {
+      throw new Error("Invalid Canvas revision.");
+    }
+    return revision;
+  }, [autosave.flush, projectId, canvasId]);
+
+  const approveAiLink = useCallback((proposal: CanvasAssistAction) => {
+    if (autosave.status === "conflict") return;
+    setHistory((current) => {
+      const before = current.present;
+      const next = linkSceneCards(before, crypto.randomUUID(),
+        proposal.sourceId, proposal.targetId, proposal.relationType);
+      if (next === before) return current;
+      const newLink = next.edges[next.edges.length - 1];
+      return commitSceneHistory(current, updateSceneEdge(next, newLink.id, {
+        rationale: proposal.rationale,
+      }));
+    });
+  }, [autosave.status]);
+
+  const addAiDraft = useCallback((result: CanvasAssistResult) => {
+    if (autosave.status === "conflict") return;
+    const content = [
+      "AI DRAFT — UNVERIFIED · Analyst review required",
+      "Catalog snippets and notes are NOT verified primary evidence.",
+      "",
+      result.summary,
+      ...result.hypotheses.map((h, index) =>
+        `HYPOTHESIS ${index + 1}: ${h.title} [model confidence ${h.confidence}]\n${h.rationale}\nTEST: ${h.test}`),
+      ...result.questions.map((q, index) => `OPEN QUESTION ${index + 1}: ${q}`),
+    ].join("\n\n").slice(0, 8000);
+    setHistory((current) => {
+      if (current.present.items.length >= 500) return current;
+      const item: CanvasItem = {
+        id: crypto.randomUUID(), kind: "NOTE", content,
+        ...center(440, 280), width: 440, height: 280,
+        z_index: current.present.items.length,
+      };
+      return commitSceneHistory(current, {
+        ...current.present, items: [...current.present.items, item],
+      });
+    });
+  }, [autosave.status, center]);
+
   const onConnect = useCallback((connection: Connection) => {
     if (!connection.source || !connection.target) return;
     const id = crypto.randomUUID();
@@ -441,7 +500,7 @@ function Editor({
   return <div className="space-y-2">
     <header className="flex flex-wrap items-center justify-between gap-3 rounded border border-stone-800 bg-[#11171a] p-3">
       <div>
-        <p className="citem-label">Analysis Canvas · CANVAS-4</p>
+        <p className="citem-label">Analysis Canvas · CANVAS-5</p>
         <h1 className="text-lg font-semibold text-stone-100">{name}</h1>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -454,6 +513,11 @@ function Editor({
         </button>
         <button type="button" className="citem-button-ghost"
           disabled={!refs.length} onClick={refreshEntities}>Refresh linked records</button>
+        <button type="button" className="citem-button-ghost"
+          disabled={!selectedAssistIds.length || selectedAssistIds.length > 12}
+          onClick={() => setAiOpen((open) => !open)}>
+          {aiOpen ? "Close AI" : "AI hypotheses · selected"}
+        </button>
         <button type="button" className="citem-button-ghost"
           disabled={groupingCandidates.length < 2 || history.present.items.length >= 500}
           onClick={addFrame}>Group selected</button>
@@ -484,6 +548,14 @@ function Editor({
       </span>
       <span>Drag from right handle to left handle to link · Shift/drag to select · Middle-drag to pan</span>
     </div>
+    {aiOpen && selectedAssistIds.length > 0 && selectedAssistIds.length <= 12 &&
+      <CanvasAiPanel key={selectedAssistIds.join(":")} projectId={projectId} canvasId={canvasId}
+        selectedItemIds={selectedAssistIds}
+        beforeAnalyze={prepareAssistRevision}
+        onApproveLink={approveAiLink}
+        onAddDraft={addAiDraft}
+        canApply={autosave.status !== "conflict"}
+        onClose={() => setAiOpen(false)} />}
     {selectedNodeIds.size > 1 && <div className="flex flex-wrap items-center gap-2 rounded border border-stone-800 bg-[#12191c] p-2 text-xs text-stone-300">
       <span>{selectedNodeIds.size} selected</span>
       <label>Align
@@ -573,6 +645,7 @@ function Editor({
     </button>
     <p className="text-[11px] text-stone-500">
       Links and frames express an analyst&apos;s working arrangement, not verified CTI evidence.
+      AI summaries require explicit BYOK consent and human approval; AI creates no canonical records.
       They do not alter the Investigation Knowledge Graph.
     </p>
     {pickerMode && <CanvasEntityPicker key={pickerMode} projectId={projectId}
