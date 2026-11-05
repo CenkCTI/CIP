@@ -7,6 +7,17 @@ export type MapLabel={code:string;name:string;x:number;y:number;area:number;labe
 
 export const MAP_WIDTH=960;
 export const MAP_HEIGHT=480;
+export const MAP_LABEL_FONT='Georgia, "Times New Roman", serif';
+export const MAP_LABEL_SPACING=1.1;
+export const mapLabelFontSize=(label:MapLabel)=>label.area>1000?11:10;
+export function mapPixelsPerUnit(dimensions:[number,number],zoom:number){
+ return Math.max(.01,Math.min(dimensions[0]/MAP_WIDTH,dimensions[1]/MAP_HEIGHT)*zoom);
+}
+export function clampMapCenter(center:[number,number],zoom:number):[number,number]{
+ const halfWidth=MAP_WIDTH/(2*zoom),halfHeight=MAP_HEIGHT/(2*zoom);
+ return [Math.max(halfWidth,Math.min(MAP_WIDTH-halfWidth,center[0])),
+  Math.max(halfHeight,Math.min(MAP_HEIGHT-halfHeight,center[1]))];
+}
 export function projectPoint(point:number[]):[number,number]{
  return [(point[0]+180)*MAP_WIDTH/360,(90-point[1])*MAP_HEIGHT/180];
 }
@@ -68,22 +79,28 @@ const referenceFeatured=new Set([
  "US","CA","MX","BR","AR","RU","CN","IN","AU","ZA","TR","DE","FR","UA","PL",
  "IT","GB","ES","EG","SA","IR","DZ","LY","SD","NE","JP","ID","NG"
 ]);
-export function visibleMapLabels(labels:MapLabel[],zoom:number,center:[number,number],linked:ReadonlySet<string>){
+type LabelLayout={pixelsPerUnit?:number;widths?:Record<string,number>;selected?:string};
+export function visibleMapLabels(labels:MapLabel[],zoom:number,center:[number,number],linked:ReadonlySet<string>,layout:LabelLayout={}){
  const width=MAP_WIDTH/zoom,height=MAP_HEIGHT/zoom;
  const left=center[0]-width/2,top=center[1]-height/2;
- // Label collision is computed in world coordinates but uses fixed on-screen text
- // dimensions, so zooming in reveals smaller countries without label overlap.
- const cellWidth=13/zoom,cellHeight=11/zoom;
+ // Match the uppercase serif text, tracking and halo in screen pixels. The SVG
+ // uses `meet`, so the scale includes both viewport dimensions, not just zoom.
+ // Browser-measured widths replace the conservative server-render estimate.
+ const scale=layout.pixelsPerUnit??zoom;
  const taken:{left:number;right:number;top:number;bottom:number}[]=[];
+ const priority=(l:MapLabel)=>l.code===layout.selected?3:linked.has(l.code)?2:referenceFeatured.has(l.code)?1:0;
  const candidates=labels
+  .filter(l=>l.code!=="AQ"||linked.has(l.code)||l.code===layout.selected)
   .filter(l=>l.x>left&&l.x<left+width&&l.y>top&&l.y<top+height)
-  .filter(l=>zoom>=2.2||referenceFeatured.has(l.code)||l.area>=Math.max(60,190/(zoom*zoom))||linked.has(l.code))
-  .sort((a,b)=>(linked.has(b.code)?1:0)-(linked.has(a.code)?1:0)||(referenceFeatured.has(b.code)?1:0)-(referenceFeatured.has(a.code)?1:0)||b.area-a.area);
+  .filter(l=>zoom>=2.2||referenceFeatured.has(l.code)||l.area>=Math.max(20,300/(zoom*zoom))||linked.has(l.code)||l.code===layout.selected)
+  .sort((a,b)=>priority(b)-priority(a)||b.area-a.area||a.code.localeCompare(b.code));
  const placed:MapLabel[]=[];
  for(const label of candidates){
-  const effectiveWidth=(label.label.length*7.1+11)/zoom;
-  const radius=Math.max(effectiveWidth/2,cellWidth);
-  const bounds={left:label.x-radius,right:label.x+radius,top:label.y-cellHeight/2,bottom:label.y+cellHeight/2};
+  const effectiveWidth=(layout.widths?.[label.code]??label.label.length*8)+10;
+  const radius=effectiveWidth/(2*scale),halfHeight=(mapLabelFontSize(label)+8)/(2*scale);
+  const bounds={left:label.x-radius,right:label.x+radius,top:label.y-halfHeight,bottom:label.y+halfHeight};
+  // Do not show half labels at the clipped viewport edge while panning.
+  if(bounds.left<left||bounds.right>left+width||bounds.top<top||bounds.bottom>top+height)continue;
   if(taken.some(b=>!(bounds.right<b.left||bounds.left>b.right||bounds.bottom<b.top||bounds.top>b.bottom)))continue;
   taken.push(bounds);placed.push(label);
  }
