@@ -18,7 +18,7 @@ export async function POST(
 
   // Keep request size bounded before schema validation.
   const body = await req.text().catch(() => "");
-  if (body.length > 1_000_000) {
+  if (body.length > 6_000_000) {
     return NextResponse.json({ error: "Canvas payload too large." }, { status: 413 });
   }
   const raw: unknown = (() => { try { return JSON.parse(body); } catch { return null; } })();
