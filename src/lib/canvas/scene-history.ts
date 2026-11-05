@@ -121,7 +121,7 @@ export function groupSceneCards(
     items: [
       frame,
       ...scene.items.map((item): CanvasItem =>
-        members.some((member) => member.id === item.id)
+        item.kind !== "FRAME" && members.some((member) => member.id === item.id)
           ? { ...item, group_id: frameId, x: item.x - x, y: item.y - y }
           : item),
     ],
