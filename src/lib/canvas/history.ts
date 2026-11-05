@@ -14,11 +14,7 @@ export function createCanvasHistory(items: CanvasItem[] = []): CanvasHistory {
 
 export function commitCanvasHistory(history: CanvasHistory, next: CanvasItem[]): CanvasHistory {
   if (JSON.stringify(history.present) === JSON.stringify(next)) return history;
-  return {
-    past: [...history.past, history.present].slice(-LIMIT),
-    present: next,
-    future: [],
-  };
+  return { past: [...history.past, history.present].slice(-LIMIT), present: next, future: [] };
 }
 
 export function undoCanvasHistory(history: CanvasHistory): CanvasHistory {
@@ -40,6 +36,10 @@ export function redoCanvasHistory(history: CanvasHistory): CanvasHistory {
   };
 }
 
-export function updateCanvasItem(items: CanvasItem[], id: string, patch: Partial<CanvasItem>): CanvasItem[] {
-  return items.map((item) => item.id === id ? { ...item, ...patch, id: item.id, kind: item.kind } : item);
+/** Geometry/text may change; canonical record reference and item identity may not. */
+export function updateCanvasItem(
+  items: CanvasItem[], id: string,
+  patch: Partial<Pick<CanvasItem, "x" | "y" | "width" | "height" | "z_index" | "content">>,
+): CanvasItem[] {
+  return items.map((item) => item.id === id ? { ...item, ...patch } : item);
 }
