@@ -19,7 +19,7 @@ import {
 import {
   alignSceneSelection, bringSceneSelectionForward, commitSceneHistory, createSceneHistory,
   groupSceneCards, linkSceneCards, moveSceneItems, redoSceneHistory, removeSceneSelection,
-  undoSceneHistory, ungroupSceneFrame, updateSceneEdge, updateSceneItem,
+  undoSceneHistory, ungroupSceneFrame, updateSceneEdge, updateSceneItem, setScenePreviewPage,
   type Alignment,
 } from "@/lib/canvas/scene-history";
 
@@ -131,7 +131,7 @@ function Editor({
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(() => new Set());
   const [selectedEdgeIds, setSelectedEdgeIds] = useState<Set<string>>(() => new Set());
   const [interactionError, setInteractionError] = useState("");
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerMode, setPickerMode] = useState<"ENTITY" | "MEDIA" | null>(null);
   const [entityByKey, setEntityByKey] = useState<Record<string, CanvasEntitySummary>>({});
   const [missingKeys, setMissingKeys] = useState<string[]>([]);
   const [loadingKeys, setLoadingKeys] = useState<string[]>([]);
@@ -195,6 +195,11 @@ function Editor({
   const commitNote = useCallback((id: string, content: string) => commitItem(id, { content }), [commitItem]);
   const commitResize = useCallback((id: string, geometry: Geometry) =>
     commitItem(id, geometry), [commitItem]);
+  const changePreviewPage = useCallback((id: string, page: number) => {
+    setHistory((current) => commitSceneHistory(
+      current, setScenePreviewPage(current.present, id, page),
+    ));
+  }, []);
 
   const makeNodes = useCallback((items: CanvasItem[]): CanvasNode[] => {
     // React Flow requires parents before children and parent-relative coordinates.
@@ -224,6 +229,9 @@ function Editor({
         const key = canvasEntityKey({ recordType: item.record_type, recordId: item.record_id });
         return { ...common, type: "canvasEntity", data: {
           recordType: item.record_type, recordId: item.record_id,
+          projectId,
+          previewPage: item.preview_page ?? null,
+          onPreviewPageChange: changePreviewPage,
           entity: entityByKey[key] ?? null,
           loading: loadingKeys.includes(key) || (!entityByKey[key] && !missingKeys.includes(key) && !resolverError),
           onResize: commitResize,
@@ -234,7 +242,7 @@ function Editor({
         data: { content: item.content, onCommit: commitNote, onResize: commitResize },
       };
     });
-  }, [commitNote, commitResize, selectedNodeIds, entityByKey, loadingKeys, missingKeys, resolverError]);
+  }, [commitNote, commitResize, changePreviewPage, projectId, selectedNodeIds, entityByKey, loadingKeys, missingKeys, resolverError]);
 
   const [nodes, setNodes] = useState<CanvasNode[]>(() => makeNodes(initialItems));
   useEffect(() => {
@@ -306,15 +314,23 @@ function Editor({
     setInteractionError("");
   }, [history.present.items.length, center]);
 
-  const addEntity = useCallback((entity: CanvasEntitySummary) => {
+  const placeEntity = useCallback((entity: CanvasEntitySummary, media: boolean) => {
+    if (media && entity.recordType !== "SOURCE_ASSET") {
+      setInteractionError("Only original Source Asset records support file previews.");
+      return;
+    }
     if (history.present.items.length >= 500) {
       setInteractionError("This Canvas has reached the 500-item limit.");
-      setPickerOpen(false); return;
+      setPickerMode(null);
+      return;
     }
+    const width = media ? 480 : 340;
+    const height = media ? 580 : 220;
     const next: CanvasItem = {
       id: crypto.randomUUID(), kind: "ENTITY_REF", content: "",
       record_type: entity.recordType, record_id: entity.recordId,
-      ...center(340, 220), width: 340, height: 220,
+      ...(media ? { preview_page: 1 } : {}),
+      ...center(width, height), width, height,
       z_index: history.present.items.length,
     };
     const key = canvasEntityKey(entity);
@@ -325,8 +341,10 @@ function Editor({
       ...h.present, items: [...h.present.items, next],
     }));
     setSelectedNodeIds(new Set([next.id])); setSelectedEdgeIds(new Set());
-    setPickerOpen(false); setInteractionError("");
+    setPickerMode(null); setInteractionError("");
   }, [history.present.items.length, center]);
+  const addEntity = useCallback((entity: CanvasEntitySummary) => placeEntity(entity, false), [placeEntity]);
+  const addMedia = useCallback((entity: CanvasEntitySummary) => placeEntity(entity, true), [placeEntity]);
 
   const addFrame = useCallback(() => {
     const id = crypto.randomUUID();
@@ -423,13 +441,16 @@ function Editor({
   return <div className="space-y-2">
     <header className="flex flex-wrap items-center justify-between gap-3 rounded border border-stone-800 bg-[#11171a] p-3">
       <div>
-        <p className="citem-label">Analysis Canvas · CANVAS-3</p>
+        <p className="citem-label">Analysis Canvas · CANVAS-4</p>
         <h1 className="text-lg font-semibold text-stone-100">{name}</h1>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" className="citem-button" onClick={addNote}>+ Working note</button>
-        <button type="button" className="citem-button" onClick={() => setPickerOpen(true)}>
+        <button type="button" className="citem-button" onClick={() => setPickerMode("ENTITY")}>
           + Investigation record
+        </button>
+        <button type="button" className="citem-button" onClick={() => setPickerMode("MEDIA")}>
+          + Source file preview
         </button>
         <button type="button" className="citem-button-ghost"
           disabled={!refs.length} onClick={refreshEntities}>Refresh linked records</button>
@@ -457,6 +478,8 @@ function Editor({
         {history.present.items.filter((item) => item.kind === "NOTE").length} notes ·{" "}
         {refs.length} entity references ·{" "}
         {history.present.items.filter((item) => item.kind === "FRAME").length} frames ·{" "}
+        {history.present.items.filter((item) => item.kind === "ENTITY_REF" &&
+          item.preview_page != null).length} file previews ·{" "}
         {history.present.edges.length} analyst links · {statusLabel}
       </span>
       <span>Drag from right handle to left handle to link · Shift/drag to select · Middle-drag to pan</span>
@@ -552,8 +575,11 @@ function Editor({
       Links and frames express an analyst&apos;s working arrangement, not verified CTI evidence.
       They do not alter the Investigation Knowledge Graph.
     </p>
-    {pickerOpen && <CanvasEntityPicker projectId={projectId}
-      onAdd={addEntity} onClose={() => setPickerOpen(false)} />}
+    {pickerMode && <CanvasEntityPicker key={pickerMode} projectId={projectId}
+      initialType={pickerMode === "MEDIA" ? "SOURCE_ASSET" : ""}
+      lockType={pickerMode === "MEDIA"}
+      onAdd={pickerMode === "MEDIA" ? addMedia : addEntity}
+      onClose={() => setPickerMode(null)} />}
   </div>;
 }
 
