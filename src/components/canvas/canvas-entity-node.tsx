@@ -1,6 +1,6 @@
 "use client";
 
-import { NodeResizer, type Node, type NodeProps } from "@xyflow/react";
+import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
 import {
   canvasEntityLabel, type CanvasEntitySummary, type CanvasEntityType,
 } from "@/lib/canvas/entity-registry";
@@ -21,6 +21,10 @@ export function CanvasEntityNode({ id, data, selected }: NodeProps<CanvasEntityF
   return (
     <article className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-[#526367] bg-[#142026] shadow-xl"
       style={{ outline: selected ? "1px solid #d4a958" : undefined }}>
+      <Handle id="in" type="target" position={Position.Left}
+        className="!h-3 !w-3 !border-amber-200 !bg-[#5f7880]" aria-label="Incoming Canvas relationship" />
+      <Handle id="out" type="source" position={Position.Right}
+        className="!h-3 !w-3 !border-amber-200 !bg-[#b9822f]" aria-label="Outgoing Canvas relationship" />
       <NodeResizer isVisible={selected} minWidth={180} minHeight={120} maxWidth={1200}
         maxHeight={900} onResizeEnd={(_, dimensions) => data.onResize(id, {
           x: dimensions.x, y: dimensions.y, width: dimensions.width, height: dimensions.height,
