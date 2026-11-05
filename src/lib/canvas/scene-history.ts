@@ -67,6 +67,19 @@ export function moveSceneItems(
   };
 }
 
+/** Only source assets can select a PDF page; the selection is not source content. */
+export function setScenePreviewPage(scene: CanvasScene, id: string, page: number): CanvasScene {
+  if (!Number.isInteger(page) || page < 1 || page > 10_000) return scene;
+  const card = scene.items.find((item) => item.id === id);
+  if (!card || card.kind !== "ENTITY_REF" || card.record_type !== "SOURCE_ASSET") return scene;
+  return {
+    ...scene,
+    items: scene.items.map((item): CanvasItem =>
+      item.id === id && item.kind === "ENTITY_REF" && item.record_type === "SOURCE_ASSET"
+        ? { ...item, preview_page: page } : item),
+  };
+}
+
 export function linkSceneCards(
   scene: CanvasScene, id: string, sourceId: string, targetId: string,
   relation_type: CanvasRelationType = "RELATED_TO",

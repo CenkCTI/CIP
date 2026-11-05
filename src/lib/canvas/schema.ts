@@ -4,6 +4,7 @@ import { canvasEntityTypeSchema } from "./entity-registry";
 const coordinate = z.number().finite().min(-1_000_000).max(1_000_000);
 const size = (min: number, max: number) => z.number().finite().min(min).max(max);
 const member = z.string().uuid().nullable().optional();
+const previewPageSchema = z.number().int().min(1).max(10_000);
 const base = {
   id: z.string().uuid(),
   x: coordinate, y: coordinate,
@@ -23,6 +24,7 @@ const note = z.object({
   content: z.string().max(8000),
   record_type: z.null().optional(),
   record_id: z.null().optional(),
+  preview_page: z.null().optional(),
 }).strict();
 
 const entityRef = z.object({
@@ -31,6 +33,8 @@ const entityRef = z.object({
   content: z.literal(""),
   record_type: canvasEntityTypeSchema,
   record_id: z.string().uuid(),
+  // CANVAS-4: null = ordinary canonical reference, positive = live media preview.
+  preview_page: previewPageSchema.nullable().optional(),
 }).strict();
 
 /** Single-level visual frames are Canvas-only presentation data, never CTI entities. */
@@ -43,9 +47,17 @@ const frame = z.object({
   record_type: z.null().optional(),
   record_id: z.null().optional(),
   group_id: z.null().optional(),
+  preview_page: z.null().optional(),
 }).strict();
 
-export const canvasItemSchema = z.discriminatedUnion("kind", [note, entityRef, frame]);
+export const canvasItemSchema = z.discriminatedUnion("kind", [note, entityRef, frame])
+  .superRefine((item, ctx) => {
+    if (item.kind === "ENTITY_REF" && item.preview_page != null &&
+        item.record_type !== "SOURCE_ASSET") {
+      ctx.addIssue({ code: "custom", path: ["preview_page"],
+        message: "Only canonical SOURCE_ASSET references can display media" });
+    }
+  });
 export type CanvasItem = z.infer<typeof canvasItemSchema>;
 
 export const canvasRelationTypes = [

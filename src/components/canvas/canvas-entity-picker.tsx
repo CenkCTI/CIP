@@ -7,15 +7,17 @@ import {
 } from "@/lib/canvas/entity-registry";
 
 export function CanvasEntityPicker({
-  projectId, onAdd, onClose,
+  projectId, onAdd, onClose, initialType = "", lockType = false,
 }: {
   projectId: string;
   onAdd: (entity: CanvasEntitySummary) => void;
   onClose: () => void;
+  initialType?: CanvasEntityType | "";
+  lockType?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [q, setQuery] = useState("");
-  const [type, setType] = useState<CanvasEntityType | "">("");
+  const [type, setType] = useState<CanvasEntityType | "">(initialType);
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<CanvasEntitySummary[]>([]);
   const [hasMore, setHasMore] = useState(false);
@@ -89,7 +91,7 @@ export function CanvasEntityPicker({
               className="field mt-1" aria-label="Search Investigation records" />
           </label>
           <label className="text-xs text-stone-400">Record type
-            <select value={type} className="field mt-1"
+            <select value={type} disabled={lockType} className="field mt-1"
               aria-label="Filter record type"
               onChange={(event) => { setType(event.target.value as CanvasEntityType | ""); setPage(1); }}>
               <option value="">All 18 types</option>
