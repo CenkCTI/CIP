@@ -75,7 +75,7 @@ describe("CANVAS-5 Source Reader-style floating Copilot",()=>{
   });
 
   it("needs per-request consent, never changes Canvas until analyst approves",async()=>{
-    const fetchMock=vi.fn(async(url:string)=>{
+    const fetchMock=vi.fn(async(url:string, _options?: RequestInit)=>{
       if(url==="/api/ai/byok/status")return {
         ok:true,json:async()=>({connected:true,providerId:"nvidia_nim",model:"nvidia/test"}),
       };
