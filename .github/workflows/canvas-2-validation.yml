@@ -1,0 +1,59 @@
+name: CANVAS-2 validation
+on:
+  pull_request:
+    branches: [main, feat/canvas-1-core-workspace]
+    paths:
+      - "src/lib/canvas/**"
+      - "src/components/canvas/**"
+      - "src/lib/fusion/types.ts"
+      - "src/app/projects/**/canvas/**"
+      - "src/app/api/projects/**/canvases/**"
+      - "supabase/migrations/202611050078_canvas_2_entity_refs.sql"
+      - "tests/canvas-2-*.test.*"
+      - "scripts/test-canvas2-migration.sql"
+      - ".github/workflows/canvas-2-validation.yml"
+  push:
+    branches: [feat/canvas-2-entity-reference-workspace]
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+  postgres-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - run: psql -v ON_ERROR_STOP=1 -f scripts/test-canvas2-migration.sql
