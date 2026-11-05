@@ -91,6 +91,7 @@ describe("CANVAS-5 Source Reader-style floating Copilot",()=>{
     fireEvent.click(screen.getByRole("checkbox",{
       name:"I consent to send selected context to NVIDIA NIM",
     }));
+    expect(await screen.findByText("Canvas analysis · NVIDIA connected")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button",{name:"Ask analyst"}));
     expect(await screen.findByText("Test hypothesis")).toBeInTheDocument();
     expect(actions.beforeAnalyze).toHaveBeenCalledOnce();
