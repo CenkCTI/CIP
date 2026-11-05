@@ -9,7 +9,7 @@ const ownerId = "a72353f5-0a30-42e5-8e84-cd38b89de105";
 const requireOwnedProject = vi.fn();
 const requireResearchByok = vi.fn(async()=>({model:"test-model",apiKey:"never-expose"}));
 const withResearchQuota = vi.fn(async(_ctx:unknown,_chars:number,job:()=>Promise<unknown>)=>job());
-const byokChat = vi.fn(async()=>JSON.stringify({
+const byokChat = vi.fn(async(..._args: unknown[])=>JSON.stringify({
   summary:"Analyst-only tentative hypothesis",
   hypotheses:[],observations:[{item_id:noteId,quote:"Sample analyst note about unverified attack",
     significance:"Not independently verified"}],
@@ -70,8 +70,8 @@ describe("CANVAS-5 live owner-only AI route",()=>{
     expect(body.notice).toContain("no Canvas writes");
     expect(ctx.supabase.rpc).not.toHaveBeenCalled();
     const sent=byokChat.mock.calls[0];
-    expect(JSON.stringify(sent)).toContain("Sample analyst note");
-    expect(JSON.stringify(sent)).not.toContain("never-expose");
+    expect(JSON.stringify(sent[3])).toContain("Sample analyst note");
+    expect(JSON.stringify(sent[3])).not.toContain("never-expose");
   });
   it("blocks foreign Investigations and never calls the model",async()=>{
     requireOwnedProject.mockRejectedValueOnce(new Error("Investigation not found"));
