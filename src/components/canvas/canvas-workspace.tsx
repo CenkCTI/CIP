@@ -135,6 +135,9 @@ function Editor({
   const [interactionError, setInteractionError] = useState("");
   const [pickerMode, setPickerMode] = useState<"ENTITY" | "MEDIA" | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
+  // A floating Copilot must remain open if the analyst clicks or edits the Canvas.
+  // Capture selection on launch; never silently extend model context on new selection.
+  const [aiSelection, setAiSelection] = useState<string[]>([]);
   const [entityByKey, setEntityByKey] = useState<Record<string, CanvasEntitySummary>>({});
   const [missingKeys, setMissingKeys] = useState<string[]>([]);
   const [loadingKeys, setLoadingKeys] = useState<string[]>([]);
@@ -514,9 +517,16 @@ function Editor({
         <button type="button" className="citem-button-ghost"
           disabled={!refs.length} onClick={refreshEntities}>Refresh linked records</button>
         <button type="button" className="citem-button-ghost"
-          disabled={!selectedAssistIds.length || selectedAssistIds.length > 12}
-          onClick={() => setAiOpen((open) => !open)}>
-          {aiOpen ? "Close AI" : "AI hypotheses · selected"}
+          disabled={!aiOpen && (!selectedAssistIds.length || selectedAssistIds.length > 12)}
+          onClick={() => {
+            if (aiOpen) {
+              setAiOpen(false);
+            } else {
+              setAiSelection(selectedAssistIds);
+              setAiOpen(true);
+            }
+          }}>
+          {aiOpen ? "Close Copilot" : "✦ AI Copilot"}
         </button>
         <button type="button" className="citem-button-ghost"
           disabled={groupingCandidates.length < 2 || history.present.items.length >= 500}
@@ -548,9 +558,9 @@ function Editor({
       </span>
       <span>Drag from right handle to left handle to link · Shift/drag to select · Middle-drag to pan</span>
     </div>
-    {aiOpen && selectedAssistIds.length > 0 && selectedAssistIds.length <= 12 &&
-      <CanvasAiPanel key={selectedAssistIds.join(":")} projectId={projectId} canvasId={canvasId}
-        selectedItemIds={selectedAssistIds}
+    {aiOpen && aiSelection.length > 0 &&
+      <CanvasAiPanel projectId={projectId} canvasId={canvasId}
+        selectedItemIds={aiSelection}
         beforeAnalyze={prepareAssistRevision}
         onApproveLink={approveAiLink}
         onAddDraft={addAiDraft}
