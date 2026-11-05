@@ -173,7 +173,7 @@ function Editor({
         data: {
           recordType: item.record_type, recordId: item.record_id,
           entity: entityByKey[key] ?? null,
-          loading: loadingKeys.includes(key) || (!attempted.current.has(key) && !missingKeys.includes(key)),
+          loading: loadingKeys.includes(key) || (!entityByKey[key] && !missingKeys.includes(key) && !resolverError),
           onResize: commitResize,
         },
       };
@@ -182,7 +182,7 @@ function Editor({
       ...common, type: "canvasNote",
       data: { content: item.content, onCommit: commitNote, onResize: commitResize },
     };
-  }), [commitNote, commitResize, selectedId, entityByKey, loadingKeys, missingKeys]);
+  }), [commitNote, commitResize, selectedId, entityByKey, loadingKeys, missingKeys, resolverError]);
 
   const [nodes, setNodes] = useState<CanvasNode[]>(() => makeNodes(initialItems));
   useEffect(() => {
