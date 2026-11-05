@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   applyNodeChanges, Background, BackgroundVariant, Controls, MiniMap,
-  NodeResizer, ReactFlow, ReactFlowProvider, useReactFlow,
+  Handle, NodeResizer, Position, ReactFlow, ReactFlowProvider, useReactFlow,
   type Node, type NodeProps, type NodeChange,
 } from "@xyflow/react";
 import { useAutosave } from "@/components/document-workspace/use-autosave";
@@ -49,6 +49,10 @@ function CanvasNoteNode({ id, data, selected }: NodeProps<CanvasNoteFlowNode>) {
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-md border border-amber-900/60 bg-[#1a1b19] shadow-lg"
       style={{ outline: selected ? "1px solid #d4a958" : undefined }}>
+      <Handle id="in" type="target" position={Position.Left}
+        className="!h-3 !w-3 !border-amber-200 !bg-[#5f7880]" aria-label="Incoming Canvas relationship" />
+      <Handle id="out" type="source" position={Position.Right}
+        className="!h-3 !w-3 !border-amber-200 !bg-[#b9822f]" aria-label="Outgoing Canvas relationship" />
       <NodeResizer isVisible={selected} minWidth={180} minHeight={120} maxWidth={1200} maxHeight={900}
         onResizeEnd={(_, dimensions) => data.onResize(id, {
           x: dimensions.x, y: dimensions.y,
