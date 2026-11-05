@@ -336,7 +336,7 @@ export function CanvasAiPanel({
                 className="rounded border border-[var(--line)] px-3 py-2 text-xs text-[var(--muted-strong)]"
                 onClick={() => activeRequest.current?.abort()}>Cancel</button>}
               <button type="submit"
-                disabled={working || !consent || question.trim().length < 3 || !selectedItemIds.length}
+                disabled={working || !connected || !consent || question.trim().length < 3 || !selectedItemIds.length}
                 className="rounded border border-[var(--amber-strong)] bg-[var(--amber-strong)] px-4 py-2 text-xs font-semibold text-[#171106] hover:bg-[var(--amber-soft)] disabled:opacity-40">
                 {working ? "Working…" : "Ask analyst"}
               </button>
