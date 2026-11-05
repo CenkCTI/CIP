@@ -41,5 +41,18 @@ export function updateCanvasItem(
   items: CanvasItem[], id: string,
   patch: Partial<Pick<CanvasItem, "x" | "y" | "width" | "height" | "z_index" | "content">>,
 ): CanvasItem[] {
-  return items.map((item) => item.id === id ? { ...item, ...patch } : item);
+  return items.map((item) => {
+    if (item.id !== id) return item;
+    if (item.kind === "NOTE") return { ...item, ...patch };
+    // Canonical entity references are immutable after placement.
+    // A UI content update must never turn a reference into copied source text.
+    return {
+      ...item,
+      x: patch.x ?? item.x,
+      y: patch.y ?? item.y,
+      width: patch.width ?? item.width,
+      height: patch.height ?? item.height,
+      z_index: patch.z_index ?? item.z_index,
+    };
+  });
 }
