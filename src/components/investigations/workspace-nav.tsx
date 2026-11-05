@@ -60,6 +60,7 @@ export function getInvestigationNavGroups(projectId: string): InvestigationNavGr
         { key: "reports", label: "Reports", href: `${root}/reports`, pathPrefix: `${root}/reports` },
         tab("infrastructure", "Infrastructure", "infrastructure", `${root}/infrastructure`),
         { key: "fusion", label: "Fusion Workspace", href: `${root}/fusion`, pathPrefix: `${root}/fusion` },
+        { key: "canvas", label: "Analysis Canvas", href: `${root}/canvas`, pathPrefix: `${root}/canvas` },
         tab("graph", "Graph"),
         ...(process.env.NEXT_PUBLIC_CITEM_STAGE3_COPILOT_ENABLED === "true" ? [tab("ai", "AI")] : []),
       ],
