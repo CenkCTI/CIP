@@ -56,7 +56,7 @@ export function CanvasDirectory({ projectId, canvases }: { projectId: string; ca
           <p className="mt-2 text-xs text-stone-500">
             Updated {new Date(board.updated_at).toLocaleString()}
           </p>
-          <button type="button" disabled={pending} onClick={() => { startTransition(() => { void remove(board.id); }); }}
+          <button type="button" disabled={pending} onClick={() => { startTransition(async () => { await remove(board.id); }); }}
             className="mt-4 text-xs text-red-300 hover:underline">Delete canvas</button>
         </li>)}
       </ul>
