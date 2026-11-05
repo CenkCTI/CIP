@@ -53,7 +53,7 @@ begin
     raise exception 'CROSS_INVESTIGATION_RECORD_ACCEPTED';
   exception when foreign_key_violation then null;
   end;
-  assert (select revision from public.analysis_canvases where id=board)=3,
+  assert (select b.revision from public.analysis_canvases b where b.id=board)=3,
     'Foreign reference cannot change the board revision';
   begin
     perform public.save_analysis_canvas_v1(project,board,3,
