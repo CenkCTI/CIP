@@ -16,7 +16,7 @@ export default async function CanvasDetailPage({
     .select("id,name,revision").eq("project_id", id).eq("id", canvasId).maybeSingle();
   if (!canvas) notFound();
   const { data: rows, error } = await ctx.supabase.from("analysis_canvas_items")
-    .select("id,kind,content,x,y,width,height,z_index")
+    .select("id,kind,content,x,y,width,height,z_index,record_type,record_id")
     .eq("project_id", id).eq("canvas_id", canvasId).order("z_index");
   if (error) throw new Error("Unable to load canvas content.");
   const items = (rows ?? []).map((row) => fromCanvasRow(row));

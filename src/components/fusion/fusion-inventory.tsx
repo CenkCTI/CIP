@@ -16,10 +16,11 @@ const GROUPS:[FusionGroupKind,string][]=[
 ];
 const Badge=({children}:{children:React.ReactNode})=><span className="rounded border border-stone-700/70 bg-[#181e22] px-2 py-0.5 text-[11px] text-stone-300">{children}</span>;
 const fmt=(x:string)=>{const d=new Date(x);return Number.isNaN(d.getTime())?"—":d.toLocaleDateString();};
-export function FusionInventory({projectId,items,count,labels,filters,assignmentReady=true}:{
- projectId:string;items:FusionInventoryItem[];count:number;labels:Labels;filters:FusionInventoryFilters;assignmentReady?:boolean
+export function FusionInventory({projectId,items,count,labels,filters,assignmentReady=true,focusedItem=null}:{
+ projectId:string;items:FusionInventoryItem[];count:number;labels:Labels;filters:FusionInventoryFilters;
+ assignmentReady?:boolean;focusedItem?:FusionInventoryItem|null
 }){
- const [selected,setSelected]=useState<FusionInventoryItem|null>(null);
+ const [selected,setSelected]=useState<FusionInventoryItem|null>(focusedItem);
  const groups=groupInventory(items,filters.group,labels);
  const totalPages=Math.max(1,Math.ceil(count/50));
  const pageUrl=(page:number)=>{
