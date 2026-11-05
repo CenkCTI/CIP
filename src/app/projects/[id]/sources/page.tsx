@@ -63,7 +63,7 @@ export default async function SourcesPage({
     context.supabase.from("projects").select("id,name,research_question").eq("id", id).single(),
     context.supabase
       .from("sources")
-      .select("id,title,source_type,publisher,url,published_at,accessed_at,collection_rationale,description,archived_at,updated_at")
+      .select("id,title,source_type,publisher,url,published_at,accessed_at,collection_rationale,description,archived_at,updated_at,review_status")
       .eq("project_id", id)
       .order("updated_at", { ascending: false })
       .order("id", { ascending: true }),

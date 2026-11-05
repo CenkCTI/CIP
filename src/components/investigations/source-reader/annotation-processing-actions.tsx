@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { Stage3Candidate } from "@/lib/ai/stage3/candidates";
 import { useRouter } from "next/navigation";
 
@@ -434,6 +434,7 @@ export function AnnotationProcessingActions({
   options,
   compact = false,
   aiCandidate,
+  onChanged,
 }: {
   projectId: string;
   sourceId: string;
@@ -445,8 +446,10 @@ export function AnnotationProcessingActions({
   options: ProcessingOptions;
   compact?: boolean;
   aiCandidate?: Stage3Candidate | null;
+  onChanged?: () => void;
 }) {
   const router = useRouter();
+  const refresh = () => { router.refresh(); onChanged?.(); };
   const state = (text(annotation.processing_state) ||
     "UNPROCESSED") as AnnotationProcessingState;
   const destinationForSuggestion = (candidate:Stage3Candidate | null | undefined):SourceReaderDestination => {
@@ -459,6 +462,33 @@ export function AnnotationProcessingActions({
     return kinds[candidate.kind];
   };
   const [open, setOpen] = useState(Boolean(aiCandidate));
+  const processingDialogRef=useRef<HTMLElement>(null);
+  const processingCloseRef=useRef<HTMLButtonElement>(null);
+  useEffect(()=>{
+    if(!open)return;
+    const returnFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;
+    processingCloseRef.current?.focus();
+    const key=(event:KeyboardEvent)=>{
+      if(event.key==="Escape"){
+        event.preventDefault();
+        setOpen(false);
+        return;
+      }
+      if(event.key!=="Tab"||!processingDialogRef.current)return;
+      const focusable=Array.from(processingDialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]'
+      )).filter(el=>el.getClientRects().length>0);
+      if(!focusable.length)return;
+      if(event.shiftKey&&document.activeElement===focusable[0]){
+        event.preventDefault();focusable[focusable.length-1].focus();
+      }else if(!event.shiftKey&&document.activeElement===focusable[focusable.length-1]){
+        event.preventDefault();focusable[0].focus();
+      }
+    };
+    document.addEventListener("keydown",key);
+    return ()=>{document.removeEventListener("keydown",key);returnFocus?.focus();};
+  },[open]);
+
   const [destination, setDestination] = useState<SourceReaderDestination>(()=>destinationForSuggestion(aiCandidate));
   const [selectedTarget, setSelectedTarget] = useState("");
   const [origin, setOrigin] = useState<MappingOrigin>(aiCandidate ? "AI_SUGGESTED" : "SOURCE_EXPLICIT");
@@ -502,7 +532,7 @@ export function AnnotationProcessingActions({
       if (result.success) {
         setIgnoreOpen(false);
         setIgnoreReason("");
-        router.refresh();
+        refresh();
       }
     });
   }
@@ -520,7 +550,7 @@ export function AnnotationProcessingActions({
         formData,
       );
       setMessage(result);
-      if (result.success) router.refresh();
+      if (result.success) refresh();
     });
   }
 
@@ -544,7 +574,7 @@ export function AnnotationProcessingActions({
       setMessage(result);
       if (result.success) {
         setSelectedTarget("");
-        router.refresh();
+        refresh();
       }
     });
   }
@@ -670,7 +700,7 @@ export function AnnotationProcessingActions({
                       text(output.id),
                     );
                     setMessage(result);
-                    if (result.success) router.refresh();
+                    if (result.success) refresh();
                   })
                 }
               >
@@ -759,7 +789,7 @@ export function AnnotationProcessingActions({
 
       {open ? (
         <div
-          className="fixed inset-0 z-[100] grid place-items-center bg-black/75 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[150] grid place-items-center bg-black/75 p-4 backdrop-blur-sm"
           role="presentation"
           onMouseDown={(event) => {
             if (event.currentTarget === event.target) setOpen(false);
@@ -768,6 +798,7 @@ export function AnnotationProcessingActions({
           <section
             className="flex max-h-[calc(100dvh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-amber-900/40 bg-[#0f1417] shadow-2xl"
             role="dialog"
+            ref={processingDialogRef}
             aria-modal="true"
             aria-label="Process source annotation"
           >
@@ -786,6 +817,7 @@ export function AnnotationProcessingActions({
               <button
                 className="citem-button-ghost min-h-0 px-3 py-1.5"
                 type="button"
+                ref={processingCloseRef}
                 onClick={() => setOpen(false)}
               >
                 Close
@@ -858,6 +890,7 @@ export function AnnotationProcessingActions({
                       annotation={annotation}
                       events={events}
                       links={timelineLinks}
+                      onChanged={onChanged}
                       aiCandidate={aiCandidate?.kind === "TIMELINE" ? aiCandidate : null}
                     />
                   </div>
@@ -868,6 +901,7 @@ export function AnnotationProcessingActions({
                     annotation={annotation}
                     claims={options.source_claim}
                     assertions={sourceClaimAssertions}
+                    onChanged={onChanged}
                     aiCandidate={aiCandidate?.kind === "SOURCE_CLAIM" ? aiCandidate : null}
                     key={aiCandidate?.candidateId ?? "manual-claim"}
                   />
@@ -944,7 +978,7 @@ export function AnnotationProcessingActions({
                                   })),
                                 );
                                 setMessage(result);
-                                if (result.success) router.refresh();
+                                if (result.success) refresh();
                               })
                             }
                           >

@@ -42,12 +42,14 @@ describe("InvestigationWorkspaceNav", () => {
         "Reports",
         "Infrastructure",
         "Graph",
-        "AI",
+        "Fusion Workspace",
         "Sources",
         "Intel Profile",
         "Attribution",
       ]),
     );
+    // AI Copilot remains explicitly gated off; not part of Fusion delivery.
+    expect(items.find((item) => item.key === "ai")).toBeUndefined();
   });
 
   it("links dedicated pages directly and preserves query-backed modules", () => {
@@ -58,6 +60,7 @@ describe("InvestigationWorkspaceNav", () => {
     expect(byKey("evidence").href).toBe(`${root}?tab=evidence&view=evidence`);
     expect(byKey("indicators").href).toBe(`${root}?tab=indicators`);
     expect(byKey("graph").href).toBe(`${root}?tab=graph`);
+    expect(byKey("fusion").href).toBe(`${root}/fusion`);
   });
 
   it("keeps active-state matching correct for query tabs and detail routes", () => {

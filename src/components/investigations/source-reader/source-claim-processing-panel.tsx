@@ -30,6 +30,7 @@ export function SourceClaimProcessingPanel({
   claims,
   assertions,
   aiCandidate,
+  onChanged,
 }: {
   projectId: string;
   sourceId: string;
@@ -37,8 +38,10 @@ export function SourceClaimProcessingPanel({
   claims: Row[];
   assertions: Row[];
   aiCandidate?: Extract<Stage3Candidate,{kind:"SOURCE_CLAIM"}> | null;
+  onChanged?: () => void;
 }) {
   const router = useRouter();
+  const refresh = () => { router.refresh(); onChanged?.(); };
   const excerpt = text(annotation.selected_text) || text(annotation.comment);
   const [pending, startTransition] = useTransition();
   const [selectedClaimId, setSelectedClaimId] = useState("");
@@ -62,7 +65,7 @@ export function SourceClaimProcessingPanel({
       setMessage(result);
       if (result.success) {
         setSelectedClaimId("");
-        router.refresh();
+        refresh();
       }
     });
   }
@@ -127,7 +130,7 @@ export function SourceClaimProcessingPanel({
                           text(assertion.id),
                         );
                         setMessage(result);
-                        if (result.success) router.refresh();
+                        if (result.success) refresh();
                       })
                     }
                   >
@@ -236,7 +239,7 @@ export function SourceClaimProcessingPanel({
             setMessage(result);
             if (result.success) {
               form.reset();
-              router.refresh();
+              refresh();
             }
           });
         }}

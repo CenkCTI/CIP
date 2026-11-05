@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import countries from "@/lib/fusion/countries.json";
+const countryNames:Record<string,string>=Object.fromEntries(countries.map(c=>[c.iso2,c.name]));
 import { requireUser } from "@/lib/auth";
 import {
   entityTableMap,
@@ -11,6 +13,7 @@ import {
 
 type Row = Record<string, unknown>;
 const NODE_LIMIT = 500;
+const graphEntityTypesForCountry=new Set<GraphEntityType>(["SOURCE","SOURCE_ASSET","SOURCE_NOTE","ANNOTATION","SOURCE_CLAIM","ATTRIBUTION_CLAIM","RESEARCH_NOTE","COUNTRY_NOTE","ACTOR","CAMPAIGN","INDICATOR","MALWARE","CVE","MITRE","EVIDENCE"]);
 const EDGE_LIMIT = 1500;
 const s = (v: unknown) => String(v ?? "");
 const count = (v: unknown) => (Array.isArray(v) ? v.length : 0);
@@ -31,6 +34,16 @@ const defs: {
   url: (projectId: string, id: string) => string;
   meta: string[];
 }[] = [
+  { type:"COUNTRY", table:"investigation_countries", select:"id,country_iso2,created_at", order:"country_iso2", title:(r)=>countryNames[s(r.country_iso2)]||s(r.country_iso2), sub:(r)=>s(r.country_iso2), url:(p,id)=>`/projects/${p}/fusion?view=countries&countryId=${id}`, meta:["country_iso2","created_at"] },
+  { type:"SOURCE", table:"sources", select:"id,title,publisher,created_at,updated_at", order:"title", title:(r)=>s(r.title), sub:(r)=>s(r.publisher)||undefined, url:(p,id)=>`/projects/${p}/sources/${id}`, meta:["publisher","updated_at"] },
+  { type:"SOURCE_ASSET", table:"source_assets", select:"id,source_id,original_filename,mime_type,created_at", order:"original_filename", title:(r)=>s(r.original_filename), sub:(r)=>s(r.mime_type)||undefined, url:(p)=>`/projects/${p}/sources`, meta:["source_id","mime_type"] },
+  { type:"SOURCE_NOTE", table:"source_notes", select:"id,source_id,body,updated_at", order:"updated_at", title:(r)=>s(r.body).slice(0,90), sub:(r)=>"Analyst source note", url:(p)=>`/projects/${p}/sources`, meta:["source_id"] },
+  { type:"ANNOTATION", table:"source_annotations", select:"id,source_id,selected_text,page_number,annotation_type,created_at", order:"created_at", title:(r)=>s(r.selected_text).slice(0,100)||`PDF ${s(r.annotation_type)}`, sub:(r)=>`Page ${s(r.page_number)||"unknown"}`, url:(p)=>`/projects/${p}/sources`, meta:["source_id","page_number","annotation_type"] },
+  { type:"SOURCE_CLAIM", table:"source_claims", select:"id,claim_summary,claim_kind,updated_at", order:"updated_at", title:(r)=>s(r.claim_summary).slice(0,110), sub:(r)=>s(r.claim_kind), url:(p,id)=>`/projects/${p}/source-claims/${id}`, meta:["claim_kind","updated_at"] },
+  { type:"ATTRIBUTION_CLAIM", table:"source_attribution_claims", select:"id,claim_summary,claimed_actor_text,updated_at", order:"updated_at", title:(r)=>s(r.claim_summary).slice(0,110), sub:(r)=>s(r.claimed_actor_text), url:(p)=>`/projects/${p}/source-claims`, meta:["claimed_actor_text","updated_at"] },
+  { type:"RESEARCH_NOTE", table:"research_notes", select:"id,title,updated_at", order:"title", title:(r)=>s(r.title), sub:()=>undefined, url:(p,id)=>`/projects/${p}/notes?note=${id}`, meta:["updated_at"] },
+  { type:"COUNTRY_NOTE", table:"investigation_country_notes", select:"id,title,updated_at,investigation_country_id", order:"title", title:(r)=>s(r.title), sub:()=> "Analyst country note", url:(p)=>`/projects/${p}/fusion?view=countries`, meta:["investigation_country_id","updated_at"] },
+
   {
     type: "ACTOR",
     table: "threat_actors",
@@ -417,6 +430,23 @@ export async function loadProjectGraph(
     }
   }
 
+  const {data:countryLinks,error:countryLinkError,count:countryLinkCount}=await supabase
+    .from("investigation_country_links")
+    .select("id,investigation_country_id,target_type,target_id,relation_type,rationale",{count:"exact"})
+    .eq("project_id",projectId).order("created_at",{ascending:true}).limit(EDGE_LIMIT+1);
+  if(countryLinkError)throw new Error("Unable to load country graph relationships.");
+  for(const link of (countryLinks??[]) as unknown as Row[]){
+    const from=nodeId("COUNTRY",s(link.investigation_country_id));
+    const toKind=s(link.target_type) as GraphEntityType;
+    if(!graphEntityTypesForCountry.has(toKind))continue;
+    const to=nodeId(toKind,s(link.target_id));
+    if(finalNodeSet.has(from)&&finalNodeSet.has(to)){
+      addUniqueGraphEdge(edges,seen,{id:"country:"+s(link.id),source:from,target:to,
+        relationshipType:s(link.relation_type),sourceKind:"manual",
+        description:s(link.rationale)||undefined});
+    }
+  }
+
   const totalSemanticEdgeCount = joinResults.reduce(
     (total, result) => total + (result.count ?? result.data?.length ?? 0),
     0,
@@ -428,7 +458,7 @@ export async function loadProjectGraph(
     nodes,
     edges,
     totalNodeCount,
-    totalSemanticEdgeCount + totalManualEdgeCount + (clusterMemberCount ?? clusterMembers?.length ?? 0) + (campaignClusterCount ?? campaignClusters?.length ?? 0),
+    totalSemanticEdgeCount + totalManualEdgeCount + (countryLinkCount ?? countryLinks?.length ?? 0) + (clusterMemberCount ?? clusterMembers?.length ?? 0) + (campaignClusterCount ?? campaignClusters?.length ?? 0),
   );
 }
 

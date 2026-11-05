@@ -1,6 +1,15 @@
 import { z } from "zod";
 
 export const graphEntityTypes = [
+  "COUNTRY",
+  "SOURCE",
+  "SOURCE_ASSET",
+  "SOURCE_NOTE",
+  "ANNOTATION",
+  "SOURCE_CLAIM",
+  "ATTRIBUTION_CLAIM",
+  "RESEARCH_NOTE",
+  "COUNTRY_NOTE",
   "ACTOR",
   "CAMPAIGN",
   "INDICATOR",
@@ -77,6 +86,15 @@ export const manualRelationshipUpdateSchema = z.object({
     .transform((v) => v || null),
 });
 export const graphPrefix: Record<GraphEntityType, string> = {
+  COUNTRY: "country",
+  SOURCE: "source",
+  SOURCE_ASSET: "source-asset",
+  SOURCE_NOTE: "source-note",
+  ANNOTATION: "annotation",
+  SOURCE_CLAIM: "source-claim",
+  ATTRIBUTION_CLAIM: "attribution-claim",
+  RESEARCH_NOTE: "research-note",
+  COUNTRY_NOTE: "country-note",
   ACTOR: "actor",
   CAMPAIGN: "campaign",
   INDICATOR: "indicator",
@@ -109,6 +127,15 @@ export const graphLayoutPatchSchema = z.object({
 });
 
 export const entityTableMap: Record<GraphEntityType, string> = {
+  COUNTRY: "investigation_countries",
+  SOURCE: "sources",
+  SOURCE_ASSET: "source_assets",
+  SOURCE_NOTE: "source_notes",
+  ANNOTATION: "source_annotations",
+  SOURCE_CLAIM: "source_claims",
+  ATTRIBUTION_CLAIM: "source_attribution_claims",
+  RESEARCH_NOTE: "research_notes",
+  COUNTRY_NOTE: "investigation_country_notes",
   ACTOR: "threat_actors",
   CAMPAIGN: "campaigns",
   INDICATOR: "indicators",
