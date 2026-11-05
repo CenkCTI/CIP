@@ -36,7 +36,7 @@ export function CanvasDirectory({ projectId, canvases }: { projectId: string; ca
   }
 
   return <div className="space-y-5">
-    <form onSubmit={(event) => { event.preventDefault(); startTransition(() => { void create(); }); }}
+    <form onSubmit={(event) => { event.preventDefault(); startTransition(async () => { await create(); }); }}
       className="flex flex-wrap gap-2 rounded border border-stone-800 bg-[#101518] p-4">
       <input aria-label="Canvas name" className="field max-w-sm flex-1" maxLength={120}
         placeholder="Canvas name" value={name} onChange={(event) => setName(event.target.value)} />
