@@ -15,6 +15,28 @@ This phase adds an optional contextual reasoning experience to existing Canvas b
 8. **Nothing is saved by AI.** The human can explicitly choose **Add link** for an individual proposal or **Add as unverified working note**. Those actions use existing revisioned scene autosave and Undo/Redo. The note is visibly marked AI DRAFT — UNVERIFIED.
 9. Changes made by other tabs generate the existing EDIT_CONFLICT rather than a silent board rewrite.
 
+## Canvas Copilot floating popup (Source Reader parity)
+
+The CANVAS-5 analyst experience now uses the **same Source Reader Copilot
+window hook, geometry, styling and interaction model**, rather than an inline
+panel in the Canvas document. It opens as a floating fixed-position
+`CİTEM / COPILOT` window with:
+
+- drag-to-move titlebar, corner resizing, Dock/Float and Minimize/Restore;
+- Sources-style NVIDIA status and Settings popover, including BYOK connection;
+- scrollable analysis history area and a composer fixed to the bottom;
+- Enter to send, Shift+Enter for a new line, Escape or the close icon to dismiss;
+- full-screen mobile presentation;
+- **separate session window geometry key** (`citem:canvas-ai-window:v1`),
+  leaving Source Reader's previous window position intact;
+- a *captured selection on open*, so clicking/moving cards in the underlying
+  Canvas does not unmount the popup or silently change the model's scope.
+
+This is intentionally a **modeless** (`aria-modal="false"`) workspace popup,
+like the Source Reader window: the analyst can inspect the Canvas underneath.
+Every request still needs its own NVIDIA consent, existing owner checks and
+manual approval for AI-drafted links/notes. No new migration.
+
 ## Hard boundaries
 
 - No new AI account or provider: use existing NVIDIA NIM BYOK cookie, model allowlist and `reserve_ai_usage_event` quota.
