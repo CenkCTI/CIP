@@ -39,7 +39,7 @@ export async function POST(
       return NextResponse.json({ error: "EDIT_CONFLICT" }, { status: 409 });
     }
     if (error.code === "42501") return NextResponse.json({ error: "Not found" }, { status: 404 });
-    if (error.code === "22023" || error.code === "23514" || error.code === "23502") {
+    if (error.code === "22023" || error.code === "23503" || error.code === "23514" || error.code === "23502") {
       return NextResponse.json({ error: "Invalid canvas mutation." }, { status: 400 });
     }
     return NextResponse.json({ error: "Unable to save canvas." }, { status: 500 });
