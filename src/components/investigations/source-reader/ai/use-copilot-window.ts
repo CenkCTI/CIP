@@ -21,9 +21,9 @@ export function clampCopilotGeometry(value: CopilotGeometry, viewportWidth: numb
   };
 }
 
-function readSaved(): CopilotGeometry {
+function readSaved(storageKey: string): CopilotGeometry {
   try {
-    const raw = window.sessionStorage.getItem(COPILOT_WINDOW_KEY);
+    const raw = window.sessionStorage.getItem(storageKey);
     const input = raw ? JSON.parse(raw) as Partial<CopilotGeometry> : null;
     if (!input || ![input.x,input.y,input.width,input.height].every((v) => typeof v === "number" && Number.isFinite(v))) {
       return clampCopilotGeometry({ ...DEFAULT, x: window.innerWidth - DEFAULT.width - 24 }, window.innerWidth, window.innerHeight);
@@ -37,7 +37,7 @@ function readSaved(): CopilotGeometry {
   }
 }
 
-export function useCopilotWindow() {
+export function useCopilotWindow(storageKey = COPILOT_WINDOW_KEY) {
   const [geometry, setGeometry] = useState<CopilotGeometry>(DEFAULT);
   const [mobile, setMobile] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -46,7 +46,7 @@ export function useCopilotWindow() {
       setMobile(window.innerWidth < 768);
       setGeometry((previous) => clampCopilotGeometry(previous, window.innerWidth, window.innerHeight));
     };
-    const saved=readSaved();
+    const saved=readSaved(storageKey);
     const frame=window.requestAnimationFrame(() => {
       setGeometry(clampCopilotGeometry(saved,window.innerWidth,window.innerHeight));
       setMobile(window.innerWidth<768);
@@ -54,11 +54,11 @@ export function useCopilotWindow() {
     });
     window.addEventListener("resize", update);
     return () => {window.cancelAnimationFrame(frame);window.removeEventListener("resize", update);};
-  }, []);
+  }, [storageKey]);
   useEffect(() => {
     if (!hydrated) return;
-    try { window.sessionStorage.setItem(COPILOT_WINDOW_KEY, JSON.stringify(geometry)); } catch {}
-  }, [geometry,hydrated]);
+    try { window.sessionStorage.setItem(storageKey, JSON.stringify(geometry)); } catch {}
+  }, [geometry,hydrated,storageKey]);
 
   const setDocked = useCallback(() => setGeometry((v) => ({ ...v, docked: !v.docked, minimized: false })), []);
   const setMinimized = useCallback(() => setGeometry((v) => ({ ...v, minimized: !v.minimized })), []);
