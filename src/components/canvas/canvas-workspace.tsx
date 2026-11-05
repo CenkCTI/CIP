@@ -23,18 +23,23 @@ type CanvasNode = Node<NoteData, "canvasNote">;
 
 function CanvasNoteNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const [draft, setDraft] = useState(data.content);
+  const lastCommitted = useRef(data.content);
   useEffect(() => {
-    // Sync an external undo/redo, but do not change canonical note content during typing.
+    // Do not overwrite newer typing when an older local commit returns as a prop.
+    if (data.content === lastCommitted.current) return;
+    lastCommitted.current = data.content;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDraft(data.content);
   }, [data.content]);
   useEffect(() => {
-    // Commit after a short typing pause even if focus stays in the note.
-    // Blur flushes immediately; undo history groups a typing burst.
-    if (draft === data.content) return;
-    const timer = window.setTimeout(() => data.onCommit(id, draft), 450);
+    // Commit on idle, even when the note remains focused.
+    if (draft === lastCommitted.current) return;
+    const timer = window.setTimeout(() => {
+      lastCommitted.current = draft;
+      data.onCommit(id, draft);
+    }, 450);
     return () => window.clearTimeout(timer);
-  }, [draft, data.content, data.onCommit, id]);
+  }, [draft, data.onCommit, id]);
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-md border border-amber-900/60 bg-[#1a1b19] shadow-lg"
       style={{ outline: selected ? "1px solid #d4a958" : undefined }}>
@@ -54,7 +59,7 @@ function CanvasNoteNode({ id, data, selected }: NodeProps<CanvasNode>) {
         placeholder="Write a thought, question, or working note…"
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
-        onBlur={() => { if (draft !== data.content) data.onCommit(id, draft); }}
+        onBlur={() => { if (draft !== lastCommitted.current) { lastCommitted.current = draft; data.onCommit(id, draft); } }}
       />
     </div>
   );
@@ -93,7 +98,8 @@ function Editor({
     data: { content: item.content, onCommit: commitNote, onResize: commitResize },
     dragHandle: ".canvas-drag-handle",
     zIndex: item.z_index,
-  })), [commitNote, commitResize]);
+    selected: item.id === selectedId,
+  })), [commitNote, commitResize, selectedId]);
 
   const [nodes, setNodes] = useState<CanvasNode[]>(() => makeNodes(initialItems));
   useEffect(() => {
