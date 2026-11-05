@@ -21,7 +21,7 @@ export async function GET(_: Request, { params }: Params) {
   const ctx = await getContext(params);
   if (!ctx) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const { data, error } = await ctx.supabase.from("analysis_canvas_items")
-    .select("id,kind,content,x,y,width,height,z_index")
+    .select("id,kind,content,x,y,width,height,z_index,record_type,record_id")
     .eq("project_id", ctx.projectId).eq("canvas_id", ctx.canvasId).order("z_index");
   if (error) return NextResponse.json({ error: "Unable to load canvas items." }, { status: 500 });
   return NextResponse.json({ canvas: ctx.board, items: data ?? [] });
