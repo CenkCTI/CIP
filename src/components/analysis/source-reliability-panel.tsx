@@ -33,11 +33,16 @@ export function SourceReliabilityPanel({ projectId, sourceId }: Props) {
 
   useEffect(() => {
     const controller = new AbortController();
-    refresh(1, controller.signal).catch(() => {
-      if (!controller.signal.aborted) setMessage("Kaynak değerlendirmesi şu an yüklenemiyor.");
-    }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    void fetch(`${endpoint}?page=1`, { cache: "no-store", credentials: "same-origin", signal: controller.signal })
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Source quality unavailable");
+        return res.json() as Promise<SourceQualityResponse>;
+      })
+      .then((data) => { if (!controller.signal.aborted) { setQuality(data); setPage(1); } })
+      .catch(() => { if (!controller.signal.aborted) setMessage("Kaynak değerlendirmesi şu an yüklenemiyor."); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [refresh]);
+  }, [endpoint]);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
