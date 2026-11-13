@@ -173,7 +173,8 @@ function AssertionCredibilityInspector({ projectId, assertionId, candidates }: P
       {credibility === 1 && <p role="status" className="rounded border border-amber-800/60 p-2 text-xs text-amber-200">
         Grade 1 now requires a current INDEPENDENT_OBSERVATION review for this exact assertion pair.
         Record it first in the Reporting lineage panel below; a second URL alone is insufficient.
-      </p>
+      </p>}
+
       {quality?.currentIsStale ? (
         <p role="status" className="rounded border border-amber-800/60 p-2 text-xs text-amber-200">
           Source / claim / annotation / assertion changed since the assessment;
