@@ -27,6 +27,12 @@ export type SourceReliabilityReviewRequest = z.infer<typeof sourceReliabilityRev
 export const qualitySourceIdSchema = z.string().uuid();
 export const qualityHistoryPageSchema = z.coerce.number<number>().int().min(1).max(50);
 export const QUALITY_HISTORY_PAGE_SIZE = 20;
+export const sourceReliabilityRpcResultSchema = z.object({
+  review_id: z.string().uuid(),
+  replayed: z.boolean(),
+  reviewed_at: z.string().datetime({ offset: true }),
+}).strict();
+
 
 export type SourceReliabilityReview = {
   id: string;
