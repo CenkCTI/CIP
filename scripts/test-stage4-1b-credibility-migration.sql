@@ -211,12 +211,6 @@ end $$;
 -- Only an explicit Investigation privacy deletion purges its review history.
 delete from public.projects where id='9c972aae-0a28-4fc7-8769-b617bedb0001';
 do $$ begin
-  ctx := jsonb_build_object(
-    'assertionUpdatedAt',(select updated_at from public.source_claim_assertions where id=a),
-    'claimUpdatedAt',(select updated_at from public.source_claims where id='bb5d557f-6f09-4ac2-b7e7-08abbd0b0001'),
-    'annotationUpdatedAt',(select updated_at from public.source_annotations where id='cc5d557f-6f09-4ac2-b7e7-08abbd0b0001'),
-    'sourceUpdatedAt',(select updated_at from public.sources where id='7b5d557f-6f09-4ac2-b7e7-08abbd0b0001')
-  );
   assert (select count(*) from public.assertion_credibility_reviews)=0,
     'Investigation deletion must purge private reviews';
 end $$;
