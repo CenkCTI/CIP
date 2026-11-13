@@ -98,7 +98,7 @@ revoke all on function public.protect_assertion_credibility_review_history()
 create function public.save_assertion_credibility_review_v1(
   p_project_id uuid,
   p_assertion_id uuid,
-  p_credibility smallint,
+  p_credibility integer,
   p_rationale text,
   p_independence_status text,
   p_independence_rationale text,
@@ -278,10 +278,10 @@ end
 $$;
 
 revoke all on function public.save_assertion_credibility_review_v1(
-  uuid,uuid,smallint,text,text,text,uuid,text,uuid,uuid
+  uuid,uuid,integer,text,text,text,uuid,text,uuid,uuid
 ) from public,anon,authenticated;
 grant execute on function public.save_assertion_credibility_review_v1(
-  uuid,uuid,smallint,text,text,text,uuid,text,uuid,uuid
+  uuid,uuid,integer,text,text,text,uuid,text,uuid,uuid
 ) to authenticated;
 
 comment on table public.assertion_credibility_reviews is
