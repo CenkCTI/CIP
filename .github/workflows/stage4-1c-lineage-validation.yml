@@ -1,0 +1,55 @@
+name: Stage 4.1 M1C assertion lineage validation
+on:
+  push:
+    branches: [feat/stage4-1c-assertion-lineage]
+  pull_request:
+    paths:
+      - 'supabase/migrations/202611130083_stage4_1c_assertion_lineage.sql'
+      - 'scripts/test-stage4-1c-lineage-migration.sql'
+      - 'src/lib/analysis/lineage/**'
+      - 'src/app/api/projects/**/analysis/lineage/**'
+      - 'src/components/analysis/assertion-lineage-panel.tsx'
+      - 'src/components/processing/source-claims-workspace.tsx'
+      - 'tests/stage4-1c-*.test.ts'
+      - '.github/workflows/stage4-1c-lineage-validation.yml'
+permissions:
+  contents: read
+jobs:
+  app-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+  postgres-acceptance:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ["16", "17"]
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 25
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Migration and acceptance
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-stage4-1c-lineage-migration.sql
