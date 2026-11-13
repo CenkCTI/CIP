@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { validateOrigin, requireJson } from "@/lib/ai/byok/security";
-import { sourceReliabilityReviewRequestSchema, qualitySourceIdSchema } from "@/lib/analysis/quality/schema";
+import { sourceReliabilityReviewRequestSchema, sourceReliabilityRpcResultSchema, qualitySourceIdSchema } from "@/lib/analysis/quality/schema";
 import { requireOwnedProject } from "@/lib/projects/ownership";
 
 export const runtime = "nodejs";
@@ -44,11 +44,12 @@ export async function POST(req: Request, { params }: Params) {
     if (error.code === "22023" || error.code === "23514") return fail(400, "Invalid review request.");
     return fail(503, "Source quality review could not be saved.");
   }
-  if (!data) return fail(503, "Source quality review could not be saved.");
+  const receipt = sourceReliabilityRpcResultSchema.safeParse(data);
+  if (!receipt.success) return fail(503, "Source quality review could not be saved.");
   return NextResponse.json({
-    reviewId: data.review_id,
+    reviewId: receipt.data.review_id,
     currentRating: parsed.data.rating,
-    assessedAt: data.reviewed_at,
-    replayed: data.replayed,
-  }, { status: data.replayed ? 200 : 201, headers });
+    assessedAt: receipt.data.reviewed_at,
+    replayed: receipt.data.replayed,
+  }, { status: receipt.data.replayed ? 200 : 201, headers });
 }
