@@ -142,11 +142,24 @@ export function HypothesisDetail({ projectId, hypothesisId }: Props & { hypothes
   }, [endpoint]);
   useEffect(() => {
     const controller = new AbortController();
-    void refresh(controller.signal).catch(() => {
-      if (!controller.signal.aborted) setMessage("Hipotez yüklenemedi; migration henüz uygulanmamış olabilir.");
-    }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    void fetch(endpoint, { cache: "no-store", credentials: "same-origin", signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Cannot load hypothesis detail");
+        return response.json() as Promise<HypothesisDetailResponse>;
+      }).then((payload) => {
+        if (!controller.signal.aborted) {
+          setData(payload);
+          setTitle(payload.hypothesis.title);
+          setProposition(payload.hypothesis.proposition);
+          setTest(payload.hypothesis.disconfirmation_test);
+          setRationale(payload.hypothesis.rationale);
+          setStatus(payload.hypothesis.status);
+        }
+      }).catch(() => {
+        if (!controller.signal.aborted) setMessage("Hipotez yüklenemedi; migration henüz uygulanmamış olabilir.");
+      }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [refresh]);
+  }, [endpoint]);
   const current = data?.hypothesis;
   const selected = data?.candidates.find((item) => item.assertionId === assertionId);
   const currentLink = data?.evidence.find((item) => item.assertion_id === assertionId);
