@@ -17,7 +17,7 @@ export default async function CanvasDetailPage({
   if (!canvas) notFound();
   const [nodes, relationships] = await Promise.all([
     ctx.supabase.from("analysis_canvas_items")
-      .select("id,kind,content,x,y,width,height,z_index,record_type,record_id,group_id")
+      .select("id,kind,content,x,y,width,height,z_index,record_type,record_id,group_id,preview_page")
       .eq("project_id", id).eq("canvas_id", canvasId).order("z_index"),
     ctx.supabase.from("analysis_canvas_edges")
       .select("id,source_id,target_id,relation_type,rationale")
