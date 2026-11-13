@@ -21,10 +21,15 @@ export async function GET(_: Request, { params }: Params) {
   const ctx = await getContext(params);
   if (!ctx) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const { data, error } = await ctx.supabase.from("analysis_canvas_items")
-    .select("id,kind,content,x,y,width,height,z_index,record_type,record_id")
+    .select("id,kind,content,x,y,width,height,z_index,record_type,record_id,group_id,preview_page")
     .eq("project_id", ctx.projectId).eq("canvas_id", ctx.canvasId).order("z_index");
   if (error) return NextResponse.json({ error: "Unable to load canvas items." }, { status: 500 });
-  return NextResponse.json({ canvas: ctx.board, items: data ?? [] });
+  const edges = await ctx.supabase.from("analysis_canvas_edges")
+    .select("id,source_id,target_id,relation_type,rationale")
+    .eq("project_id",ctx.projectId).eq("canvas_id",ctx.canvasId).order("created_at");
+  if (edges.error) return NextResponse.json({ error: "Unable to load canvas edges." }, { status: 500 });
+  return NextResponse.json({ canvas: ctx.board, items: data ?? [], edges: edges.data ?? [] },
+    { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function PATCH(req: Request, { params }: Params) {
