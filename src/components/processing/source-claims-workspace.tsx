@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AssertionCredibilityPanel, type CorroborationCandidate } from "@/components/analysis/assertion-credibility-panel";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
@@ -139,9 +140,11 @@ export function SourceClaimDirectory({
 function AssertionCard({
   projectId,
   assertion,
+  candidates,
 }: {
   projectId: string;
   assertion: Row;
+  candidates: CorroborationCandidate[];
 }) {
   const router = useRouter();
   const annotation = (assertion.annotation ?? {}) as Row;
@@ -188,6 +191,16 @@ function AssertionCard({
       <blockquote className="mt-3 border-l-2 border-amber-800/60 pl-3 text-xs leading-5 text-stone-500">
         {quote}
       </blockquote>
+      <AssertionCredibilityPanel
+        projectId={projectId}
+        assertionId={text(assertion.id)}
+        candidates={candidates.filter((candidate) =>
+          candidate.id !== text(assertion.id) &&
+          candidate.sourceId !== sourceId &&
+          candidate.stance === text(assertion.stance) &&
+          (candidate.stance === "ASSERTS" || candidate.stance === "DENIES")
+        )}
+      />
 
       <div className="mt-3 grid gap-2 md:grid-cols-3">
         <label className="grid gap-1">
@@ -311,6 +324,12 @@ export function SourceClaimDetail({
   assertions: Row[];
 }) {
   const router = useRouter();
+  const candidates: CorroborationCandidate[] = assertions.map((candidate) => ({
+    id: text(candidate.id),
+    sourceId: text(((candidate.annotation ?? {}) as Row).source_id),
+    sourceTitle: text(((candidate.source ?? {}) as Row).title) || "Source",
+    stance: text(candidate.stance),
+  })).filter((candidate) => Boolean(candidate.id && candidate.sourceId));
   const [summary, setSummary] = useState(text(claim.claim_summary));
   const [kind, setKind] = useState<SourceClaimKind>(
     text(claim.claim_kind) as SourceClaimKind,
@@ -457,6 +476,7 @@ export function SourceClaimDetail({
               key={text(assertion.id)}
               projectId={projectId}
               assertion={assertion}
+              candidates={candidates}
             />
           ))}
           {!assertions.length ? (
