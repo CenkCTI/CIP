@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { SourceReaderWorkspace } from "@/components/investigations/source-reader/source-reader-workspace";
 import { requireOwnedProject } from "@/lib/projects/ownership";
+import { SourceReliabilityPanel } from "@/components/analysis/source-reliability-panel";
 
 const uuidSchema = z.string().uuid();
 
@@ -280,7 +281,11 @@ export default async function SourceDetailPage({
     requestedAnnotation && annotationIds.has(requestedAnnotation) ? requestedAnnotation : null;
 
   return (
-    <SourceReaderWorkspace
+    <>
+      <div className="mx-auto mb-3 max-w-[1700px] px-3">
+        <SourceReliabilityPanel projectId={context.projectId} sourceId={sourceId} />
+      </div>
+      <SourceReaderWorkspace
       projectId={context.projectId}
       source={sourceResult.data}
       asset={asset}
@@ -315,5 +320,6 @@ export default async function SourceDetailPage({
       }}
       initialFocusedAnnotationId={initialFocusedAnnotationId}
     />
+    </>
   );
 }
