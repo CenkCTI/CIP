@@ -1,0 +1,63 @@
+name: Stage 4.1 M1B assertion credibility validation
+on:
+  pull_request:
+    branches: [main, feat/stage4-1a-source-reliability]
+    paths:
+      - "supabase/migrations/202611130082_stage4_1b_assertion_credibility_reviews.sql"
+      - "src/lib/analysis/credibility/**"
+      - "src/components/analysis/assertion-credibility-panel.tsx"
+      - "src/components/processing/source-claims-workspace.tsx"
+      - "src/app/api/projects/**/analysis/quality/assertions/**"
+      - "scripts/test-stage4-1b-credibility-migration.sql"
+      - "tests/stage4-1b-*.test.ts"
+      - "docs/STAGE4_1B_ASSERTION_CREDIBILITY.md"
+      - ".github/workflows/stage4-1b-credibility-validation.yml"
+  push:
+    branches: [feat/stage4-1b-assertion-credibility]
+permissions:
+  contents: read
+jobs:
+  app-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+  postgres-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: ["16", "17"]
+    services:
+      postgres:
+        image: postgres:${{ matrix.pg }}
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - run: psql -v ON_ERROR_STOP=1 -f scripts/test-stage4-1b-credibility-migration.sql
