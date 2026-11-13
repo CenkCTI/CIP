@@ -84,22 +84,29 @@ declare
   first_review uuid;
   second_review uuid;
   replayed_flag boolean;
+  ctx jsonb;
   why text := 'The independently obtained observation confirms the described infrastructure pattern and was checked against primary telemetry.';
   independence text := 'Separate first-hand telemetry collection; neither author cited or copied the other report.';
 begin
+  ctx := jsonb_build_object(
+    'assertionUpdatedAt',(select updated_at from public.source_claim_assertions where id=a),
+    'claimUpdatedAt',(select updated_at from public.source_claims where id='bb5d557f-6f09-4ac2-b7e7-08abbd0b0001'),
+    'annotationUpdatedAt',(select updated_at from public.source_annotations where id='cc5d557f-6f09-4ac2-b7e7-08abbd0b0001'),
+    'sourceUpdatedAt',(select updated_at from public.sources where id='7b5d557f-6f09-4ac2-b7e7-08abbd0b0001')
+  );
   assert (select count(*) from public.assertion_credibility_reviews)=0,
     'No review must mean Not evaluated, not 6';
   begin
     perform public.save_assertion_credibility_review_v1(p,a,1,why,
       'UNKNOWN','',null,'ADMIRALTY_INFORMATION_V1',null,
-      'ce1f11c5-ea5d-4d7a-97d4-91cc8c940101');
+      'ce1f11c5-ea5d-4d7a-97d4-91cc8c940101',ctx);
     raise exception 'UNVERIFIED_LEVEL_ONE_ACCEPTED';
   exception when sqlstate '22023' then null;
   end;
   begin
     perform public.save_assertion_credibility_review_v1(p,a,1,why,
       'ANALYST_VERIFIED_INDEPENDENT',independence,same_source,
-      'ADMIRALTY_INFORMATION_V1',null,'ce1f11c5-ea5d-4d7a-97d4-91cc8c940102');
+      'ADMIRALTY_INFORMATION_V1',null,'ce1f11c5-ea5d-4d7a-97d4-91cc8c940102',ctx);
     raise exception 'SAME_SOURCE_ALLOWED';
   exception when sqlstate '22023' then null;
   end;
@@ -107,7 +114,7 @@ begin
     from public.save_assertion_credibility_review_v1(p,a,6,
       'This report cannot yet be verified without independent original reporting.',
       'UNKNOWN','',null,'ADMIRALTY_INFORMATION_V1',null,
-      'ce1f11c5-ea5d-4d7a-97d4-91cc8c940103');
+      'ce1f11c5-ea5d-4d7a-97d4-91cc8c940103',ctx);
   assert first_review is not null and replayed_flag=false,'First review persisted';
   assert (select revision from public.assertion_credibility_reviews where id=first_review)=1,
     'Revision 1';
@@ -118,25 +125,25 @@ begin
     from public.save_assertion_credibility_review_v1(p,a,6,
       'This report cannot yet be verified without independent original reporting.',
       'UNKNOWN','',null,'ADMIRALTY_INFORMATION_V1',null,
-      'ce1f11c5-ea5d-4d7a-97d4-91cc8c940103');
+      'ce1f11c5-ea5d-4d7a-97d4-91cc8c940103',ctx);
   assert second_review=first_review and replayed_flag,'Idempotent retry';
   begin
     perform public.save_assertion_credibility_review_v1(p,a,4,
       'Changed payload with reused idempotency key.','UNKNOWN','',null,
-      'ADMIRALTY_INFORMATION_V1',null,'ce1f11c5-ea5d-4d7a-97d4-91cc8c940103');
+      'ADMIRALTY_INFORMATION_V1',null,'ce1f11c5-ea5d-4d7a-97d4-91cc8c940103',ctx);
     raise exception 'REQUEST_REUSE_ACCEPTED';
   exception when unique_violation then null;
   end;
   begin
     perform public.save_assertion_credibility_review_v1(p,a,3,
       'Stale expected review must not be accepted.','UNKNOWN','',null,
-      'ADMIRALTY_INFORMATION_V1',null,'ce1f11c5-ea5d-4d7a-97d4-91cc8c940104');
+      'ADMIRALTY_INFORMATION_V1',null,'ce1f11c5-ea5d-4d7a-97d4-91cc8c940104',ctx);
     raise exception 'STALE_REVISION_ACCEPTED';
   exception when serialization_failure then null;
   end;
   select review_id into second_review from public.save_assertion_credibility_review_v1(
     p,a,1,why,'ANALYST_VERIFIED_INDEPENDENT',independence,other,
-    'ADMIRALTY_INFORMATION_V1',first_review,'ce1f11c5-ea5d-4d7a-97d4-91cc8c940105');
+    'ADMIRALTY_INFORMATION_V1',first_review,'ce1f11c5-ea5d-4d7a-97d4-91cc8c940105',ctx);
   assert (select count(*) from public.assertion_credibility_reviews)=2,
     'Append-only history expected';
   assert (select revision from public.assertion_credibility_reviews where id=second_review)=2,
@@ -148,9 +155,19 @@ begin
     'Verification source ID is resolved server side';
   begin
     perform public.save_assertion_credibility_review_v1(
+      p,a,3,'The claim was changed after the analyst reviewed it.','UNKNOWN','',null,
+      'ADMIRALTY_INFORMATION_V1',second_review,
+      'ce1f11c5-ea5d-4d7a-97d4-91cc8c940108',
+      jsonb_set(ctx,'{claimUpdatedAt}','"2000-01-01T00:00:00+00:00"'::jsonb));
+    raise exception 'STALE_PROVENANCE_ACCEPTED';
+  exception when serialization_failure then null;
+  end;
+
+  begin
+    perform public.save_assertion_credibility_review_v1(
       p,'dd5d557f-6f09-4ac2-b7e7-08abbd0b0004',3,
       'Cannot assess a foreign assertion.','UNKNOWN','',null,
-      'ADMIRALTY_INFORMATION_V1',null,'ce1f11c5-ea5d-4d7a-97d4-91cc8c940106');
+      'ADMIRALTY_INFORMATION_V1',null,'ce1f11c5-ea5d-4d7a-97d4-91cc8c940106',ctx);
     raise exception 'CROSS_PROJECT_ACCEPTED';
   exception when insufficient_privilege then null;
   end;
@@ -194,6 +211,12 @@ end $$;
 -- Only an explicit Investigation privacy deletion purges its review history.
 delete from public.projects where id='9c972aae-0a28-4fc7-8769-b617bedb0001';
 do $$ begin
+  ctx := jsonb_build_object(
+    'assertionUpdatedAt',(select updated_at from public.source_claim_assertions where id=a),
+    'claimUpdatedAt',(select updated_at from public.source_claims where id='bb5d557f-6f09-4ac2-b7e7-08abbd0b0001'),
+    'annotationUpdatedAt',(select updated_at from public.source_annotations where id='cc5d557f-6f09-4ac2-b7e7-08abbd0b0001'),
+    'sourceUpdatedAt',(select updated_at from public.sources where id='7b5d557f-6f09-4ac2-b7e7-08abbd0b0001')
+  );
   assert (select count(*) from public.assertion_credibility_reviews)=0,
     'Investigation deletion must purge private reviews';
 end $$;

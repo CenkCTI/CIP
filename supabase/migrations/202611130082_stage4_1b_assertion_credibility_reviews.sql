@@ -105,7 +105,8 @@ create function public.save_assertion_credibility_review_v1(
   p_verification_assertion_id uuid,
   p_method_version text,
   p_expected_current_review_id uuid,
-  p_request_id uuid
+  p_request_id uuid,
+  p_expected_context jsonb
 ) returns table(review_id uuid,replayed boolean,reviewed_at timestamptz)
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -182,7 +183,8 @@ begin
     'independenceRationale',v_independence_rationale,
     'verificationAssertionId',p_verification_assertion_id,
     'methodVersion',p_method_version,
-    'expectedCurrentReviewId',p_expected_current_review_id
+    'expectedCurrentReviewId',p_expected_current_review_id,
+    'expectedContext',p_expected_context
   )::text,'UTF8')),'hex');
 
   -- Replays are checked before staleness even after a newer review is saved.
@@ -195,6 +197,15 @@ begin
       return;
     end if;
     raise exception 'REQUEST_ID_REUSED' using errcode='23505';
+  end if;
+
+  -- Reject a review if any authoritative subject changed after the inspector loaded.
+  if p_expected_context is null or
+     v_assertion.updated_at is distinct from (p_expected_context->>'assertionUpdatedAt')::timestamptz or
+     v_claim.updated_at is distinct from (p_expected_context->>'claimUpdatedAt')::timestamptz or
+     v_annotation.updated_at is distinct from (p_expected_context->>'annotationUpdatedAt')::timestamptz or
+     v_source.updated_at is distinct from (p_expected_context->>'sourceUpdatedAt')::timestamptz then
+    raise exception 'SOURCE_CONTEXT_CONFLICT' using errcode='40001';
   end if;
 
   if v_source.archived_at is not null then
@@ -278,10 +289,10 @@ end
 $$;
 
 revoke all on function public.save_assertion_credibility_review_v1(
-  uuid,uuid,integer,text,text,text,uuid,text,uuid,uuid
+  uuid,uuid,integer,text,text,text,uuid,text,uuid,uuid,jsonb
 ) from public,anon,authenticated;
 grant execute on function public.save_assertion_credibility_review_v1(
-  uuid,uuid,integer,text,text,text,uuid,text,uuid,uuid
+  uuid,uuid,integer,text,text,text,uuid,text,uuid,uuid,jsonb
 ) to authenticated;
 
 comment on table public.assertion_credibility_reviews is

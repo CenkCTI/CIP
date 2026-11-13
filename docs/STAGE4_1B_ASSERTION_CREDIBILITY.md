@@ -16,7 +16,7 @@ Open an Investigation → **Source Claims** → choose a Source Claim → expand
 
 `supabase/migrations/202611130082_stage4_1b_assertion_credibility_reviews.sql` adds table `assertion_credibility_reviews`, policy `assertion_credibility_reviews_select_owned` and RPC `save_assertion_credibility_review_v1`.
 
-- Composite `(project_id, assertion_id, revision)` uniqueness, `supersedes_id`, request idempotency (`request_id` + server-computed input SHA-256), row lock, conflict detection, immutable trigger, minimum-grant RLS.
+- Composite `(project_id, assertion_id, revision)` uniqueness, `supersedes_id`, four-timestamp provenance optimistic locking, request idempotency (`request_id` + server-computed input SHA-256), row lock, conflict detection, immutable trigger, minimum-grant RLS.
 - Server stores only **bounded** identity snapshot plus source/claim/annotation/assertion update timestamps, never raw quotes, PDF blobs, signed URLs or asset keys. Historical identity is not a substitute for original evidence; it serves auditability only.
 - No FK to mutable/deletable assertion, claim or Source; FK to project cascades for privacy deletion. Only authenticated users can call the owner-checked definer RPC; anonymous and authenticated roles cannot directly insert, update, or delete reviews.
 - Corroboration is **explicit**, never inferred from number of links/Canvas arrows/AI. M1C will implement actual provenance lineage and circular-reporting checks; it should not rewrite these existing historical assessments.
@@ -24,7 +24,7 @@ Open an Investigation → **Source Claims** → choose a Source Claim → expand
 ## API
 
 - `GET /api/projects/{id}/analysis/quality/assertions/{assertionId}?page=1`: current source quality and assertion credibility, missing/archived/unavailable subject, history in pages of 20, whether review is stale. Owner-scoped; private no-store.
-- `POST /api/projects/{id}/analysis/quality/assertions/{assertionId}/reviews`: strict JSON payload `{ credibility, rationale, independenceStatus, independenceRationale, verificationAssertionId, methodVersion: "ADMIRALTY_INFORMATION_V1", expectedCurrentReviewId, requestId }`. Returns 201 on creation, 200 for exact replay, 409 stale/reused key, 404 unauthorized/missing, 400 invalid or unverified corroboration, 503 unexpected DB error.
+- `POST /api/projects/{id}/analysis/quality/assertions/{assertionId}/reviews`: strict JSON payload `{ credibility, rationale, independenceStatus, independenceRationale, verificationAssertionId, methodVersion: "ADMIRALTY_INFORMATION_V1", expectedCurrentReviewId, expectedProvenance, requestId }`. Returns 201 on creation, 200 for exact replay, 409 stale/reused key, 404 unauthorized/missing, 400 invalid or unverified corroboration, 503 unexpected DB error.
 
 ## Deploy gates
 

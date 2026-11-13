@@ -88,7 +88,8 @@ function AssertionCredibilityInspector({ projectId, assertionId, candidates }: P
   }, [endpoint]);
 
   const verified = independenceStatus === "ANALYST_VERIFIED_INDEPENDENT";
-  const canSave = !loading && !busy && quality?.assertionStatus === "ACTIVE" &&
+  const canSave = !loading && !busy && Boolean(quality?.provenance) &&
+    quality?.assertionStatus === "ACTIVE" &&
     (credibility !== 1 || (verified && candidates.length > 0));
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -119,6 +120,7 @@ function AssertionCredibilityInspector({ projectId, assertionId, candidates }: P
           methodVersion: informationCredibilityMethodVersion,
           expectedCurrentReviewId: quality.current?.id ?? null,
           requestId: crypto.randomUUID(),
+          expectedProvenance: quality.provenance,
         }),
       });
       if (!response.ok) {

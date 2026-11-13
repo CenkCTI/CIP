@@ -12,6 +12,12 @@ const base = {
   credibility: 3, rationale: "The assertion may be correct but lacks verification.",
   independenceStatus: "UNKNOWN", independenceRationale: "", verificationAssertionId: null,
   methodVersion: "ADMIRALTY_INFORMATION_V1", expectedCurrentReviewId: null, requestId,
+  expectedProvenance: {
+    assertionUpdatedAt: "2026-11-13T13:00:00+00:00",
+    claimUpdatedAt: "2026-11-13T13:00:00+00:00",
+    annotationUpdatedAt: "2026-11-13T13:00:00+00:00",
+    sourceUpdatedAt: "2026-11-13T13:00:00+00:00",
+  },
 };
 const req = (value: Record<string, unknown> = {}) => new Request("https://citem.test/quality", {
   method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...base, ...value }),
@@ -47,6 +53,7 @@ describe("M1B owner-only credibility HTTP API", () => {
       p_verification_assertion_id: null,
       p_method_version: "ADMIRALTY_INFORMATION_V1",
       p_expected_current_review_id: null, p_request_id: requestId,
+      p_expected_context: base.expectedProvenance,
     });
     expect((await response.json()).reviewId).toBe(reviewId);
   });

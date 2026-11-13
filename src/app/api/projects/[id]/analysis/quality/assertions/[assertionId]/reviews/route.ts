@@ -38,6 +38,7 @@ export async function POST(req: Request, { params }: Params) {
     p_method_version: parsed.data.methodVersion,
     p_expected_current_review_id: parsed.data.expectedCurrentReviewId,
     p_request_id: parsed.data.requestId,
+    p_expected_context: parsed.data.expectedProvenance,
   }).single();
   if (error) {
     if (error.code === "40001" || error.code === "23505") return fail(409, "EDIT_CONFLICT: review changed or request ID was reused.");

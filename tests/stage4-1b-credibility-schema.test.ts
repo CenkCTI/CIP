@@ -10,6 +10,12 @@ const valid = {
   independenceStatus: "UNKNOWN", independenceRationale: "", verificationAssertionId: null,
   methodVersion: "ADMIRALTY_INFORMATION_V1", expectedCurrentReviewId: null,
   requestId: "ce1f11c5-ea5d-4d7a-97d4-91cc8c940123",
+  expectedProvenance: {
+    assertionUpdatedAt: "2026-11-13T13:00:00+00:00",
+    claimUpdatedAt: "2026-11-13T13:00:00+00:00",
+    annotationUpdatedAt: "2026-11-13T13:00:00+00:00",
+    sourceUpdatedAt: "2026-11-13T13:00:00+00:00",
+  },
 };
 
 describe("Stage 4.1 M1B information credibility contract", () => {

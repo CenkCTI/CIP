@@ -48,6 +48,7 @@ export async function GET(req: Request, { params }: Params) {
   const assertion = assertionResult.data;
   if (!assertion && !current) return fail(404, "Not found.");
 
+  let provenance: AssertionCredibilityResponse["provenance"] = null;
   let sourceId: string | null = null;
   let sourceTitle = current?.assertion_identity_snapshot?.sourceTitle ?? "Unavailable Source";
   let status: AssertionCredibilityResponse["assertionStatus"] = "UNAVAILABLE";
@@ -78,6 +79,12 @@ export async function GET(req: Request, { params }: Params) {
         const source = sourceResult.data;
         sourceTitle = source.title;
         status = source.archived_at ? "ARCHIVED" : "ACTIVE";
+        provenance = {
+          assertionUpdatedAt: assertion.updated_at,
+          claimUpdatedAt: claim.updated_at,
+          annotationUpdatedAt: annotation.updated_at,
+          sourceUpdatedAt: source.updated_at,
+        };
         sourceReliability = reliabilityResult.data?.rating ?? null;
         sourceReliabilityStale = Boolean(reliabilityResult.data &&
           changed(reliabilityResult.data.source_updated_at, source.updated_at));
@@ -90,7 +97,7 @@ export async function GET(req: Request, { params }: Params) {
     }
   }
   const payload: AssertionCredibilityResponse = {
-    assertionId, assertionStatus: status,
+    assertionId, assertionStatus: status, provenance,
     assertionStance: assertion?.stance ?? current?.assertion_identity_snapshot?.stance ?? null,
     sourceTitle, sourceId, sourceReliability, sourceReliabilityStale,
     current, currentIsStale, history: history.slice(0, CREDIBILITY_HISTORY_PAGE_SIZE),

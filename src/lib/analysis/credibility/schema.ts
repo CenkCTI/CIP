@@ -41,6 +41,12 @@ export const assertionCredibilityReviewRequestSchema = z.object({
   methodVersion: z.literal(informationCredibilityMethodVersion),
   expectedCurrentReviewId: z.string().uuid().nullable(),
   requestId: z.string().uuid(),
+  expectedProvenance: z.object({
+    assertionUpdatedAt: z.string().datetime({ offset: true }),
+    claimUpdatedAt: z.string().datetime({ offset: true }),
+    annotationUpdatedAt: z.string().datetime({ offset: true }),
+    sourceUpdatedAt: z.string().datetime({ offset: true }),
+  }).strict(),
 }).strict().superRefine((input, context) => {
   const attested = input.independenceStatus === "ANALYST_VERIFIED_INDEPENDENT";
   if (attested && (!input.verificationAssertionId || input.independenceRationale.length < 40)) {
@@ -86,6 +92,12 @@ export type AssertionCredibilityReview = {
 };
 
 export type AssertionCredibilityResponse = {
+  provenance: {
+    assertionUpdatedAt: string;
+    claimUpdatedAt: string;
+    annotationUpdatedAt: string;
+    sourceUpdatedAt: string;
+  } | null;
   assertionId: string;
   assertionStatus: "ACTIVE" | "ARCHIVED" | "UNAVAILABLE";
   assertionStance: string | null;
