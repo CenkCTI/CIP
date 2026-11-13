@@ -46,11 +46,23 @@ function LineageInspector({ projectId, assertionId }: Props) {
   }, [endpoint, assertionId]);
   useEffect(() => {
     const controller = new AbortController();
-    void refresh(targetId, controller.signal).catch(() => {
+    const query = new URLSearchParams({ assertionId });
+    if (targetId) query.set("otherAssertionId", targetId);
+    void fetch(`${endpoint}?${query.toString()}`, {
+      credentials: "same-origin", cache: "no-store", signal: controller.signal,
+    }).then(async (response) => {
+      if (!response.ok) throw new Error("Lineage unavailable");
+      return response.json() as Promise<AssertionLineageResponse & { history?: AssertionLineageResponse["links"] }>;
+    }).then((value) => {
+      if (!controller.signal.aborted) {
+        setData(value);
+        setHistory(value.history ?? []);
+      }
+    }).catch(() => {
       if (!controller.signal.aborted) setMessage("Kaynak ilişkileri yüklenemedi.");
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [refresh, targetId]);
+  }, [endpoint, assertionId, targetId]);
 
   const subject = data?.candidates.find((candidate) => candidate.id === assertionId);
   const target = data?.candidates.find((candidate) => candidate.id === targetId);
@@ -106,7 +118,7 @@ function LineageInspector({ projectId, assertionId }: Props) {
     {data?.truncated && <p className="text-amber-300">Kayıt listesi 100 ile sınırlandı; tüm kaynaklar görünmüyor.</p>}
     {data?.unavailable && <p className="text-amber-300">Assertion kaldırılmış; geçmiş bağlantılar salt okunur.</p>}
     <form onSubmit={submit} className="grid gap-3">
-      <label className="grid gap-1 text-stone-300">Karşılaştırılacak kaynak assertion'ı
+      <label className="grid gap-1 text-stone-300">Karşılaştırılacak kaynak assertion&apos;ı
         <select className="field" value={targetId} onChange={(event) => { setTargetId(event.target.value); setMessage(""); }}>
           <option value="">Başka bir assertion seç…</option>
           {data?.candidates.filter((candidate) => candidate.id !== assertionId).map((candidate) =>
