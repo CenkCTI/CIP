@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { AssertionCredibilityPanel, type CorroborationCandidate } from "@/components/analysis/assertion-credibility-panel";
+import { AssertionLineagePanel } from "@/components/analysis/assertion-lineage-panel";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
@@ -201,6 +202,7 @@ function AssertionCard({
           (candidate.stance === "ASSERTS" || candidate.stance === "DENIES")
         )}
       />
+      <AssertionLineagePanel projectId={projectId} assertionId={text(assertion.id)} />
 
       <div className="mt-3 grid gap-2 md:grid-cols-3">
         <label className="grid gap-1">

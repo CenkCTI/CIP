@@ -130,7 +130,7 @@ function AssertionCredibilityInspector({ projectId, assertionId, candidates }: P
           return;
         }
         if (response.status === 400) {
-          setMessage("Seçilen doğrulama kaydı geçersiz veya gerekçe yetersiz.");
+          setMessage("Doğrulama geçersiz veya gerekçe yetersiz. Derece 1 için aşağıdaki Reporting lineage bölümünde INDEPENDENT_OBSERVATION incelemesi de kaydedilmiş olmalı.");
           return;
         }
         throw new Error("Could not save review.");
@@ -170,6 +170,11 @@ function AssertionCredibilityInspector({ projectId, assertionId, candidates }: P
         canonical Claim. Neither is analyst confidence. A1 does not happen automatically.
         6 means cannot judge; no saved review means not evaluated.
       </p>
+      {credibility === 1 && <p role="status" className="rounded border border-amber-800/60 p-2 text-xs text-amber-200">
+        Grade 1 now requires a current INDEPENDENT_OBSERVATION review for this exact assertion pair.
+        Record it first in the Reporting lineage panel below; a second URL alone is insufficient.
+      </p>}
+
       {quality?.currentIsStale ? (
         <p role="status" className="rounded border border-amber-800/60 p-2 text-xs text-amber-200">
           Source / claim / annotation / assertion changed since the assessment;
