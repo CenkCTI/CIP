@@ -68,6 +68,7 @@ export function getInvestigationNavGroups(projectId: string): InvestigationNavGr
     {
       label: "Analysis",
       items: [
+        { key: "hypotheses", label: "Hypotheses", href: `${root}/analysis/hypotheses`, pathPrefix: `${root}/analysis/hypotheses` },
         { key: "attribution", label: "Attribution", href: `${root}/attribution`, pathPrefix: `${root}/attribution` },
       ],
     },

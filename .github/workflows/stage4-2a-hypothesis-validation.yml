@@ -1,0 +1,55 @@
+name: Stage 4.2 M2A hypotheses and evidence validation
+on:
+  push:
+    branches: [feat/stage4-2a-hypotheses-evidence]
+  pull_request:
+    paths:
+      - 'supabase/migrations/202611130084_stage4_2a_hypothesis_workbench.sql'
+      - 'scripts/test-stage4-2a-hypothesis-migration.sql'
+      - 'src/lib/analysis/hypotheses/**'
+      - 'src/app/api/projects/**/analysis/hypotheses/**'
+      - 'src/components/analysis/hypothesis-workbench.tsx'
+      - 'src/app/projects/**/analysis/hypotheses/**'
+      - 'src/components/investigations/workspace-nav.tsx'
+      - 'tests/stage4-2a-*.test.ts'
+      - '.github/workflows/stage4-2a-hypothesis-validation.yml'
+permissions:
+  contents: read
+jobs:
+  app-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+  postgres-acceptance:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ['16', '17']
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd 'pg_isready -U postgres'
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 25
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-stage4-2a-hypothesis-migration.sql
