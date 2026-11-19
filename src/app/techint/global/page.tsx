@@ -6,7 +6,7 @@ import { getNodeChanges,getNodeComparisons,getNodeDiscoverySummary,getNodeMeasur
 import { requireUser } from "@/lib/auth";
 import { NodeClientError } from "@/lib/baykush-node/errors";
 
-function safeNodeFailureCode(error:unknown){return error instanceof NodeClientError?error.code:"UNEXPECTED_ERROR";}
+function safeNodeFailureCode(error:unknown){return error instanceof NodeClientError?`${error.code}${error.networkFailureKind?` / ${error.networkFailureKind}`:""}`:"UNEXPECTED_ERROR";}
 
 function latestGeneratedAt(...values:(string|undefined)[]){return values.filter((value):value is string=>Boolean(value)).sort().at(-1)??new Date().toISOString();}
 
