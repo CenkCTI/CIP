@@ -5,6 +5,22 @@ import { NodeClientError, safeRetryAfter } from "./errors";
 
 const RETRY_STATUS = new Set([502, 503, 504]);
 
+function networkFailureKind(error: unknown): "DNS" | "TLS" | "TIMEOUT" | "CONNECTION" | "OTHER" {
+  if (error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError")) return "TIMEOUT";
+  const cause = error instanceof Error ? error.cause : undefined;
+  const code = cause && typeof cause === "object" && "code" in cause && typeof cause.code === "string"
+    ? cause.code
+    : "";
+  if (code === "ENOTFOUND" || code === "EAI_AGAIN") return "DNS";
+  if (code === "UND_ERR_CONNECT_TIMEOUT" || code === "ETIMEDOUT") return "TIMEOUT";
+  if (code.startsWith("ERR_TLS_") || code.startsWith("ERR_SSL_") ||
+      code === "CERT_HAS_EXPIRED" || code === "UNABLE_TO_VERIFY_LEAF_SIGNATURE" ||
+      code === "DEPTH_ZERO_SELF_SIGNED_CERT") return "TLS";
+  if (["ECONNREFUSED", "ECONNRESET", "EHOSTUNREACH", "ENETUNREACH", "UND_ERR_SOCKET"].includes(code)) return "CONNECTION";
+  return "OTHER";
+}
+
+
 export async function nodeGet<T>(path: string, schema: z.ZodType<T>, options: { revalidate?: number; fetchImpl?: typeof fetch } = {}): Promise<T> {
   if (!path.startsWith("/") || path.startsWith("//")) throw new NodeClientError("INVALID_REQUEST", "Node request path is invalid.");
   let config;
@@ -36,7 +52,7 @@ export async function nodeGet<T>(path: string, schema: z.ZodType<T>, options: { 
       return parsed.data;
     } catch (error) {
       if (error instanceof NodeClientError) throw error;
-      if (attempt === 1) throw new NodeClientError("UNAVAILABLE", "BAYKUSH Intelligence Node is unavailable.");
+      if (attempt === 1) throw new NodeClientError("UNAVAILABLE", "BAYKUSH Intelligence Node is unavailable.", null, null, networkFailureKind(error));
     } finally { clearTimeout(timer); }
   }
   throw new NodeClientError("UNAVAILABLE", "BAYKUSH Intelligence Node is unavailable.");

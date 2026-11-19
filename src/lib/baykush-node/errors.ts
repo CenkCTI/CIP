@@ -9,12 +9,15 @@ export type NodeClientErrorCode =
   | "NOT_FOUND"
   | "REMOTE_ERROR";
 
+export type NodeNetworkFailureKind = "DNS" | "TLS" | "TIMEOUT" | "CONNECTION" | "OTHER";
+
 export class NodeClientError extends Error {
   constructor(
     readonly code: NodeClientErrorCode,
     message: string,
     readonly status: number | null = null,
     readonly retryAfterSeconds: number | null = null,
+    readonly networkFailureKind: NodeNetworkFailureKind | null = null,
   ) {
     super(message);
     this.name = "NodeClientError";
