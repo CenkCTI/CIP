@@ -9,6 +9,23 @@ import { ROUTING_MEASUREMENTS } from "./routing";
 describe("BAYKUSH Node global query ownership boundary", () => {
   beforeEach(() => nodeGet.mockReset().mockResolvedValue({apiVersion:"v1",generatedAt:"2026-08-13T00:00:00.000Z",data:[]}));
 
+  it("uses stable minute-aligned Node ranges for repeated default-time reads", async () => {
+    const clock = vi.spyOn(Date, "now");
+    try {
+      clock.mockReturnValue(Date.parse("2026-08-13T12:00:05.000Z"));
+      await getNodeSourceStatus("24h");
+      clock.mockReturnValue(Date.parse("2026-08-13T12:00:45.000Z"));
+      await getNodeSourceStatus("24h");
+      expect(nodeGet.mock.calls[0]?.[0]).toBe(nodeGet.mock.calls[1]?.[0]);
+      expect(nodeGet.mock.calls[0]?.[0]).toContain("2026-08-13T12%3A00%3A00.000Z");
+      clock.mockReturnValue(Date.parse("2026-08-13T12:01:01.000Z"));
+      await getNodeSourceStatus("24h");
+      expect(nodeGet.mock.calls[2]?.[0]).not.toBe(nodeGet.mock.calls[1]?.[0]);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it("keeps core and routing measurements in independent bounded failure domains", async () => {
     const userId="11111111-1111-4111-8111-111111111111";const now=new Date("2026-08-13T12:00:00.000Z");
     await getNodeSourceStatus("24h",now);await getNodeMeasurements("24h",now);await getNodeRoutingMeasurements("24h",now);
