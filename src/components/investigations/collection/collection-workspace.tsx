@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { CollectionSummary } from "./collection-summary";
+import type { CollectionMetrics } from "@/lib/analysis/annotation-credibility/collection-metrics";
 import { useActionState, useMemo, useState, useTransition } from "react";
 
 import {
@@ -22,6 +24,7 @@ const initial: CollectionActionState = {};
 type Props = {
   projectId: string;
   project: Row;
+  metrics?: CollectionMetrics;
   questions: Row[];
   gaps: Row[];
   requirements: Row[];
@@ -235,6 +238,7 @@ function RequirementActions({
 export function CollectionWorkspace({
   projectId,
   project,
+  metrics,
   questions,
   gaps,
   requirements,
@@ -295,15 +299,20 @@ export function CollectionWorkspace({
       )
     : requirements;
 
+  const gapById = new Map(gaps.map((gap) => [s(gap.id), gap]));
   const sourceById = new Map(sources.map((source) => [s(source.id), source]));
 
   return (
     <section className="mx-auto max-w-7xl space-y-5">
       <header className="card">
-        <p className="citem-label">Investigation / Collection</p>
+        <p className="citem-label">Collection &amp; Validation</p>
         <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-semibold text-stone-100">{s(project.name)}</h1>
+            <p className="mt-2 text-sm text-stone-400">Plan collection, review source material and prepare evidence for analysis.</p>
+            <p className="mt-2 text-xs text-stone-400">Priority · {s(project.priority) || "Unavailable"}
+              {project.due_at ? ` · Intelligence deadline ${s(project.due_at).slice(0, 10)}` : ""}
+            </p>
             <p className="mt-3 max-w-4xl text-sm leading-6 text-stone-300">
               <span className="font-medium text-amber-300">Ana soru:</span>{" "}
               {s(project.research_question) || "Tanımlanmamış"}
@@ -313,22 +322,22 @@ export function CollectionWorkspace({
             Kaynaklara git
           </Link>
         </div>
-        {questions.length ? (
-          <details className="mt-4">
+        <details id="collection-questions" className="mt-4">
             <summary className="cursor-pointer text-sm text-stone-400">
-              Supporting Intelligence Questions ({questions.length})
+              Supporting Intelligence Questions
             </summary>
-            <ul className="mt-2 space-y-2 text-sm text-stone-500">
+            {questions.length ? <ul className="mt-2 space-y-2 text-sm text-stone-400">
               {questions.map((question) => (
-                <li key={s(question.id)}>• {s(question.question)}</li>
+                <li key={s(question.id)}>{s(question.question)} · {s(question.status)}</li>
               ))}
-            </ul>
-          </details>
-        ) : null}
+            </ul> : <p className="mt-2 text-xs text-stone-400">No supporting questions recorded.</p>}
+        </details>
       </header>
 
+      {metrics && <CollectionSummary projectId={projectId} metrics={metrics} />}
+      <h2 id="collection-planning" className="text-lg font-semibold text-stone-100">Collection Planning</h2>
       <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <aside className="card self-start">
+        <aside className="card self-start" id="collection-information-gaps">
           <div className="flex items-end justify-between gap-3">
             <div>
               <p className="citem-label">Information Gaps</p>
@@ -423,6 +432,13 @@ export function CollectionWorkspace({
                     </span>
                   </div>
 
+                  <div className="mt-3 flex flex-wrap gap-3 text-xs text-amber-300">
+                    {(gapLinksByRequirement.get(id) ?? []).map((gapId) => {
+                      const gap = gapById.get(gapId);
+                      return gap ? <button key={gapId} type="button" className="text-left underline" onClick={() => setSelectedGapId(gapId)}>{s(gap.description)}</button> : null;
+                    })}
+                    <Link className="underline" href={`/projects/${projectId}/fusion?view=inventory&type=ANNOTATION&requirement=${id}`}>Linked source annotations</Link>
+                  </div>
                   {linkedSourceIds.length ? (
                     <div className="mt-4 rounded border border-stone-800 bg-black/10 p-3">
                       <p className="citem-label">Toplanan kaynaklar</p>
@@ -435,7 +451,7 @@ export function CollectionWorkspace({
                               href={`/projects/${projectId}/sources/${sourceId}`}
                               key={sourceId}
                             >
-                              {s(source.title)}
+                              {s(source.title)}{source.archived_at ? " · Archived" : ""}
                             </Link>
                           ) : null;
                         })}
