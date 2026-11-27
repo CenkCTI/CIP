@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { InvestigationDirectionWorkspace } from "@/components/investigations/direction-workspace";
 import { KnowledgeGraph } from "@/components/graph/knowledge-graph";
 import { InfrastructureWorkspace } from "@/components/infrastructure/infrastructure-workspace";
 import { notFound, redirect } from "next/navigation";
@@ -116,6 +117,15 @@ export default async function Page({
     .eq("id", id)
     .single<Project>();
   if (error || !project) notFound();
+
+  if (sp.tab === undefined) {
+    return (
+      <section className="mx-auto max-w-6xl" aria-label="Intelligence Direction">
+        <InvestigationDirectionWorkspace key={id} project={project} />
+      </section>
+    );
+  }
+
   if (tab === "infrastructure") {
     const { data: clusters, error: clusterError } = await supabase
       .from("infrastructure_clusters")

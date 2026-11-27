@@ -125,7 +125,7 @@ function Panel({
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-amber-900/20 pb-3">
         <div>
           <p className="citem-label">{eyebrow}</p>
-          <h3 className="mt-1 text-base font-semibold text-stone-100">{title}</h3>
+          <h2 className="mt-1 text-base font-semibold text-stone-100">{title}</h2>
         </div>
         {action}
       </div>
@@ -209,7 +209,7 @@ export function InvestigationDirectionWorkspace({ project }: { project: Project 
   >(null);
 
   const load = useCallback(async () => {
-    const [directionResponse, summaryResponse] = await Promise.all([
+    const [directionResponse, nextSummary] = await Promise.all([
       fetch(`/api/projects/${encodeURIComponent(project.id)}/direction`, {
         cache: "no-store",
         credentials: "same-origin",
@@ -217,13 +217,15 @@ export function InvestigationDirectionWorkspace({ project }: { project: Project 
       fetch(`/api/projects/${encodeURIComponent(project.id)}/investigation-summary`, {
         cache: "no-store",
         credentials: "same-origin",
-      }),
+      })
+        .then((response) => response.ok ? response.json() as Promise<SummaryState> : null)
+        .catch(() => null),
     ]);
 
     if (!directionResponse.ok) throw new Error("Direction workspace is unavailable.");
     const next = (await directionResponse.json()) as DirectionState;
     setData(next);
-    if (summaryResponse.ok) setSummary((await summaryResponse.json()) as SummaryState);
+    setSummary(nextSummary);
   }, [project.id]);
 
   useEffect(() => {
@@ -349,26 +351,13 @@ export function InvestigationDirectionWorkspace({ project }: { project: Project 
 
   return (
     <div className="citem-direction-workspace space-y-4">
-      <style jsx global>{`
-        .card:has(> .citem-direction-workspace) {
-          grid-column: 1 / -1;
-          overflow: visible;
-          border-color: transparent;
-          background: transparent;
-          box-shadow: none;
-          padding: 0;
-        }
-        .card:has(> .citem-direction-workspace)::after { display: none; }
-        .card:has(> .citem-direction-workspace) > h2:first-child { display: none; }
-      `}</style>
-
       <header className="rounded border border-amber-900/30 bg-[linear-gradient(135deg,rgba(185,130,47,0.09),rgba(0,0,0,0.10)_42%,rgba(17,21,24,0.94))] p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="citem-label">CİTEM / Stage 1 · Direction</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-stone-100">
+            <p className="citem-label">Intelligence Direction</p>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-stone-100">
               {current.name}
-            </h2>
+            </h1>
             <div className="mt-3 flex flex-wrap gap-2 text-xs text-stone-500">
               <StatusBadge>{current.investigation_status}</StatusBadge>
               <span>{current.priority} priority</span>
@@ -618,7 +607,11 @@ export function InvestigationDirectionWorkspace({ project }: { project: Project 
         </form>
       </Panel>
 
-      <Panel eyebrow="Current understanding" title="Working knowledge and information gaps">
+      <Panel
+        eyebrow="Current understanding"
+        title="Working knowledge and information gaps"
+        action={<Link className="citem-button-ghost" href={`/projects/${project.id}/collection`}>Collection Planning</Link>}
+      >
         <div className="grid gap-4 xl:grid-cols-2">
           <section className="rounded border border-stone-800/70 bg-black/10 p-4">
             <div className="flex items-center justify-between gap-3"><div><p className="citem-label">Working knowledge</p><p className="mt-1 text-xs text-stone-500">Working context, not automatically verified fact.</p></div><span className="text-xs text-stone-600">{activeKnowledge.length} active</span></div>
@@ -789,12 +782,11 @@ export function InvestigationDirectionWorkspace({ project }: { project: Project 
               </div>
             ))}
           </div>
-        ) : <p className="text-sm text-stone-500">Workspace counts are loading independently.</p>}
+        ) : <p className="text-sm text-stone-500">Workspace counts are unavailable.</p>}
         {current.current_assessment ? (
           <div className="mt-4 rounded border border-stone-800/70 bg-black/10 p-4">
             <p className="citem-label">Existing current assessment</p>
             <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-stone-400">{current.current_assessment}</p>
-            <p className="mt-2 text-xs text-stone-600">Assessment remains a later analytical stage and is not required by Direction.</p>
           </div>
         ) : null}
       </Panel>

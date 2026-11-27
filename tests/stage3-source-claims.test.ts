@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { getInvestigationNavGroups } from "@/components/investigations/workspace-nav";
 
 describe("Stage 3 Evidence / Source Claim", () => {
   const migration = readFileSync(
@@ -32,10 +33,6 @@ describe("Stage 3 Evidence / Source Claim", () => {
   );
   const sourcePage = readFileSync(
     "src/app/projects/[id]/sources/[sourceId]/page.tsx",
-    "utf8",
-  );
-  const nav = readFileSync(
-    "src/components/investigations/workspace-nav.tsx",
     "utf8",
   );
   const genericTypes = readFileSync("src/lib/processing/types.ts", "utf8");
@@ -130,7 +127,12 @@ describe("Stage 3 Evidence / Source Claim", () => {
   });
 
   it("provides a dedicated Source Claims review workspace", () => {
-    expect(nav).toContain('label: "Source Claims"');
+    const collection = getInvestigationNavGroups("investigation-1")
+      .find((group) => group.key === "collection");
+    expect(collection?.items).toContainEqual(expect.objectContaining({
+      key: "source-claims",
+      href: "/projects/investigation-1/source-claims",
+    }));
     expect(workspace).toContain("Assertions, denials and qualifications");
     expect(workspace).toContain("Source stance is not CITEM confidence");
     expect(workspace).toContain("Open annotation");

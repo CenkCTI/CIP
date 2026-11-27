@@ -1,93 +1,171 @@
-import { describe, expect, it } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { createElement } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   getInvestigationNavGroups,
+  InvestigationWorkspaceNav,
   isInvestigationNavItemActive,
 } from "@/components/investigations/workspace-nav";
 
-describe("InvestigationWorkspaceNav", () => {
-  const projectId = "investigation-1";
-  const root = `/projects/${projectId}`;
-  const groups = getInvestigationNavGroups(projectId);
-  const items = groups.flatMap((group) => group.items);
-  const byKey = (key: string) => {
-    const item = items.find((candidate) => candidate.key === key);
-    if (!item) throw new Error(`Missing navigation item: ${key}`);
-    return item;
-  };
+const navigation = vi.hoisted(() => ({ pathname: "", search: "" }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => navigation.pathname,
+  useSearchParams: () => new URLSearchParams(navigation.search),
+}));
 
-  it("keeps all investigation destinations in one navigation surface", () => {
-    expect(groups.map((group) => group.label)).toEqual([
-      "Production",
-      "Research artefacts",
-      "Workspace",
-      "Analysis",
-    ]);
+const projectId = "investigation-1";
+const root = `/projects/${projectId}`;
+const destinations = [
+  ["Intelligence Direction", [
+    ["direction", ""],
+    ["overview", "?tab=overview"],
+    ["intel-profile", "/intel-profile"],
+  ]],
+  ["01 — Collection & Validation", [
+    ["collection", "/collection"],
+    ["sources", "/sources"],
+    ["source-claims", "/source-claims"],
+  ]],
+  ["02 — Analysis & Reporting", [
+    ["canvas", "/canvas"],
+    ["fusion", "/fusion"],
+    ["mitre", "?tab=mitre"],
+    ["actors", "?tab=actors"],
+    ["campaigns", "?tab=campaigns"],
+    ["malware", "?tab=malware"],
+    ["cves", "?tab=cves"],
+    ["infrastructure", "?tab=infrastructure"],
+    ["attribution", "/attribution"],
+    ["reports", "/reports"],
+  ]],
+  ["Shared Workspace", [
+    ["evidence", "?tab=evidence&view=evidence"],
+    ["indicators", "?tab=indicators"],
+    ["timeline", "?tab=timeline"],
+    ["graph", "?tab=graph"],
+    ["notes", "/notes"],
+    ["tasks", "?tab=tasks"],
+  ]],
+] as const;
 
-    expect(items.map((item) => item.label)).toEqual(
-      expect.arrayContaining([
-        "Direction",
-        "Collection",
-        "Overview",
-        "Notes",
-        "Evidence",
-        "Timeline",
-        "Tasks",
-        "Actors",
-        "Campaigns",
-        "IOC Workbench",
-        "Malware",
-        "CVEs",
-        "MITRE",
-        "Reports",
-        "Infrastructure",
-        "Graph",
-        "Fusion Workspace",
-        "Sources",
-        "Intel Profile",
-        "Attribution",
-      ]),
+function activeKeys(href: string) {
+  const { pathname, searchParams } = new URL(href, "https://citem.test");
+  return getInvestigationNavGroups(projectId)
+    .flatMap((group) => group.items)
+    .filter((item) => isInvestigationNavItemActive(item, pathname, searchParams.get("tab")))
+    .map((item) => item.key);
+}
+
+afterEach(() => vi.unstubAllEnvs());
+
+describe("Investigation workspace navigation", () => {
+  it("places each existing destination in one department and preserves its key and href", () => {
+    vi.stubEnv("NEXT_PUBLIC_CITEM_STAGE3_COPILOT_ENABLED", "false");
+    const groups = getInvestigationNavGroups(projectId);
+    expect(groups.map(({ label, items }) => [label, items.map(({ key, href }) => [key, href])])).toEqual(
+      destinations.map(([label, items]) => [label, items.map(([key, suffix]) => [key, root + suffix])]),
     );
-    // AI Copilot remains explicitly gated off; not part of Fusion delivery.
-    expect(items.find((item) => item.key === "ai")).toBeUndefined();
+
+    const items = groups.flatMap((group) => group.items);
+    expect(new Set(items.map((item) => item.key)).size).toBe(items.length);
+    expect(new Set(items.map((item) => item.href)).size).toBe(items.length);
+
+    for (const { key, href } of items) {
+      expect(activeKeys(href), href).toEqual([key]);
+    }
   });
 
-  it("links dedicated pages directly and preserves query-backed modules", () => {
-    expect(byKey("notes").href).toBe(`${root}/notes`);
-    expect(byKey("reports").href).toBe(`${root}/reports`);
-    expect(byKey("sources").href).toBe(`${root}/sources`);
-    expect(byKey("intel-profile").href).toBe(`${root}/intel-profile`);
-    expect(byKey("evidence").href).toBe(`${root}?tab=evidence&view=evidence`);
-    expect(byKey("indicators").href).toBe(`${root}?tab=indicators`);
-    expect(byKey("graph").href).toBe(`${root}?tab=graph`);
-    expect(byKey("fusion").href).toBe(`${root}/fusion`);
+  it.each([
+    ["/sources/source-1", "sources"],
+    ["/sources/source-1/print", "sources"],
+    ["/source-claims/claim-1", "source-claims"],
+    ["/indicators/indicator-1", "indicators"],
+    ["/timeline/event-1", "timeline"],
+    ["/canvas/canvas-1", "canvas"],
+    ["/actors/actor-1", "actors"],
+    ["/campaigns/campaign-1?historical=1", "campaigns"],
+    ["/malware/malware-1", "malware"],
+    ["/cves/cve-1", "cves"],
+    ["/mitre/technique-1", "mitre"],
+    ["/infrastructure/cluster-1", "infrastructure"],
+    ["/campaigns/campaign-1/attribution", "attribution"],
+    ["/campaigns/campaign-1/attribution/hypothesis-1", "attribution"],
+    ["/reports/report-1", "reports"],
+    ["/reports/report-1/versions/version-1", "reports"],
+    ["?tab=notes", "notes"],
+    ["?tab=reports", "reports"],
+  ])("activates only the owning module for %s", (suffix, key) => {
+    expect(activeKeys(root + suffix)).toEqual([key]);
   });
 
-  it("keeps active-state matching correct for query tabs and detail routes", () => {
-    expect(isInvestigationNavItemActive(byKey("direction"), root, null)).toBe(true);
-    expect(isInvestigationNavItemActive(byKey("direction"), root, "overview")).toBe(false);
-    expect(isInvestigationNavItemActive(byKey("overview"), root, "overview")).toBe(true);
-    expect(isInvestigationNavItemActive(byKey("campaigns"), root, "campaigns")).toBe(true);
-    expect(
-      isInvestigationNavItemActive(
-        byKey("campaigns"),
-        `${root}/campaigns/campaign-1`,
-        null,
-      ),
-    ).toBe(true);
-    expect(
-      isInvestigationNavItemActive(
-        byKey("indicators"),
-        `${root}/indicators/indicator-1`,
-        null,
-      ),
-    ).toBe(true);
-    expect(
-      isInvestigationNavItemActive(
-        byKey("reports"),
-        `${root}/reports/report-1`,
-        null,
-      ),
-    ).toBe(true);
+  it("keeps route matching inside the current Investigation and on segment boundaries", () => {
+    expect(activeKeys("/projects/investigation-10/campaigns/campaign-1/attribution")).toEqual([]);
+    expect(activeKeys(root + "/sources-other")).toEqual([]);
+    expect(activeKeys(root + "/source-claims/claim-1?tab=overview")).toEqual(["source-claims"]);
+  });
+
+  it("exposes AI Copilot in Shared Workspace only when the existing flag is enabled", () => {
+    vi.stubEnv("NEXT_PUBLIC_CITEM_STAGE3_COPILOT_ENABLED", "false");
+    expect(activeKeys(root + "?tab=ai")).toEqual([]);
+
+    vi.stubEnv("NEXT_PUBLIC_CITEM_STAGE3_COPILOT_ENABLED", "true");
+    const shared = getInvestigationNavGroups(projectId).find((group) => group.key === "shared");
+    expect(shared?.items.at(-1)).toMatchObject({
+      key: "ai",
+      label: "AI Copilot",
+      href: root + "?tab=ai",
+    });
+    expect(activeKeys(root + "?tab=ai")).toEqual(["ai"]);
+  });
+
+  it("supports keyboard disclosure while indicating the current route when collapsed", async () => {
+    const user = userEvent.setup();
+    navigation.pathname = root + "/sources/source-1";
+    navigation.search = "";
+    render(createElement(InvestigationWorkspaceNav, { projectId }));
+
+    const collection = screen.getByRole("button", { name: "01 — Collection & Validation" });
+    expect(collection).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("link", { name: "Source Library" })).toHaveAttribute("aria-current", "page");
+
+    collection.focus();
+    await user.keyboard("{Enter}");
+    expect(collection).toHaveFocus();
+    expect(collection).toHaveAttribute("aria-expanded", "false");
+    expect(collection).toHaveAccessibleDescription(/Current: Source Library/);
+    expect(screen.queryByRole("link", { name: "Source Library" })).not.toBeInTheDocument();
+
+    await user.keyboard("{Enter}");
+    expect(collection).toHaveAttribute("aria-expanded", "true");
+    const claims = screen.getByRole("link", { name: "Source Claims & Validation" });
+    expect(claims).toHaveAttribute("href", root + "/source-claims");
+    const navigate = vi.fn((event: Event) => event.preventDefault());
+    claims.addEventListener("click", navigate);
+    await user.click(claims);
+    expect(navigate).toHaveBeenCalledOnce();
+  });
+
+  it("opens the new route’s department after a link or deep-link transition", async () => {
+    const user = userEvent.setup();
+    navigation.pathname = root;
+    navigation.search = "?tab=overview";
+    const view = render(createElement(InvestigationWorkspaceNav, { projectId }));
+
+    const analysis = screen.getByRole("button", { name: "02 — Analysis & Reporting" });
+    await user.click(analysis);
+    expect(analysis).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Intelligence Direction" }))
+      .toHaveAccessibleDescription(/Current: Investigation Overview/);
+
+    const graph = root + "?tab=graph";
+    navigation.search = "?tab=graph";
+    view.rerender(createElement(InvestigationWorkspaceNav, { projectId }));
+
+    expect(screen.getByRole("button", { name: "Shared Workspace" })).toHaveAttribute("aria-expanded", "true");
+    const graphLink = screen.getByRole("link", { name: "Knowledge Graph" });
+    expect(graphLink).toHaveAttribute("href", graph);
+    expect(graphLink).toHaveAttribute("aria-current", "page");
   });
 });
