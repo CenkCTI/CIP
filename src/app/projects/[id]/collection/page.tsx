@@ -1,3 +1,4 @@
+import { loadCollectionMetrics } from "@/lib/analysis/annotation-credibility/collection-metrics";
 import { notFound } from "next/navigation";
 
 import { CollectionWorkspace } from "@/components/investigations/collection/collection-workspace";
@@ -20,6 +21,7 @@ export default async function CollectionPage({
     sourcesResult,
     sourceGapLinksResult,
     sourceRequirementLinksResult,
+    metrics,
   ] = await Promise.all([
     context.supabase
       .from("projects")
@@ -61,6 +63,7 @@ export default async function CollectionPage({
       .from("source_requirement_links")
       .select("source_id,requirement_id")
       .eq("project_id", context.projectId),
+    loadCollectionMetrics(context),
   ]);
 
   if (projectResult.error || !projectResult.data) notFound();
@@ -90,6 +93,7 @@ export default async function CollectionPage({
     <CollectionWorkspace
       projectId={context.projectId}
       project={projectResult.data}
+      metrics={metrics}
       questions={questionsResult.data ?? []}
       gaps={gapsResult.data ?? []}
       requirements={requirementsResult.data ?? []}

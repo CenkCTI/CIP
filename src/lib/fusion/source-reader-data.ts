@@ -1,4 +1,5 @@
 import "server-only";
+import { loadAnnotationQuality } from "@/lib/analysis/annotation-credibility/queries";
 import { z } from "zod";
 import { requireOwnedProject } from "@/lib/projects/ownership";
 const uuidSchema=z.string().uuid();
@@ -262,6 +263,7 @@ export async function loadFusionSourceReader(id:string,sourceId:string,annotatio
     sourceRequirementIds: (sourceRequirementLinksResult.data??[]).map(link=>link.requirement_id),
     notes:notesResult.data??[], annotations:annotationsResult.data??[],
     annotationFragments:annotationFragmentsResult.data??[],
+    annotationQuality:await loadAnnotationQuality(context,[...annotationIds]),
     annotationGapLinks:(annotationGapLinksResult.data??[]).filter(link=>annotationIds.has(link.annotation_id)),
     annotationRequirementLinks:(annotationRequirementLinksResult.data??[]).filter(link=>annotationIds.has(link.annotation_id)),
     timelineEvents:timelineEventsResult.data??[],

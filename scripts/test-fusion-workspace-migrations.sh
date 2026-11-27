@@ -43,13 +43,17 @@ SQL
 # Each migration is applied once in its canonical dependency order, without feature-skipping
 # or fabricated success. ON_ERROR_STOP aborts immediately if any DDL fails.
 while IFS= read -r file; do
+  if [[ "$(basename "$file")" == 202611130081_* ]]; then
+    # Mirror Data API grants before the quality review migrations apply their
+    # explicit read-only policies. Never overwrite review table grants.
+    "${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" -c \
+      "grant usage on schema public to authenticated; grant select, insert, update, delete on all tables in schema public to authenticated;" >/dev/null
+  fi
   echo "APPLY $(basename "$file")"
   "${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" -f "$file" >/dev/null
 done < <(find "$ROOT/supabase/migrations" -maxdepth 1 -name '*.sql' | LC_ALL=C sort)
-# Supabase public Data API grants ordinary application tables to authenticated;
-# the minimal local auth/storage fixture does not create these automatically.
-"${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" -c \
-  "grant usage on schema public to authenticated; grant select, insert, update, delete on all tables in schema public to authenticated;" >/dev/null
-echo "PASS: Complete migration chain through Fusion 074"
+echo "PASS: Complete CİTEM migration chain"
 "${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" -f "$ROOT/tests/fusion-postgres-acceptance.sql"
 echo "PASS: Fusion owner isolation, RLS, links, audit and integrity"
+"${PSQL[@]}" -v ON_ERROR_STOP=1 -d "$DB" -f "$ROOT/tests/annotation-credibility-postgres.sql"
+echo "PASS: Annotation credibility and Collection/Fusion read models"

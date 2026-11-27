@@ -1,4 +1,7 @@
 "use client";
+import { AnnotationCredibilityPanel, AnnotationCredibilitySummary } from "@/components/analysis/annotation-credibility-panel";
+import type { AnnotationQuality } from "@/lib/analysis/annotation-credibility/schema";
+
 import Link from "next/link";
 import { useCallback,useEffect,useRef,useState } from "react";
 import { useRouter } from "next/navigation";
@@ -13,7 +16,7 @@ import {
 type AssignmentKind="SOURCE"|"GAP"|"REQUIREMENT";
 type Manual={id:string;assignment_kind:AssignmentKind;assigned_id:string;rationale:string|null;created_at:string;updated_at:string};
 type CountryLink={id:string;country_iso2:string;relation_type:string;rationale:string|null};
-type Payload={item:FusionInventoryItem;manual:Manual[];countries:CountryLink[];labels:Record<string,string>;reviewStatus:string|null};
+type Payload={item:FusionInventoryItem;manual:Manual[];countries:CountryLink[];labels:Record<string,string>;reviewStatus:string|null;relatedQuality?:Record<string,AnnotationQuality>|null;relatedTruncated?:boolean};
 type Candidate={id:string;label:string};
 const choices=["GENERAL_RELEVANCE","REPORTED_TARGET","REPORTED_LOCATION","REPORTED_ORIGIN",
  "REPORTED_VICTIM_LOCATION","REPORTED_OPERATIONAL_AREA","MENTIONED_IN_SOURCE","OTHER"];
@@ -230,6 +233,9 @@ export function FusionInventoryPopup({projectId,item,close,assignmentReady=true}
       </select><button className={button} disabled={busy}>Save review state</button>
      </form>}
     </div>}
+    {selected.record_type==="ANNOTATION" && tab==="evidence" && (
+      <AnnotationCredibilityPanel projectId={projectId} annotationId={selected.record_id} />
+    )}
     {tab==="processing"&&<FusionInventoryProcessing
       key={item.record_type+":"+item.record_id}
       projectId={projectId} item={selected}
@@ -237,6 +243,13 @@ export function FusionInventoryPopup({projectId,item,close,assignmentReady=true}
     {!loading&&payload&&tab==="evidence"&&<section className="space-y-4 text-sm">
      <div className="rounded border border-stone-800 bg-[#14191d] p-4"><h3 className="mb-2 font-semibold text-[#e8e1d6]">Original content · read-only</h3>
       <p className="whitespace-pre-wrap break-words text-stone-300">{selected.preview_text||selected.summary||"No excerpt saved"}</p></div>
+     {selected.record_type!=="ANNOTATION" && selected.annotation_ids.length>0 && <div className="rounded border border-stone-800 p-4">
+      <h3 className="font-semibold">Related annotation assessments</h3>
+      {payload.relatedQuality ? <ul className="mt-2 space-y-2">{Object.values(payload.relatedQuality).map(assessment=>
+        <li key={assessment.annotation_id}><Link className="underline" href={`/projects/${projectId}/sources/${assessment.source_id}?annotation=${assessment.annotation_id}`}>Original passage</Link>
+          <p><AnnotationCredibilitySummary assessment={assessment}/></p></li>)}</ul> : <p>Annotation credibility unavailable.</p>}
+      {payload.relatedTruncated && <p>Showing the first 100 related annotations.</p>}
+     </div>}
      <div className="rounded border border-stone-800 bg-[#14191d] p-4"><h3 className="mb-2 font-semibold text-[#e8e1d6]">Canonical context</h3>
       <p className="text-xs text-stone-400">Origin: {selected.origin_kind} · Updated: {fmt(selected.updated_at)}</p>
       <p className="mt-2 text-xs text-stone-500">{selected.annotation_ids.length} source passages · {selected.source_ids.length} original sources · {selected.gap_ids.length} canonical gaps · {selected.requirement_ids.length} canonical requirements</p>

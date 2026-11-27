@@ -1,3 +1,4 @@
+import { loadAnnotationQuality } from "@/lib/analysis/annotation-credibility/queries";
 import { NextRequest,NextResponse } from "next/server";
 import { z } from "zod";
 import { requireOwnedProject } from "@/lib/projects/ownership";
@@ -20,7 +21,8 @@ const pageOf=(input:string|null)=>Math.max(1,Math.min(10000,Math.floor(Number(in
 export async function GET(req:NextRequest,{params}:{params:Promise<{id:string}>}){
  try{
   const {id:projectId}=await params;
-  const {supabase}=await requireOwnedProject(projectId);
+  const context=await requireOwnedProject(projectId);
+  const {supabase}=context;
   const q=req.nextUrl.searchParams;
   if(q.get("mode")==="lookup"){
    const kind=kinds.parse(q.get("kind"));
@@ -60,7 +62,9 @@ export async function GET(req:NextRequest,{params}:{params:Promise<{id:string}>}
    ...(entries.filter(a=>a.assignment_kind===kind).map(a=>a.assigned_id)),
    ...(kind==="SOURCE"?item.source_ids:kind==="GAP"?item.gap_ids:item.requirement_ids)
   ])];
-  const [sources,gaps,requirements,sourceReview]=await Promise.all([
+  const relatedIds=recordType!=="ANNOTATION"?[...new Set(item.annotation_ids)].sort():[];
+  const [relatedQuality,sources,gaps,requirements,sourceReview]=await Promise.all([
+   loadAnnotationQuality(context,relatedIds.slice(0,100)),
    idsByKind("SOURCE").length?supabase.from("sources").select("id,title").eq("project_id",projectId)
     .in("id",idsByKind("SOURCE")):Promise.resolve({data:[],error:null}),
    idsByKind("GAP").length?supabase.from("investigation_information_gaps").select("id,description").eq("project_id",projectId)
@@ -74,7 +78,7 @@ export async function GET(req:NextRequest,{params}:{params:Promise<{id:string}>}
   for(const row of sources.data??[])labels[row.id]=row.title;
   for(const row of gaps.data??[])labels[row.id]=row.description;
   for(const row of requirements.data??[])labels[row.id]=row.requirement;
-  return NextResponse.json({item,reviewStatus:sourceReview.data?.review_status??null,manual:entries,
+  return NextResponse.json({item,relatedQuality,relatedTruncated:relatedIds.length>100,reviewStatus:sourceReview.data?.review_status??null,manual:entries,
    countries:linkRows.map(l=>({
     id:l.id,country_iso2:countryIndex[l.investigation_country_id]??null,
     relation_type:l.relation_type,rationale:l.rationale
