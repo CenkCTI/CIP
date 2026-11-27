@@ -1,4 +1,7 @@
 "use client";
+import { AnnotationCredibilitySummary } from "@/components/analysis/annotation-credibility-panel";
+import type { AnnotationQuality } from "@/lib/analysis/annotation-credibility/schema";
+import { informationCredibilityGrades } from "@/lib/analysis/credibility/schema";
 import Link from "next/link";
 import { useState } from "react";
 import { FusionInventoryPopup } from "./fusion-inventory-popup";
@@ -16,8 +19,9 @@ const GROUPS:[FusionGroupKind,string][]=[
 ];
 const Badge=({children}:{children:React.ReactNode})=><span className="rounded border border-stone-700/70 bg-[#181e22] px-2 py-0.5 text-[11px] text-stone-300">{children}</span>;
 const fmt=(x:string)=>{const d=new Date(x);return Number.isNaN(d.getTime())?"—":d.toLocaleDateString();};
-export function FusionInventory({projectId,items,count,labels,filters,assignmentReady=true,focusedItem=null}:{
+export function FusionInventory({projectId,items,count,labels,filters,assignmentReady=true,focusedItem=null,annotationQuality,credibilityFilterUnavailable=false}:{
  projectId:string;items:FusionInventoryItem[];count:number;labels:Labels;filters:FusionInventoryFilters;
+ annotationQuality?:Record<string,AnnotationQuality>|null;credibilityFilterUnavailable?:boolean;
  assignmentReady?:boolean;focusedItem?:FusionInventoryItem|null
 }){
  const [selected,setSelected]=useState<FusionInventoryItem|null>(focusedItem);
@@ -38,6 +42,8 @@ export function FusionInventory({projectId,items,count,labels,filters,assignment
    <div className="text-right text-xs text-stone-400"><strong className="text-lg text-amber-300">{count.toLocaleString()}</strong><span className="block">unique matching records</span></div>
   </header>
   {!assignmentReady&&<p role="status" className="rounded border border-amber-900 bg-[#2b2119] p-3 text-sm text-amber-200">Existing Inventory remains readable. Inline assignments require Supabase migration 076 before editing.</p>}
+  {credibilityFilterUnavailable && <p role="status" className="card text-amber-300">Annotation credibility filter unavailable. Showing records with the other active filters.</p>}
+  {filters.credibility && !credibilityFilterUnavailable && <p className="text-xs text-stone-400">Credibility filters search annotations only and override Record type.</p>}
   <form className="rounded border border-stone-800 bg-[#111518] p-3" action={`/projects/${projectId}/fusion`} method="get">
     <input type="hidden" name="view" value="inventory"/>
     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -51,6 +57,13 @@ export function FusionInventory({projectId,items,count,labels,filters,assignment
       <label className="text-xs text-stone-400">Record type
        <select name="type" defaultValue={filters.type} className="mt-1 w-full rounded border border-stone-700 bg-[#101417] px-2 py-2 text-stone-100">
         <option value="">All types</option>{TYPES.map(v=><option key={v} value={v}>{v.replaceAll("_"," ")}</option>)}
+       </select></label>
+      <label className="text-xs text-stone-400">Annotation credibility
+       <select name="credibility" defaultValue={filters.credibility ?? ""} className="field mt-1">
+        <option value="">Any assessment · all record types</option>
+        <option value="unevaluated">Not evaluated · annotations</option>
+        {informationCredibilityGrades.map(grade=><option key={grade} value={grade}>Current grade {grade} · annotations</option>)}
+        <option value="stale">Re-evaluation required · annotations</option>
        </select></label>
       <label className="text-xs text-stone-400">Processing
        <select name="state" defaultValue={filters.state} className="mt-1 w-full rounded border border-stone-700 bg-[#101417] px-2 py-2 text-stone-100">
@@ -86,7 +99,15 @@ export function FusionInventory({projectId,items,count,labels,filters,assignment
          className="grid w-full grid-cols-[110px_minmax(0,1fr)_90px] items-center gap-3 px-4 py-3 text-left hover:bg-[#181e22] focus-visible:outline-2 focus-visible:outline-amber-400 sm:grid-cols-[130px_minmax(0,1fr)_150px_90px]">
         <span className="text-[11px] font-medium text-amber-300">{item.record_type.replaceAll("_"," ")}</span>
         <span className="min-w-0"><span className="block truncate text-sm text-stone-200">{item.title}</span>
-         <span className="block truncate text-xs text-stone-500">{item.summary||item.preview_text||item.origin_kind}</span></span>
+         <span className="block truncate text-xs text-stone-500">{item.summary||item.preview_text||item.origin_kind}</span>
+         {item.record_type==="ANNOTATION" && <span className="mt-1 block text-xs text-stone-300">
+           <AnnotationCredibilitySummary assessment={annotationQuality?.[item.record_id]} />
+           {annotationQuality?.[item.record_id] && <span className="block text-stone-400">
+             Source reliability · {annotationQuality[item.record_id].source_reliability ?? "Not evaluated"}
+             {annotationQuality[item.record_id].source_reliability_stale && " · Re-evaluation required"}
+             {annotationQuality[item.record_id].reviewed_at && ` · Reviewed ${fmt(annotationQuality[item.record_id].reviewed_at!)}`}
+           </span>}
+         </span>}</span>
         <span className="hidden truncate text-xs text-stone-400 sm:block">{item.source_ids.length?
           (labels.source[item.source_ids[0]]||"Source")+(item.source_ids.length>1?` +${item.source_ids.length-1}`:""):
           "Independent"}</span>
