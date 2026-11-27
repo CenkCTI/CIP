@@ -1,3 +1,4 @@
+import { loadAnnotationQuality } from "@/lib/analysis/annotation-credibility/queries";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 
@@ -274,6 +275,8 @@ export default async function SourceDetailPage({
     );
   }
 
+  const annotationQuality = await loadAnnotationQuality(context, [...annotationIds]);
+
   const requestedAnnotation = uuidSchema.safeParse(query.annotation).success
     ? String(query.annotation)
     : null;
@@ -298,6 +301,7 @@ export default async function SourceDetailPage({
       )}
       notes={notesResult.data ?? []}
       annotations={annotationsResult.data ?? []}
+      annotationQuality={annotationQuality}
       annotationFragments={annotationFragmentsResult.data ?? []}
       annotationGapLinks={(annotationGapLinksResult.data ?? []).filter((link) =>
         annotationIds.has(link.annotation_id),

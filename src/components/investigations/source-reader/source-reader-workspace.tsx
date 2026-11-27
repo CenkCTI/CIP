@@ -1,4 +1,7 @@
 "use client";
+import { AnnotationCredibilityPanel, AnnotationCredibilitySummary } from "@/components/analysis/annotation-credibility-panel";
+import type { AnnotationQuality } from "@/lib/analysis/annotation-credibility/schema";
+
 
 import Link from "next/link";
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -508,6 +511,7 @@ export function SourceReaderWorkspace({
   sourceClaimAssertions,
   processingOptions,
   initialFocusedAnnotationId,
+  annotationQuality,
   embedded = false,
   onChanged,
 }: {
@@ -538,6 +542,7 @@ export function SourceReaderWorkspace({
     source_claim: Row[];
   };
   initialFocusedAnnotationId?: string | null;
+  annotationQuality?: Record<string, AnnotationQuality> | null;
   embedded?: boolean;
   onChanged?: () => void;
 }) {
@@ -570,7 +575,7 @@ export function SourceReaderWorkspace({
   const [editingComment, setEditingComment] = useState("");
   const [editingGapIds, setEditingGapIds] = useState<string[]>([]);
   const [editingRequirementIds, setEditingRequirementIds] = useState<string[]>([]);
-  const [expandedAnnotationId, setExpandedAnnotationId] = useState<string | null>(null);
+  const [expandedAnnotationId, setExpandedAnnotationId] = useState<string | null>(initialFocusedAnnotationId ?? null);
   const [localAnnotations, setLocalAnnotations] = useState<Row[]>([]);
   const [localAnnotationFragments, setLocalAnnotationFragments] = useState<Row[]>([]);
   const [localAnnotationGapLinks, setLocalAnnotationGapLinks] = useState<Row[]>([]);
@@ -1038,6 +1043,10 @@ export function SourceReaderWorkspace({
                             : compactText(annotation.selected_text, 220)}
                         </blockquote>
                       ) : null}
+                      {annotationQuality !== undefined && <p className="mt-2 text-xs text-stone-300">
+                        <AnnotationCredibilitySummary assessment={annotationQuality?.[id]} />
+                      </p>}
+                      {expanded && <AnnotationCredibilityPanel projectId={projectId} annotationId={id} onSaved={onChanged} />}
                       {editingAnnotationId === id ? (
                         <div className="mt-3 space-y-3 rounded border border-stone-800 bg-stone-950/40 p-3">
                           <label className="block text-xs text-stone-400">
