@@ -309,9 +309,11 @@ export function CollectionWorkspace({
               {s(project.research_question) || "Tanımlanmamış"}
             </p>
           </div>
-          <Link className="citem-button-ghost" href={`/projects/${projectId}/sources`}>
-            Kaynaklara git
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link className="citem-button-ghost" href={`/projects/${projectId}`}>Direction</Link>
+            <Link className="citem-button-ghost" href={`/projects/${projectId}/sources`}>Source Library</Link>
+            <Link className="citem-button-ghost" href={`/projects/${projectId}/source-claims`}>Source Claims</Link>
+          </div>
         </div>
         {questions.length ? (
           <details className="mt-4">
